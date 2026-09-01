@@ -1,10 +1,12 @@
 "use client"
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import { Image as KonvaImage, Layer, Line, Rect, Stage, Transformer, Group } from 'react-konva'
+import { Image as KonvaImage, Layer, Line, Rect, Stage, Transformer, Group, Text as KonvaText } from 'react-konva'
 import Konva from 'konva'
 import { MoveUp, MoveDown, Eye, EyeOff, Copy, Trash2, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+export type CanvasTool = 'select' | 'draw' | 'shapes' | 'lines' | 'sticky' | 'text'
 
 // Artboard geometry in stage-local (unscaled) coordinates.
 export const ARTBOARD_X = 40
@@ -42,6 +44,13 @@ export interface KonvaCanvasAsset {
   hidden: boolean
   zIndex: number
   pageId?: string
+  kind?: 'image' | 'rect' | 'line' | 'sticky' | 'text'
+  points?: number[]
+  text?: string
+  fill?: string
+  strokeColor?: string
+  strokeWidth?: number
+  fontSize?: number
 }
 
 export interface KonvaDroppedAsset {
@@ -82,6 +91,9 @@ type Props = {
   artboardBg?: string
   /** Loaded HTMLImageElement to tile/cover the artboard as a photo background */
   artboardBgImage?: HTMLImageElement | null
+  onPlaceElement?: (asset: Partial<KonvaCanvasAsset>) => void
+  activeTool?: CanvasTool
+  onToolReset?: () => void
 }
 
 function useLoadedImage(src: string) {
@@ -106,15 +118,18 @@ function useLoadedImage(src: string) {
   return image
 }
 
-function CanvasImage({
+function CanvasElement({
   asset,
   pageIndex,
   pageNavMode,
   pan,
   scale,
   selected,
+  activeTool = 'select',
+  isEditing = false,
   onSelect,
   onUpdate,
+  onStartEditing,
 }: {
   asset: KonvaCanvasAsset
   pageIndex: number
@@ -122,83 +137,123 @@ function CanvasImage({
   pan: { x: number; y: number }
   scale: number
   selected: boolean
+  activeTool?: CanvasTool
+  isEditing?: boolean
   onSelect: () => void
   onUpdate: (changes: Partial<KonvaCanvasAsset>) => void
+  onStartEditing: () => void
 }) {
   const image = useLoadedImage(asset.src)
-  const nodeRef = useRef<Konva.Image>(null)
+  const nodeRef = useRef<any>(null)
   const transformerRef = useRef<Konva.Transformer>(null)
   const pageY = pageNavMode === 'flow' ? getPageY(pageIndex) : ARTBOARD_Y
+  const listening = activeTool === 'select'
 
   useEffect(() => {
-    if (selected && nodeRef.current && transformerRef.current) {
+    if (selected && listening && nodeRef.current && transformerRef.current) {
       transformerRef.current.nodes([nodeRef.current])
       transformerRef.current.getLayer()?.batchDraw()
     }
-  }, [selected])
+  }, [selected, listening])
 
-  if (asset.hidden || !image) return null
+  if (asset.hidden) return null
 
-  const filters = asset.label.toLowerCase().includes('crystal') ? [Konva.Filters.Brighten] : undefined
+  const kind = asset.kind || 'image'
+  if (kind === 'image' && !image) return null
+
+  const commonProps = {
+    ref: nodeRef,
+    id: asset.id,
+    x: ARTBOARD_X + asset.x,
+    y: pageY + asset.y,
+    rotation: asset.rotation,
+    opacity: asset.opacity / 100,
+    draggable: listening && !asset.locked,
+    listening,
+    dragBoundFunc: (pos: { x: number; y: number }) => {
+      const minX = pan.x + ARTBOARD_X * scale
+      const maxX = pan.x + (ARTBOARD_X + Math.max(0, ARTBOARD_W - asset.w)) * scale
+      const minY = pan.y + pageY * scale
+      const maxY = pan.y + (pageY + Math.max(0, ARTBOARD_H - asset.h)) * scale
+      return {
+        x: Math.max(minX, Math.min(maxX, pos.x)),
+        y: Math.max(minY, Math.min(maxY, pos.y)),
+      }
+    },
+    shadowColor: selected ? '#b58a52' : undefined,
+    shadowBlur: selected ? 12 : 0,
+    shadowOpacity: selected ? 0.28 : 0,
+    onClick: (event: any) => {
+      if (!listening) return
+      event.cancelBubble = true
+      onSelect()
+    },
+    onTap: () => {
+      if (!listening) return
+      onSelect()
+    },
+    onDblClick: (event: any) => {
+      if (!listening) return
+      event.cancelBubble = true
+      onStartEditing()
+    },
+    onDblTap: () => {
+      if (!listening) return
+      onStartEditing()
+    },
+    onDragStart: (event: any) => { event.cancelBubble = true },
+    onDragMove: (event: any) => { event.cancelBubble = true },
+    onDragEnd: (event: any) => {
+      event.cancelBubble = true
+      const node = event.target
+      const localX = Math.round(node.x() - ARTBOARD_X)
+      const localY = Math.round(node.y() - pageY)
+      onUpdate({ x: localX, y: localY })
+    },
+    onTransformEnd: () => {
+      const node = nodeRef.current
+      if (!node) return
+      const scaleX = node.scaleX()
+      const scaleY = node.scaleY()
+      node.scaleX(1)
+      node.scaleY(1)
+      const localX = Math.round(node.x() - ARTBOARD_X)
+      const localY = Math.round(node.y() - pageY)
+      onUpdate({
+        x: localX,
+        y: localY,
+        w: Math.max(20, Math.round(node.width() * scaleX)),
+        h: Math.max(20, Math.round(node.height() * scaleY)),
+        rotation: Math.round(node.rotation()),
+      })
+    },
+  }
+
+  let nodeEl = null
+  if (kind === 'image' && image) {
+    const filters = asset.label.toLowerCase().includes('crystal') ? [Konva.Filters.Brighten] : undefined
+    nodeEl = <KonvaImage {...commonProps} image={image} width={asset.w} height={asset.h} filters={filters} />
+  } else if (kind === 'rect') {
+    nodeEl = <Rect {...commonProps} width={asset.w} height={asset.h} fill={asset.fill || '#3b82f6'} stroke="#1d4ed8" strokeWidth={1} cornerRadius={4} />
+  } else if (kind === 'line') {
+    nodeEl = <Line {...commonProps} points={asset.points || [0, 0, asset.w, asset.h]} stroke={asset.strokeColor || '#1e293b'} strokeWidth={asset.strokeWidth || 3} tension={0.2} lineCap="round" lineJoin="round" />
+  } else if (kind === 'sticky') {
+    nodeEl = (
+      <Group {...commonProps} width={asset.w} height={asset.h}>
+        <Rect width={asset.w} height={asset.h} fill={asset.fill || '#fef08a'} stroke="#fde047" strokeWidth={1} cornerRadius={4} shadowColor="#000000" shadowBlur={4} shadowOpacity={0.1} />
+        {!isEditing && (
+          <KonvaText x={8} y={8} width={Math.max(10, asset.w - 16)} height={Math.max(10, asset.h - 16)} text={asset.text || 'Sticky Note'} fontSize={asset.fontSize || 14} fontFamily="sans-serif" fill="#1e293b" align="left" verticalAlign="top" wrap="word" />
+        )}
+      </Group>
+    )
+  } else if (kind === 'text') {
+    nodeEl = <KonvaText {...commonProps} width={asset.w} height={asset.h} text={isEditing ? '' : (asset.text || 'Add text')} fontSize={asset.fontSize || 20} fontFamily="sans-serif" fill={asset.strokeColor || '#0f172a'} wrap="word" />
+  }
 
   return (
     <>
-      <KonvaImage
-        ref={nodeRef}
-        id={asset.id}
-        image={image}
-        x={ARTBOARD_X + asset.x}
-        y={pageY + asset.y}
-        width={asset.w}
-        height={asset.h}
-        rotation={asset.rotation}
-        opacity={asset.opacity / 100}
-        draggable={!asset.locked}
-        dragBoundFunc={(pos) => {
-          // Clamp dragging strictly to originating page's artboard boundaries
-          const minX = pan.x + ARTBOARD_X * scale
-          const maxX = pan.x + (ARTBOARD_X + Math.max(0, ARTBOARD_W - asset.w)) * scale
-          const minY = pan.y + pageY * scale
-          const maxY = pan.y + (pageY + Math.max(0, ARTBOARD_H - asset.h)) * scale
-          return {
-            x: Math.max(minX, Math.min(maxX, pos.x)),
-            y: Math.max(minY, Math.min(maxY, pos.y)),
-          }
-        }}
-        filters={filters}
-        shadowColor={selected ? '#b58a52' : undefined}
-        shadowBlur={selected ? 12 : 0}
-        shadowOpacity={selected ? 0.28 : 0}
-        onClick={(event) => { event.cancelBubble = true; onSelect() }}
-        onTap={onSelect}
-        onDragStart={(event) => { event.cancelBubble = true }}
-        onDragMove={(event) => { event.cancelBubble = true }}
-        onDragEnd={(event) => {
-          event.cancelBubble = true
-          const node = event.target
-          const localX = Math.round(node.x() - ARTBOARD_X)
-          const localY = Math.round(node.y() - pageY)
-          onUpdate({ x: localX, y: localY })
-        }}
-        onTransformEnd={() => {
-          const node = nodeRef.current
-          if (!node) return
-          const scaleX = node.scaleX()
-          const scaleY = node.scaleY()
-          node.scaleX(1)
-          node.scaleY(1)
-          const localX = Math.round(node.x() - ARTBOARD_X)
-          const localY = Math.round(node.y() - pageY)
-          onUpdate({
-            x: localX,
-            y: localY,
-            w: Math.max(40, Math.round(node.width() * scaleX)),
-            h: Math.max(40, Math.round(node.height() * scaleY)),
-            rotation: Math.round(node.rotation()),
-          })
-        }}
-      />
-      {selected && (
+      {nodeEl}
+      {selected && listening && (
         <Transformer
           ref={transformerRef}
           rotateEnabled
@@ -243,6 +298,9 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
     onAddPage,
     artboardBg = '#fbf8f1',
     artboardBgImage = null,
+    onPlaceElement,
+    activeTool = 'select',
+    onToolReset,
   },
   ref,
 ) {
@@ -252,6 +310,22 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
   const [manualOffset, setManualOffset] = useState({ x: 0, y: 0 })
   const [panning, setPanning] = useState(false)
   const [isOver, setIsOver] = useState(false)
+
+  // Tools & inline editing state
+  const [editingAssetId, setEditingAssetId] = useState<string | null>(null)
+  const [editingText, setEditingText] = useState('')
+  const [isDrawingLine, setIsDrawingLine] = useState(false)
+  const [linePoints, setLinePoints] = useState<number[]>([])
+  const [isFreehand, setIsFreehand] = useState(false)
+  const [freehandPoints, setFreehandPoints] = useState<number[]>([])
+  const activePageForToolRef = useRef<{ page: KonvaCanvasPage; pageY: number } | null>(null)
+
+  useEffect(() => {
+    if (editingAssetId) {
+      const a = assets.find((x) => x.id === editingAssetId)
+      setEditingText(a?.text || '')
+    }
+  }, [editingAssetId, assets])
 
   const scale = zoom / 100
   const effectivePages = useMemo(() => (pages.length > 0 ? pages : [{ id: 'pg1', title: 'Page 1' }]), [pages])
@@ -435,6 +509,50 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
   // Active single page in Thumbnail mode
   const activeSinglePage = effectivePages[currentPageIdx] || effectivePages[0]
 
+  function getPointerStageInfo(evt: MouseEvent | TouchEvent) {
+    const stage = stageRef.current
+    if (!stage) return null
+    const pointerPos = stage.getPointerPosition()
+    if (!pointerPos) return null
+    const stageX = (pointerPos.x - pan.x) / scale
+    const stageY = (pointerPos.y - pan.y) / scale
+
+    let targetIdx = 0
+    if (pageNavMode === 'thumbnail') {
+      targetIdx = currentPageIdx
+    } else {
+      for (let i = 0; i < effectivePages.length; i++) {
+        const pY = getPageY(i)
+        if (stageY >= pY && stageY <= pY + ARTBOARD_H + PAGE_GAP) {
+          targetIdx = i
+          break
+        }
+        if (stageY > pY + ARTBOARD_H + PAGE_GAP) {
+          targetIdx = i
+        }
+      }
+    }
+    const targetPage = effectivePages[targetIdx] || effectivePages[0]
+    const targetPageY = pageNavMode === 'flow' ? getPageY(targetIdx) : ARTBOARD_Y
+
+    return { stageX, stageY, targetPage, targetPageY }
+  }
+
+  const editingAsset = useMemo(() => assets.find((a) => a.id === editingAssetId), [assets, editingAssetId])
+  const editingPageIdx = useMemo(() => {
+    if (!editingAsset) return 0
+    const pId = editingAsset.pageId || effectivePages[0]?.id
+    const idx = effectivePages.findIndex((p) => p.id === pId)
+    return idx >= 0 ? idx : 0
+  }, [editingAsset, effectivePages])
+
+  const editingPageY = pageNavMode === 'flow' ? getPageY(editingPageIdx) : ARTBOARD_Y
+  const editingScreenX = editingAsset ? pan.x + (ARTBOARD_X + editingAsset.x) * scale : 0
+  const editingScreenY = editingAsset ? pan.y + (editingPageY + editingAsset.y) * scale : 0
+  const editingScreenW = editingAsset ? Math.max(120, editingAsset.w * scale) : 0
+  const editingScreenH = editingAsset ? Math.max(40, editingAsset.h * scale) : 0
+  const editingFontSizePx = editingAsset ? Math.max(12, (editingAsset.fontSize || 16) * scale) : 16
+
   return (
     <div
       ref={wrapperRef}
@@ -595,12 +713,158 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
         y={pan.y}
         scaleX={scale}
         scaleY={scale}
-        draggable={panning}
+        draggable={panning && activeTool === 'select'}
         onMouseDown={(event) => {
           if (event.evt.button !== 0) return
-          if (event.target === event.target.getStage()) { onDeselect(); setPanning(true) }
+
+          if (activeTool === 'select') {
+            if (event.target === event.target.getStage()) { onDeselect(); setPanning(true) }
+            return
+          }
+
+          const info = getPointerStageInfo(event.evt)
+          if (!info) return
+          const { stageX, stageY, targetPage, targetPageY } = info
+
+          if (activeTool === 'shapes') {
+            const localX = Math.max(0, Math.min(ARTBOARD_W - 150, Math.round(stageX - ARTBOARD_X)))
+            const localY = Math.max(0, Math.min(ARTBOARD_H - 150, Math.round(stageY - targetPageY)))
+            onPlaceElement?.({
+              kind: 'rect',
+              label: 'Rectangle',
+              x: localX,
+              y: localY,
+              w: 150,
+              h: 150,
+              fill: '#3b82f6',
+              pageId: targetPage.id,
+            })
+            onToolReset?.()
+          } else if (activeTool === 'sticky') {
+            const localX = Math.max(0, Math.min(ARTBOARD_W - 160, Math.round(stageX - ARTBOARD_X)))
+            const localY = Math.max(0, Math.min(ARTBOARD_H - 160, Math.round(stageY - targetPageY)))
+            onPlaceElement?.({
+              kind: 'sticky',
+              label: 'Sticky Note',
+              x: localX,
+              y: localY,
+              w: 160,
+              h: 160,
+              fill: '#fef08a',
+              text: 'Double-tap to edit',
+              fontSize: 14,
+              pageId: targetPage.id,
+            })
+            onToolReset?.()
+          } else if (activeTool === 'text') {
+            const localX = Math.max(0, Math.min(ARTBOARD_W - 200, Math.round(stageX - ARTBOARD_X)))
+            const localY = Math.max(0, Math.min(ARTBOARD_H - 40, Math.round(stageY - targetPageY)))
+            const id = `text-${Date.now()}`
+            onPlaceElement?.({
+              id,
+              kind: 'text',
+              label: 'Text Element',
+              x: localX,
+              y: localY,
+              w: 200,
+              h: 40,
+              text: 'Type text here',
+              fontSize: 20,
+              strokeColor: '#0f172a',
+              pageId: targetPage.id,
+            })
+            setEditingAssetId(id)
+            onToolReset?.()
+          } else if (activeTool === 'lines') {
+            setIsDrawingLine(true)
+            activePageForToolRef.current = { page: targetPage, pageY: targetPageY }
+            setLinePoints([stageX, stageY, stageX, stageY])
+          } else if (activeTool === 'draw') {
+            setIsFreehand(true)
+            activePageForToolRef.current = { page: targetPage, pageY: targetPageY }
+            setFreehandPoints([stageX, stageY])
+          }
         }}
-        onMouseUp={() => setPanning(false)}
+        onMouseMove={(event) => {
+          if (isDrawingLine && activeTool === 'lines') {
+            const info = getPointerStageInfo(event.evt)
+            if (!info) return
+            setLinePoints((prev) => [prev[0], prev[1], info.stageX, info.stageY])
+          } else if (isFreehand && activeTool === 'draw') {
+            const info = getPointerStageInfo(event.evt)
+            if (!info) return
+            setFreehandPoints((prev) => [...prev, info.stageX, info.stageY])
+          }
+        }}
+        onMouseUp={() => {
+          if (panning) setPanning(false)
+
+          if (isDrawingLine && linePoints.length === 4) {
+            const [x1, y1, x2, y2] = linePoints
+            const pageInfo = activePageForToolRef.current
+            if (pageInfo) {
+              const minX = Math.min(x1, x2)
+              const minY = Math.min(y1, y2)
+              const maxX = Math.max(x1, x2)
+              const maxY = Math.max(y1, y2)
+              const w = Math.max(20, Math.round(maxX - minX))
+              const h = Math.max(20, Math.round(maxY - minY))
+              const localX = Math.round(minX - ARTBOARD_X)
+              const localY = Math.round(minY - pageInfo.pageY)
+
+              onPlaceElement?.({
+                kind: 'line',
+                label: 'Straight Line',
+                x: localX,
+                y: localY,
+                w,
+                h,
+                points: [x1 - minX, y1 - minY, x2 - minX, y2 - minY],
+                strokeColor: '#1e293b',
+                strokeWidth: 3,
+                pageId: pageInfo.page.id,
+              })
+            }
+            setIsDrawingLine(false)
+            setLinePoints([])
+            activePageForToolRef.current = null
+            onToolReset?.()
+          } else if (isFreehand && freehandPoints.length >= 4) {
+            const pageInfo = activePageForToolRef.current
+            if (pageInfo) {
+              const xs = freehandPoints.filter((_, i) => i % 2 === 0)
+              const ys = freehandPoints.filter((_, i) => i % 2 === 1)
+              const minX = Math.min(...xs)
+              const maxX = Math.max(...xs)
+              const minY = Math.min(...ys)
+              const maxY = Math.max(...ys)
+
+              const w = Math.max(20, Math.round(maxX - minX))
+              const h = Math.max(20, Math.round(maxY - minY))
+              const localX = Math.round(minX - ARTBOARD_X)
+              const localY = Math.round(minY - pageInfo.pageY)
+
+              const relPoints = freehandPoints.map((val, idx) => (idx % 2 === 0 ? val - minX : val - minY))
+
+              onPlaceElement?.({
+                kind: 'line',
+                label: 'Freehand Drawing',
+                x: localX,
+                y: localY,
+                w,
+                h,
+                points: relPoints,
+                strokeColor: '#1e293b',
+                strokeWidth: 3,
+                pageId: pageInfo.page.id,
+              })
+            }
+            setIsFreehand(false)
+            setFreehandPoints([])
+            activePageForToolRef.current = null
+            onToolReset?.()
+          }
+        }}
         onDragEnd={(event) => {
           if (event.target !== event.target.getStage()) return
           const stage = event.target
@@ -686,7 +950,7 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                 {/* Placed elements for this page */}
                 <Group>
                   {pageAssets.map((asset) => (
-                    <CanvasImage
+                    <CanvasElement
                       key={asset.id}
                       asset={asset}
                       pageIndex={pIdx}
@@ -694,8 +958,11 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                       pan={pan}
                       scale={scale}
                       selected={asset.id === selectedId}
+                      activeTool={activeTool}
+                      isEditing={asset.id === editingAssetId}
                       onSelect={() => onSelect(asset.id)}
                       onUpdate={(changes) => onUpdate(asset.id, changes)}
+                      onStartEditing={() => setEditingAssetId(asset.id)}
                     />
                   ))}
                 </Group>
@@ -751,7 +1018,7 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                   .filter((a) => (a.pageId || effectivePages[0]?.id) === activeSinglePage.id)
                   .sort((a, b) => a.zIndex - b.zIndex)
                   .map((asset) => (
-                    <CanvasImage
+                    <CanvasElement
                       key={asset.id}
                       asset={asset}
                       pageIndex={currentPageIdx}
@@ -759,15 +1026,67 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                       pan={pan}
                       scale={scale}
                       selected={asset.id === selectedId}
+                      activeTool={activeTool}
+                      isEditing={asset.id === editingAssetId}
                       onSelect={() => onSelect(asset.id)}
                       onUpdate={(changes) => onUpdate(asset.id, changes)}
+                      onStartEditing={() => setEditingAssetId(asset.id)}
                     />
                   ))}
               </Group>
             </Group>
           )}
+
+          {/* In-progress drawing / line preview overlays */}
+          {isDrawingLine && linePoints.length === 4 && (
+            <Line points={linePoints} stroke="#3b82f6" strokeWidth={3} dash={[6, 6]} />
+          )}
+          {isFreehand && freehandPoints.length >= 4 && (
+            <Line points={freehandPoints} stroke="#1e293b" strokeWidth={3} tension={0.2} lineCap="round" lineJoin="round" />
+          )}
         </Layer>
       </Stage>
+
+      {/* Textarea inline editing overlay */}
+      {editingAsset && (
+        <textarea
+          autoFocus
+          value={editingText}
+          onChange={(e) => setEditingText(e.target.value)}
+          onBlur={() => {
+            onUpdate(editingAsset.id, { text: editingText })
+            setEditingAssetId(null)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              onUpdate(editingAsset.id, { text: editingText })
+              setEditingAssetId(null)
+            } else if (e.key === 'Enter' && !e.shiftKey && editingAsset.kind === 'text') {
+              e.preventDefault()
+              onUpdate(editingAsset.id, { text: editingText })
+              setEditingAssetId(null)
+            }
+          }}
+          style={{
+            position: 'absolute',
+            top: `${editingScreenY}px`,
+            left: `${editingScreenX}px`,
+            width: `${editingScreenW}px`,
+            height: `${editingScreenH}px`,
+            fontSize: `${editingFontSizePx}px`,
+            fontFamily: 'sans-serif',
+            color: editingAsset.kind === 'sticky' ? '#1e293b' : (editingAsset.strokeColor || '#0f172a'),
+            backgroundColor: editingAsset.kind === 'sticky' ? (editingAsset.fill || '#fef08a') : 'transparent',
+            border: '2px solid #3b82f6',
+            borderRadius: '4px',
+            padding: '4px',
+            outline: 'none',
+            resize: 'both',
+            zIndex: 50,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          }}
+        />
+      )}
     </div>
   )
 })

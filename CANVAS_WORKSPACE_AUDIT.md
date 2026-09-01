@@ -65,9 +65,9 @@
 | **Persistent Event Reference** | Locked read-only panel (*Event Pegs, Color Palette, Branding & Textures*) | `Click` accordion | **Fully Implemented**: Pinned above library tabs, populated from `EVENT_REFERENCE_DATA` for the open event alias; marked with lock icon. |
 | **Text Library** | Font hierarchy presets & formatting buttons | `Click` | **Static Placeholder**: Displays sample typography styles, but clicking does not spawn text onto Konva canvas. |
 | **Uploads Library** | Custom reference image repository | `Click` / file input / `Drag` | **Fully Implemented**: Users can upload custom images (converted to durable base64 URLs), preview gallery items, and drag or click tiles to place them directly onto the Konva canvas with per-page partitioning and bounding clamps. |
-| **Tools Panel** | Select, Draw, Shapes, Lines, Sticky Note, Text | `Click` | **Partially Implemented**: Selecting a tool updates tool active state and instruction note, but does not activate freehand drawing on the Konva stage. |
+| **Tools Panel** | Select, Draw, Shapes, Lines, Sticky Note, Text | `Click` / `Drag` | **Fully Implemented**: All 6 tools are fully interactive on the Konva stage — Select (transform/pan), Draw (freehand pen), Shapes (rectangle placement), Lines (straight line drag-draw), Sticky Note (color rect + double-tap text edit), and Text (Text node + auto-focus inline textarea overlay). Placed elements respect page partitioning, drag clamping, z-indexing, and localStorage persistence. |
 | **Projects Panel** | Import pages from other events/moodboards | `Click` accordion | **Partially Implemented**: Shows project directory tree and pages; page import to canvas is static. |
-| **Background Tab** | Preset color swatches, color picker, photo background | `Click` / input | **Partially Implemented**: Color/photo picker controls are interactive with "Applied to all pages" feedback, but stage background color is not dynamically altered. |
+| **Background Tab** | Preset color swatches, color picker, photo background | `Click` / input | **Fully Implemented**: Color/photo picker controls are interactive with "Applied to all pages" feedback, dynamically updating the Konva artboard fill/photo background across all pages with per-project `localStorage` persistence. |
 
 ---
 

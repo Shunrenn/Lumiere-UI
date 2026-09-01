@@ -23,7 +23,7 @@ import { useNav } from '@/lib/nav'
   import { useAuth } from '@/lib/auth'
   import { usePlanner } from '@/lib/planner'
   import { EventPipelinePanel } from '@/components/EventPipelinePanel'
-  import { KonvaInfiniteCanvas, type KonvaInfiniteCanvasHandle, ARTBOARD_W, ARTBOARD_H } from '@/components/canvas/KonvaInfiniteCanvas'
+  import { KonvaInfiniteCanvas, type KonvaInfiniteCanvasHandle, type CanvasTool, ARTBOARD_W, ARTBOARD_H } from '@/components/canvas/KonvaInfiniteCanvas'
 
 
 /* ─── Types ─── */
@@ -566,8 +566,16 @@ function UploadsTab({ onDropAsset }: { onDropAsset: (asset: DroppedAsset) => voi
   )
 }
 
-function ToolsTab() {
-  const [activeTool, setActiveTool] = useState<string | null>('select')
+const TOOL_DESCRIPTIONS: Record<CanvasTool, string> = {
+  select: 'Click or drag to select and move elements.',
+  draw: 'Click and drag to draw a freehand line.',
+  shapes: 'Click the canvas to place a rectangle.',
+  lines: 'Click and drag to draw a straight line.',
+  sticky: 'Click the canvas to place a sticky note. Double-tap to edit text.',
+  text: 'Click the canvas to place a text element.',
+}
+
+function ToolsTab({ activeTool, onToolChange }: { activeTool: CanvasTool; onToolChange: (tool: CanvasTool) => void }) {
   return (
     <div className="flex flex-col gap-3 p-3 overflow-y-auto flex-1">
       <p className="text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Canvas tools</p>
@@ -576,7 +584,7 @@ function ToolsTab() {
           const Icon = tool.icon
           const isActive = activeTool === tool.id
           return (
-            <button key={tool.id} type="button" onClick={() => setActiveTool(tool.id)}
+            <button key={tool.id} type="button" onClick={() => onToolChange(tool.id as CanvasTool)}
               className={cn('flex flex-col items-center gap-2 rounded-xl border py-3 transition',
                 isActive ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}>
               <Icon className="size-4" />
@@ -588,9 +596,7 @@ function ToolsTab() {
       {activeTool && (
         <div className="rounded-xl border border-border bg-background p-3 text-[0.62rem] text-muted-foreground space-y-1">
           <p className="font-bold uppercase tracking-[0.1em] text-foreground">{DEMO_TOOLS.find((t) => t.id === activeTool)?.label}</p>
-          {DEMO_TOOLS.find((t) => t.id === activeTool)?.textOk
-            ? <p>Double-tap to insert text into this element.</p>
-            : <p>Text insertion is not supported for this tool.</p>}
+          <p>{TOOL_DESCRIPTIONS[activeTool]}</p>
         </div>
       )}
     </div>
@@ -795,12 +801,14 @@ function EventReferencePanel({ eventAlias }: { eventAlias: string }) {
   )
 }
 
-function LeftPanel({ onDropAsset, eventAlias, assets, onRouteToDeficit, onApplyBackground }: {
+function LeftPanel({ onDropAsset, eventAlias, assets, onRouteToDeficit, onApplyBackground, activeTool, onToolChange }: {
   onDropAsset: (asset: DroppedAsset) => void
   eventAlias?: string
   assets: AllocatedAsset[]
   onRouteToDeficit: (item: { id: string; name: string; unit: string }) => void
   onApplyBackground: (color: string | null, photoDataUrl: string | null) => void
+  activeTool: CanvasTool
+  onToolChange: (tool: CanvasTool) => void
 }) {
   const [activeTab, setActiveTab] = useState<PanelTab>('elements')
   const [collapsed, setCollapsed] = useState(false)
@@ -834,7 +842,7 @@ function LeftPanel({ onDropAsset, eventAlias, assets, onRouteToDeficit, onApplyB
             {activeTab === 'elements'   && <ElementsTab onDropAsset={onDropAsset} assets={assets} onRouteToDeficit={onRouteToDeficit} />}
             {activeTab === 'text'       && <TextTab />}
             {activeTab === 'uploads'    && <UploadsTab onDropAsset={onDropAsset} />}
-            {activeTab === 'tools'      && <ToolsTab />}
+            {activeTab === 'tools'      && <ToolsTab activeTool={activeTool} onToolChange={onToolChange} />}
             {activeTab === 'projects'   && <ProjectsTab />}
             {activeTab === 'background' && <BackgroundTab onApply={onApplyBackground} />}
           </div>
@@ -2750,6 +2758,41 @@ export function CanvasWorkspacePage() {
   const canvasColumnRef = useRef<HTMLDivElement>(null)
   const [isCanvasFullscreen, setIsCanvasFullscreen] = useState(false)
 
+  /* ── Canvas active tool state ── */
+  const [activeTool, setActiveTool] = useState<CanvasTool>('select')
+  useEffect(() => {
+    if (activeTool !== 'select') {
+      setSelectedAssetId(null)
+    }
+  }, [activeTool])
+
+  function handlePlaceElement(element: Partial<KonvaCanvasAsset>) {
+    const newAsset: KonvaCanvasAsset = {
+      id: element.id || `el-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      label: element.label || 'Canvas Element',
+      src: element.src || '',
+      x: element.x ?? 100,
+      y: element.y ?? 100,
+      w: element.w ?? 150,
+      h: element.h ?? 150,
+      rotation: element.rotation ?? 0,
+      opacity: element.opacity ?? 100,
+      locked: element.locked ?? false,
+      hidden: element.hidden ?? false,
+      zIndex: Date.now(),
+      pageId: element.pageId || currentPage,
+      kind: element.kind || 'rect',
+      points: element.points,
+      text: element.text,
+      fill: element.fill,
+      strokeColor: element.strokeColor,
+      strokeWidth: element.strokeWidth,
+      fontSize: element.fontSize,
+    }
+    setCanvasAssets((prev) => [...prev, newAsset])
+    setSelectedAssetId(newAsset.id)
+  }
+
   /* ── Artboard Background (color or photo) — persisted per project ── */
   const [artboardBgColor, setArtboardBgColor] = useState<string>(() => {
     if (card?.id) {
@@ -3067,7 +3110,7 @@ export function CanvasWorkspacePage() {
 
       {/* ══════════ BODY ══════════ */}
       <div className="flex flex-1 overflow-hidden">
-        <LeftPanel onDropAsset={handleDropFromPanel} eventAlias={card?.eventAlias} assets={assets} onRouteToDeficit={handleRouteToDeficit} onApplyBackground={handleApplyBackground} />
+        <LeftPanel onDropAsset={handleDropFromPanel} eventAlias={card?.eventAlias} assets={assets} onRouteToDeficit={handleRouteToDeficit} onApplyBackground={handleApplyBackground} activeTool={activeTool} onToolChange={setActiveTool} />
 
         {/* Canvas + bottom bar */}
         <div ref={canvasColumnRef} className="flex flex-1 flex-col overflow-hidden bg-background">
@@ -3095,6 +3138,9 @@ export function CanvasWorkspacePage() {
             onDuplicate={duplicateAsset}
             onDelete={deleteAsset}
             onDropAsset={handleDropOnCanvas}
+            onPlaceElement={handlePlaceElement}
+            activeTool={activeTool}
+            onToolReset={() => setActiveTool('select')}
             onZoomChange={setZoom}
             onContextMenu={(x, y, assetId) => setCtxMenu({ x, y, assetId })}
             onCopy={copyAsset}
