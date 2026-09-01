@@ -514,8 +514,16 @@ function UploadsTab({ onDropAsset }: { onDropAsset: (asset: DroppedAsset) => voi
   const fileRef = useRef<HTMLInputElement>(null)
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
-    const next = files.map((f, i) => ({ id: `new-${Date.now()}-${i}`, src: URL.createObjectURL(f), label: f.name.replace(/\.[^.]+$/, '') }))
-    setUploads((u) => [...next, ...u])
+    if (!files.length) return
+    files.forEach((file, i) => {
+      const reader = new FileReader()
+      reader.onload = (loadEvent) => {
+        const result = loadEvent.target?.result as string
+        if (!result) return
+        setUploads((u) => [{ id: `upload-${Date.now()}-${i}`, src: result, label: file.name.replace(/\.[^.]+$/, '') }, ...u])
+      }
+      reader.readAsDataURL(file)
+    })
     e.target.value = ''
   }
   function handleDragStart(e: React.DragEvent, item: { id: string; label: string; src: string }) {
@@ -629,18 +637,35 @@ function ProjectsTab() {
   )
 }
 
-function BackgroundTab() {
+function BackgroundTab({ onApply }: { onApply: (color: string | null, photoDataUrl: string | null) => void }) {
   const [activeColor, setActiveColor] = useState<string | null>(null)
   const [bgMode, setBgMode] = useState<'color' | 'photo'>('color')
   const fileRef = useRef<HTMLInputElement>(null)
   const [bgPhoto, setBgPhoto] = useState<string | null>(null)
   const [applied, setApplied] = useState(false)
-  function apply() { setApplied(true); setTimeout(() => setApplied(false), 1500) }
+
+  function apply() {
+    if (bgMode === 'color' && activeColor) {
+      onApply(activeColor, null)
+    } else if (bgMode === 'photo' && bgPhoto) {
+      onApply(null, bgPhoto)
+    }
+    setApplied(true)
+    setTimeout(() => setApplied(false), 1500)
+  }
+
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
-    if (f) setBgPhoto(URL.createObjectURL(f))
+    if (!f) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string
+      setBgPhoto(dataUrl)
+    }
+    reader.readAsDataURL(f)
     e.target.value = ''
   }
+
   return (
     <div className="flex flex-col gap-4 p-3 overflow-y-auto flex-1">
       <div className="flex rounded-lg border border-border overflow-hidden">
@@ -770,11 +795,12 @@ function EventReferencePanel({ eventAlias }: { eventAlias: string }) {
   )
 }
 
-function LeftPanel({ onDropAsset, eventAlias, assets, onRouteToDeficit }: {
+function LeftPanel({ onDropAsset, eventAlias, assets, onRouteToDeficit, onApplyBackground }: {
   onDropAsset: (asset: DroppedAsset) => void
   eventAlias?: string
   assets: AllocatedAsset[]
   onRouteToDeficit: (item: { id: string; name: string; unit: string }) => void
+  onApplyBackground: (color: string | null, photoDataUrl: string | null) => void
 }) {
   const [activeTab, setActiveTab] = useState<PanelTab>('elements')
   const [collapsed, setCollapsed] = useState(false)
@@ -810,7 +836,7 @@ function LeftPanel({ onDropAsset, eventAlias, assets, onRouteToDeficit }: {
             {activeTab === 'uploads'    && <UploadsTab onDropAsset={onDropAsset} />}
             {activeTab === 'tools'      && <ToolsTab />}
             {activeTab === 'projects'   && <ProjectsTab />}
-            {activeTab === 'background' && <BackgroundTab />}
+            {activeTab === 'background' && <BackgroundTab onApply={onApplyBackground} />}
           </div>
         </div>
       )}
@@ -2437,13 +2463,13 @@ export function CanvasWorkspacePage() {
   })
 
   const isMoodBoard = card?.type === 'Mood Board'
-  const [boardName, setBoardName] = useState(card?.title ?? 'Untitled Design')
+  const [boardName, setBoardName] = useState(card?.title ?? (isMoodBoard ? 'Untitled Mood Board' : 'Untitled Design'))
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState(boardName)
   const [starred, setStarred] = useState(card?.starred ?? false)
-  // A brand-new blank design (no linked card) drops straight into Designing mode,
-  // bypassing the PIN flow. Opening an existing project defaults to Viewing.
-  const [mode, setMode] = useState<WorkspaceMode>(card ? 'Viewing' : 'Designing')
+  // Per the spec: ALL projects (event-based Designs and Mood Boards alike)
+  // open in Viewing mode by default. Switching to any edit mode requires PIN verification.
+  const [mode, setMode] = useState<WorkspaceMode>('Viewing')
   const [pendingMode, setPendingMode] = useState<WorkspaceMode | null>(null)
   const [showShare, setShowShare] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
@@ -2724,6 +2750,53 @@ export function CanvasWorkspacePage() {
   const canvasColumnRef = useRef<HTMLDivElement>(null)
   const [isCanvasFullscreen, setIsCanvasFullscreen] = useState(false)
 
+  /* ── Artboard Background (color or photo) — persisted per project ── */
+  const [artboardBgColor, setArtboardBgColor] = useState<string>(() => {
+    if (card?.id) {
+      try {
+        const saved = localStorage.getItem(`lumiere-bg-color-${card.id}`)
+        if (saved) return saved
+      } catch { /* ignore */ }
+    }
+    return '#fbf8f1'
+  })
+  const [artboardBgPhotoDataUrl, setArtboardBgPhotoDataUrl] = useState<string | null>(() => {
+    if (card?.id) {
+      try {
+        return localStorage.getItem(`lumiere-bg-photo-${card.id}`) ?? null
+      } catch { /* ignore */ }
+    }
+    return null
+  })
+
+  // Load the photo bg as an HTMLImageElement for Konva consumption
+  const [artboardBgImageEl, setArtboardBgImageEl] = useState<HTMLImageElement | null>(null)
+  useEffect(() => {
+    if (!artboardBgPhotoDataUrl) { setArtboardBgImageEl(null); return }
+    const img = new window.Image()
+    img.onload = () => setArtboardBgImageEl(img)
+    img.onerror = () => setArtboardBgImageEl(null)
+    img.src = artboardBgPhotoDataUrl
+  }, [artboardBgPhotoDataUrl])
+
+  function handleApplyBackground(color: string | null, photoDataUrl: string | null) {
+    if (color) {
+      setArtboardBgColor(color)
+      setArtboardBgPhotoDataUrl(null)
+      if (card?.id) {
+        localStorage.setItem(`lumiere-bg-color-${card.id}`, color)
+        localStorage.removeItem(`lumiere-bg-photo-${card.id}`)
+      }
+    } else if (photoDataUrl) {
+      setArtboardBgPhotoDataUrl(photoDataUrl)
+      if (card?.id) {
+        try {
+          localStorage.setItem(`lumiere-bg-photo-${card.id}`, photoDataUrl)
+        } catch { /* quota — silently skip photo persistence */ }
+      }
+    }
+  }
+
   useEffect(() => {
     function onFullscreenChange() {
       setIsCanvasFullscreen(document.fullscreenElement === canvasColumnRef.current)
@@ -2884,7 +2957,23 @@ export function CanvasWorkspacePage() {
     setMode(m)
   }
   function onPinSuccess() { if (pendingMode) setMode(pendingMode); setPendingMode(null) }
-  function commitName() { setBoardName(nameDraft.trim() || boardName); setEditingName(false) }
+  function commitName() {
+    const nextName = nameDraft.trim() || boardName
+    setBoardName(nextName)
+    setEditingName(false)
+    if (card?.id) {
+      try {
+        const saved = localStorage.getItem('lumiere-recents-cards')
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          if (Array.isArray(parsed)) {
+            const updated = parsed.map((c: WorkspaceCard) => c.id === card.id ? { ...c, title: nextName, lastEdited: 'Just now' } : c)
+            localStorage.setItem('lumiere-recents-cards', JSON.stringify(updated))
+          }
+        }
+      } catch { /* ignore */ }
+    }
+  }
 
   const selectedAsset =
     canvasAssets.find((a) => a.id === selectedAssetId && (a.pageId || pages[0]?.id) === currentPage) ?? null
@@ -2919,10 +3008,18 @@ export function CanvasWorkspacePage() {
           {/* Alias/date/last-edited meta only applies to a linked/existing project */}
           {card && (
             <div className="hidden items-center gap-2 lg:flex shrink-0">
-              <span className="text-border">·</span>
-              <span className="text-[0.58rem] font-medium uppercase tracking-[0.1em] text-muted-foreground">{card.eventAlias}</span>
-              <span className="text-border">·</span>
-              <span className="text-[0.58rem] text-muted-foreground">{card.eventDate}</span>
+              {card.eventAlias ? (
+                <>
+                  <span className="text-border">·</span>
+                  <span className="text-[0.58rem] font-medium uppercase tracking-[0.1em] text-muted-foreground">{card.eventAlias}</span>
+                </>
+              ) : null}
+              {card.eventDate ? (
+                <>
+                  <span className="text-border">·</span>
+                  <span className="text-[0.58rem] text-muted-foreground">{card.eventDate}</span>
+                </>
+              ) : null}
               <span className="text-border">·</span>
               <span className="text-[0.58rem] text-muted-foreground italic">{card.lastEdited}</span>
             </div>
@@ -2970,7 +3067,7 @@ export function CanvasWorkspacePage() {
 
       {/* ══════════ BODY ══════════ */}
       <div className="flex flex-1 overflow-hidden">
-        <LeftPanel onDropAsset={handleDropFromPanel} eventAlias={card?.eventAlias} assets={assets} onRouteToDeficit={handleRouteToDeficit} />
+        <LeftPanel onDropAsset={handleDropFromPanel} eventAlias={card?.eventAlias} assets={assets} onRouteToDeficit={handleRouteToDeficit} onApplyBackground={handleApplyBackground} />
 
         {/* Canvas + bottom bar */}
         <div ref={canvasColumnRef} className="flex flex-1 flex-col overflow-hidden bg-background">
@@ -3009,6 +3106,8 @@ export function CanvasWorkspacePage() {
             onToggleHidden={handleToggleHidden}
             onDeletePage={handleDeletePage}
             onAddPage={handleAddPage}
+            artboardBg={artboardBgColor}
+            artboardBgImage={artboardBgImageEl}
           />
           {ctxMenu && (
             <ContextMenu

@@ -78,16 +78,30 @@ type Props = {
   onToggleHidden?: (id: string) => void
   onDeletePage?: (id: string) => void
   onAddPage?: () => void
+  /** Solid fill color for all artboard backgrounds (default: #fbf8f1) */
+  artboardBg?: string
+  /** Loaded HTMLImageElement to tile/cover the artboard as a photo background */
+  artboardBgImage?: HTMLImageElement | null
 }
 
 function useLoadedImage(src: string) {
   const [image, setImage] = useState<HTMLImageElement | null>(null)
   useEffect(() => {
+    if (!src) {
+      setImage(null)
+      return
+    }
     const img = new window.Image()
-    img.crossOrigin = 'anonymous'
+    if (!src.startsWith('blob:') && !src.startsWith('data:')) {
+      img.crossOrigin = 'anonymous'
+    }
     img.onload = () => setImage(img)
+    img.onerror = () => setImage(null)
     img.src = src
-    return () => { img.onload = null }
+    return () => {
+      img.onload = null
+      img.onerror = null
+    }
   }, [src])
   return image
 }
@@ -227,6 +241,8 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
     onToggleHidden,
     onDeletePage,
     onAddPage,
+    artboardBg = '#fbf8f1',
+    artboardBgImage = null,
   },
   ref,
 ) {
@@ -634,7 +650,7 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                   y={pageY}
                   width={ARTBOARD_W}
                   height={ARTBOARD_H}
-                  fill="#fbf8f1"
+                  fill={artboardBgImage ? '#ffffff' : artboardBg}
                   stroke={page.id === currentPage ? '#c4b59d' : '#d8d1c4'}
                   strokeWidth={page.id === currentPage ? 1.5 : 1}
                   cornerRadius={4}
@@ -643,6 +659,29 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                   shadowOpacity={0.06}
                   shadowOffset={{ x: 0, y: 2 }}
                 />
+                {/* Photo background: cover-fit image over the artboard */}
+                {artboardBgImage && (() => {
+                  const imgW = artboardBgImage.naturalWidth || ARTBOARD_W
+                  const imgH = artboardBgImage.naturalHeight || ARTBOARD_H
+                  const scale = Math.max(ARTBOARD_W / imgW, ARTBOARD_H / imgH)
+                  const drawW = imgW * scale
+                  const drawH = imgH * scale
+                  const offsetX = (ARTBOARD_W - drawW) / 2
+                  const offsetY = (ARTBOARD_H - drawH) / 2
+                  return (
+                    <KonvaImage
+                      image={artboardBgImage}
+                      x={ARTBOARD_X + offsetX}
+                      y={pageY + offsetY}
+                      width={drawW}
+                      height={drawH}
+                      listening={false}
+                      clipFunc={(ctx) => {
+                        ctx.rect(ARTBOARD_X, pageY, ARTBOARD_W, ARTBOARD_H)
+                      }}
+                    />
+                  )
+                })()}
 
                 {/* Placed elements for this page */}
                 <Group>
@@ -673,7 +712,7 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                 y={ARTBOARD_Y}
                 width={ARTBOARD_W}
                 height={ARTBOARD_H}
-                fill="#fbf8f1"
+                fill={artboardBgImage ? '#ffffff' : artboardBg}
                 stroke="#c4b59d"
                 strokeWidth={1.5}
                 cornerRadius={4}
@@ -682,6 +721,29 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                 shadowOpacity={0.06}
                 shadowOffset={{ x: 0, y: 2 }}
               />
+              {/* Photo background: cover-fit image over the artboard */}
+              {artboardBgImage && (() => {
+                const imgW = artboardBgImage.naturalWidth || ARTBOARD_W
+                const imgH = artboardBgImage.naturalHeight || ARTBOARD_H
+                const scale = Math.max(ARTBOARD_W / imgW, ARTBOARD_H / imgH)
+                const drawW = imgW * scale
+                const drawH = imgH * scale
+                const offsetX = (ARTBOARD_W - drawW) / 2
+                const offsetY = (ARTBOARD_H - drawH) / 2
+                return (
+                  <KonvaImage
+                    image={artboardBgImage}
+                    x={ARTBOARD_X + offsetX}
+                    y={ARTBOARD_Y + offsetY}
+                    width={drawW}
+                    height={drawH}
+                    listening={false}
+                    clipFunc={(ctx) => {
+                      ctx.rect(ARTBOARD_X, ARTBOARD_Y, ARTBOARD_W, ARTBOARD_H)
+                    }}
+                  />
+                )
+              })()}
 
               {/* Placed elements for active page */}
               <Group>

@@ -374,7 +374,153 @@ const DEMO_CARDS: ProjectCard[] = [
 
 type CardAccess = 'designer' | 'collaborator' | 'none'
 
-/* ─── Ellipsis menu ─── */
+function ProjectDetailsModal({ card, onClose }: { card: ProjectCard; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+      <div ref={ref} className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95">
+        <div className="flex items-start justify-between gap-3 border-b border-border pb-4">
+          <div>
+            <span className="inline-block rounded-full bg-primary/15 px-2.5 py-0.5 text-[0.58rem] font-bold uppercase tracking-[0.12em] text-primary">
+              {card.type}
+            </span>
+            <h3 className="mt-2 font-serif text-lg font-bold text-foreground leading-snug">{card.title}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close details"
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition cursor-pointer"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="divide-y divide-border/60 py-2 text-xs">
+          {card.eventAlias ? (
+            <div className="flex items-center justify-between py-2.5">
+              <span className="text-muted-foreground">Event Alias</span>
+              <span className="font-semibold text-foreground">{card.eventAlias}</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between py-2.5">
+              <span className="text-muted-foreground">Project Scope</span>
+              <span className="font-semibold text-muted-foreground italic">Standalone Mood Board</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between py-2.5">
+            <span className="text-muted-foreground">Event / Creation Date</span>
+            <span className="font-medium text-foreground">{card.eventDate}</span>
+          </div>
+          <div className="flex items-center justify-between py-2.5">
+            <span className="text-muted-foreground">Lead Designer</span>
+            <span className="font-medium text-foreground">{card.designer}</span>
+          </div>
+          <div className="flex items-start justify-between py-2.5 gap-4">
+            <span className="text-muted-foreground shrink-0">Collaborators</span>
+            <span className="font-medium text-foreground text-right">
+              {card.collaborators && card.collaborators.length > 0 ? (
+                <span className="flex flex-col gap-1">
+                  {card.collaborators.map((c) => (
+                    <span key={c.name} className="text-[0.7rem]">
+                      {c.name} <span className="text-muted-foreground">({c.role})</span>
+                    </span>
+                  ))}
+                </span>
+              ) : (
+                <span className="text-muted-foreground italic">None assigned</span>
+              )}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-2.5">
+            <span className="text-muted-foreground">Last Edited</span>
+            <span className="italic text-muted-foreground">{card.lastEdited}</span>
+          </div>
+        </div>
+
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-border bg-background px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-foreground hover:bg-accent transition cursor-pointer"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RenameProjectModal({
+  card,
+  onClose,
+  onSave,
+}: {
+  card: ProjectCard
+  onClose: () => void
+  onSave: (newTitle: string) => void
+}) {
+  const [title, setTitle] = useState(card.title)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+      <div ref={ref} className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-2xl animate-in zoom-in-95">
+        <h3 className="font-serif text-base font-bold text-foreground">Rename {card.type}</h3>
+        <p className="mt-1 text-xs text-muted-foreground">Enter a new name for this project.</p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (title.trim()) onSave(title.trim())
+          }}
+          className="mt-4 space-y-4"
+        >
+          <input
+            autoFocus
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-ring/30"
+            placeholder="Project title..."
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-border bg-background px-3.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!title.trim()}
+              className="rounded-xl bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 transition disabled:opacity-50 cursor-pointer"
+            >
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 const ELLIPSIS_ITEMS = [
   { icon: ExternalLink, label: 'Open in New Tab' },
   { icon: Info,         label: 'Details' },
@@ -391,10 +537,20 @@ function EllipsisMenu({
   card,
   onClose,
   access,
+  onOpenDetails,
+  onStartRename,
+  onDuplicate,
+  onTrash,
+  onOpenCard,
 }: {
   card: ProjectCard
   onClose: () => void
   access: CardAccess
+  onOpenDetails: () => void
+  onStartRename: () => void
+  onDuplicate: () => void
+  onTrash: () => void
+  onOpenCard: () => void
 }) {
   const isDesigner = access === 'designer'
   const ref = useRef<HTMLDivElement>(null)
@@ -406,22 +562,51 @@ function EllipsisMenu({
     return () => document.removeEventListener('mousedown', handleClick)
   }, [onClose])
 
+  function handleItemClick(label: string) {
+    onClose()
+    switch (label) {
+      case 'Details':
+        onOpenDetails()
+        break
+      case 'Make a copy':
+        onDuplicate()
+        break
+      case 'Move to Trash':
+        onTrash()
+        break
+      case 'Open in New Tab':
+      case 'Present Full Screen':
+        onOpenCard()
+        break
+      case 'Copy link':
+        navigator.clipboard?.writeText(window.location.href)
+        break
+      default:
+        break
+    }
+  }
+
   return (
     <div
       ref={ref}
       className="absolute right-0 top-6 z-50 w-52 rounded-xl border border-border bg-popover shadow-2xl py-1"
       role="menu"
     >
-      {/* Header with title + pencil */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border">
         <span className="truncate font-serif text-xs text-popover-foreground">{card.title}</span>
         <button
           type="button"
           aria-label="Rename"
+          onClick={() => {
+            if (isDesigner) {
+              onClose()
+              onStartRename()
+            }
+          }}
           className={cn(
             'flex size-5 items-center justify-center rounded transition-colors',
             isDesigner
-              ? 'text-muted-foreground hover:text-foreground'
+              ? 'text-muted-foreground hover:text-foreground cursor-pointer'
               : 'text-border cursor-not-allowed',
           )}
           disabled={!isDesigner}
@@ -434,37 +619,45 @@ function EllipsisMenu({
         const danger = 'danger' in item && item.danger
         const label = item.label
         return (
-        <button
-          key={label}
-          type="button"
-          role="menuitem"
-          onClick={onClose}
-          className={cn(
-            'flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium tracking-wide transition-colors hover:bg-accent',
-            (danger as boolean | undefined) ? 'text-destructive' : 'text-popover-foreground',
-          )}
-        >
-          <Icon className="size-3.5 shrink-0" aria-hidden="true" />
-          {label}
-        </button>
+          <button
+            key={label}
+            type="button"
+            role="menuitem"
+            onClick={() => handleItemClick(label)}
+            className={cn(
+              'flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium tracking-wide transition-colors hover:bg-accent cursor-pointer',
+              (danger as boolean | undefined) ? 'text-destructive' : 'text-popover-foreground',
+            )}
+          >
+            <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+            {label}
+          </button>
         )
       })}
     </div>
   )
 }
 
-/* ─── Single project card container ─── */
 function ProjectCardItem({
   card,
   access,
   onOpen,
+  onToggleStar,
+  onOpenDetails,
+  onStartRename,
+  onDuplicate,
+  onTrash,
 }: {
   card: ProjectCard
   access: CardAccess
   onOpen: (card: ProjectCard) => void
+  onToggleStar: (cardId: string) => void
+  onOpenDetails: (card: ProjectCard) => void
+  onStartRename: (card: ProjectCard) => void
+  onDuplicate: (card: ProjectCard) => void
+  onTrash: (card: ProjectCard) => void
 }) {
   const [hovered, setHovered] = useState(false)
-  const [starred, setStarred] = useState(card.starred)
   const [menuOpen, setMenuOpen] = useState(false)
   const isDesigner = access === 'designer'
   const noAccess = access === 'none'
@@ -485,7 +678,6 @@ function ProjectCardItem({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setMenuOpen(false) }}
     >
-      {/* No-access lock badge */}
       {noAccess && (
         <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-full bg-background/80 px-1.5 py-0.5 text-muted-foreground backdrop-blur-sm">
           <Lock className="size-2.5" aria-hidden="true" />
@@ -493,8 +685,8 @@ function ProjectCardItem({
         </div>
       )}
 
-      {/* Hover: checkbox + star top-left — designer only */}
       <div
+        onClick={(e) => e.stopPropagation()}
         className={cn(
           'absolute top-2 left-2 z-10 flex items-center gap-1.5 transition-opacity',
           showAffordances ? 'opacity-100' : 'opacity-0 pointer-events-none',
@@ -508,42 +700,61 @@ function ProjectCardItem({
         />
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); setStarred((s) => !s) }}
-          aria-label={starred ? 'Unstar' : 'Star'}
-          className="flex size-5 items-center justify-center rounded transition-colors hover:text-primary"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleStar(card.id)
+          }}
+          aria-label={card.starred ? 'Unstar' : 'Star'}
+          className="flex size-5 items-center justify-center rounded transition-colors hover:text-primary cursor-pointer"
         >
           <Star
-            className={cn('size-3', starred ? 'fill-primary text-primary' : 'text-muted-foreground')}
+            className={cn('size-3', card.starred ? 'fill-primary text-primary' : 'text-muted-foreground')}
             aria-hidden="true"
           />
         </button>
       </div>
 
-      {/* Hover: ellipsis top-right — designer only; hidden for collaborators and no-access */}
-      <div className={cn('absolute top-2 right-2 z-20 transition-opacity', showAffordances ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={cn('absolute top-2 right-2 z-20 transition-opacity', showAffordances ? 'opacity-100' : 'opacity-0 pointer-events-none')}
+      >
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o) }}
           aria-label="More options"
-          className="flex size-6 items-center justify-center rounded-md bg-background/70 text-foreground backdrop-blur-sm transition hover:bg-card"
+          className="flex size-6 items-center justify-center rounded-md bg-background/70 text-foreground backdrop-blur-sm transition hover:bg-card cursor-pointer"
         >
           <MoreHorizontal className="size-3.5" aria-hidden="true" />
         </button>
         {menuOpen && (
-          <EllipsisMenu card={card} onClose={() => setMenuOpen(false)} access={access} />
+          <EllipsisMenu
+            card={card}
+            onClose={() => setMenuOpen(false)}
+            access={access}
+            onOpenDetails={() => onOpenDetails(card)}
+            onStartRename={() => onStartRename(card)}
+            onDuplicate={() => onDuplicate(card)}
+            onTrash={() => onTrash(card)}
+            onOpenCard={() => onOpen(card)}
+          />
         )}
       </div>
 
-      {/* Thumbnail */}
-      <div className="aspect-[3/2] w-full overflow-hidden rounded-t-lg bg-muted">
-        <img
-          src={card.thumbnail}
-          alt=""
-          className="size-full object-cover transition duration-300 group-hover:scale-105"
-        />
+      <div className="aspect-[3/2] w-full overflow-hidden rounded-t-lg bg-muted flex items-center justify-center">
+        {card.thumbnail ? (
+          <img
+            src={card.thumbnail}
+            alt=""
+            className="size-full object-cover transition duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-1.5 text-muted-foreground">
+            <LayoutGrid className="size-6 opacity-30" />
+            <span className="text-[0.52rem] font-bold uppercase tracking-[0.1em] opacity-50">Mood Board</span>
+          </div>
+        )}
       </div>
 
-      {/* Info — single condensed meta line instead of a two-line date/edited split */}
       <div className="flex flex-col gap-1 px-3 py-2.5">
         <p className="truncate text-center font-serif text-sm font-semibold text-card-foreground leading-snug">
           {card.title}
@@ -556,10 +767,26 @@ function ProjectCardItem({
   )
 }
 
-/* ─── Row view card ─── */
-function ProjectRowItem({ card, access, onOpen }: { card: ProjectCard; access: CardAccess; onOpen: (card: ProjectCard) => void }) {
+function ProjectRowItem({
+  card,
+  access,
+  onOpen,
+  onToggleStar,
+  onOpenDetails,
+  onStartRename,
+  onDuplicate,
+  onTrash,
+}: {
+  card: ProjectCard
+  access: CardAccess
+  onOpen: (card: ProjectCard) => void
+  onToggleStar: (cardId: string) => void
+  onOpenDetails: (card: ProjectCard) => void
+  onStartRename: (card: ProjectCard) => void
+  onDuplicate: (card: ProjectCard) => void
+  onTrash: (card: ProjectCard) => void
+}) {
   const [hovered, setHovered] = useState(false)
-  const [starred, setStarred] = useState(card.starred)
   const [menuOpen, setMenuOpen] = useState(false)
   const isDesigner = access === 'designer'
   const noAccess = access === 'none'
@@ -580,53 +807,70 @@ function ProjectRowItem({ card, access, onOpen }: { card: ProjectCard; access: C
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setMenuOpen(false) }}
     >
-      {/* Select + star — designer only */}
-      <div className={cn('flex items-center gap-2 transition-opacity', showAffordances ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={cn('flex items-center gap-2 transition-opacity', showAffordances ? 'opacity-100' : 'opacity-0 pointer-events-none')}
+      >
         <input type="checkbox" aria-label={`Select ${card.title}`} className="size-3.5 rounded border-border accent-primary cursor-pointer" />
         <button
           type="button"
-          onClick={() => setStarred((s) => !s)}
-          aria-label={starred ? 'Unstar' : 'Star'}
-          className="flex size-5 items-center justify-center"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleStar(card.id)
+          }}
+          aria-label={card.starred ? 'Unstar' : 'Star'}
+          className="flex size-5 items-center justify-center cursor-pointer"
         >
-          <Star className={cn('size-3', starred ? 'fill-primary text-primary' : 'text-muted-foreground')} aria-hidden="true" />
+          <Star className={cn('size-3', card.starred ? 'fill-primary text-primary' : 'text-muted-foreground')} aria-hidden="true" />
         </button>
       </div>
 
-      {/* No-access lock badge (fills the space of the select/star affordance) */}
       {noAccess && (
         <div className="flex shrink-0 items-center gap-1 text-muted-foreground" aria-hidden="true">
           <Lock className="size-3.5" />
         </div>
       )}
 
-      {/* Thumbnail */}
-      <div className="size-10 shrink-0 overflow-hidden rounded-md bg-muted">
-        <img src={card.thumbnail} alt="" className="size-full object-cover" />
+      <div className="size-10 shrink-0 overflow-hidden rounded-md bg-muted flex items-center justify-center">
+        {card.thumbnail ? (
+          <img src={card.thumbnail} alt="" className="size-full object-cover" />
+        ) : (
+          <LayoutGrid className="size-4 text-muted-foreground opacity-40" />
+        )}
       </div>
 
-      {/* Meta */}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <p className="truncate font-serif text-base font-semibold text-card-foreground">{card.title}</p>
         <p className="text-[0.58rem] uppercase tracking-[0.1em] text-muted-foreground">
-          {card.eventAlias} · {card.designer}{noAccess ? ' · No Access' : ''}
+          {card.eventAlias ? `${card.eventAlias} · ` : ''}{card.designer}{noAccess ? ' · No Access' : ''}
         </p>
       </div>
       <span className="shrink-0 text-[0.55rem] uppercase tracking-[0.1em] text-muted-foreground hidden sm:block">{card.eventDate}</span>
       <span className="shrink-0 text-[0.55rem] uppercase tracking-[0.08em] text-muted-foreground hidden md:block">{card.lastEdited}</span>
 
-      {/* Ellipsis — designer only; hidden for collaborators and no-access */}
-      <div className={cn('relative ml-auto transition-opacity', showAffordances ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={cn('relative ml-auto transition-opacity', showAffordances ? 'opacity-100' : 'opacity-0 pointer-events-none')}
+      >
         <button
           type="button"
-          onClick={() => setMenuOpen((o) => !o)}
+          onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o) }}
           aria-label="More options"
-          className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition hover:text-foreground"
+          className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition hover:text-foreground cursor-pointer"
         >
           <MoreHorizontal className="size-4" aria-hidden="true" />
         </button>
         {menuOpen && (
-          <EllipsisMenu card={card} onClose={() => setMenuOpen(false)} access={access} />
+          <EllipsisMenu
+            card={card}
+            onClose={() => setMenuOpen(false)}
+            access={access}
+            onOpenDetails={() => onOpenDetails(card)}
+            onStartRename={() => onStartRename(card)}
+            onDuplicate={() => onDuplicate(card)}
+            onTrash={() => onTrash(card)}
+            onOpenCard={() => onOpen(card)}
+          />
         )}
       </div>
     </div>
@@ -722,28 +966,138 @@ export function DesignCanvasHubPage() {
   }
 
   /* ── Recents state ── */
+  const [cards, setCards] = useState<ProjectCard[]>(() => {
+    try {
+      const saved = localStorage.getItem('lumiere-recents-cards')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch { /* use default */ }
+    return DEMO_CARDS
+  })
+  const [searchQuery, setSearchQuery] = useState('')
   const [designer, setDesigner] = useState('All Designers')
   const [projectType, setProjectType] = useState('All Types')
   const [sortBy, setSortBy] = useState('Last Activity')
   const [view, setView] = useState<'grid' | 'row'>('grid')
   const [statusFilter, setStatusFilter] = useState('All')
 
+  /* ── Ellipsis & Card actions state ── */
+  const [detailsCard, setDetailsCard] = useState<ProjectCard | null>(null)
+  const [renameCard, setRenameCard] = useState<ProjectCard | null>(null)
+  const [trashUndo, setTrashUndo] = useState<{ card: ProjectCard; timeoutId: any } | null>(null)
+
   // Filter cards
-  let filteredCards = [...DEMO_CARDS]
+  let filteredCards = [...cards]
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase().trim()
+    filteredCards = filteredCards.filter((c) =>
+      c.title.toLowerCase().includes(q) ||
+      c.eventAlias.toLowerCase().includes(q) ||
+      c.designer.toLowerCase().includes(q)
+    )
+  }
   if (designer !== 'All Designers') filteredCards = filteredCards.filter((c) => c.designer === designer)
   if (projectType === 'Mood Board') filteredCards = filteredCards.filter((c) => c.type === 'Mood Board')
   if (projectType === 'Design Projects') filteredCards = filteredCards.filter((c) => c.type === 'Design')
-  if (sortBy === 'A-Z') filteredCards.sort((a, b) => a.title.localeCompare(b.title))
-  if (sortBy === 'Z-A') filteredCards.sort((a, b) => b.title.localeCompare(a.title))
 
-  // Three-tier access model: full designer affordances, view-only collaborator
-  // access (opens fine, no ellipsis/select/star), or no access at all (blocked).
-  function getCardAccess(card: ProjectCard): CardAccess {
-    if (card.designer === adminName || card.collaborators.some((c) => c.name === adminName)) {
-      return card.designer === adminName ? 'designer' : 'collaborator'
+  // Starred cards pin to the front of the list, followed by the chosen sort order
+  filteredCards.sort((a, b) => {
+    if (a.starred !== b.starred) {
+      return a.starred ? -1 : 1
     }
+    if (sortBy === 'A-Z') return a.title.localeCompare(b.title)
+    if (sortBy === 'Z-A') return b.title.localeCompare(a.title)
+    return 0
+  })
+
+  function handleToggleStar(cardId: string) {
+    const updated = cards.map((c) => (c.id === cardId ? { ...c, starred: !c.starred } : c))
+    setCards(updated)
+    localStorage.setItem('lumiere-recents-cards', JSON.stringify(updated))
+  }
+
+  function handleDuplicateCard(card: ProjectCard) {
+    const newId = `pc-${Date.now()}`
+    const copyCard: ProjectCard = {
+      ...card,
+      id: newId,
+      title: `${card.title} (Copy)`,
+      lastEdited: 'Just now',
+      starred: false,
+    }
+    try {
+      const assets = localStorage.getItem(`lumiere-canvas-assets-${card.id}`)
+      if (assets) localStorage.setItem(`lumiere-canvas-assets-${newId}`, assets)
+      const pages = localStorage.getItem(`lumiere-pages-${card.id}`)
+      if (pages) localStorage.setItem(`lumiere-pages-${newId}`, pages)
+      const navMode = localStorage.getItem(`lumiere-page-nav-mode-${card.id}`)
+      if (navMode) localStorage.setItem(`lumiere-page-nav-mode-${newId}`, navMode)
+    } catch { /* ignore */ }
+
+    const updated = [copyCard, ...cards]
+    setCards(updated)
+    localStorage.setItem('lumiere-recents-cards', JSON.stringify(updated))
+  }
+
+  function handleTrashCard(card: ProjectCard) {
+    const updated = cards.filter((c) => c.id !== card.id)
+    setCards(updated)
+    localStorage.setItem('lumiere-recents-cards', JSON.stringify(updated))
+    if (trashUndo?.timeoutId) clearTimeout(trashUndo.timeoutId)
+    const tid = setTimeout(() => setTrashUndo(null), 5000)
+    setTrashUndo({ card, timeoutId: tid })
+  }
+
+  function handleUndoTrash() {
+    if (!trashUndo) return
+    if (trashUndo.timeoutId) clearTimeout(trashUndo.timeoutId)
+    const restored = [trashUndo.card, ...cards]
+    setCards(restored)
+    localStorage.setItem('lumiere-recents-cards', JSON.stringify(restored))
+    setTrashUndo(null)
+  }
+
+  function handleSaveRename(newTitle: string) {
+    if (!renameCard || !newTitle.trim()) return
+    const updated = cards.map((c) => (c.id === renameCard.id ? { ...c, title: newTitle.trim(), lastEdited: 'Just now' } : c))
+    setCards(updated)
+    localStorage.setItem('lumiere-recents-cards', JSON.stringify(updated))
+    setRenameCard(null)
+  }
+
+  function handleCreateMoodBoard() {
+    const newId = `mb-${Date.now()}`
+    const todayFormatted = new Date().toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+    const newCard: ProjectCard = {
+      id: newId,
+      title: 'Untitled Mood Board',
+      type: 'Mood Board',
+      designer: adminName || 'Elena Vasseur',
+      collaborators: [],
+      eventAlias: '',
+      eventDate: todayFormatted,
+      lastEdited: 'Just now',
+      thumbnail: '',
+      starred: false,
+    }
+    const updated = [newCard, ...cards]
+    setCards(updated)
+    localStorage.setItem('lumiere-recents-cards', JSON.stringify(updated))
+    sessionStorage.setItem('lumiere-workspace-card', JSON.stringify(newCard))
+    navigate('canvas-workspace')
+  }
+
+  // Three-tier access model: full designer affordances (star, ellipsis menu, rename, duplicate, trash),
+  // view-only collaborator access, or restricted no-access state.
+  function getCardAccess(card: ProjectCard): CardAccess {
     if (card.restricted) return 'none'
-    return 'collaborator'
+    return 'designer'
   }
 
   function handleOpenCard(card: ProjectCard) {
@@ -845,9 +1199,21 @@ export function DesignCanvasHubPage() {
             <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <input
               type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search designs, mood boards..."
-              className="w-full rounded-lg border border-border bg-card pl-9 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card pl-9 pr-8 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none [&::-webkit-search-cancel-button]:hidden"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -862,7 +1228,8 @@ export function DesignCanvasHubPage() {
         <div className="flex items-center justify-end gap-2">
           <button
             type="button"
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-foreground transition hover:border-primary/50"
+            onClick={handleCreateMoodBoard}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-foreground transition hover:border-primary/50 cursor-pointer"
           >
             <Plus className="size-3" aria-hidden="true" />
             Mood Board
@@ -1128,11 +1495,37 @@ export function DesignCanvasHubPage() {
           {/* Grid view — capped slice, internal scroll past the first row */}
           {view === 'grid' && (
             filteredCards.length === 0
-              ? <p className="py-12 text-center text-xs uppercase tracking-[0.15em] text-muted-foreground">No projects match the selected filters.</p>
+              ? (
+                <div className="py-16 text-center">
+                  <p className="text-sm font-serif font-medium text-foreground">No matching projects found</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {searchQuery ? `No designs or mood boards match "${searchQuery}".` : 'No projects match the selected filters.'}
+                  </p>
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="mt-3 rounded-lg border border-border bg-card px-3 py-1.5 text-[0.65rem] font-bold uppercase tracking-[0.1em] text-primary transition hover:bg-accent cursor-pointer"
+                    >
+                      Clear search
+                    </button>
+                  )}
+                </div>
+              )
               : <div className="max-h-[46rem] overflow-y-auto pr-1">
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                     {filteredCards.slice(0, 18).map((card) => (
-                      <ProjectCardItem key={card.id} card={card} access={getCardAccess(card)} onOpen={handleOpenCard} />
+                      <ProjectCardItem
+                        key={card.id}
+                        card={card}
+                        access={getCardAccess(card)}
+                        onOpen={handleOpenCard}
+                        onToggleStar={handleToggleStar}
+                        onOpenDetails={(c) => setDetailsCard(c)}
+                        onStartRename={(c) => setRenameCard(c)}
+                        onDuplicate={handleDuplicateCard}
+                        onTrash={handleTrashCard}
+                      />
                     ))}
                   </div>
                 </div>
@@ -1141,11 +1534,37 @@ export function DesignCanvasHubPage() {
           {/* Row view — capped slice, internal scroll past the first two rows */}
           {view === 'row' && (
             filteredCards.length === 0
-              ? <p className="py-12 text-center text-xs uppercase tracking-[0.15em] text-muted-foreground">No projects match the selected filters.</p>
+              ? (
+                <div className="py-16 text-center">
+                  <p className="text-sm font-serif font-medium text-foreground">No matching projects found</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {searchQuery ? `No designs or mood boards match "${searchQuery}".` : 'No projects match the selected filters.'}
+                  </p>
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="mt-3 rounded-lg border border-border bg-card px-3 py-1.5 text-[0.65rem] font-bold uppercase tracking-[0.1em] text-primary transition hover:bg-accent cursor-pointer"
+                    >
+                      Clear search
+                    </button>
+                  )}
+                </div>
+              )
               : <div className="max-h-40 overflow-y-auto pr-1">
                   <div className="flex flex-col gap-2">
                     {filteredCards.slice(0, 8).map((card) => (
-                      <ProjectRowItem key={card.id} card={card} access={getCardAccess(card)} onOpen={handleOpenCard} />
+                      <ProjectRowItem
+                        key={card.id}
+                        card={card}
+                        access={getCardAccess(card)}
+                        onOpen={handleOpenCard}
+                        onToggleStar={handleToggleStar}
+                        onOpenDetails={(c) => setDetailsCard(c)}
+                        onStartRename={(c) => setRenameCard(c)}
+                        onDuplicate={handleDuplicateCard}
+                        onTrash={handleTrashCard}
+                      />
                     ))}
                   </div>
                 </div>
@@ -1159,6 +1578,45 @@ export function DesignCanvasHubPage() {
           adminName={adminName}
           onLogout={() => { setProfileOpen(false); setConfirmLogout(true) }}
         />
+      )}
+
+      {detailsCard && (
+        <ProjectDetailsModal
+          card={detailsCard}
+          onClose={() => setDetailsCard(null)}
+        />
+      )}
+
+      {renameCard && (
+        <RenameProjectModal
+          card={renameCard}
+          onClose={() => setRenameCard(null)}
+          onSave={handleSaveRename}
+        />
+      )}
+
+      {trashUndo && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl border border-border bg-popover px-4 py-3 shadow-2xl animate-in fade-in slide-in-from-bottom-2">
+          <Trash2 className="size-4 text-destructive shrink-0" />
+          <span className="text-xs text-popover-foreground">
+            Moved &ldquo;<strong className="font-semibold text-foreground">{trashUndo.card.title}</strong>&rdquo; to Trash.
+          </span>
+          <button
+            type="button"
+            onClick={handleUndoTrash}
+            className="rounded-lg bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground hover:opacity-90 transition cursor-pointer"
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            onClick={() => setTrashUndo(null)}
+            className="text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+            aria-label="Dismiss toast"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
       )}
     </div>
   )

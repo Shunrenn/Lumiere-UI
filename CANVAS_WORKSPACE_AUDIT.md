@@ -13,9 +13,9 @@
 
 | Module Area | Functional Health | Implementation Status |
 | :--- | :--- | :--- |
-| **Creatives Dashboard & Calendar** | **95%** | Fully responsive layout, sequential 10-color palette cycling, 75/25 ratio status cells, recents grid/row views, role-gated ellipsis actions, and account sidebar. |
+| **Creatives Dashboard & Calendar** | **100%** | Fully responsive layout, sequential 10-color palette cycling, 75/25 ratio status cells, live search filtering, standalone + Mood Board creation flow, recents grid/row views, role-gated ellipsis actions, and account sidebar. |
 | **Workspace Top Bar & Security** | **90%** | Default `Viewing` mode lock, 4-digit PIN verification gate for editing modes (`Planning`, `Designing`, `Asset Planning`), share modal with role matrix, and comment drawer. |
-| **Left Asset & Tool Libraries** | **85%** | Clean drag-and-drop elements with stock tracking, zero-stock blocker ("Not Available" badge + deficit queue routing), persistent read-only event reference panel, and uploads manager. |
+| **Left Asset & Tool Libraries** | **90%** | Clean drag-and-drop elements with stock tracking, zero-stock blocker ("Not Available" badge + deficit queue routing), persistent read-only event reference panel, and custom uploads manager (with direct drag/place onto canvas). |
 | **Middle Konva Canvas & Controls** | **90%** | Infinite viewport pan & zoom (10%–200%), selection transforms (scaling + rotation), floating toolbar, right-click context menu with keyboard shortcuts, z-index arrange/layers stack, transparency slider, and multi-page management. |
 | **Logistics & Allocation Panel** | **95%** | Smart drag count proposals, proactive stock availability warning modal, unit conversion allocation modal, deficit resolution matrix (Cross-docking exceptions & replenishment requests), and pending verification flows. |
 
@@ -26,9 +26,10 @@
 | Specification Requirement | UI Element / Action | Trigger | Actual Implementation Status & Behavior |
 | :--- | :--- | :--- | :--- |
 | **No Traditional Navbar** | Minimalist sticky header with upper-center motto | Render | **Fully Implemented**: Maximized viewport height without traditional navbar; mathematically centered motto `LUMIÈRE CREATIVES`. |
+| **Live Header Search** | Real-time query matching title, alias, and designer | Typing in header | **Fully Implemented**: Filters Recents grid/list live with partial case-insensitive matching; clear button and dedicated empty state with "Clear search" action. |
 | **Notifications & Bell** | Notification bell with role tags | `Click` bell | **Fully Implemented**: Displays notifications mapped by type (`share`, `access-request`, `comment`, `design-collab`, `asset-collab`) with unread status indicators. |
 | **Profile Settings Sidebar** | Account settings drawer (Display Name, Theme, Logout) | `Click` profile icon | **Fully Implemented**: Slide-out drawer with editable display name, light/dark/system theme switch, and `[Yes / No]` logout confirmation prompt. |
-| **Direct Project Actions** | `+ Mood Board` button & project creation | `Click` | **Fully Implemented**: Header includes `+ Mood Board` action; clicking project cards navigates to workspace in default `Viewing` mode. |
+| **Direct Project Actions** | `+ Mood Board` button & project creation | `Click` | **Fully Implemented**: Header includes `+ Mood Board` action; creates a new blank Mood Board, opens directly in `Designing` mode without event reference panel, and persists to Recents store on return. |
 | **Calendar Module & Markers** | Monthly 42-day fixed grid with ingress/egress/actual markers | Month nav / Render | **Fully Implemented**: 10-color sequential palette cycling, circular ingress/egress indicators, and star icon for actual event dates (up to 6 indicators per cell). |
 | **75/25 Date Cell Ratio** | Left 75% indicator + alias; Right 25% status label | Render | **Fully Implemented**: Formatted with alias and color-coded status badges (`Initial Draft`, `Final Draft`, `Subject to Review`, `Ready to Present`, `Subject to Revision`). |
 | **Recents Filters & Layout** | Designer, Project Type, Sort, Grid vs Row view | Select / `Click` | **Fully Implemented**: 6 cards per column in Grid View with scrollable rows; Row view toggle. |
@@ -63,7 +64,7 @@
 | **Zero-Stock Display Rule** | "Not Available" badge for `0` stock; blocks dragging; prompts Deficit Queue or Skip | `Click` / `Drag` | **Fully Implemented**: Items with `0` stock display *Not Available* badge, prevent dragging, and clicking opens prompt to route to Deficit Queue or Skip. |
 | **Persistent Event Reference** | Locked read-only panel (*Event Pegs, Color Palette, Branding & Textures*) | `Click` accordion | **Fully Implemented**: Pinned above library tabs, populated from `EVENT_REFERENCE_DATA` for the open event alias; marked with lock icon. |
 | **Text Library** | Font hierarchy presets & formatting buttons | `Click` | **Static Placeholder**: Displays sample typography styles, but clicking does not spawn text onto Konva canvas. |
-| **Uploads Library** | Custom reference image repository | `Click` / file input | **Partially Implemented**: Users can upload images into the local grid; dragging custom uploads directly to the Konva canvas is not yet bound. |
+| **Uploads Library** | Custom reference image repository | `Click` / file input / `Drag` | **Fully Implemented**: Users can upload custom images (converted to durable base64 URLs), preview gallery items, and drag or click tiles to place them directly onto the Konva canvas with per-page partitioning and bounding clamps. |
 | **Tools Panel** | Select, Draw, Shapes, Lines, Sticky Note, Text | `Click` | **Partially Implemented**: Selecting a tool updates tool active state and instruction note, but does not activate freehand drawing on the Konva stage. |
 | **Projects Panel** | Import pages from other events/moodboards | `Click` accordion | **Partially Implemented**: Shows project directory tree and pages; page import to canvas is static. |
 | **Background Tab** | Preset color swatches, color picker, photo background | `Click` / input | **Partially Implemented**: Color/photo picker controls are interactive with "Applied to all pages" feedback, but stage background color is not dynamically altered. |
