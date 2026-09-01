@@ -1,0 +1,32 @@
+@keyframes adminFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes rowHighlightPulse { 0%, 40% { background-color: color-mix(in srgb, var(--primary) 16%, transparent); } 100% { background-color: transparent; } }
+
+html, body, #root { min-height: 100%; background: var(--background); }
+body { overflow-x: hidden; overscroll-behavior-x: none; }
+.admin-fade { animation: adminFade .35s ease; }
+.row-highlight { animation: rowHighlightPulse 2.2s ease-out; }
+.mobile-shell { min-height: 100dvh; width: 100%; max-width: 430px; margin: 0 auto; overflow-x: clip; background: var(--background); }
+.app-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding: calc(16px + env(safe-area-inset-top)) 16px 14px; border-bottom: 1px solid var(--border); }
+.brand-mark { font: 700 14px Georgia, serif; letter-spacing: .16em; }
+.eyebrow { font: 700 10px Arial, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-foreground); }
+.app-main { min-width: 0; padding: 16px 14px calc(96px + env(safe-area-inset-bottom)); }
+.paper-card { min-width: 0; max-width: 100%; border: 1px solid var(--border); background: var(--card); padding: 14px; border-radius: 8px; overflow-wrap: anywhere; }
+.section-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
+.section-heading > * { min-width:0; }
+.section-heading h2 { font: 600 20px Georgia, serif; }
+.icon-button { display:flex; align-items:center; justify-content:center; width:32px; height:32px; border:1px solid var(--border); border-radius:50%; background:var(--card); }
+.avatar { display:flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:50%; background:var(--foreground); color:var(--background); font-size:12px; }
+.button-primary,.button-secondary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:38px; padding: 0 14px; border-radius:4px; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+.button-primary { background:var(--primary); color:var(--primary-foreground); }
+.button-secondary { border:1px solid var(--border); background:transparent; color:var(--foreground); }
+.status { display:inline-flex; white-space:nowrap; padding:4px 7px; border-radius:999px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; background:var(--secondary); }
+.status-submitted { background:#ead8b5; color:#704c23; } .status-approved { background:#dce8d9; color:#3e623d; } .status-rejected { background:#f0d9d3; color:#8e3e32; } .status-in-progress { background:#e6e0ce; color:#675b2f; } .status-neutral { background:var(--secondary); color:var(--muted-foreground); }
+.field-label { display:flex; flex-direction:column; gap:8px; margin-top:20px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
+.field-input { width:100%; border:1px solid var(--border); background:var(--card); border-radius:4px; padding:11px 12px; outline:none; text-transform:none; letter-spacing:normal; font-weight:400; }
+.field-input:focus { border-color:var(--primary); }
+.bottom-nav { position:fixed; bottom:0; left:50%; z-index:30; display:flex; width:min(430px,100%); transform:translateX(-50%); justify-content:space-around; border-top:1px solid var(--border); background:color-mix(in srgb, var(--card) 96%, transparent); padding:10px 6px calc(10px + env(safe-area-inset-bottom)); backdrop-filter:blur(16px); }
+.bottom-nav span { display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--muted-foreground); font-size:10px; } .bottom-nav .active { color:var(--primary); font-weight:700; }
+.sheet-backdrop { position:fixed; inset:0; z-index:40; display:flex; align-items:flex-end; justify-content:center; padding-top:env(safe-area-inset-top); background:rgb(39 37 34 / .35); }
+.sheet { width:min(430px,100%); max-height:calc(100dvh - env(safe-area-inset-top)); overflow-y:auto; border:1px solid var(--border); border-bottom:0; border-radius:14px 14px 0 0; background:var(--background); padding:20px 16px calc(24px + env(safe-area-inset-bottom)); }
+.field-input { min-height:44px; font-size:16px; }
+.button-primary,.button-secondary { min-height:44px; max-width:100%; }
