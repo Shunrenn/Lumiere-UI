@@ -441,6 +441,13 @@ export async function createAssignment(
     'work_date' | 'event_name' | 'venue' | 'deployment_ref' | 'lead_name' | 'lead_email' | 'member_names' | 'sub_role' | 'notes'
   > & { inherited_from?: string | null; created_by?: string | null },
 ): Promise<ManningAssignment> {
+  const hasLead = Boolean(input.lead_name && input.lead_name.trim().length > 0)
+  if (!hasLead) {
+    throw new Error(
+      `Cannot finalize assignment: At least 1 active Team Lead must be assigned for sub-role '${input.sub_role || 'General'}' on ${input.work_date}.`,
+    )
+  }
+
   const { data, error } = await supabase
     .from('manning_assignments')
     .insert(input)
@@ -986,9 +993,83 @@ export function useIncidentData(): IncidentData {
     }
   }, [])
 
+  return { incidents, loading, error, usingPreset, reload }
+}
+
+// ---- Manning Overrides (Supabase + Local Fallback) -------------------
+
+export interface ManningOverride {
+  id: string
+  staff_id: string
+  staff_name: string
+  event_id: string
+  event_title: string
+  conflict_type: 'On Leave' | 'Double Booked'
+  justification: string
+  overridden_by: string
+  created_at: string
+}
+
+let localOverrides: ManningOverride[] = []
+
+export async function fetchOverrides(): Promise<ManningOverride[]> {
+  try {
+    const { data, error } = await supabase
+      .from('manning_overrides')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    localOverrides = (data ?? []) as ManningOverride[]
+    return localOverrides
+  } catch (err) {
+    console.warn('[v0] manning_overrides table unavailable; using local memory store.', err)
+    return localOverrides
+  }
+}
+
+export async function createOverride(
+  input: Omit<ManningOverride, 'id' | 'created_at'>,
+): Promise<ManningOverride> {
+  const now = new Date().toISOString()
+  const id = `override-${Date.now()}`
+  const override: ManningOverride = { id, created_at: now, ...input }
+
+  try {
+    const { data, error } = await supabase
+      .from('manning_overrides')
+      .insert(override)
+      .select('*')
+      .single()
+    if (!error && data) {
+      localOverrides = [data as ManningOverride, ...localOverrides]
+      return data as ManningOverride
+    }
+  } catch (err) {
+    console.warn('[v0] Failed to insert manning_override to Supabase; storing locally.', err)
+  }
+
+  localOverrides = [override, ...localOverrides]
+  return override
+}
+
+export function useManningOverrides() {
+  const [overrides, setOverrides] = useState<ManningOverride[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const reload = useCallback(async () => {
+    setLoading(true)
+    try {
+      const data = await fetchOverrides()
+      setOverrides(data)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     void reload()
   }, [reload])
 
-  return { incidents, loading, error, usingPreset, reload }
+  return { overrides, loading, reload }
 }
+

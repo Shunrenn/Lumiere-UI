@@ -1,4 +1,9 @@
-import type { AssetStatus, CatalogAsset } from '@/lib/warehouse-catalog'
+import {
+  computeStockHealth,
+  formatSmartDuration,
+  type AssetStatus,
+  type CatalogAsset,
+} from '@/lib/warehouse-catalog'
 import type { Tone } from '@/components/warehouse/event-detail/status-tone'
 import { Pill } from '@/components/warehouse/shared/Pill'
 
@@ -10,10 +15,14 @@ export const ASSET_STATUS_TONE: Record<AssetStatus, Tone> = {
   'Lost In Action': 'critical',
 }
 
-// The stock-display line varies by category — this is the one piece of
-// copy on the card that is never the same shape twice.
-export function stockDisplay(asset: CatalogAsset): { kind: 'fraction' | 'text'; text: string; percent?: number } {
-  if (asset.category === 'Event Asset' || asset.category === 'Stockroom') {
+export function getTierGlanceDisplay(asset: CatalogAsset): {
+  badgeLabel?: string
+  badgeTone?: Tone
+  text: string
+  kind: 'fraction' | 'text' | 'health'
+  percent?: number
+} {
+  if (asset.category === 'Event Asset') {
     const stock = asset.currentStock ?? 0
     const threshold = asset.threshold ?? 1
     return {
@@ -22,17 +31,42 @@ export function stockDisplay(asset: CatalogAsset): { kind: 'fraction' | 'text'; 
       percent: threshold > 0 ? Math.min(100, Math.round((stock / threshold) * 100)) : 0,
     }
   }
-  if (asset.category === 'Bespoke') {
-    return { kind: 'text', text: asset.bespokeStage ?? 'Unprepped' }
+
+  if (asset.category === 'Stockroom') {
+    const stock = asset.currentStock ?? 0
+    const crit = asset.criticalThreshold ?? 30
+    const ceil = asset.ceilingCap ?? 200
+    const health = computeStockHealth(stock, crit, ceil)
+    const tone: Tone = health === 'Low Stock' ? 'caution' : health === 'Over Stock' ? 'progress' : 'positive'
+    return {
+      kind: 'health',
+      badgeLabel: health,
+      badgeTone: tone,
+      text: `${stock} ${asset.unit} (${health})`,
+    }
   }
+
+  if (asset.category === 'Bespoke') {
+    const est = asset.finishTimeMinutes ? formatSmartDuration(asset.finishTimeMinutes) : null
+    const stage = asset.bespokeStage ?? 'Unprepped'
+    return {
+      kind: 'text',
+      text: est ? `${stage} · Finish: ~${est}` : stage,
+    }
+  }
+
   if (asset.category === 'Rental') {
     return {
       kind: 'text',
-      text: asset.onLoanDueDate ? `On Loan · Due back ${asset.onLoanDueDate}` : 'In Warehouse',
+      text: asset.onLoanDueDate ? `On Loan · Due ${asset.onLoanDueDate}` : 'In Warehouse',
     }
   }
+
   // Office Asset
-  return { kind: 'text', text: asset.custodian ? `Assigned to ${asset.custodian}` : 'In Storage' }
+  return {
+    kind: 'text',
+    text: asset.custodian ? `Cust: ${asset.custodian}` : 'Unassigned (Storage)',
+  }
 }
 
 interface AssetCardProps {
@@ -41,37 +75,51 @@ interface AssetCardProps {
 }
 
 export function AssetCard({ asset, onOpen }: AssetCardProps) {
-  const display = stockDisplay(asset)
-  const tone = ASSET_STATUS_TONE[asset.status]
+  const glance = getTierGlanceDisplay(asset)
+  const statusTone = ASSET_STATUS_TONE[asset.status]
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="group flex flex-col overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      className="group flex flex-col overflow-hidden rounded-xl border border-border/80 bg-white dark:bg-card text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-primary/50 hover:ring-1 hover:ring-primary/20"
     >
-      <div className="relative aspect-[3.4] overflow-hidden bg-muted">
+      {/* Aspect Ratio 4:3 image for compact 6-col grid */}
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
         <img
           src={asset.image || '/placeholder.svg'}
           alt={asset.name}
           crossOrigin="anonymous"
-          className="size-full object-cover transition duration-500 group-hover:scale-105"
+          className="size-full object-cover transition duration-300 group-hover:scale-105"
         />
-        <div className="absolute left-1.5 top-1.5">
-          <Pill tone={tone}>{asset.status}</Pill>
+        <div className="absolute left-1.5 top-1.5 flex flex-wrap gap-1">
+          <Pill tone={statusTone} className="text-[0.5rem] px-1.5 py-0.5">
+            {asset.status}
+          </Pill>
+          {glance.kind === 'health' && glance.badgeLabel && (
+            <Pill tone={glance.badgeTone ?? 'positive'} className="text-[0.5rem] px-1.5 py-0.5">
+              {glance.badgeLabel}
+            </Pill>
+          )}
         </div>
       </div>
-      <div className="flex flex-1 flex-col gap-0.5 p-1.5">
-        <h3 className="truncate font-serif text-[0.7rem] leading-tight text-card-foreground">{asset.name}</h3>
-        <div className="mt-auto">
-          {display.kind === 'fraction' ? (
-            <div className="flex items-center justify-between text-[0.5rem] font-semibold uppercase tracking-[0.03em] text-muted-foreground">
+
+      {/* Proportional compact card body */}
+      <div className="flex flex-1 flex-col gap-1 p-2 sm:p-2.5">
+        <h3 className="truncate font-serif text-[0.68rem] font-medium leading-snug text-card-foreground group-hover:text-primary transition-colors">
+          {asset.name}
+        </h3>
+
+        <div className="mt-auto pt-0.5">
+          {glance.kind === 'fraction' ? (
+            <div className="flex items-center justify-between text-[0.55rem] font-semibold uppercase tracking-wider text-muted-foreground">
               <span className="truncate">{asset.category}</span>
-              <span className="shrink-0 text-card-foreground">{display.text}</span>
+              <span className="shrink-0 text-card-foreground font-bold">{glance.text}</span>
             </div>
           ) : (
-            <p className="truncate text-[0.56rem] font-medium text-muted-foreground">
-              <span className="uppercase tracking-[0.03em]">{asset.category}</span> · {display.text}
+            <p className="truncate text-[0.55rem] font-medium text-muted-foreground">
+              <span className="font-semibold uppercase tracking-wider text-card-foreground/90">{asset.category}</span>
+              <span className="opacity-80"> · {glance.text}</span>
             </p>
           )}
         </div>

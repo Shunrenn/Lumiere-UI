@@ -43,32 +43,104 @@ export interface CatalogLedgerEntry {
   reconciliationTag?: ReconciliationTag
 }
 
+export type StockHealthState = 'Low Stock' | 'Healthy Stock' | 'Over Stock'
+
+/**
+ * Smart Duration Formatting Helper
+ * - Under 1 hour (< 60 mins): "Xm" (e.g. "2m", "45m")
+ * - 1 hour to under 1 day (60 to 1439 mins): "Xh Ym" (e.g. "1h 20m", "2h 15m")
+ * - 1 day+ (>= 1440 mins): "Xd Yh" (e.g. "2d 3h")
+ */
+export function formatSmartDuration(minutes: number): string {
+  if (isNaN(minutes) || minutes <= 0) return '0m'
+
+  if (minutes < 60) {
+    return `${Math.round(minutes)}m`
+  }
+
+  const hours = Math.floor(minutes / 60)
+  const remainingMins = Math.round(minutes % 60)
+
+  if (hours < 24) {
+    return remainingMins > 0 ? `${hours}h ${remainingMins}m` : `${hours}h`
+  }
+
+  const days = Math.floor(hours / 24)
+  const remainingHours = hours % 24
+
+  return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`
+}
+
+export function computeStockHealth(
+  currentStock = 0,
+  criticalThreshold = 30,
+  ceilingCap = 200,
+): StockHealthState {
+  if (currentStock < criticalThreshold) return 'Low Stock'
+  if (currentStock > ceilingCap) return 'Over Stock'
+  return 'Healthy Stock'
+}
+
 export interface CatalogAsset {
   id: string
   assetId: string
   name: string
+  itemCallName?: string
   category: AssetCategory
+  subCategory?: string
+  description?: string
   status: AssetStatus
   image: string
   unit: string
-  // Stockroom / Event Asset
-  currentStock?: number
-  threshold?: number
-  // Bespoke
-  bespokeStage?: BespokeStage
-  bespokeCrew?: string
-  // Rental
-  onLoanDueDate?: string
-  rentalVendorName?: string
-  // Office Asset
-  custodian?: string
-  // Detailed tab
+
+  // Shared Base Fields
   dimensions: AssetDimensions
+  is_circular?: boolean
+  shape?: string
+  circumference?: string
+  material?: string
+  colorType?: 'mono' | 'multi' | 'changeable'
+  colorPrimary?: string
+  colorSecondary?: string[]
+  colorNotes?: string
+  tags?: string[]
+
   purchaseCost: number
   costPerUnit: number
   dateAdded: string
   primaryVendorId: string
   backupVendorId?: string
+
+  // Event Asset Specific
+  currentStock?: number
+  threshold?: number
+  lifeSpan?: string
+  damageReplacementCost?: number
+
+  // Bespoke Specific
+  bespokeStage?: BespokeStage
+  bespokeCrew?: string
+  rawMaterials?: string[]
+  manCount?: number
+  finishTimeMinutes?: number
+  revisionTimeMinutes?: number
+
+  // Stockroom Specific
+  criticalThreshold?: number
+  ceilingCap?: number
+  pricePerPack?: number
+
+  // Rental Specific
+  onLoanDueDate?: string
+  rentalVendorName?: string
+  supplierDetails?: string
+  supplierContact?: string
+  lengthOfRent?: string
+  overduePenaltyFee?: number
+
+  // Office Asset Specific
+  custodian?: string
+  vendorDetails?: string
 }
 
 function hashOf(value: string) {
@@ -95,43 +167,318 @@ const DECOR_IMAGES = [
 
 interface SeedRow {
   name: string
+  itemCallName: string
   category: AssetCategory
+  subCategory: string
   unit: string
+  material: string
+  colorType: 'mono' | 'multi' | 'changeable'
+  colorPrimary: string
+  colorSecondary?: string[]
+  tags: string[]
+  is_circular?: boolean
+  shape?: string
+  circumference?: string
 }
 
 const SEED_ROWS: SeedRow[] = [
   // Event Asset — reservable stock, deployed per event
-  { name: 'Tiffany Ceremony Chair', category: 'Event Asset', unit: 'pcs' },
-  { name: 'Gold Charger Plate Set', category: 'Event Asset', unit: 'sets' },
-  { name: 'Silk Table Runner — Ivory', category: 'Event Asset', unit: 'pcs' },
-  { name: 'Crystal Votive Candle Holder', category: 'Event Asset', unit: 'pcs' },
-  { name: 'Uplighting Fixture — Warm Amber', category: 'Event Asset', unit: 'units' },
-  { name: 'Floral Arch Frame — Round', category: 'Event Asset', unit: 'units' },
-  // Bespoke — one-off custom builds, no fraction
-  { name: 'Custom Monogram Backdrop', category: 'Bespoke', unit: 'build' },
-  { name: 'Bespoke Ceiling Installation', category: 'Bespoke', unit: 'build' },
-  { name: 'Client Crest Stage Panel', category: 'Bespoke', unit: 'build' },
-  { name: 'Bespoke Welcome Signage', category: 'Bespoke', unit: 'build' },
-  { name: 'Custom Dessert Table Facade', category: 'Bespoke', unit: 'build' },
-  // Stockroom — general warehouse consumables / reusable stock
-  { name: 'Silver Flatware Set', category: 'Stockroom', unit: 'sets' },
-  { name: 'Glassware — Coupe Set', category: 'Stockroom', unit: 'sets' },
-  { name: 'Pillar Candle — Unscented', category: 'Stockroom', unit: 'pcs' },
-  { name: 'Silk Napkin — Champagne', category: 'Stockroom', unit: 'pcs' },
-  { name: 'String Lights — Warm White 10m', category: 'Stockroom', unit: 'coils' },
-  // Rental — sourced from an outside vendor, tracked on loan
-  { name: 'Crystal Chandelier — Grand', category: 'Rental', unit: 'units' },
-  { name: 'Velvet Lounge Sofa', category: 'Rental', unit: 'pcs' },
-  { name: 'Vintage Candelabra Set', category: 'Rental', unit: 'sets' },
-  { name: 'Dance Floor Panel — Glossy White', category: 'Rental', unit: 'panels' },
-  // Office Asset — internal operational equipment
-  { name: 'Warehouse Forklift Unit', category: 'Office Asset', unit: 'unit' },
-  { name: 'Field Radio Set', category: 'Office Asset', unit: 'sets' },
-  { name: 'Site Survey Tablet', category: 'Office Asset', unit: 'unit' },
-  { name: 'Loading Bay Pallet Jack', category: 'Office Asset', unit: 'unit' },
+  {
+    name: 'Tiffany Ceremony Chair',
+    itemCallName: 'Tiffany Chair',
+    category: 'Event Asset',
+    subCategory: 'Furniture / Seating',
+    unit: 'pcs',
+    material: 'Resin & Hardwood',
+    colorType: 'mono',
+    colorPrimary: 'Metallic Gold',
+    tags: ['Ceremony', 'Seating', 'Gala'],
+  },
+  {
+    name: 'Gold Charger Plate Set',
+    itemCallName: 'Gold Charger',
+    category: 'Event Asset',
+    subCategory: 'Tableware / Chargers',
+    unit: 'sets',
+    material: 'Lacquered Glass',
+    colorType: 'mono',
+    colorPrimary: 'Polished Gold',
+    tags: ['Dining', 'Tableware'],
+    is_circular: true,
+    shape: 'Circular',
+    circumference: '103 cm',
+  },
+  {
+    name: 'Silk Table Runner — Ivory',
+    itemCallName: 'Ivory Runner',
+    category: 'Event Asset',
+    subCategory: 'Linens / Textiles',
+    unit: 'pcs',
+    material: '100% Mulberry Silk',
+    colorType: 'mono',
+    colorPrimary: 'Ivory Cream',
+    tags: ['Tablescape', 'Linens'],
+  },
+  {
+    name: 'Crystal Votive Candle Holder',
+    itemCallName: 'Crystal Votive',
+    category: 'Event Asset',
+    subCategory: 'Lighting / Accents',
+    unit: 'pcs',
+    material: 'Leaded Crystal Glass',
+    colorType: 'mono',
+    colorPrimary: 'Clear Crystal',
+    tags: ['Centerpiece', 'Candlelit'],
+    is_circular: true,
+    shape: 'Cylindrical',
+    circumference: '25 cm',
+  },
+  {
+    name: 'Uplighting Fixture — Warm Amber',
+    itemCallName: 'Amber Uplight',
+    category: 'Event Asset',
+    subCategory: 'AV & Lighting',
+    unit: 'units',
+    material: 'Aluminum Casing',
+    colorType: 'changeable',
+    colorPrimary: 'Warm Amber',
+    colorSecondary: ['RGBW Spectrum'],
+    tags: ['Stage', 'Ambience'],
+  },
+  {
+    name: 'Floral Arch Frame — Round',
+    itemCallName: 'Round Arch',
+    category: 'Event Asset',
+    subCategory: 'Structures / Arches',
+    unit: 'units',
+    material: 'Wrought Iron',
+    colorType: 'mono',
+    colorPrimary: 'Matte Brass',
+    tags: ['Photo Op', 'Stage Arch'],
+    is_circular: true,
+    shape: 'Circular Arch',
+    circumference: '754 cm',
+  },
+
+  // Bespoke — custom fabrication builds
+  {
+    name: 'Custom Monogram Backdrop',
+    itemCallName: 'Monogram Wall',
+    category: 'Bespoke',
+    subCategory: 'Fabrication / Backdrops',
+    unit: 'build',
+    material: 'Plywood & Acrylic',
+    colorType: 'multi',
+    colorPrimary: 'Gilded Gold',
+    colorSecondary: ['Matte White', 'Navy Accent'],
+    tags: ['Stage', 'Custom Build'],
+  },
+  {
+    name: 'Bespoke Ceiling Canopy Installation',
+    itemCallName: 'Ceiling Canopy',
+    category: 'Bespoke',
+    subCategory: 'Fabrication / Hanging Decor',
+    unit: 'build',
+    material: 'Organza & Micro-LEDs',
+    colorType: 'changeable',
+    colorPrimary: 'Champagne Gold',
+    tags: ['Hanging', 'Illuminated'],
+  },
+  {
+    name: 'Client Crest Stage Panel',
+    itemCallName: 'Crest Panel',
+    category: 'Bespoke',
+    subCategory: 'Fabrication / Stagecraft',
+    unit: 'build',
+    material: 'CNC Engraved MDF',
+    colorType: 'mono',
+    colorPrimary: 'Polished Brass',
+    tags: ['Stagecraft', 'VIP Branding'],
+  },
+  {
+    name: 'Bespoke Welcome Signage Stand',
+    itemCallName: 'Welcome Stand',
+    category: 'Bespoke',
+    subCategory: 'Fabrication / Signage',
+    unit: 'build',
+    material: 'Frosted Acrylic & Steel',
+    colorType: 'mono',
+    colorPrimary: 'Rose Gold',
+    tags: ['Entrance', 'Signage'],
+  },
+  {
+    name: 'Custom Dessert Table Facade',
+    itemCallName: 'Dessert Facade',
+    category: 'Bespoke',
+    subCategory: 'Fabrication / Furniture',
+    unit: 'build',
+    material: 'Fluted Molding & Marble Top',
+    colorType: 'multi',
+    colorPrimary: 'Parchment White',
+    colorSecondary: ['Gold Fluting'],
+    tags: ['Station', 'Custom Facade'],
+  },
+
+  // Stockroom — general consumable / reusable stock
+  {
+    name: 'Silver Flatware Set',
+    itemCallName: 'Silver Flatware',
+    category: 'Stockroom',
+    subCategory: 'Consumables / Cutlery',
+    unit: 'sets',
+    material: 'Sterling Silver Plate',
+    colorType: 'mono',
+    colorPrimary: 'Polished Silver',
+    tags: ['Dining', 'Cutlery'],
+  },
+  {
+    name: 'Glassware — Coupe Set',
+    itemCallName: 'Coupe Glassware',
+    category: 'Stockroom',
+    subCategory: 'Consumables / Glassware',
+    unit: 'sets',
+    material: 'Hand-blown Crystal',
+    colorType: 'mono',
+    colorPrimary: 'Crystal Clear',
+    tags: ['Barware', 'Toast'],
+    is_circular: true,
+    shape: 'Circular Rim',
+    circumference: '28 cm',
+  },
+  {
+    name: 'Pillar Candle — Unscented',
+    itemCallName: 'Pillar Candle',
+    category: 'Stockroom',
+    subCategory: 'Consumables / Candles',
+    unit: 'pcs',
+    material: 'Paraffin & Soy Wax',
+    colorType: 'mono',
+    colorPrimary: 'Pure Ivory',
+    tags: ['Ambience', 'Consumable'],
+    is_circular: true,
+    shape: 'Cylindrical',
+    circumference: '22 cm',
+  },
+  {
+    name: 'Silk Napkin — Champagne',
+    itemCallName: 'Silk Napkin',
+    category: 'Stockroom',
+    subCategory: 'Consumables / Napkins',
+    unit: 'pcs',
+    material: 'Satin Silk',
+    colorType: 'mono',
+    colorPrimary: 'Champagne Satin',
+    tags: ['Dining', 'Textile'],
+  },
+  {
+    name: 'String Lights — Warm White 10m',
+    itemCallName: 'String Lights',
+    category: 'Stockroom',
+    subCategory: 'Consumables / Wiring',
+    unit: 'coils',
+    material: 'Copper & PVC Wiring',
+    colorType: 'changeable',
+    colorPrimary: 'Warm Yellow',
+    tags: ['Lighting', 'Wiring'],
+  },
+
+  // Rental — sourced from external vendor
+  {
+    name: 'Crystal Chandelier — Grand',
+    itemCallName: 'Grand Chandelier',
+    category: 'Rental',
+    subCategory: 'External Rental / Lighting',
+    unit: 'units',
+    material: 'K9 Austrian Crystal',
+    colorType: 'mono',
+    colorPrimary: 'Sparkling Clear',
+    tags: ['Rental', 'Overhead'],
+    is_circular: true,
+    shape: 'Tiered Circular',
+    circumference: '376 cm',
+  },
+  {
+    name: 'Velvet Lounge Sofa',
+    itemCallName: 'Velvet Sofa',
+    category: 'Rental',
+    subCategory: 'External Rental / Seating',
+    unit: 'pcs',
+    material: 'Plush Emerald Velvet',
+    colorType: 'mono',
+    colorPrimary: 'Deep Emerald',
+    tags: ['Rental', 'Lounge'],
+  },
+  {
+    name: 'Vintage Candelabra Set',
+    itemCallName: 'Vintage Candelabra',
+    category: 'Rental',
+    subCategory: 'External Rental / Tabletop',
+    unit: 'sets',
+    material: 'Antiqued Bronze',
+    colorType: 'mono',
+    colorPrimary: 'Antique Bronze',
+    tags: ['Rental', 'Table Decor'],
+  },
+  {
+    name: 'Dance Floor Panel — Glossy White',
+    itemCallName: 'Dance Panel',
+    category: 'Rental',
+    subCategory: 'External Rental / Staging',
+    unit: 'panels',
+    material: 'High-Gloss Vinyl',
+    colorType: 'mono',
+    colorPrimary: 'Gloss White',
+    tags: ['Rental', 'Dance Floor'],
+  },
+
+  // Office Asset — operational equipment
+  {
+    name: 'Warehouse Forklift Unit',
+    itemCallName: 'Forklift #1',
+    category: 'Office Asset',
+    subCategory: 'Equipment / Logistics',
+    unit: 'unit',
+    material: 'Heavy Industrial Steel',
+    colorType: 'mono',
+    colorPrimary: 'Safety Yellow',
+    tags: ['Office Asset', 'Heavy Machinery'],
+  },
+  {
+    name: 'Field Radio Set',
+    itemCallName: 'Walkie-Talkie Set',
+    category: 'Office Asset',
+    subCategory: 'Equipment / Comms',
+    unit: 'sets',
+    material: 'Polycarbonate Shell',
+    colorType: 'mono',
+    colorPrimary: 'Matte Black',
+    tags: ['Office Asset', 'Communications'],
+  },
+  {
+    name: 'Site Survey Tablet',
+    itemCallName: 'Survey iPad Pro',
+    category: 'Office Asset',
+    subCategory: 'Equipment / Electronics',
+    unit: 'unit',
+    material: 'Anodized Aluminum',
+    colorType: 'mono',
+    colorPrimary: 'Space Gray',
+    tags: ['Office Asset', 'Surveying'],
+  },
+  {
+    name: 'Loading Bay Pallet Jack',
+    itemCallName: 'Pallet Jack #2',
+    category: 'Office Asset',
+    subCategory: 'Equipment / Hydraulics',
+    unit: 'unit',
+    material: 'Reinforced Alloy Steel',
+    colorType: 'mono',
+    colorPrimary: 'Industrial Red',
+    tags: ['Office Asset', 'Hydraulics'],
+  },
 ]
 
-const CUSTODIANS = ['Marco Villareal', 'Dennis Pineda', 'JoyABREGO', 'Trisha Domingo', 'Warehouse Pool']
+const CUSTODIANS = ['Marco Villareal', 'Dennis Pineda', 'Joy ABREGO', 'Trisha Domingo', 'Warehouse Pool']
 const CREW_LEADS = ['Fab Team — Ronnie', 'Fab Team — Iris', 'Fab Team — Kean', 'Fab Team — Marge']
 const DECLARANTS = ['Marco Villareal', 'Dennis Pineda', 'Joy Abrego', 'Trisha Domingo', 'Ronnie Cabrera', 'Iris Manalo']
 
@@ -183,11 +530,22 @@ export function getCatalogAssets(): CatalogAsset[] {
       id: `cat-${index}`,
       assetId,
       name: row.name,
+      itemCallName: row.itemCallName,
       category: row.category,
+      subCategory: row.subCategory,
+      description: `Premium ${row.material.toLowerCase()} piece curated for high-profile luxury event staging.`,
       status: 'Available',
       image,
       unit: row.unit,
       dimensions: dimsFor(seed),
+      is_circular: row.is_circular,
+      shape: row.shape,
+      circumference: row.circumference,
+      material: row.material,
+      colorType: row.colorType,
+      colorPrimary: row.colorPrimary,
+      colorSecondary: row.colorSecondary,
+      tags: row.tags,
       purchaseCost: 4500 + ((seed * 37) % 60000),
       costPerUnit: 150 + ((seed * 11) % 3200),
       dateAdded: dateFromSeed(seed, -200),
@@ -195,32 +553,84 @@ export function getCatalogAssets(): CatalogAsset[] {
       backupVendorId: backupVendor.id !== primaryVendor.id ? backupVendor.id : undefined,
     }
 
-    if (row.category === 'Event Asset' || row.category === 'Stockroom') {
+    if (row.category === 'Event Asset') {
       const threshold = 40 + (seed % 160)
       const ratioRoll = seed % 10
       const ratio = ratioRoll < 5 ? 0.6 + ((seed % 40) / 100) : ratioRoll < 8 ? 0.25 + ((seed % 20) / 100) : (seed % 12) / 100
       const currentStock = Math.max(0, Math.round(threshold * ratio))
       const status: AssetStatus = currentStock === 0 ? 'Critical Deficit' : currentStock / threshold < 0.2 ? 'Critical Deficit' : currentStock / threshold < 0.5 ? 'Low Stock' : 'Available'
-      return { ...base, currentStock, threshold, status }
+      return {
+        ...base,
+        currentStock,
+        threshold,
+        status,
+        lifeSpan: `${3 + (seed % 4)} Years`,
+        damageReplacementCost: Math.round(base.costPerUnit * 1.4),
+      }
+    }
+
+    if (row.category === 'Stockroom') {
+      const criticalThreshold = 30 + (seed % 50)
+      const ceilingCap = 180 + (seed % 120)
+      const roll = seed % 10
+      const currentStock = roll < 3 ? criticalThreshold - 12 : roll < 7 ? criticalThreshold + 40 : ceilingCap + 35
+      const status: AssetStatus = currentStock < criticalThreshold ? 'Low Stock' : 'Available'
+      return {
+        ...base,
+        currentStock,
+        criticalThreshold,
+        ceilingCap,
+        threshold: criticalThreshold,
+        status,
+        pricePerPack: Math.round(base.costPerUnit * 12),
+        lifeSpan: '24 Months',
+      }
     }
 
     if (row.category === 'Bespoke') {
       const stages: BespokeStage[] = ['Unprepped', 'Prepping', 'Ready']
       const status = statusFor(row.category, seed)
       const bespokeStage: BespokeStage = status === 'Deployed' ? 'Ready' : stages[seed % stages.length]
-      return { ...base, status, bespokeStage, bespokeCrew: CREW_LEADS[seed % CREW_LEADS.length] }
+      const finishTimeMinutes = 45 + ((seed * 17) % 3600) // Ranges from 45 mins to ~60 hours
+      const revisionTimeMinutes = 15 + ((seed * 7) % 180)
+
+      return {
+        ...base,
+        status,
+        bespokeStage,
+        bespokeCrew: CREW_LEADS[seed % CREW_LEADS.length],
+        rawMaterials: ['Plywood 3/4"', 'Acrylic Panel', 'Gold Leaf Coating', 'Steel Bracing'],
+        manCount: 2 + (seed % 5),
+        finishTimeMinutes,
+        revisionTimeMinutes,
+      }
     }
 
     if (row.category === 'Rental') {
       const status = statusFor(row.category, seed)
       const dueDate = dateFromSeed(seed, 5 + (seed % 25))
-      return { ...base, status, onLoanDueDate: status === 'Deployed' ? dueDate : undefined, rentalVendorName: primaryVendor.name }
+      return {
+        ...base,
+        status,
+        onLoanDueDate: status === 'Deployed' ? dueDate : undefined,
+        rentalVendorName: primaryVendor.name,
+        supplierDetails: `${primaryVendor.name} (Acct Ref: SUP-${1000 + (seed % 800)})`,
+        supplierContact: primaryVendor.contactPerson || 'Vendor Rep',
+        lengthOfRent: `${7 + (seed % 14)} Days`,
+        overduePenaltyFee: 1500 + ((seed * 23) % 4000),
+      }
     }
 
     // Office Asset
     const status = statusFor(row.category, seed)
     const assigned = seed % 3 !== 0
-    return { ...base, status, custodian: assigned ? CUSTODIANS[seed % CUSTODIANS.length] : undefined }
+    return {
+      ...base,
+      status,
+      custodian: assigned ? CUSTODIANS[seed % CUSTODIANS.length] : undefined,
+      vendorDetails: `${primaryVendor.name} — Direct Purchase`,
+      lifeSpan: '5 Years Warranty',
+    }
   })
 
   return cachedCatalog
@@ -231,10 +641,6 @@ export function getCatalogAssetById(id: string): CatalogAsset | undefined {
 }
 
 // ---------- Live catalog store ----------
-// Assets registered through the Add Item flow live in the same store the
-// seed occupies, so downstream consumers (Replenishment's automated
-// threshold listener in particular) see them without a page reload.
-
 const listeners = new Set<() => void>()
 
 function publishCatalog() {

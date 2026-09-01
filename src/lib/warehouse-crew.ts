@@ -186,6 +186,48 @@ export function crewHasConflict(row: CrewRow | undefined, eventId: string): bool
   return false
 }
 
+export const QUALIFIED_LEAD_ROLES = [
+  'Event Admin',
+  'Warehouse Lead',
+  'Team Lead / Field Lead',
+  'Field Lead',
+  'Team Lead',
+  'Site Supervisor',
+] as const
+
+export function isTeamLead(
+  row: CrewRow | undefined,
+  staffList: Staff[] = [],
+  declarations: { submittedBy: string; submittedRole: string; submittedAt: string }[] = [],
+): boolean {
+  if (!row) return false
+  const staffMember = staffList.find((s) => s.id === row.staffId)
+
+  // 1. Check explicit staff role (exact match)
+  if (staffMember && QUALIFIED_LEAD_ROLES.includes(staffMember.role as any)) {
+    return true
+  }
+
+  // 2. Check CrewRow role text (exact match against fixed list)
+  if (QUALIFIED_LEAD_ROLES.includes(row.role.trim() as any)) {
+    return true
+  }
+
+  // 3. Check recent Ground Crew Declarations (recency window: <= 7 days)
+  const now = Date.now()
+  const recentDecl = declarations.find((d) => {
+    if (d.submittedRole !== 'Team Lead' && d.submittedRole !== 'Field Lead') return false
+    const ageMs = now - new Date(d.submittedAt).getTime()
+    if (ageMs > 7 * 24 * 60 * 60 * 1000) return false // Expire declarations older than 7 days
+    return (
+      (staffMember && d.submittedBy.toLowerCase().includes(staffMember.surname.toLowerCase())) ||
+      d.submittedBy.toLowerCase().includes(row.name.toLowerCase())
+    )
+  })
+
+  return Boolean(recentDecl)
+}
+
 // ---------- Daily-Weekly Ops — non-event-bound shift roster grid ----------
 
 export function getOpsWeekDates(weekOffset = 0): string[] {
