@@ -48,6 +48,7 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
   const [manualIds, setManualIds] = useState<Set<string>>(new Set())
   const [presetId, setPresetId] = useState(presetSquads[0]?.id ?? '')
   const [swappedOut, setSwappedOut] = useState<Set<string>>(new Set())
+  const [swaps, setSwaps] = useState<Record<string, string>>({})
   const [slotsFullNotice, setSlotsFullNotice] = useState(false)
 
   // Emergency Override State & Persistence
