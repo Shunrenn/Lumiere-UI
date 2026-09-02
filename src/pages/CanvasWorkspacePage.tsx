@@ -568,8 +568,8 @@ function ToolsTab() {
           const Icon = tool.icon
           const isActive = activeTool === tool.id
           return (
-            <button key={tool.id} type="button" onClick={() => setActiveTool(tool.id)}
-              className={cn('flex flex-col items-center gap-2 rounded-xl border py-3 transition',
+            <button key={tool.id} type="button" aria-pressed={isActive} onClick={() => setActiveTool(tool.id)}
+              className={cn('flex flex-col items-center gap-2 rounded-xl border py-3 transition cursor-pointer',
                 isActive ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}>
               <Icon className="size-4" />
               <span className="text-[0.58rem] font-semibold uppercase tracking-[0.1em]">{tool.label}</span>
@@ -582,7 +582,7 @@ function ToolsTab() {
           <p className="font-bold uppercase tracking-[0.1em] text-foreground">{DEMO_TOOLS.find((t) => t.id === activeTool)?.label}</p>
           {DEMO_TOOLS.find((t) => t.id === activeTool)?.textOk
             ? <p>Double-tap to insert text into this element.</p>
-            : <p>Text insertion is not supported for this tool.</p>}
+            : <p>{`The ${DEMO_TOOLS.find((t) => t.id === activeTool)?.label ?? 'selected'} tool is selected. Click the canvas to use it.`}</p>}
         </div>
       )}
     </div>
@@ -1490,7 +1490,7 @@ function ContextMenu({
 
 /* ═══════════��══════════════════════════════
    INFINITE ARTBOARD CANVAS
-   ══════════════════════════════════════════ */
+   ═══════════════════���══════════════════════ */
 function InfiniteCanvas({
   assets, selectedId, zoom, showGrid, onSelect, onUpdate, onDeselect, onDuplicate, onDelete, onDropAsset,
 }: {
