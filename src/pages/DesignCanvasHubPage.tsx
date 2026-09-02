@@ -752,6 +752,23 @@ export function DesignCanvasHubPage() {
     navigate('canvas-workspace')
   }
 
+  function handleCreateMoodBoard() {
+    const moodBoard: ProjectCard = {
+      id: `moodboard-${Date.now()}`,
+      title: 'Untitled Mood Board',
+      type: 'Mood Board',
+      designer: adminName,
+      collaborators: [],
+      eventAlias: 'NEW-26',
+      eventDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      lastEdited: 'Created just now',
+      thumbnail: '',
+      starred: false,
+    }
+    sessionStorage.setItem('lumiere-workspace-card', JSON.stringify(moodBoard))
+    navigate('canvas-workspace')
+  }
+
   // Events across upcoming months, sorted chronologically (soonest first)
   const upcomingEvents = useMemo(() => {
     const all: CalendarEvent[] = []
@@ -862,6 +879,8 @@ export function DesignCanvasHubPage() {
         <div className="flex items-center justify-end gap-2">
           <button
             type="button"
+            onClick={handleCreateMoodBoard}
+            aria-label="Create mood board"
             className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-foreground transition hover:border-primary/50"
           >
             <Plus className="size-3" aria-hidden="true" />
