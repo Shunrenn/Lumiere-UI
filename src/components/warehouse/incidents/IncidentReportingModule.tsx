@@ -122,7 +122,18 @@ export function IncidentReportingModule({ onClose }: IncidentReportingModuleProp
             setTab('queue')
           }} />
         ) : !unlocked ? (
-          <PinGate onUnlock={() => setUnlocked(true)} />
+          <div className="relative">
+            <div className="pointer-events-none opacity-40 blur-xs">
+              <ReviewQueue incidents={visibleIncidents} actor={actor} onReload={reload} />
+            </div>
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
+              role="dialog"
+              aria-modal="true"
+            >
+              <PinGate onUnlock={() => setUnlocked(true)} onCancel={() => setTab('report')} />
+            </div>
+          </div>
         ) : loading ? (
           <p className="text-sm text-muted-foreground">Loading review queue…</p>
         ) : (
@@ -294,7 +305,7 @@ function ReportForm({ actor, onFiled }: { actor: string; onFiled: (created: Inci
 
 // ---- PIN gate --------------------------------------------------------
 
-function PinGate({ onUnlock }: { onUnlock: () => void }) {
+function PinGate({ onUnlock, onCancel }: { onUnlock: () => void; onCancel?: () => void }) {
   const [pin, setPin] = useState('')
   const [checking, setChecking] = useState(false)
   const [err, setErr] = useState(false)
@@ -315,7 +326,16 @@ function PinGate({ onUnlock }: { onUnlock: () => void }) {
   }
 
   return (
-    <div className="max-w-sm rounded-xl border border-border bg-card px-6 py-8 text-center">
+    <div className="relative max-w-sm rounded-xl border border-border bg-card px-6 py-8 text-center shadow-2xl">
+      {onCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+        >
+          <X className="size-4" />
+        </button>
+      )}
       <span className="mx-auto flex size-12 items-center justify-center rounded-lg bg-primary/15 text-primary">
         <Lock className="size-6" aria-hidden="true" />
       </span>

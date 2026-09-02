@@ -54,10 +54,10 @@ export const WAREHOUSE_MODULES: WarehouseModule[] = [
   },
   {
     id: 'manning',
-    label: 'Manning',
+    label: 'Manning Delegation',
     icon: Users,
-    blurb: 'Unified crew management: daily shift rosters, event schedules, 48h SLA tasks, and warning ledgers.',
-    previewPoints: ['Daily shift grid (AM/PM/OFF)', 'Event schedule & squad assignments', '48h SLA & warning ledger'],
+    blurb: 'Unified crew management: daily shift rosters, event schedules, 48h task confirmations, and warning ledgers.',
+    previewPoints: ['Daily shift grid (AM/PM/OFF)', 'Event schedule & squad assignments', '48h task confirmations & warning ledger'],
   },
   {
     id: 'incidents',

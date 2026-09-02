@@ -241,7 +241,7 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
                 <div key={eventId} className="overflow-hidden rounded-xl border border-border bg-card">
                   <div className="flex items-center justify-between border-b border-border px-5 py-4">
                     <div>
-                      <h2 className="font-serif text-lg font-medium text-card-foreground">{group.title}</h2>
+                      <h2 className="font-serif text-lg font-bold text-card-foreground">{group.title}</h2>
                       <p className="text-[0.6rem] uppercase tracking-[0.08em] text-muted-foreground">
                         {group.lines.length} deficit line{group.lines.length === 1 ? '' : 's'}
                       </p>

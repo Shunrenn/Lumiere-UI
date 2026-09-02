@@ -35,7 +35,10 @@ function TriggerCell({ source }: { source: TriggerSource }) {
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((cur) => !cur)}
+        onClick={(e) => {
+          e.stopPropagation()
+          setOpen((cur) => !cur)
+        }}
         aria-expanded={open}
         className={cn(
           'whitespace-nowrap rounded-full border px-2.5 py-1 text-[0.58rem] font-semibold uppercase tracking-[0.08em] transition',
@@ -92,28 +95,36 @@ export function DeficitTable({ lines, selectedIds, onToggleSelect, onRowClick, o
           {lines.map((line) => {
             const pct = line.threshold > 0 ? Math.min(100, Math.round((line.currentStock / line.threshold) * 100)) : 0
             return (
-              <tr key={line.id} className="border-t border-border/60 align-middle">
+              <tr
+                key={line.id}
+                onClick={() => onRowClick(line)}
+                className="cursor-pointer border-t border-border/60 align-middle transition-colors hover:bg-accent/50"
+              >
                 {onToggleSelect && (
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedIds.has(line.id)}
-                      onChange={() => onToggleSelect(line.id)}
+                      onChange={(e) => {
+                        e.stopPropagation()
+                        onToggleSelect(line.id)
+                      }}
+                      onClick={(e) => e.stopPropagation()}
                       aria-label={`Select ${line.itemName}`}
                       className="size-4 accent-primary"
                     />
                   </td>
                 )}
                 <td className="px-4 py-3">
-                  <button type="button" onClick={() => onRowClick(line)} className="text-left">
-                    <p className="font-serif text-sm text-card-foreground hover:text-primary">{line.itemName}</p>
+                  <div className="text-left">
+                    <p className="font-serif text-sm font-medium text-card-foreground group-hover:text-primary transition-colors">{line.itemName}</p>
                     <p className="text-[0.6rem] uppercase tracking-[0.08em] text-muted-foreground">
                       {line.category}
                       {line.taggedForDispatch && ' · Tagged for dispatch'}
                     </p>
-                  </button>
+                  </div>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <TriggerCell source={line.triggerSource} />
                 </td>
                 <td className="px-4 py-3">
@@ -138,7 +149,7 @@ export function DeficitTable({ lines, selectedIds, onToggleSelect, onRowClick, o
                 <td className="px-4 py-3">
                   <Pill tone={DEFICIT_STATUS_TONE[line.status]}>{line.status}</Pill>
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                   <KebabMenu
                     label={`Actions for ${line.itemName}`}
                     actions={[

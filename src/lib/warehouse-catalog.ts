@@ -7,6 +7,8 @@
 import { useSyncExternalStore } from 'react'
 import { getWarehouseVendors } from '@/lib/warehouse-vendors'
 
+import type { WarehouseZone } from '@/lib/warehouse-crew'
+
 export type AssetCategory = 'Event Asset' | 'Bespoke' | 'Stockroom' | 'Rental' | 'Office Asset'
 
 export type AssetStatus = 'Available' | 'Low Stock' | 'Critical Deficit' | 'Deployed' | 'Lost In Action'
@@ -92,6 +94,7 @@ export interface CatalogAsset {
   status: AssetStatus
   image: string
   unit: string
+  warehouseZone?: WarehouseZone
 
   // Shared Base Fields
   dimensions: AssetDimensions

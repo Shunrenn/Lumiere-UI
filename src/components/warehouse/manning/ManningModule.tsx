@@ -1,54 +1,35 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  AlertTriangle,
   CalendarClock,
-  CalendarDays,
-  CheckCircle2,
-  ChevronDown,
-  ClipboardList,
   Clock,
-  Copy,
-  List,
-  Plus,
-  Search,
-  ShieldAlert,
-  Timer,
   UserPlus,
   Users,
   X,
+  Copy,
+  Plus,
+  ShieldAlert,
+  Search,
+  Maximize2,
 } from 'lucide-react'
 import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import {
-  getPresetSquads,
   useCrewRows,
-  useShiftGrid,
-  getOpsWeekDates,
+  getPresetSquads,
   type CrewRow,
   type CrewRowStatus,
 } from '@/lib/warehouse-crew'
-import type { CrewAssignmentStatus, EventCrewAssignment } from '@/lib/event-detail'
-import { CrewListView } from '@/components/warehouse/manpower/CrewListView'
-import { CrewCalendarView } from '@/components/warehouse/manpower/CrewCalendarView'
-import { CrewOpsGrid } from '@/components/warehouse/manpower/CrewOpsGrid'
-import { AssignCrewModal } from '@/components/warehouse/manpower/AssignCrewModal'
-import { CrewInfoModal } from '@/components/warehouse/event-detail/CrewInfoModal'
 import {
-  useGroundCrewDeclarations,
   reconcileExpiredDeclarations,
-  getManningFallbackDeclarations,
-  getApproachingDeclarationsSummary,
+  useGroundCrewDeclarations,
 } from '@/lib/ground-crew-declarations'
+import { CrewOpsGrid } from '@/components/warehouse/manpower/CrewOpsGrid'
+import { DailyZoneDutyView } from '@/components/warehouse/manpower/DailyZoneDutyView'
+import { AssignCrewModal } from '@/components/warehouse/manpower/AssignCrewModal'
 import {
   confirmTask,
-  createAssignment,
-  createTask,
   formatSlaCountdown,
-  getApproachingSlaCount,
-  inheritAssignment,
   isSlaOverdue,
-  issueWarning,
-  nextWarningTier,
   rejectTask,
   slaRemainingMs,
   submitTask,
@@ -59,14 +40,17 @@ import {
 } from '@/lib/manning'
 import { cn } from '@/lib/utils'
 
-// Maps the Manning module's status vocabulary onto EventCrewAssignment status
-const ROW_STATUS_TO_ASSIGNMENT: Record<CrewRowStatus, CrewAssignmentStatus> = {
-  Available: 'Pending',
-  Assigned: 'Confirmed',
-  'On Leave': 'Unavailable',
-}
-function toCrewAssignment(row: CrewRow): EventCrewAssignment {
-  return { id: row.id, name: row.name, role: row.role, status: ROW_STATUS_TO_ASSIGNMENT[row.status] }
+function Avatar({ name }: { name: string }) {
+  const initials = name
+    .split(' ')
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join('')
+  return (
+    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[0.6rem] font-bold uppercase tracking-wide text-primary ring-1 ring-border">
+      {initials}
+    </span>
+  )
 }
 
 type TopLevelTab = 'daily' | 'event'
@@ -86,37 +70,34 @@ export function ManningModule({ onClose }: ManningModuleProps) {
   const crewRows = useCrewRows(staff, events)
   const presetSquads = useMemo(() => getPresetSquads(staff), [staff])
 
-  // Manning & SLA Engine Data
+  // Manning Delegation Data
   const { assignments, tasks, warnings, loading, error, reload } = useManningData()
   const declarations = useGroundCrewDeclarations()
 
   // Navigation State
   const [topTab, setTopTab] = useState<TopLevelTab>('daily')
+  const [dailyViewMode, setDailyViewMode] = useState<'matrix' | 'detail'>('matrix')
   const [eventSubTab, setEventSubTab] = useState<EventSubTab>('schedule')
-  const [scheduleViewMode, setScheduleViewMode] = useState<ScheduleViewMode>('list')
 
-  // Search & Filter State for Event Schedule
-  const [query, setQuery] = useState('')
-  const [roleFilter, setRoleFilter] = useState('All Roles')
-  const [statusFilter, setStatusFilter] = useState<'All Statuses' | CrewRowStatus>('All Statuses')
+  // Roster Directory Search & Filter State
+  const [directoryQuery, setDirectoryQuery] = useState('')
+  const [directoryStatusFilter, setDirectoryStatusFilter] = useState<'All' | 'Available' | 'Assigned' | 'On Leave'>('All')
 
-  // Modals & Selection State
-  const [assignOpen, setAssignOpen] = useState(false)
-  const [selectedCrewRow, setSelectedCrewRow] = useState<CrewRow | null>(null)
+  // Modal / Drawer States
   const [rosterOpen, setRosterOpen] = useState(true)
+  const [assignOpen, setAssignOpen] = useState(false)
+  const [fullRosterModalOpen, setFullRosterModalOpen] = useState(false)
+  const [selectedCrewRow, setSelectedCrewRow] = useState<CrewRow | null>(null)
 
-  // Manning & SLA Modals State
-  const [now, setNow] = useState(() => new Date())
-  const [busy, setBusy] = useState<string | null>(null)
-  const [createAssignmentOpen, setCreateAssignmentOpen] = useState(false)
-  const [inheritOpen, setInheritOpen] = useState(false)
-  const [createTaskOpen, setCreateTaskOpen] = useState(false)
-  const [createWarningOpen, setCreateWarningOpen] = useState(false)
-  const [targetTaskForConfirm, setTargetTaskForConfirm] = useState<ManningTask | null>(null)
+  // Card Click Inspection Detail Modals
+  const [selectedAssignment, setSelectedAssignment] = useState<ManningAssignment | null>(null)
+  const [selectedTask, setSelectedTask] = useState<ManningTask | null>(null)
+  const [selectedWarning, setSelectedWarning] = useState<ManningWarning | null>(null)
 
-  // Live SLA countdowns interval (30s)
+  // Real-time clock tick for task countdown displays
+  const [now, setNow] = useState<Date>(() => new Date())
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30_000)
+    const id = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(id)
   }, [])
 
@@ -124,41 +105,15 @@ export function ManningModule({ onClose }: ManningModuleProps) {
     reconcileExpiredDeclarations()
   }, [declarations])
 
-  const canViewFullCrewDetail = hasFullWarehouseAccess || isManningOfficer
-
-  // Stats Calculations: Daily Operations
-  const totalCrew = crewRows.length
-  const availableToday = crewRows.filter((row) => row.status === 'Available').length
-  const assignedEvents = crewRows.filter((row) => row.status === 'Assigned').length
-  const pendingLeaves = crewRows.filter((row) => row.status === 'On Leave').length
-
-  // Stats Calculations: Event-Based Operations
-  const activeAssignments = assignments.filter((a) => a.status === 'Active').length
-  const awaitingConfirmation = tasks.filter((t) => t.status === 'Submitted').length
-  const slaOverdue = tasks.filter((t) => isSlaOverdue(t, now)).length
-  const totalEscalated = tasks.filter((t) => t.escalated).length
-
-  // Crew Roles Filter Options
-  const crewRoles = useMemo(
-    () => ['All Roles', ...Array.from(new Set(crewRows.map((row) => row.role)))],
-    [crewRows],
-  )
-
-  // Filtered Event Schedule Rows
-  const filteredCrewRows = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return crewRows.filter((row) => {
-      const matchesRole = roleFilter === 'All Roles' || row.role === roleFilter
-      const matchesStatus = statusFilter === 'All Statuses' || row.status === statusFilter
-      const matchesQuery =
-        !q ||
-        row.name.toLowerCase().includes(q) ||
-        row.role.toLowerCase().includes(q) ||
-        (row.allocation?.event.toLowerCase().includes(q) ?? false) ||
-        (row.allocation?.task.toLowerCase().includes(q) ?? false)
-      return matchesRole && matchesStatus && matchesQuery
+  // Filtered Roster Directory Rows
+  const filteredDirectoryRows = useMemo(() => {
+    const q = directoryQuery.trim().toLowerCase()
+    return crewRows.filter((crew) => {
+      const matchesStatus = directoryStatusFilter === 'All' || crew.status === directoryStatusFilter
+      const matchesQuery = !q || crew.name.toLowerCase().includes(q) || crew.role.toLowerCase().includes(q)
+      return matchesStatus && matchesQuery
     })
-  }, [crewRows, query, roleFilter, statusFilter])
+  }, [crewRows, directoryQuery, directoryStatusFilter])
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-y-auto bg-background">
@@ -167,9 +122,9 @@ export function ManningModule({ onClose }: ManningModuleProps) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[0.6rem] font-bold uppercase tracking-[0.24em] text-primary">Warehouse module</p>
-            <h1 className="mt-1 font-serif text-2xl font-medium text-foreground">Manning</h1>
+            <h1 className="mt-1 font-serif text-2xl font-medium text-foreground">Manning Delegation</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Unified crew management: daily shift rosters, event schedules, 48h SLA tasks, and warning ledgers.
+              Ground crew scheduling, 48h task confirmations, and warning enforcement.
             </p>
           </div>
           <button
@@ -182,68 +137,9 @@ export function ManningModule({ onClose }: ManningModuleProps) {
           </button>
         </div>
 
-        {/* ─── Dynamic Stat Cards (changes based on active topLevelTab) ─── */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {topTab === 'daily' ? (
-            <>
-              <div className="rounded-lg border border-border bg-card px-4 py-3.5 border-l-4 border-l-foreground/30">
-                <p className="font-sans text-2xl font-bold leading-none text-card-foreground">{totalCrew}</p>
-                <p className="mt-2 text-[0.6rem] font-semibold uppercase leading-tight tracking-[0.1em] text-muted-foreground">
-                  Total Crew
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-card px-4 py-3.5 border-l-4 border-l-primary">
-                <p className="font-sans text-2xl font-bold leading-none text-card-foreground">{availableToday}</p>
-                <p className="mt-2 text-[0.6rem] font-semibold uppercase leading-tight tracking-[0.1em] text-muted-foreground">
-                  Available Today
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-card px-4 py-3.5 border-l-4 border-l-accent-foreground/40">
-                <p className="font-sans text-2xl font-bold leading-none text-card-foreground">{assignedEvents}</p>
-                <p className="mt-2 text-[0.6rem] font-semibold uppercase leading-tight tracking-[0.1em] text-muted-foreground">
-                  Auto-Scheduled
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-card px-4 py-3.5 border-l-4 border-l-destructive">
-                <p className="font-sans text-2xl font-bold leading-none text-card-foreground">{pendingLeaves}</p>
-                <p className="mt-2 text-[0.6rem] font-semibold uppercase leading-tight tracking-[0.1em] text-muted-foreground">
-                  Pending Leaves
-                </p>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="rounded-lg border border-border bg-card px-4 py-3.5 border-l-4 border-l-primary">
-                <p className="font-sans text-2xl font-bold leading-none text-card-foreground">{activeAssignments}</p>
-                <p className="mt-2 text-[0.6rem] font-semibold uppercase leading-tight tracking-[0.1em] text-muted-foreground">
-                  Active Assignments
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-card px-4 py-3.5 border-l-4 border-l-foreground/30">
-                <p className="font-sans text-2xl font-bold leading-none text-card-foreground">{awaitingConfirmation}</p>
-                <p className="mt-2 text-[0.6rem] font-semibold uppercase leading-tight tracking-[0.1em] text-muted-foreground">
-                  Awaiting Confirm
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-card px-4 py-3.5 border-l-4 border-l-destructive">
-                <p className="font-sans text-2xl font-bold leading-none text-card-foreground">{slaOverdue}</p>
-                <p className="mt-2 text-[0.6rem] font-semibold uppercase leading-tight tracking-[0.1em] text-muted-foreground">
-                  SLA Overdue
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-card px-4 py-3.5 border-l-4 border-l-amber-500">
-                <p className="font-sans text-2xl font-bold leading-none text-card-foreground">{totalEscalated}</p>
-                <p className="mt-2 text-[0.6rem] font-semibold uppercase leading-tight tracking-[0.1em] text-muted-foreground">
-                  Escalated
-                </p>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* ─── Top-Level Tabs: Daily Operations vs Event-Based Operations ─── */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between pt-1">
-          <div className="inline-flex rounded-lg border border-border bg-background p-1">
+        {/* ─── Top-Level Navigation Tabs ─── */}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="inline-flex rounded-lg border border-border bg-card p-1">
             <button
               type="button"
               onClick={() => setTopTab('daily')}
@@ -274,7 +170,6 @@ export function ManningModule({ onClose }: ManningModuleProps) {
             </button>
           </div>
 
-          {/* Quick Roster Drawer Toggle & Action Button */}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -288,7 +183,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
               )}
             >
               <Users className="size-3.5" />
-              Crew Roster Directory ({crewRows.length})
+              Crew Directory ({filteredDirectoryRows.length}/{crewRows.length})
             </button>
 
             {topTab === 'event' && eventSubTab === 'schedule' && (
@@ -298,11 +193,41 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                 className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90"
               >
                 <UserPlus className="size-3.5" />
-                Assign Crew
+                Assign Field Crew
               </button>
             )}
           </div>
         </div>
+
+        {/* ─── Nested Sub-Tabs (when topTab === 'daily') ─── */}
+        {topTab === 'daily' && (
+          <div className="flex flex-col gap-3 border-t border-border pt-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="inline-flex rounded-md border border-border bg-background p-1">
+              <button
+                type="button"
+                onClick={() => setDailyViewMode('matrix')}
+                aria-pressed={dailyViewMode === 'matrix'}
+                className={cn(
+                  'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
+                  dailyViewMode === 'matrix' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
+                )}
+              >
+                Weekly Roster Matrix
+              </button>
+              <button
+                type="button"
+                onClick={() => setDailyViewMode('detail')}
+                aria-pressed={dailyViewMode === 'detail'}
+                className={cn(
+                  'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
+                  dailyViewMode === 'detail' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
+                )}
+              >
+                Daily Department &amp; Zone Detail
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ─── Nested Sub-Tabs (when topTab === 'event') ─── */}
         {topTab === 'event' && (
@@ -339,7 +264,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                   eventSubTab === 'tasks' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
                 )}
               >
-                SLA Tasks ({tasks.length})
+                48h Task Confirmations ({tasks.length})
               </button>
               <button
                 type="button"
@@ -350,115 +275,101 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                   eventSubTab === 'warnings' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
                 )}
               >
-                Warnings ({warnings.length})
+                Warning Ledger ({warnings.length})
               </button>
             </div>
-
-            {/* Controls specific to Event Schedule subtab */}
-            {eventSubTab === 'schedule' && (
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex rounded-md border border-border bg-background p-1" aria-label="Schedule View">
-                  <button
-                    type="button"
-                    onClick={() => setScheduleViewMode('list')}
-                    aria-pressed={scheduleViewMode === 'list'}
-                    className={cn(
-                      'flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
-                      scheduleViewMode === 'list' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
-                    )}
-                  >
-                    <List className="size-3" />
-                    List
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setScheduleViewMode('calendar')}
-                    aria-pressed={scheduleViewMode === 'calendar'}
-                    className={cn(
-                      'flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
-                      scheduleViewMode === 'calendar' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
-                    )}
-                  >
-                    <CalendarDays className="size-3" />
-                    Calendar
-                  </button>
-                </div>
-
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search crew or event..."
-                    className="w-48 rounded-md border border-input bg-background py-1.5 pl-8 pr-2.5 text-xs text-foreground outline-none focus:border-primary"
-                  />
-                </div>
-
-                <select
-                  value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value)}
-                  className="rounded-md border border-border bg-background py-1.5 px-2.5 text-xs font-medium text-foreground outline-none focus:border-primary"
-                >
-                  {crewRoles.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-                  className="rounded-md border border-border bg-background py-1.5 px-2.5 text-xs font-medium text-foreground outline-none focus:border-primary"
-                >
-                  {(['All Statuses', 'Available', 'Assigned', 'On Leave'] as const).map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
           </div>
         )}
       </div>
 
-      {/* ─── Persistent Shared Crew Roster Directory (Collapsible Section) ─── */}
+      {/* ─── Compact Scrollable Crew Roster Directory with Search & Filters ─── */}
       {rosterOpen && (
-        <div className="border-b border-border bg-card/60 px-6 py-4 sm:px-10">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-foreground flex items-center gap-2">
+        <div className="border-b border-border bg-card/60 px-6 py-3 sm:px-10 space-y-3">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
               <Users className="size-4 text-primary" />
-              Shared Crew Roster &amp; Availability Directory
-            </h3>
-            <span className="text-[0.62rem] text-muted-foreground">Click any member to inspect details</span>
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {crewRows.map((crew) => (
+              <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-foreground">
+                Shared Crew Directory ({filteredDirectoryRows.length})
+              </h3>
               <button
-                key={crew.id}
                 type="button"
-                onClick={() => setSelectedCrewRow(crew)}
-                className="flex items-center justify-between rounded-lg border border-border bg-background p-2.5 text-left transition hover:border-primary/50 hover:shadow-sm"
+                onClick={() => setFullRosterModalOpen(true)}
+                title="Expand full crew directory modal"
+                className="inline-flex items-center gap-1 rounded border border-border bg-background px-2 py-0.5 text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground transition hover:bg-accent hover:text-foreground"
               >
-                <div className="min-w-0 pr-2">
-                  <p className="truncate text-xs font-semibold text-foreground">{crew.name}</p>
-                  <p className="text-[0.58rem] text-muted-foreground">{crew.role}</p>
-                </div>
-                <span
-                  className={cn(
-                    'shrink-0 rounded px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider',
-                    crew.status === 'Available'
-                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                      : crew.status === 'Assigned'
-                        ? 'bg-primary/15 text-primary'
-                        : 'bg-destructive/15 text-destructive',
-                  )}
-                >
-                  {crew.status}
-                </span>
+                <Maximize2 className="size-3" />
+                Expand
               </button>
-            ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Search Input */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={directoryQuery}
+                  onChange={(e) => setDirectoryQuery(e.target.value)}
+                  placeholder="Search crew name or role..."
+                  className="w-48 sm:w-56 rounded-md border border-input bg-background py-1.5 pl-8 pr-2.5 text-xs text-foreground outline-none focus:border-primary"
+                />
+              </div>
+
+              {/* Status Filter Pills */}
+              <div className="inline-flex rounded-md border border-border bg-background p-0.5">
+                {(['All', 'Available', 'Assigned', 'On Leave'] as const).map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setDirectoryStatusFilter(st)}
+                    className={cn(
+                      'rounded-sm px-2.5 py-1 text-[0.58rem] font-bold uppercase tracking-wider transition',
+                      directoryStatusFilter === st
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted',
+                    )}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Compact Scrollable List Container */}
+          <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+            {filteredDirectoryRows.length === 0 ? (
+              <p className="py-6 text-center text-xs text-muted-foreground">No crew members match the search filter.</p>
+            ) : (
+              filteredDirectoryRows.map((crew) => (
+                <button
+                  key={crew.id}
+                  type="button"
+                  onClick={() => setSelectedCrewRow(crew)}
+                  className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left transition hover:border-primary/50 hover:bg-accent/40"
+                >
+                  <div className="flex items-center gap-3 min-w-0 pr-2">
+                    <Avatar name={crew.name} />
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-foreground">{crew.name}</p>
+                      <p className="truncate text-[0.58rem] uppercase tracking-wider text-muted-foreground">{crew.role}</p>
+                    </div>
+                  </div>
+                  <span
+                    className={cn(
+                      'shrink-0 rounded px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider',
+                      crew.status === 'Available'
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                        : crew.status === 'Assigned'
+                          ? 'bg-primary/15 text-primary'
+                          : 'bg-destructive/15 text-destructive',
+                    )}
+                  >
+                    {crew.status}
+                  </span>
+                </button>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -466,52 +377,30 @@ export function ManningModule({ onClose }: ManningModuleProps) {
       {/* ─── Main Content Area ─── */}
       <div className="flex-1 px-6 py-6 sm:px-10">
         {topTab === 'daily' ? (
-          /* Daily Operations: Daily-Weekly Ops Shift Grid */
-          <div className="flex flex-col gap-4">
-            <div className="rounded-xl border border-border bg-card p-4">
-              <h2 className="text-sm font-bold text-foreground">Daily-Weekly Operational Shift Roster</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Set and cycle shift codes (AM / PM / OFF) per crew member per day. This grid represents depot/warehouse duties independent of event assignments.
-              </p>
-            </div>
+          dailyViewMode === 'matrix' ? (
             <CrewOpsGrid staff={staff} />
-          </div>
+          ) : (
+            <DailyZoneDutyView crewRows={crewRows} presetSquads={presetSquads} />
+          )
         ) : (
-          /* Event-Based Operations Sub-Tabs */
-          <div>
-            {eventSubTab === 'schedule' && (
-              scheduleViewMode === 'list' ? (
-                <CrewListView rows={filteredCrewRows} onSelect={setSelectedCrewRow} />
-              ) : (
-                <CrewCalendarView rows={filteredCrewRows} events={events} onSelect={setSelectedCrewRow} />
-              )
-            )}
-
+          <div className="flex flex-col gap-5">
+            {/* SUB-TAB: ASSIGNMENTS */}
             {eventSubTab === 'assignments' && (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-bold text-foreground">Event Manning Assignments</h2>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setInheritOpen(true)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted"
-                    >
-                      <Copy className="size-3.5" /> Inherit Prior Roster
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCreateAssignmentOpen(true)}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] text-primary-foreground hover:opacity-90"
-                    >
-                      <Plus className="size-3.5" /> Create Assignment
-                    </button>
+                  <div>
+                    <h2 className="text-sm font-bold text-foreground">Event Manning Assignments</h2>
+                    <p className="text-xs text-muted-foreground">Active and upcoming ground crew deployment records.</p>
                   </div>
                 </div>
 
                 <div className="space-y-3">
                   {assignments.map((assignment) => (
-                    <div key={assignment.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                    <div
+                      key={assignment.id}
+                      onClick={() => setSelectedAssignment(assignment)}
+                      className="rounded-xl border border-border bg-card p-4 shadow-sm cursor-pointer hover:border-primary/50 hover:bg-accent/40 transition-all"
+                    >
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <div className="flex items-center gap-2">
@@ -552,20 +441,14 @@ export function ManningModule({ onClose }: ManningModuleProps) {
               </div>
             )}
 
+            {/* SUB-TAB: TASKS */}
             {eventSubTab === 'tasks' && (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-sm font-bold text-foreground">48h SLA Confirmation Tasks</h2>
+                    <h2 className="text-sm font-bold text-foreground">48h Task Confirmations</h2>
                     <p className="text-xs text-muted-foreground">Tasks requiring lead confirmation within the 48-hour window.</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setCreateTaskOpen(true)}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] text-primary-foreground hover:opacity-90"
-                  >
-                    <Plus className="size-3.5" /> Issue SLA Task
-                  </button>
                 </div>
 
                 <div className="space-y-3">
@@ -575,8 +458,9 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                     return (
                       <div
                         key={task.id}
+                        onClick={() => setSelectedTask(task)}
                         className={cn(
-                          'rounded-xl border bg-card p-4 shadow-sm transition',
+                          'rounded-xl border bg-card p-4 shadow-sm transition-all cursor-pointer hover:border-primary/50 hover:bg-accent/40',
                           overdue ? 'border-destructive/60 bg-destructive/5' : 'border-border',
                         )}
                       >
@@ -602,14 +486,13 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                             >
                               {task.status}
                             </span>
-                            {remMs !== null && (
+                            {remMs !== null && overdue && (
                               <span
                                 className={cn(
-                                  'text-[0.62rem] font-mono font-semibold',
-                                  overdue ? 'text-destructive' : 'text-amber-600 dark:text-amber-400',
+                                  'text-[0.62rem] font-mono font-semibold text-destructive',
                                 )}
                               >
-                                {formatSlaCountdown(remMs)}
+                                {formatSlaCountdown(remMs).replace('overdue', 'Confirmation Overdue')}
                               </span>
                             )}
                           </div>
@@ -619,8 +502,9 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                           <div className="mt-3 flex items-center justify-end gap-2 border-t border-border/60 pt-3">
                             <button
                               type="button"
-                              onClick={() => {
-                                rejectTask(task.id, actor, 'Rejected by WOM during SLA review')
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                rejectTask(task.id, actor, 'Rejected by WOM during task review')
                                 reload()
                               }}
                               className="rounded-md border border-destructive/40 px-3 py-1 text-[0.62rem] font-semibold text-destructive hover:bg-destructive/10"
@@ -629,7 +513,8 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                             </button>
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation()
                                 confirmTask(task.id, actor)
                                 reload()
                               }}
@@ -646,25 +531,23 @@ export function ManningModule({ onClose }: ManningModuleProps) {
               </div>
             )}
 
+            {/* SUB-TAB: WARNINGS */}
             {eventSubTab === 'warnings' && (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-sm font-bold text-foreground">Three-Tier Warning Ledger</h2>
-                    <p className="text-xs text-muted-foreground">Formal warning log for SLA breaches or operational non-compliance.</p>
+                    <p className="text-xs text-muted-foreground">Formal warning log for response delays or operational non-compliance.</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setCreateWarningOpen(true)}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-destructive px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] text-destructive-foreground hover:opacity-90"
-                  >
-                    <ShieldAlert className="size-3.5" /> Issue Warning
-                  </button>
                 </div>
 
                 <div className="space-y-3">
                   {warnings.map((w) => (
-                    <div key={w.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                    <div
+                      key={w.id}
+                      onClick={() => setSelectedWarning(w)}
+                      className="rounded-xl border border-border bg-card p-4 shadow-sm cursor-pointer hover:border-primary/50 hover:bg-accent/40 transition-all"
+                    >
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <div className="flex items-center gap-2">
@@ -688,7 +571,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
         )}
       </div>
 
-      {/* ─── Modals ─── */}
+      {/* ─── Assign Field Crew Modal ─── */}
       {assignOpen && (
         <AssignCrewModal
           events={events}
@@ -698,14 +581,444 @@ export function ManningModule({ onClose }: ManningModuleProps) {
         />
       )}
 
-      {selectedCrewRow && (
-        <CrewInfoModal
-          member={toCrewAssignment(selectedCrewRow)}
-          staff={staff.find((member) => member.id === selectedCrewRow.staffId) ?? null}
-          canViewFullDetail={canViewFullCrewDetail}
-          onClose={() => setSelectedCrewRow(null)}
+      {/* ─── Full Roster Expanded Modal ─── */}
+      {fullRosterModalOpen && (
+        <FullRosterModal
+          crewRows={crewRows}
+          onClose={() => setFullRosterModalOpen(false)}
+          onSelectMember={(crew) => {
+            setSelectedCrewRow(crew)
+            setFullRosterModalOpen(false)
+          }}
         />
       )}
+
+      {/* ─── Detail Inspection Modals ─── */}
+      {selectedAssignment && (
+        <AssignmentDetailModal
+          assignment={selectedAssignment}
+          onClose={() => setSelectedAssignment(null)}
+        />
+      )}
+
+      {selectedTask && (
+        <TaskDetailModal
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onReject={() => {
+            rejectTask(selectedTask.id, actor, 'Rejected by WOM during task review')
+            reload()
+          }}
+          onConfirm={() => {
+            confirmTask(selectedTask.id, actor)
+            reload()
+          }}
+        />
+      )}
+
+      {selectedWarning && (
+        <WarningDetailModal
+          warning={selectedWarning}
+          onClose={() => setSelectedWarning(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function FullRosterModal({
+  crewRows,
+  onClose,
+  onSelectMember,
+}: {
+  crewRows: CrewRow[]
+  onClose: () => void
+  onSelectMember: (crew: CrewRow) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Available' | 'Assigned' | 'On Leave'>('All')
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return crewRows.filter((crew) => {
+      const matchesStatus = statusFilter === 'All' || crew.status === statusFilter
+      const matchesQuery = !q || crew.name.toLowerCase().includes(q) || crew.role.toLowerCase().includes(q)
+      return matchesStatus && matchesQuery
+    })
+  }, [crewRows, query, statusFilter])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="flex h-full max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-card shadow-2xl space-y-4 p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between border-b border-border pb-3">
+          <div>
+            <span className="text-[0.58rem] font-bold uppercase tracking-[0.2em] text-primary">
+              Ground Crew Directory
+            </span>
+            <h2 className="font-serif text-xl font-bold text-card-foreground">
+              Full Crew Roster ({filtered.length}/{crewRows.length})
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by crew name or role..."
+              className="w-full rounded-md border border-input bg-background py-2 pl-8 pr-3 text-xs text-foreground outline-none focus:border-primary"
+            />
+          </div>
+
+          <div className="inline-flex rounded-md border border-border bg-background p-1">
+            {(['All', 'Available', 'Assigned', 'On Leave'] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setStatusFilter(st)}
+                className={cn(
+                  'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider transition',
+                  statusFilter === st
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted',
+                )}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="max-h-[28rem] overflow-y-auto pr-1">
+          {filtered.length === 0 ? (
+            <p className="py-16 text-center text-xs text-muted-foreground">No crew members match the search query.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((crew) => (
+                <button
+                  key={crew.id}
+                  type="button"
+                  onClick={() => onSelectMember(crew)}
+                  className="flex items-center justify-between rounded-lg border border-border bg-background p-3 text-left transition hover:border-primary/50 hover:bg-accent/40 hover:shadow-xs"
+                >
+                  <div className="flex items-center gap-3 min-w-0 pr-2">
+                    <Avatar name={crew.name} />
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-foreground">{crew.name}</p>
+                      <p className="truncate text-[0.58rem] uppercase tracking-wider text-muted-foreground">{crew.role}</p>
+                    </div>
+                  </div>
+                  <span
+                    className={cn(
+                      'shrink-0 rounded px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider',
+                      crew.status === 'Available'
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                        : crew.status === 'Assigned'
+                          ? 'bg-primary/15 text-primary'
+                          : 'bg-destructive/15 text-destructive',
+                    )}
+                  >
+                    {crew.status}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end border-t border-border pt-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-border px-4 py-2 text-xs font-bold uppercase tracking-wider hover:bg-accent"
+          >
+            Close Roster
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AssignmentDetailModal({
+  assignment,
+  onClose,
+}: {
+  assignment: ManningAssignment
+  onClose: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg overflow-hidden rounded-xl bg-card p-6 shadow-2xl space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between border-b border-border pb-3">
+          <div>
+            <span className="text-[0.58rem] font-bold uppercase tracking-[0.2em] text-primary">
+              Manning Assignment Record
+            </span>
+            <h2 className="font-serif text-xl font-medium text-card-foreground">
+              {assignment.event_name}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="rounded-lg border border-border bg-background p-3">
+            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
+              Deployment Ref
+            </span>
+            <span className="font-mono text-xs font-semibold text-card-foreground">
+              {assignment.deployment_ref || 'N/A'}
+            </span>
+          </div>
+          <div className="rounded-lg border border-border bg-background p-3">
+            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
+              Status
+            </span>
+            <span className="font-bold text-emerald-600">{assignment.status}</span>
+          </div>
+          <div className="rounded-lg border border-border bg-background p-3">
+            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
+              Work Date
+            </span>
+            <span className="font-semibold text-card-foreground">{assignment.work_date}</span>
+          </div>
+          <div className="rounded-lg border border-border bg-background p-3">
+            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
+              Lead Officer
+            </span>
+            <span className="font-semibold text-card-foreground">{assignment.lead_name}</span>
+          </div>
+        </div>
+
+        {assignment.venue && (
+          <div className="rounded-lg border border-border bg-background p-3 text-xs">
+            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
+              Venue
+            </span>
+            <span className="font-semibold text-card-foreground">{assignment.venue}</span>
+          </div>
+        )}
+
+        <div>
+          <span className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground block mb-2">
+            Assigned Crew Members ({assignment.member_names.length})
+          </span>
+          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+            {assignment.member_names.map((name) => (
+              <span
+                key={name}
+                className="rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-card-foreground"
+              >
+                {name}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex justify-end border-t border-border pt-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-border px-4 py-2 text-xs font-bold uppercase tracking-wider hover:bg-accent"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TaskDetailModal({
+  task,
+  onClose,
+  onReject,
+  onConfirm,
+}: {
+  task: ManningTask
+  onClose: () => void
+  onReject: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg overflow-hidden rounded-xl bg-card p-6 shadow-2xl space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between border-b border-border pb-3">
+          <div>
+            <span className="text-[0.58rem] font-bold uppercase tracking-[0.2em] text-primary">
+              48h Confirmation Task Detail
+            </span>
+            <h2 className="font-serif text-xl font-medium text-card-foreground">{task.title}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground leading-relaxed">
+          <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+            Task Description
+          </span>
+          {task.description}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="rounded-lg border border-border bg-background p-3">
+            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
+              Lead Officer
+            </span>
+            <span className="font-semibold text-card-foreground">{task.lead_name}</span>
+          </div>
+          <div className="rounded-lg border border-border bg-background p-3">
+            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
+              Status
+            </span>
+            <span className="font-bold text-amber-600">{task.status}</span>
+          </div>
+        </div>
+
+        {task.status === 'Submitted' && (
+          <div className="flex justify-end gap-2 border-t border-border pt-3">
+            <button
+              type="button"
+              onClick={() => {
+                onReject()
+                onClose()
+              }}
+              className="rounded-md border border-destructive/40 px-4 py-2 text-xs font-semibold text-destructive hover:bg-destructive/10"
+            >
+              Reject Task
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onConfirm()
+                onClose()
+              }}
+              className="rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-emerald-700"
+            >
+              Confirm Task
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function WarningDetailModal({
+  warning,
+  onClose,
+}: {
+  warning: ManningWarning
+  onClose: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg overflow-hidden rounded-xl bg-card p-6 shadow-2xl space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between border-b border-border pb-3">
+          <div>
+            <span className="text-[0.58rem] font-bold uppercase tracking-[0.2em] text-destructive">
+              Warning Record
+            </span>
+            <h2 className="font-serif text-xl font-medium text-card-foreground">
+              Tier {warning.tier}: {warning.recipient_name}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground leading-relaxed">
+          <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+            Reason / Infraction Note
+          </span>
+          {warning.reason}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="rounded-lg border border-border bg-background p-3">
+            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
+              Recipient Role
+            </span>
+            <span className="font-semibold text-card-foreground">{warning.recipient_role}</span>
+          </div>
+          <div className="rounded-lg border border-border bg-background p-3">
+            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
+              Issued By
+            </span>
+            <span className="font-semibold text-card-foreground">{warning.issued_by}</span>
+          </div>
+        </div>
+
+        <div className="flex justify-end border-t border-border pt-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-border px-4 py-2 text-xs font-bold uppercase tracking-wider hover:bg-accent"
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

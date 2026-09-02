@@ -759,14 +759,56 @@ The app is best understood as a polished multi-portal frontend prototype with a 
 *   **Needs Editing panel [COMPLETED]:** Added fixed height (`32rem`) to the sidebar container, marked header layout as `shrink-0` to keep it pinned, and set the list element to `flex-1 overflow-y-auto` to allow scrollable list viewing.
 *   **Layout ratio [COMPLETED]:** Restructured the parent container wrapping the Calendar and Needs Editing elements in [`DesignCanvasHubPage.tsx`](file:///c:/Users/T480s/Downloads/Lumiere_Frontend/src/pages/DesignCanvasHubPage.tsx) to use a CSS grid with `grid-cols-1 lg:grid-cols-[7fr_3fr]` layout ratio which holds cleanly across responsive breakpoints.
 
-### Current focus: Canvas Workspace improvements and sidebar audit
+### Latest Completed Focus: Manning Delegation Module & System-Wide UI Polish [COMPLETED]
 
-*   **Cross-project canvas-leak fix [COMPLETED]:** Namespaced all canvas `localStorage` keys with `card.id` (`lumiere-canvas-assets-${card.id}`, `lumiere-pages-${card.id}`). Eliminated shared static key `lumiere-canvas-assets` that caused elements from one project to leak into another.
-*   **Continuous vertical page scrolling [COMPLETED]:** Added Canva-style Flow mode with pages stacked vertically, bounded scroll, external per-page header bars (rename, hide, duplicate, delete, move up/down), and a bottom "+ Add page" button.
-*   **Per-page asset partitioning [COMPLETED]:** Each placed element carries a `pageId`. Assets render only on their assigned page. Drag movement is clamped within the originating page's artboard boundaries. Selection/Transformer auto-clears on active page change.
-*   **Dual page navigation modes [COMPLETED]:** Toggle between Flow (continuous scroll) and Thumbnail (single-page + filmstrip) modes. Mode persists per project in `localStorage`.
-*   **Uploads tab drag-to-canvas [COMPLETED]:** Upload tiles are now draggable onto the canvas (same `DRAG_MIME` pattern as Elements tab). Click-to-add is also supported.
-*   **Sidebar audit [COMPLETED]:** Documented functional status of all 6 sidebar tabs (Elements, Text, Uploads, Tools, Projects, Background). Only Elements and Uploads are fully functional end-to-end; Text, Tools, Projects sub-page navigation, and Background apply-to-canvas remain placeholders.
+- **Manning Delegation Module — COMPLETE ✅**:
+  - **Structural**: Merged "Manning & SLA Engine" + "Manpower & Crew" into unified "Manning Delegation" module (`/manning`). Single route with internal tab-switching (`Daily Operations` / `Event-Based Operations`). Renamed "SLA" terminology to plain language throughout (`"48h Task Confirmations"`, `"Confirmation Overdue"`).
+  - **Weekly Roster Matrix**: Built scrollable shift grid (`CrewOpsGrid.tsx`) with dual-axis sticky headers (`sticky top-0` dates, `sticky left-0` crew names). Local draft editing (`draftGrid`) with staged amber ring visual feedback, **"Save Changes (N)"** confirmation modal, and **"Discard"** safety prompt modal. Expanded mock crew roster to 20 members.
+  - **Shared Crew Directory**: Built compact scrollable list format (`max-h-52`) with real-time text search and status filter pills (`All`, `Available`, `Assigned`, `On Leave`). Added **"Expand"** button (`Maximize2` icon) opening a full-screen/large scrollable `FullRosterModal`.
+  - **Foundation A — Leave/Double-Booking Hard-Block**: Hard-blocks On Leave + double-booked crew across Manual/Preset assignment modes. Integrated Foundation A Emergency Override modal requiring mandatory justification, backed by Supabase `manning_overrides` table with local fallback.
+  - **Foundation B — Minimum Team Lead Enforcement**: Implemented `isTeamLead()` two-tier resolution hierarchy: Tier 1 per-day designation (`isTeamLeadToday`), Tier 2 static role/declaration fallback (exact-match qualification roles). UI blocks finalization with 0 Team Leads selected (amber banner) or 0 available in pool (red escalation banner). Backend `createAssignment()` validates genuine `isTeamLead()` qualification.
+  - **Daily Duty Assignment by Department & Zone (Batches 1-4)**:
+    - Three-way duty category separation: `Field` (event deployments), `Warehouse` (zone maintenance), `Production` (bespoke fabrication).
+    - `DailyDutyAssignment` record schema: single-day date scope, `dutyCategory`, `zone`, `isTeamLeadToday`.
+    - 6 physical warehouse zones: `Logistics & Movement`, `Artificials Inventory`, `Centerpieces Inventory`, `Drapery & Fabrics`, `Lighting & Rigging`, `Staging & Hardware`.
+    - **Symmetric Hard-Block**: Cross-context hard-blocking between Field Crew (event deployments) and Daily Duty (Warehouse / Production). Multi-day Field ranges block Daily Duty for every day in range, reusing Foundation A's override system with per-day surgical override.
+    - **Shared Selector Components**: Extracted `<FifoSelector>`, `<PresetSelector>`, and `<ManualCrewPicker>` into `src/components/warehouse/manpower/shared/` and reused across `AssignCrewModal` and `AssignDailyDutyModal`.
+    - **`DailyZoneDutyView.tsx`**: Per-day view with date picker, Production section, Warehouse zone cards, `[⭐ Lead Today]` badges, compact scrollable crew lists, and `"No Crew Assigned"` gap callouts with `+ Assign` shortcuts.
+    - **Daily Operations View Switcher**: Added sub-tab toggle inside Daily Operations: `[ 📅 Weekly Roster Matrix ]` ↔ `[ 🏢 Daily Department & Zone Detail ]`.
+  - **UI Polish (System-Wide)**:
+    - Bolds event group headers in Replenishment & Deficits (`<h2 className="font-serif text-lg font-bold">`).
+    - Clickable table rows/cards with proper `stopPropagation()` across Replenishment, Asset Catalog, and Manning Delegation (Assignments, SLA Tasks, Warning Ledger).
+
+  - **Prompt 2 (FIFO & Modal Date Validation) — COMPLETE ✅**:
+    - Added explicit **Assignment date** input field (`<input type="date">`) to `AssignCrewModal`.
+    - Added past-event-date validation: selecting a date past `selectedEvent.targetDate` renders a red `Invalid Assignment Date` warning banner and hard-disables `Finalize Field Assignment`.
+  - **Prompt 3 (Preset Squad Enhancements & Persistence) — COMPLETE ✅**:
+    - **Supabase Persistence**: `manning_preset_squads` stored directly in Supabase (`fetchPresetSquads`, `savePresetSquad`, `deletePresetSquad`) with local in-memory fallback.
+    - **Per-Team Field Task Registry**: Hidden global task dropdown in Preset Mode; task is bound per-team (`Team Task: Setup & Staging`) on preset cards.
+    - **Candidate Swap Dropdown**: Clicking swap icon on a squad card renders an inline candidate replacement dropdown listing available non-conflicting FIFO candidates.
+    - **Preset Squad Manager Modal**: Added **`Manage Squads`** button opening `PresetSquadManagerModal` for creating, editing, and deleting squad presets.
+  - **Prompt 4 (SLA Indicator & PIN Gate Popup Modal) — COMPLETE ✅**:
+    - **Strict Overdue SLA Indicator**: Countdown badge renders strictly when `isSlaOverdue(task, now)` is `true` (`overdue === true`).
+    - **PIN Review Gate Popup Modal**: Converted `PinGate` full-panel takeover into a floating modal dialog overlay (`fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 backdrop-blur-sm`) over the dimmed/blurred review queue in the background.
+
+  - **Prompt 5 (Dispatch & Logistics Enhancements) — COMPLETE ✅**:
+    - **List Row Assets Summary**: Contained assets (`reconciliation` items) rendered directly inside list row cards.
+    - **Asset Deduplication & Allocation**: `NewBatchModal` with Driver field, master asset list, and quantity deduplication (`Available Qty = Total Qty - Committed in Open Batches`). Items with `Available Qty <= 0` disabled with `Reserved in Open Batch` badge.
+    - **Automated Return Batch Prompt**: Reaching `Delivered` status renders `Outbound Batch Delivered` banner and `+ Return Batch` shortcut button pre-populating return ingress batch.
+    - **Real PDF Manifest Export**: `exportBatchPdf` helper using `jsPDF` (`^4.2.1`) generating formatted `Manifest_[Plate]_[BatchId].pdf` downloads.
+    - **Editable Vehicle & Driver**: `driverName` field added to `DispatchBatch` schema, with dynamic vehicle type, plate number, and driver name editing in `BatchDetailView`.
+    - **Cancel/Delete Batch Action (Feature Addition)**: Exposed red `Cancel / Delete Batch` button in `BatchDetailView` header with confirmation popup modal. Deleting a batch removes it from active fleet store & Supabase (`deleteBatch`), logs to the Dispatch Activity Feed (`getDispatchActivity`), and releases all committed quantities back to the available pool. Reactivity is instant on the active tab/device (`useSyncExternalStore`), with cross-device sync updating upon module open/refresh.
+
+### Next Up / Pending Tasks
+- **Foundation C-F**: (leave-after-assignment auto-release, First-Commit-Wins tie-breaker, no-show flag, Admin Team Lead quota) — parked, non-blocking future tasks.
+- **Foundation G: Centralized Audit Log (parked, cross-module)**:
+  - **Status**: Not started — identified during Prompt 5 Dispatch sign-off review.
+  - **Problem**: Destructive/sensitive actions across modules currently use inconsistent audit patterns. `manning_overrides` has a proper structured table with mandatory justification (gold standard). Dispatch batch deletion only writes a free-text activity log string (no actor, no reason, no snapshot). Preset squad create/rename/delete audit trail status unconfirmed.
+  - **Proposed Fix**: Generic reusable `audit_log` Supabase table usable across all modules (`id`, `actor_id` / `actor_name`, `module`, `action_type`, `target_id`, `target_snapshot` [JSON], `reason`, `created_at`).
+  - **Scope**: Cross-cutting, not tied to one module. Needs its own data-model-first proposal before implementation.
+  - **Related Gap**: Dispatch's current `deleteBatch()` hard-deletes with no soft-delete/archive option — no manifest/reconciliation history preserved. Decision pending on whether this matters for dispute resolution.
+- **Prompt 6**: Replenishment status labels & workflow adjustments.
+- **Prompt 7**: Vendor search & Asset detail fields.
 
 ---
 

@@ -84,9 +84,9 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
     const assetId = `LM-${draft.category.slice(0, 2).toUpperCase()}-${1000 + assets.length + (seed % 900)}`
     const isFractional = draft.category === 'Event Asset' || draft.category === 'Stockroom'
     const status: AssetStatus = isFractional
-      ? draft.currentStock === 0
+      ? (draft.currentStock ?? 0) === 0
         ? 'Critical Deficit'
-        : draft.currentStock / Math.max(1, draft.threshold) < 0.5
+        : (draft.currentStock ?? 0) / Math.max(1, draft.threshold ?? 50) < 0.5
           ? 'Low Stock'
           : 'Available'
       : 'Available'
@@ -95,19 +95,57 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
       id: `cat-new-${Date.now()}`,
       assetId,
       name: draft.name,
+      itemCallName: draft.itemCallName || draft.name,
       category: draft.category,
+      subCategory: draft.subCategory || 'General',
+      description: draft.description || `Custom ${draft.category} entry added to warehouse registry.`,
       status,
       image: draft.image || '/placeholder.svg',
-      unit: draft.unit,
-      currentStock: isFractional ? draft.currentStock : undefined,
-      threshold: isFractional ? draft.threshold : undefined,
-      bespokeStage: draft.category === 'Bespoke' ? 'Unprepped' : undefined,
-      custodian: undefined,
-      dimensions: { height: '—', width: '—', depth: '—', weight: '—' },
-      purchaseCost: 0,
-      costPerUnit: 0,
+      unit: draft.unit || 'pcs',
+      dimensions: draft.dimensions || { height: '30 cm', width: '30 cm', depth: '30 cm', weight: '5 kg' },
+      is_circular: draft.is_circular,
+      shape: draft.shape,
+      circumference: draft.circumference,
+      material: draft.material || 'Standard Composite',
+      colorType: draft.colorType || 'mono',
+      colorPrimary: draft.colorPrimary || 'Standard',
+      colorSecondary: draft.colorSecondary,
+      tags: draft.tags && draft.tags.length > 0 ? draft.tags : ['New Registry Entry'],
+      purchaseCost: draft.purchaseCost ?? 0,
+      costPerUnit: draft.costPerUnit ?? draft.purchaseCost ?? 0,
       dateAdded: new Date().toISOString().slice(0, 10),
-      primaryVendorId: 'ven-01',
+      primaryVendorId: draft.primaryVendorId || 'ven-01',
+      backupVendorId: draft.backupVendorId,
+
+      // Event Asset
+      currentStock: draft.currentStock,
+      threshold: draft.threshold,
+      lifeSpan: draft.lifeSpan,
+      damageReplacementCost: draft.damageReplacementCost,
+
+      // Bespoke
+      bespokeStage: draft.bespokeStage || 'Prepping',
+      bespokeCrew: 'Fab Team — Ronnie',
+      rawMaterials: draft.rawMaterials,
+      manCount: draft.manCount,
+      finishTimeMinutes: draft.finishTimeMinutes,
+      revisionTimeMinutes: draft.revisionTimeMinutes,
+
+      // Stockroom
+      criticalThreshold: draft.criticalThreshold,
+      ceilingCap: draft.ceilingCap,
+      pricePerPack: draft.pricePerPack,
+
+      // Rental
+      supplierDetails: draft.supplierDetails,
+      supplierContact: draft.supplierContact,
+      lengthOfRent: draft.lengthOfRent,
+      overduePenaltyFee: draft.overduePenaltyFee,
+      onLoanDueDate: draft.onLoanDueDate,
+
+      // Office Asset
+      vendorDetails: draft.vendorDetails,
+      custodian: draft.custodian,
     }
     addCatalogAsset(newAsset)
     setAddOpen(false)
@@ -271,7 +309,11 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
                       {tierItems.map((asset) => {
                         const display = getTierGlanceDisplay(asset)
                         return (
-                          <tr key={asset.id} className="border-t border-border/60 align-middle">
+                          <tr
+                            key={asset.id}
+                            onClick={() => setSelectedAsset(asset)}
+                            className="cursor-pointer border-t border-border/60 align-middle transition-colors hover:bg-accent/50"
+                          >
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-3">
                                 <div className="size-11 shrink-0 overflow-hidden rounded-md bg-muted">
@@ -285,10 +327,13 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
                               <Pill tone={ASSET_STATUS_TONE[asset.status]}>{asset.status}</Pill>
                             </td>
                             <td className="px-4 py-3 text-xs text-muted-foreground">{display.text}</td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                               <button
                                 type="button"
-                                onClick={() => setSelectedAsset(asset)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedAsset(asset)
+                                }}
                                 className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary hover:underline"
                               >
                                 View item

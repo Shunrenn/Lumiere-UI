@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { isTeamLead, isTeamLeadToday, QUALIFIED_LEAD_ROLES } from '@/lib/warehouse-crew'
 
 // =====================================================================
 // Manning & SLA engine + Incident Reporting data access
@@ -388,6 +389,25 @@ let incidentsUsingPreset = false
 
 // ---- SLA helpers -----------------------------------------------------
 
+/** Expand a date or start/end date range into discrete YYYY-MM-DD calendar date strings. */
+export function expandDateRange(startDate: string, endDate?: string | null): string[] {
+  if (!startDate) return []
+  const start = new Date(`${startDate}T00:00:00`)
+  if (isNaN(start.getTime())) return [startDate]
+  if (!endDate || startDate === endDate) return [startDate]
+
+  const end = new Date(`${endDate}T00:00:00`)
+  if (isNaN(end.getTime()) || end.getTime() < start.getTime()) return [startDate]
+
+  const dates: string[] = []
+  const current = new Date(start)
+  while (current.getTime() <= end.getTime()) {
+    dates.push(current.toISOString().slice(0, 10))
+    current.setDate(current.getDate() + 1)
+  }
+  return dates
+}
+
 /** Whether a submitted task has blown its 48h lead-confirmation window. */
 export function isSlaOverdue(task: ManningTask, now: Date = new Date()): boolean {
   if (task.status !== 'Submitted' || !task.sla_due) return false
@@ -441,10 +461,22 @@ export async function createAssignment(
     'work_date' | 'event_name' | 'venue' | 'deployment_ref' | 'lead_name' | 'lead_email' | 'member_names' | 'sub_role' | 'notes'
   > & { inherited_from?: string | null; created_by?: string | null },
 ): Promise<ManningAssignment> {
-  const hasLead = Boolean(input.lead_name && input.lead_name.trim().length > 0)
-  if (!hasLead) {
+  const leadName = input.lead_name?.trim() || ''
+  if (!leadName) {
     throw new Error(
       `Cannot finalize assignment: At least 1 active Team Lead must be assigned for sub-role '${input.sub_role || 'General'}' on ${input.work_date}.`,
+    )
+  }
+
+  // Validate that the assigned lead is genuinely isTeamLead-qualified
+  const isQualifiedLead =
+    QUALIFIED_LEAD_ROLES.some((role) => leadName.toLowerCase().includes(role.toLowerCase())) ||
+    isTeamLeadToday(leadName, input.work_date) ||
+    isTeamLead({ id: `lead-${leadName}`, staffId: leadName, name: leadName, role: 'Team Lead', status: 'Available' }, [], [], input.work_date)
+
+  if (!isQualifiedLead) {
+    throw new Error(
+      `Cannot finalize assignment: Assigned lead '${leadName}' is not a qualified Team Lead for ${input.work_date}.`,
     )
   }
 
