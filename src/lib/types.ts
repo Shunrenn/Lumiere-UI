@@ -83,6 +83,7 @@ export interface ReorderDraft {
 export const STAFF_ROLES = [
   'Admin',
   'Executive',
+  'Warehouse Operations Manager',
   'Warehouse Manager',
   'Event Planner',
   'Ground Crew',

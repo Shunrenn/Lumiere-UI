@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { X, Eye, EyeOff } from 'lucide-react'
-import { STAFF_ROLES, type NewStaffDraft, type StaffRole } from '@/lib/types'
+import { type NewStaffDraft, type StaffRole } from '@/lib/types'
 import { usePortal } from '@/lib/store'
 
 interface Props {
@@ -26,6 +26,21 @@ const labelClass =
   'block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground'
 const inputClass =
   'mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-ring/30'
+
+// Account creation starts with a parent account type. Manning assigns Ground Crew
+// members to their specific Ground Crew tier after the account is created.
+const STAFF_ACCOUNT_ROLES: StaffRole[] = [
+  'Admin',
+  'Executive',
+  'Event Planner',
+  'Warehouse Operations Manager',
+  'Manning Officer',
+  'Warehouse Manager',
+  'Production Manager',
+  'Inventory Officer',
+  'Purchasing Officer',
+  'Ground Crew',
+]
 
 export function EmployeeModal({ open, onClose }: Props) {
   const { addStaff, staff } = usePortal()
@@ -208,7 +223,7 @@ export function EmployeeModal({ open, onClose }: Props) {
                 onChange={(e) => set('role', e.target.value as StaffRole)}
               >
                 <option value="">Select Staff Role</option>
-                {STAFF_ROLES.map((role) => (
+                {STAFF_ACCOUNT_ROLES.map((role) => (
                   <option key={role} value={role}>
                     {role}
                   </option>
