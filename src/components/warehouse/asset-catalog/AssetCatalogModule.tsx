@@ -7,12 +7,20 @@ import {
   type AssetStatus,
   type CatalogAsset,
 } from '@/lib/warehouse-catalog'
-import { AssetCard, ASSET_STATUS_TONE, stockDisplay } from '@/components/warehouse/asset-catalog/AssetCard'
+import { AssetCard, ASSET_STATUS_TONE, getTierGlanceDisplay } from '@/components/warehouse/asset-catalog/AssetCard'
 import { AssetDetailModal } from '@/components/warehouse/asset-catalog/AssetDetailModal'
 import { AddAssetModal, type NewAssetDraft } from '@/components/warehouse/asset-catalog/AddAssetModal'
 import { GridRevealContainer } from '@/components/GridRevealContainer'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { cn } from '@/lib/utils'
+
+const FIXED_TIER_ORDER: AssetCategory[] = [
+  'Event Asset',
+  'Bespoke',
+  'Stockroom',
+  'Rental',
+  'Office Asset',
+]
 
 const CATEGORY_FILTERS: Array<AssetCategory | 'All'> = [
   'All',
@@ -59,14 +67,26 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
     })
   }, [assets, query, categoryFilter, statusFilter])
 
+  // Group items by Tier in fixed order
+  const tierGroups = useMemo(() => {
+    const map = new Map<AssetCategory, CatalogAsset[]>()
+    FIXED_TIER_ORDER.forEach((t) => map.set(t, []))
+    filtered.forEach((asset) => {
+      const list = map.get(asset.category) ?? []
+      list.push(asset)
+      map.set(asset.category, list)
+    })
+    return Array.from(map.entries()).filter(([_, items]) => items.length > 0)
+  }, [filtered])
+
   const handleCreate = (draft: NewAssetDraft) => {
     const seed = hashOf(`${draft.name}-${Date.now()}`)
     const assetId = `LM-${draft.category.slice(0, 2).toUpperCase()}-${1000 + assets.length + (seed % 900)}`
     const isFractional = draft.category === 'Event Asset' || draft.category === 'Stockroom'
     const status: AssetStatus = isFractional
-      ? draft.currentStock === 0
+      ? (draft.currentStock ?? 0) === 0
         ? 'Critical Deficit'
-        : draft.currentStock / Math.max(1, draft.threshold) < 0.5
+        : (draft.currentStock ?? 0) / Math.max(1, draft.threshold ?? 50) < 0.5
           ? 'Low Stock'
           : 'Available'
       : 'Available'
@@ -75,19 +95,57 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
       id: `cat-new-${Date.now()}`,
       assetId,
       name: draft.name,
+      itemCallName: draft.itemCallName || draft.name,
       category: draft.category,
+      subCategory: draft.subCategory || 'General',
+      description: draft.description || `Custom ${draft.category} entry added to warehouse registry.`,
       status,
       image: draft.image || '/placeholder.svg',
-      unit: draft.unit,
-      currentStock: isFractional ? draft.currentStock : undefined,
-      threshold: isFractional ? draft.threshold : undefined,
-      bespokeStage: draft.category === 'Bespoke' ? 'Unprepped' : undefined,
-      custodian: undefined,
-      dimensions: { height: '—', width: '—', depth: '—', weight: '—' },
-      purchaseCost: 0,
-      costPerUnit: 0,
+      unit: draft.unit || 'pcs',
+      dimensions: draft.dimensions || { height: '30 cm', width: '30 cm', depth: '30 cm', weight: '5 kg' },
+      is_circular: draft.is_circular,
+      shape: draft.shape,
+      circumference: draft.circumference,
+      material: draft.material || 'Standard Composite',
+      colorType: draft.colorType || 'mono',
+      colorPrimary: draft.colorPrimary || 'Standard',
+      colorSecondary: draft.colorSecondary,
+      tags: draft.tags && draft.tags.length > 0 ? draft.tags : ['New Registry Entry'],
+      purchaseCost: draft.purchaseCost ?? 0,
+      costPerUnit: draft.costPerUnit ?? draft.purchaseCost ?? 0,
       dateAdded: new Date().toISOString().slice(0, 10),
-      primaryVendorId: 'ven-01',
+      primaryVendorId: draft.primaryVendorId || 'ven-01',
+      backupVendorId: draft.backupVendorId,
+
+      // Event Asset
+      currentStock: draft.currentStock,
+      threshold: draft.threshold,
+      lifeSpan: draft.lifeSpan,
+      damageReplacementCost: draft.damageReplacementCost,
+
+      // Bespoke
+      bespokeStage: draft.bespokeStage || 'Prepping',
+      bespokeCrew: 'Fab Team — Ronnie',
+      rawMaterials: draft.rawMaterials,
+      manCount: draft.manCount,
+      finishTimeMinutes: draft.finishTimeMinutes,
+      revisionTimeMinutes: draft.revisionTimeMinutes,
+
+      // Stockroom
+      criticalThreshold: draft.criticalThreshold,
+      ceilingCap: draft.ceilingCap,
+      pricePerPack: draft.pricePerPack,
+
+      // Rental
+      supplierDetails: draft.supplierDetails,
+      supplierContact: draft.supplierContact,
+      lengthOfRent: draft.lengthOfRent,
+      overduePenaltyFee: draft.overduePenaltyFee,
+      onLoanDueDate: draft.onLoanDueDate,
+
+      // Office Asset
+      vendorDetails: draft.vendorDetails,
+      custodian: draft.custodian,
     }
     addCatalogAsset(newAsset)
     setAddOpen(false)
@@ -95,6 +153,7 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
 
   return (
     <div className="relative flex h-full flex-1 flex-col overflow-y-auto">
+      {/* Header controls & filters */}
       <div className="flex flex-col gap-1.5 border-b border-border px-6 py-2.5 sm:px-10">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -153,6 +212,7 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
           </div>
         </div>
 
+        {/* Filter Pills */}
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-1.5">
             {CATEGORY_FILTERS.map((c) => (
@@ -193,67 +253,105 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
         </div>
       </div>
 
-      <div className="flex-1 px-6 py-2.5 sm:px-10">
-        {filtered.length === 0 ? (
+      {/* Main Content Area (Tier-Grouped Sections with Sticky Headers) */}
+      <div className="flex-1 px-6 py-4 sm:px-10">
+        {tierGroups.length === 0 ? (
           <div className="mt-10 text-center text-sm font-semibold uppercase tracking-[0.15em] text-muted-foreground">
             No assets match the current filters
           </div>
         ) : viewMode === 'grid' ? (
+          /* ─── GRID VIEW: Tier-Grouped Sections with Sticky Headers ─── */
           <GridRevealContainer maxHeightClass="max-h-[calc(100vh-230px)]">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {filtered.map((asset) => (
-                <AssetCard key={asset.id} asset={asset} onOpen={() => setSelectedAsset(asset)} />
+            <div className="space-y-6 pb-6">
+              {tierGroups.map(([tierName, tierItems]) => (
+                <div key={tierName} className="space-y-3">
+                  {/* Sticky Section Header */}
+                  <div className="sticky top-0 z-10 border-b border-border/80 bg-background/95 py-2 backdrop-blur-sm">
+                    <span className="text-[0.65rem] font-bold uppercase tracking-[0.15em] text-primary">
+                      {tierName} ({tierItems.length})
+                    </span>
+                  </div>
+
+                  {/* 6-Column Card Grid for this Tier */}
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 sm:gap-4">
+                    {tierItems.map((asset) => (
+                      <AssetCard key={asset.id} asset={asset} onOpen={() => setSelectedAsset(asset)} />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </GridRevealContainer>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-border bg-card">
-            <table className="w-full min-w-[720px] text-left">
-              <thead>
-                <tr className="bg-muted/50">
-                  {['Item', 'Category', 'Status', 'Detail', ''].map((h) => (
-                    <th key={h} className="px-4 py-3 text-[0.56rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((asset) => {
-                  const display = stockDisplay(asset)
-                  return (
-                    <tr key={asset.id} className="border-t border-border/60 align-middle">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="size-11 shrink-0 overflow-hidden rounded-md bg-muted">
-                            <img src={asset.image || '/placeholder.svg'} alt={asset.name} crossOrigin="anonymous" className="size-full object-cover" />
-                          </div>
-                          <p className="font-serif text-sm text-card-foreground">{asset.name}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{asset.category}</td>
-                      <td className="px-4 py-3">
-                        <Pill tone={ASSET_STATUS_TONE[asset.status]}>{asset.status}</Pill>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{display.text}</td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedAsset(asset)}
-                          className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary hover:underline"
-                        >
-                          View item
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+          /* ─── LIST VIEW: Tier-Grouped Sections with Sticky Headers ─── */
+          <div className="space-y-6 max-h-[calc(100vh-230px)] overflow-y-auto pr-1">
+            {tierGroups.map(([tierName, tierItems]) => (
+              <div key={tierName} className="space-y-2">
+                {/* Sticky Section Header */}
+                <div className="sticky top-0 z-10 border-b border-border/80 bg-background/95 py-2 backdrop-blur-sm">
+                  <span className="text-[0.65rem] font-bold uppercase tracking-[0.15em] text-primary">
+                    {tierName} ({tierItems.length})
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-border bg-card">
+                  <table className="w-full min-w-[720px] text-left">
+                    <thead>
+                      <tr className="bg-muted/50">
+                        {['Item', 'Category', 'Status', 'Detail', ''].map((h) => (
+                          <th key={h} className="px-4 py-3 text-[0.56rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tierItems.map((asset) => {
+                        const display = getTierGlanceDisplay(asset)
+                        return (
+                          <tr
+                            key={asset.id}
+                            onClick={() => setSelectedAsset(asset)}
+                            className="cursor-pointer border-t border-border/60 align-middle transition-colors hover:bg-accent/50"
+                          >
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="size-11 shrink-0 overflow-hidden rounded-md bg-muted">
+                                  <img src={asset.image || '/placeholder.svg'} alt={asset.name} crossOrigin="anonymous" className="size-full object-cover" />
+                                </div>
+                                <p className="font-serif text-sm text-card-foreground">{asset.name}</p>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-muted-foreground">{asset.category}</td>
+                            <td className="px-4 py-3">
+                              <Pill tone={ASSET_STATUS_TONE[asset.status]}>{asset.status}</Pill>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-muted-foreground">{display.text}</td>
+                            <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedAsset(asset)
+                                }}
+                                className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary hover:underline"
+                              >
+                                View item
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
+      {/* Floating Add Item FAB */}
       <button
         type="button"
         onClick={() => setAddOpen(true)}

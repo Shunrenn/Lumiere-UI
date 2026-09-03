@@ -1,6 +1,5 @@
 import {
   Boxes,
-  CalendarClock,
   Hammer,
   PackageSearch,
   ShieldAlert,
@@ -17,10 +16,9 @@ export type WarehouseModuleId =
   | 'assets'
   | 'replenishment'
   | 'vendors'
-  | 'manpower'
+  | 'manning'
   | 'dispatch'
   | 'production'
-  | 'manning-sla'
   | 'incidents'
 
 export interface WarehouseModule {
@@ -54,18 +52,11 @@ export const WAREHOUSE_MODULES: WarehouseModule[] = [
     previewPoints: ['Vendor directory & ratings', 'Lead-time comparisons', 'Preferred-supplier routing'],
   },
   {
-    id: 'manpower',
-    label: 'Manpower & Crew',
+    id: 'manning',
+    label: 'Manning Delegation',
     icon: Users,
-    blurb: 'Crew roster, availability, and scheduling conflicts.',
-    previewPoints: ['Crew roster & availability', 'Scheduling conflict flags', 'Task force deployment'],
-  },
-  {
-    id: 'manning-sla',
-    label: 'Manning & SLA Engine',
-    icon: CalendarClock,
-    blurb: 'Daily manning assignments, the 48h lead-confirmation SLA, and three-tier warnings.',
-    previewPoints: ['Lead tagging & roster inheritance', '48h SLA with auto-escalation', 'Three-tier warning ledger'],
+    blurb: 'Unified crew management: daily shift rosters, event schedules, 48h task confirmations, and warning ledgers.',
+    previewPoints: ['Daily shift grid (AM/PM/OFF)', 'Event schedule & squad assignments', '48h task confirmations & warning ledger'],
   },
   {
     id: 'incidents',

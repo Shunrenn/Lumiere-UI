@@ -59,6 +59,7 @@ export interface DispatchBatch {
   id: string
   vehicleType: string
   plateNumber: string
+  driverName?: string
   direction: BatchDirection
   stage: BatchStage
   handoffNote: string

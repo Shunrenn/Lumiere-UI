@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Search, Plus, ChevronDown, Grid2X2, List } from 'lucide-react'
 import { ConsoleLayout } from '@/components/ConsoleLayout'
-import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { AddNewAssetModal } from '@/components/AddNewAssetModal'
 import { AssetInformationModal } from '@/components/AssetInformationModal'
 import { ReorderRequisitionModal } from '@/components/ReorderRequisitionModal'
@@ -14,7 +13,6 @@ import { useInventoryOps } from '@/lib/inventory-ops'
 import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { GridRevealContainer } from '@/components/GridRevealContainer'
 import type { InventoryItem, ProcurementItem, StockStatus } from '@/lib/types'
-import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 
 // Map a warehouse inventory category onto an Event Planner décor category so a
 // newly registered asset lands in the right group of the canvas side panel.
@@ -94,10 +92,10 @@ const SORT_OPTIONS = [
 export function InventoryStockPage() {
   const { inventory: items, addInventoryItem, updateInventoryItem } = usePortal()
   const liveOps = useInventoryOps()
-  // Admin and Executive have read-only oversight; only Warehouse Managers can mutate the registry.
-  const { isAdmin, isExecutive } = useAuth()
-  const { intent, clearIntent, navigate } = useNav()
-  const readOnly = isAdmin || isExecutive
+  // Admin has read-only oversight; Warehouse Managers mutate the registry.
+  const { isAdmin } = useAuth()
+  const { intent, clearIntent } = useNav()
+  const readOnly = isAdmin
   const [query, setQuery] = useState('')
   const [stateFilter, setStateFilter] = useState<StockStatus | 'All'>('All')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -179,11 +177,7 @@ export function InventoryStockPage() {
     return result
   }, [query, stateFilter, categoryFilter, sortBy, items])
 
-  const destination = (id: ExecutiveDestinationId) => navigate(id)
-
-  // Heading + search + add — shared as the sticky header for Executive
-  // (ExecutiveShell) and as the top-of-body content for Warehouse
-  // (ConsoleLayout), which has no sticky-header slot of its own.
+  // Heading + search + add for Warehouse ConsoleLayout
   const headerBlock = (
     <div>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -500,11 +494,7 @@ export function InventoryStockPage() {
     </>
   )
 
-  return isExecutive ? (
-    <ExecutiveShell activeId="inventory" onSelect={destination} stickyHeader={headerBlock}>
-      {bodyContent}
-    </ExecutiveShell>
-  ) : (
+  return (
     <ConsoleLayout>
       <div className="mt-4">{headerBlock}</div>
       {bodyContent}

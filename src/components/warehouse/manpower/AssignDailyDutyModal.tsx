@@ -1,16 +1,8 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, ShieldAlert, UserCheck, X } from 'lucide-react'
-import type { PortalEvent } from '@/lib/types'
-import {
-  assignCrewToEvent,
-  checkSymmetricConflict,
-  crewHasConflict,
-  isTeamLead,
-  type AssignMode,
-  type CrewRow,
-  type PresetSquad,
-} from '@/lib/warehouse-crew'
-import { createOverride } from '@/lib/manning'
+import { ShieldAlert, UserCheck, X } from 'lucide-react'
+import type { CrewRow, PresetSquad, WarehouseZone } from '@/lib/warehouse-crew'
+import { assignDailyDuty, checkSymmetricConflict, isTeamLead, type AssignMode } from '@/lib/warehouse-crew'
+import { createOverride, useManningData } from '@/lib/manning'
 import { useAuth } from '@/lib/auth'
 import { usePortal } from '@/lib/store'
 import { useGroundCrewDeclarations } from '@/lib/ground-crew-declarations'
@@ -19,36 +11,38 @@ import { FifoSelector } from './shared/FifoSelector'
 import { PresetSelector } from './shared/PresetSelector'
 import { ManualCrewPicker } from './shared/ManualCrewPicker'
 
-const FIELD_TASKS = [
-  'Load-in & setup',
-  'Décor styling',
-  'Floral install',
-  'Load-out & strike',
-  'Vehicle marshaling',
-  'Client liaison',
-]
-
-interface AssignCrewModalProps {
-  events: PortalEvent[]
+interface AssignDailyDutyModalProps {
+  date: string
+  department: 'Warehouse' | 'Production'
+  zone?: WarehouseZone
   crewRows: CrewRow[]
   presetSquads: PresetSquad[]
   onClose: () => void
+  onSuccess?: () => void
 }
 
-export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: AssignCrewModalProps) {
+export function AssignDailyDutyModal({
+  date,
+  department,
+  zone,
+  crewRows,
+  presetSquads,
+  onClose,
+  onSuccess,
+}: AssignDailyDutyModalProps) {
   const { adminName, adminEmail } = useAuth()
   const { staff } = usePortal()
+  const { assignments: activeFieldAssignments } = useManningData()
   const declarations = useGroundCrewDeclarations()
   const actor = adminName || adminEmail || 'Manning Manager'
 
   const [mode, setMode] = useState<AssignMode>('fifo')
-  const [eventId, setEventId] = useState(events[0]?.id ?? '')
-  const [task, setTask] = useState(FIELD_TASKS[0])
-  const [slotCount, setSlotCount] = useState(3)
+  const [slotCount, setSlotCount] = useState(2)
   const [manualIds, setManualIds] = useState<Set<string>>(new Set())
   const [presetId, setPresetId] = useState(presetSquads[0]?.id ?? '')
   const [swappedOut, setSwappedOut] = useState<Set<string>>(new Set())
   const [swaps, setSwaps] = useState<Record<string, string>>({})
+  const [isTeamLeadToday, setIsTeamLeadToday] = useState(false)
 
   // Emergency Override State & Persistence
   const [overriddenStaffIds, setOverriddenStaffIds] = useState<Set<string>>(new Set())
@@ -60,40 +54,19 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
   const [justification, setJustification] = useState('')
   const [submittingOverride, setSubmittingOverride] = useState(false)
 
-  const selectedEvent = events.find((e) => e.id === eventId)
-  const [assignmentDate, setAssignmentDate] = useState(selectedEvent?.targetDate ?? '2026-08-20')
-
-  // Keep assignmentDate in sync with selectedEvent targetDate when event changes
-  useMemo(() => {
-    if (selectedEvent?.targetDate) {
-      setAssignmentDate(selectedEvent.targetDate)
-    }
-  }, [eventId])
-
-  const targetDate = assignmentDate
-
-  // Block assignment if target date is past the event's actual targetDate
-  const isPastEventDate = useMemo(() => {
-    if (!selectedEvent?.targetDate || !assignmentDate) return false
-    return new Date(assignmentDate).getTime() > new Date(selectedEvent.targetDate).getTime()
-  }, [assignmentDate, selectedEvent])
-
   // FIFO Mode: picks strictly available non-conflicting crew members
   const available = useMemo(() => {
     return crewRows.filter((row) => {
       if (row.status !== 'Available') return false
-      if (crewHasConflict(row, eventId)) return false
-      if (targetDate) {
-        const symmetric = checkSymmetricConflict(row.staffId, targetDate, 'Field')
-        if (symmetric.hasConflict) return false
-      }
+      const symmetric = checkSymmetricConflict(row.staffId, date, department, activeFieldAssignments)
+      if (symmetric.hasConflict) return false
       return true
     })
-  }, [crewRows, eventId, targetDate])
+  }, [crewRows, date, department, activeFieldAssignments])
 
   const fifoPicks = useMemo(() => available.slice(0, slotCount), [available, slotCount])
 
-  // Preset Mode: filters out conflicting squad members UNLESS overridden or swapped
+  // Preset Mode: filters out conflicting squad members UNLESS overridden
   const preset = presetSquads.find((s) => s.id === presetId)
   const presetMembers = useMemo(() => {
     if (!preset) return []
@@ -105,27 +78,24 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
       })
       .filter((row): row is CrewRow => {
         if (!row) return false
-        if (!selectedEvent) return true
-        const hasEventConflict = crewHasConflict(row, selectedEvent.id)
-        const symmetric = targetDate ? checkSymmetricConflict(row.staffId, targetDate, 'Field') : { hasConflict: false }
-        const hasConflict = hasEventConflict || symmetric.hasConflict
-
-        if (hasConflict && !overriddenStaffIds.has(row.staffId)) return false
+        const symmetric = checkSymmetricConflict(row.staffId, date, department, activeFieldAssignments)
+        if (symmetric.hasConflict && !overriddenStaffIds.has(row.staffId)) return false
         return true
       })
-  }, [preset, crewRows, swappedOut, swaps, selectedEvent, targetDate, overriddenStaffIds])
+  }, [preset, crewRows, swappedOut, swaps, date, department, activeFieldAssignments, overriddenStaffIds])
 
   const toggleManual = (row: CrewRow) => {
     const staffId = row.staffId
-    const isEventConflict = selectedEvent ? crewHasConflict(row, selectedEvent.id) : false
-    const symmetric = targetDate ? checkSymmetricConflict(staffId, targetDate, 'Field') : { hasConflict: false }
-    const isConflict = isEventConflict || symmetric.hasConflict
+    const symmetric = checkSymmetricConflict(staffId, date, department, activeFieldAssignments)
 
-    if (isConflict && !overriddenStaffIds.has(staffId) && !manualIds.has(staffId)) {
+    if (symmetric.hasConflict && !overriddenStaffIds.has(staffId) && !manualIds.has(staffId)) {
       const conflictType: 'On Leave' | 'Double Booked' =
         row.status === 'On Leave' ? 'On Leave' : 'Double Booked'
-      const details = symmetric.details || (row.status === 'On Leave' ? 'Crew member is on leave' : 'Double booked for another event')
-      setOverrideModal({ row, conflictType, conflictDetails: details })
+      setOverrideModal({
+        row,
+        conflictType,
+        conflictDetails: symmetric.details || `Assigned as Field Crew on target date ${date}`,
+      })
       setJustification('')
       return
     }
@@ -149,14 +119,14 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
   }
 
   const handleConfirmOverride = async () => {
-    if (!overrideModal || !selectedEvent || !justification.trim()) return
+    if (!overrideModal || !justification.trim()) return
     setSubmittingOverride(true)
     try {
       await createOverride({
         staff_id: overrideModal.row.staffId,
         staff_name: overrideModal.row.name,
-        event_id: selectedEvent.id,
-        event_title: selectedEvent.title,
+        event_id: `daily-duty-${date}`,
+        event_title: `Daily Duty Assignment (${department}${zone ? ` · ${zone}` : ''})`,
         conflict_type: overrideModal.conflictType,
         justification: justification.trim(),
         overridden_by: actor,
@@ -182,33 +152,25 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
         ? crewRows.filter((r) => manualIds.has(r.staffId))
         : presetMembers
 
-  // ─── Team Lead Minimum Validation & Escalation ───
-  const poolLeads = useMemo(
-    () => crewRows.filter((row) => isTeamLead(row, staff, declarations, targetDate)),
-    [crewRows, staff, declarations, targetDate],
-  )
-  const hasTeamLeadInPool = poolLeads.length > 0
-
-  const hasTeamLeadPicked = useMemo(
-    () => finalPicks.some((row) => isTeamLead(row, staff, declarations, targetDate)),
-    [finalPicks, staff, declarations, targetDate],
-  )
-
-  const canConfirm = Boolean(selectedEvent) && finalPicks.length > 0 && hasTeamLeadPicked && !isPastEventDate
+  const canConfirm = finalPicks.length > 0
 
   const handleConfirm = () => {
-    if (!selectedEvent || isPastEventDate) return
-    if (!hasTeamLeadPicked) return
+    if (finalPicks.length === 0) return
 
-    finalPicks.forEach((row) => {
-      assignCrewToEvent(row.staffId, {
-        eventId: selectedEvent.id,
-        event: selectedEvent.title,
-        venue: selectedEvent.venue,
-        date: assignmentDate,
-        task,
+    finalPicks.forEach((row, idx) => {
+      assignDailyDuty({
+        date,
+        staffId: row.staffId,
+        staffName: row.name,
+        dutyCategory: department,
+        zone: department === 'Warehouse' ? zone : undefined,
+        // Designate Team Lead for the first picked worker or explicit toggle
+        isTeamLeadToday: idx === 0 ? isTeamLeadToday || isTeamLead(row, staff, declarations, date) : false,
+        assignedBy: actor,
       })
     })
+
+    if (onSuccess) onSuccess()
     onClose()
   }
 
@@ -223,12 +185,16 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
         className="flex h-full max-h-[44rem] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-card shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
+        {/* Header */}
         <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
           <div>
-            <p className="text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              Manning Delegation
+            <p className="text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-primary">
+              Daily Duty Assignment
             </p>
-            <h2 className="mt-1 font-serif text-xl font-medium text-card-foreground">Assign Field Crew</h2>
+            <h2 className="mt-1 font-serif text-xl font-medium text-card-foreground">
+              Assign {department} Crew {zone ? `— ${zone}` : ''}
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Target Date: <span className="font-semibold text-foreground">{date}</span></p>
           </div>
           <button
             type="button"
@@ -240,77 +206,29 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
           </button>
         </div>
 
+        {/* Modal Body */}
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
-          {/* Team Lead Status / Escalation Banners */}
-          {!hasTeamLeadInPool ? (
-            <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-              <ShieldAlert className="mt-0.5 size-4 shrink-0" />
-              <div>
-                <p className="font-bold uppercase tracking-wider">No Team Lead Available in Pool</p>
-                <p className="mt-0.5 text-[0.7rem] text-destructive/90">
-                  No qualified Team Leads are available in the crew pool for this assignment. Finalization is blocked.
-                </p>
-              </div>
+          {/* Team Lead Designation Checkbox */}
+          <div className="rounded-lg border border-border bg-background p-3.5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-foreground">Designate Team Lead for Today</p>
+              <p className="text-[0.68rem] text-muted-foreground">
+                Assign Lead status to the primary worker for this {department} duty on {date}.
+              </p>
             </div>
-          ) : !hasTeamLeadPicked && finalPicks.length > 0 ? (
-            <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-              <div>
-                <p className="font-bold uppercase tracking-wider">Team Lead Required</p>
-                <p className="mt-0.5 text-[0.7rem]">
-                  At least 1 Team Lead must be included in this assignment before finalizing. Select a crew member tagged as Team Lead.
-                </p>
-              </div>
-            </div>
-          ) : null}
-
-          {/* Past Event Date Warning Banner */}
-          {isPastEventDate && (
-            <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-              <div>
-                <p className="font-bold uppercase tracking-wider">Invalid Assignment Date</p>
-                <p className="mt-0.5 text-[0.7rem] text-destructive/90">
-                  Selected assignment date ({assignmentDate}) cannot be past the event's actual date ({selectedEvent?.targetDate}). Finalization is blocked.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Event, Date & Task Inputs */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-            <label className="flex flex-col gap-1.5 sm:col-span-2">
-              <span className="text-[0.58rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                Target event
-              </span>
-              <select
-                value={eventId}
-                onChange={(e) => setEventId(e.target.value)}
-                className="rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
-              >
-                {events.map((event) => (
-                  <option key={event.id} value={event.id}>
-                    {event.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[0.58rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                Assignment date
-              </span>
+            <label className="flex items-center gap-2 cursor-pointer">
               <input
-                type="date"
-                value={assignmentDate}
-                onChange={(e) => setAssignmentDate(e.target.value)}
-                className={cn(
-                  'rounded-md border bg-background px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary',
-                  isPastEventDate ? 'border-destructive ring-1 ring-destructive' : 'border-input',
-                )}
+                type="checkbox"
+                checked={isTeamLeadToday}
+                onChange={(e) => setIsTeamLeadToday(e.target.checked)}
+                className="size-4 rounded border-input text-primary focus:ring-primary"
               />
+              <span className="text-xs font-bold uppercase tracking-wider text-primary">Lead Today</span>
             </label>
+          </div>
 
+          {/* Slots & Config */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5">
               <span className="text-[0.58rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
                 Slots to fill
@@ -323,32 +241,10 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
                 onChange={(e) => {
                   setSlotCount(Math.max(1, Math.min(10, Number(e.target.value) || 1)))
                 }}
-                className="rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+                className="rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
               />
             </label>
           </div>
-
-          {/* Field Task Dropdown (Visible in FIFO & Manual modes; in Preset mode, task is set per-team) */}
-          {mode !== 'preset' && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-1">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-[0.58rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                  Field task
-                </span>
-                <select
-                  value={task}
-                  onChange={(e) => setTask(e.target.value)}
-                  className="rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
-                >
-                  {FIELD_TASKS.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
 
           {/* Assignment Mode Tabs */}
           <div className="flex flex-col gap-3">
@@ -393,7 +289,7 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
                 availableCount={available.length}
                 staffList={staff}
                 declarations={declarations}
-                date={targetDate}
+                date={date}
               />
             )}
 
@@ -404,13 +300,11 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
                 onPresetChange={setPresetId}
                 presetMembers={presetMembers}
                 crewRows={crewRows}
-                eventId={eventId}
-                date={targetDate}
-                targetCategory="Field"
+                date={date}
+                targetCategory={department}
                 overriddenStaffIds={overriddenStaffIds}
                 onSwapMember={(outId, inId) => setSwaps((prev) => ({ ...prev, [outId]: inId }))}
                 onRemove={handleRemove}
-                onTaskChange={(newTask) => setTask(newTask)}
                 staffList={staff}
                 declarations={declarations}
               />
@@ -421,9 +315,8 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
                 crewRows={crewRows}
                 selectedIds={manualIds}
                 onToggle={toggleManual}
-                eventId={eventId}
-                date={targetDate}
-                targetCategory="Field"
+                date={date}
+                targetCategory={department}
                 overriddenStaffIds={overriddenStaffIds}
                 staffList={staff}
                 declarations={declarations}
@@ -435,7 +328,7 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
         {/* Modal Footer Actions */}
         <div className="flex items-center justify-between border-t border-border px-6 py-4">
           <span className="text-xs text-muted-foreground">
-            {finalPicks.length} member{finalPicks.length === 1 ? '' : 's'} staged
+            {finalPicks.length} worker{finalPicks.length === 1 ? '' : 's'} staged
           </span>
 
           <div className="flex items-center gap-2">
@@ -456,7 +349,7 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
               )}
             >
               <UserCheck className="size-4" />
-              Finalize Field Assignment
+              Assign {department} Duty
             </button>
           </div>
         </div>
@@ -491,7 +384,7 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
             </div>
 
             <p className="text-xs text-muted-foreground leading-relaxed">
-              <span className="font-semibold text-foreground">{overrideModal.row.name}</span> is currently hard-blocked ({overrideModal.conflictDetails || overrideModal.conflictType}). Double-duty requires an Emergency Override.
+              <span className="font-semibold text-foreground">{overrideModal.row.name}</span> is currently hard-blocked ({overrideModal.conflictDetails || overrideModal.conflictType}). Assigning Daily Duty requires an Emergency Override.
             </p>
 
             <label className="flex flex-col gap-1.5">

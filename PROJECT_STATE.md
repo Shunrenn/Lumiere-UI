@@ -431,16 +431,6 @@ Damage exceptions lacking photographic evidence are held for audit and require t
 - Audit all warehouse modules for which Supabase imports are present but mutations still fall back to in-memory state.
 - Replace seeded security events with append-only server-side audit records.
 
-### Backlog / Future Considerations (Canvas Workspace — as of Sep 2026)
-
-The items below are explicitly deferred or unverified as of the last working session. They are tracked here so future agents do not assume they are complete.
-
-- **Text tool tab (non-functional placeholders):** All buttons in the Text sidebar tab — Paragraph, Heading 1/2/3, and all formatting controls — are visual stubs only. No Konva `Text` node is ever placed on the canvas when a text preset is clicked. Full Konva text integration (placement, inline editing, font/size binding) has not been started.
-- **Tools tab (COMPLETED):** All 6 tools in the Tools sidebar tab (Select, Draw, Shapes, Lines, Sticky Note, Text) are fully wired to `KonvaInfiniteCanvas`. Freehand drawing (Pen), straight lines, rectangle shapes, sticky notes with double-tap text editing, and text nodes with auto-focus inline textarea overlays are fully functional, per-page partitioned, drag-clamped, selectable/transformable/deletable, and persisted in `localStorage`.
-- **Projects tab sub-page navigation (no-op):** The Projects sidebar accordion renders per-project page entries. Clicking any sub-page button has no handler — it does not navigate the canvas to that page or switch the active page in any way.
-- **Duplicate action (card metadata only, canvas copy unverified):** The ellipsis menu's "Make a copy" action clones the project card entry and copies the three associated localStorage keys (`lumiere-canvas-assets-{id}`, `lumiere-pages-{id}`, `lumiere-page-nav-mode-{id}`). This has not been verified via a live browser session confirming that a duplicated project's canvas state (placed elements, page titles) is a true independent copy and does not share a reference with the original.
-- **Background apply (implemented, screenshot pending):** The Background tab's "Apply background" action is fully wired — selected color or photo data URL is passed from `BackgroundTab` → `LeftPanel` → `handleApplyBackground` in `CanvasWorkspacePage`, stored in `localStorage` (`lumiere-bg-color-{id}`, `lumiere-bg-photo-{id}`), and passed as `artboardBg` / `artboardBgImage` props to `KonvaInfiniteCanvas` where the artboard `<Rect>` fill and an optional cover-fitted `<KonvaImage>` are rendered. TypeScript compilation is clean (zero errors). Browser-screenshot confirmation that the fill visibly updates across all pages is still pending due to browser-agent quota limits at time of implementation.
-
 ---
 
 ## 5. Data model summary
@@ -769,15 +759,119 @@ The app is best understood as a polished multi-portal frontend prototype with a 
 *   **Needs Editing panel [COMPLETED]:** Added fixed height (`32rem`) to the sidebar container, marked header layout as `shrink-0` to keep it pinned, and set the list element to `flex-1 overflow-y-auto` to allow scrollable list viewing.
 *   **Layout ratio [COMPLETED]:** Restructured the parent container wrapping the Calendar and Needs Editing elements in [`DesignCanvasHubPage.tsx`](file:///c:/Users/T480s/Downloads/Lumiere_Frontend/src/pages/DesignCanvasHubPage.tsx) to use a CSS grid with `grid-cols-1 lg:grid-cols-[7fr_3fr]` layout ratio which holds cleanly across responsive breakpoints.
 
-### Current focus: Canvas Workspace improvements and sidebar audit
+### Latest Completed Focus: Manning Delegation Module & System-Wide UI Polish [COMPLETED]
 
-*   **Cross-project canvas-leak fix [COMPLETED]:** Namespaced all canvas `localStorage` keys with `card.id` (`lumiere-canvas-assets-${card.id}`, `lumiere-pages-${card.id}`). Eliminated shared static key `lumiere-canvas-assets` that caused elements from one project to leak into another.
-*   **Continuous vertical page scrolling [COMPLETED]:** Added Canva-style Flow mode with pages stacked vertically, bounded scroll, external per-page header bars (rename, hide, duplicate, delete, move up/down), and a bottom "+ Add page" button.
-*   **Per-page asset partitioning [COMPLETED]:** Each placed element carries a `pageId`. Assets render only on their assigned page. Drag movement is clamped within the originating page's artboard boundaries. Selection/Transformer auto-clears on active page change.
-*   **Dual page navigation modes [COMPLETED]:** Toggle between Flow (continuous scroll) and Thumbnail (single-page + filmstrip) modes. Mode persists per project in `localStorage`.
-*   **Uploads tab drag-to-canvas [COMPLETED]:** Upload tiles are now draggable onto the canvas (same `DRAG_MIME` pattern as Elements tab). Click-to-add is also supported.
-*   **Tools Tab canvas integration [COMPLETED]:** Lifted `activeTool` state to workspace root (`CanvasWorkspacePage`), wired `handlePlaceElement` to `KonvaInfiniteCanvas`. All 6 tools — Select, Draw (freehand Pen), Shapes (rectangle), Lines (straight line drag-draw), Sticky Note (with double-tap text edit), and Text (Text node + auto-focus inline textarea overlay with zoom/pan screen positioning) — are fully functional and persisted to `localStorage`.
-*   **Sidebar audit [COMPLETED]:** Elements, Uploads, Tools, and Background tabs are fully functional end-to-end. Only Text presets tab and Projects sub-page navigation remain placeholders — tracked in §4 "Backlog / Future Considerations".
+- **Manning Delegation Module — COMPLETE ✅**:
+  - **Structural**: Merged "Manning & SLA Engine" + "Manpower & Crew" into unified "Manning Delegation" module (`/manning`). Single route with internal tab-switching (`Daily Operations` / `Event-Based Operations`). Renamed "SLA" terminology to plain language throughout (`"48h Task Confirmations"`, `"Confirmation Overdue"`).
+  - **Weekly Roster Matrix**: Built scrollable shift grid (`CrewOpsGrid.tsx`) with dual-axis sticky headers (`sticky top-0` dates, `sticky left-0` crew names). Local draft editing (`draftGrid`) with staged amber ring visual feedback, **"Save Changes (N)"** confirmation modal, and **"Discard"** safety prompt modal. Expanded mock crew roster to 20 members.
+  - **Shared Crew Directory**: Built compact scrollable list format (`max-h-52`) with real-time text search and status filter pills (`All`, `Available`, `Assigned`, `On Leave`). Added **"Expand"** button (`Maximize2` icon) opening a full-screen/large scrollable `FullRosterModal`.
+  - **Foundation A — Leave/Double-Booking Hard-Block**: Hard-blocks On Leave + double-booked crew across Manual/Preset assignment modes. Integrated Foundation A Emergency Override modal requiring mandatory justification, backed by Supabase `manning_overrides` table with local fallback.
+  - **Foundation B — Minimum Team Lead Enforcement**: Implemented `isTeamLead()` two-tier resolution hierarchy: Tier 1 per-day designation (`isTeamLeadToday`), Tier 2 static role/declaration fallback (exact-match qualification roles). UI blocks finalization with 0 Team Leads selected (amber banner) or 0 available in pool (red escalation banner). Backend `createAssignment()` validates genuine `isTeamLead()` qualification.
+  - **Daily Duty Assignment by Department & Zone (Batches 1-4)**:
+    - Three-way duty category separation: `Field` (event deployments), `Warehouse` (zone maintenance), `Production` (bespoke fabrication).
+    - `DailyDutyAssignment` record schema: single-day date scope, `dutyCategory`, `zone`, `isTeamLeadToday`.
+    - 6 physical warehouse zones: `Logistics & Movement`, `Artificials Inventory`, `Centerpieces Inventory`, `Drapery & Fabrics`, `Lighting & Rigging`, `Staging & Hardware`.
+    - **Symmetric Hard-Block**: Cross-context hard-blocking between Field Crew (event deployments) and Daily Duty (Warehouse / Production). Multi-day Field ranges block Daily Duty for every day in range, reusing Foundation A's override system with per-day surgical override.
+    - **Shared Selector Components**: Extracted `<FifoSelector>`, `<PresetSelector>`, and `<ManualCrewPicker>` into `src/components/warehouse/manpower/shared/` and reused across `AssignCrewModal` and `AssignDailyDutyModal`.
+    - **`DailyZoneDutyView.tsx`**: Per-day view with date picker, Production section, Warehouse zone cards, `[⭐ Lead Today]` badges, compact scrollable crew lists, and `"No Crew Assigned"` gap callouts with `+ Assign` shortcuts.
+    - **Daily Operations View Switcher**: Added sub-tab toggle inside Daily Operations: `[ 📅 Weekly Roster Matrix ]` ↔ `[ 🏢 Daily Department & Zone Detail ]`.
+  - **UI Polish (System-Wide)**:
+    - Bolds event group headers in Replenishment & Deficits (`<h2 className="font-serif text-lg font-bold">`).
+    - Clickable table rows/cards with proper `stopPropagation()` across Replenishment, Asset Catalog, and Manning Delegation (Assignments, SLA Tasks, Warning Ledger).
+
+  - **Prompt 2 (FIFO & Modal Date Validation) — COMPLETE ✅**:
+    - Added explicit **Assignment date** input field (`<input type="date">`) to `AssignCrewModal`.
+    - Added past-event-date validation: selecting a date past `selectedEvent.targetDate` renders a red `Invalid Assignment Date` warning banner and hard-disables `Finalize Field Assignment`.
+  - **Prompt 3 (Preset Squad Enhancements & Persistence) — COMPLETE ✅**:
+    - **Supabase Persistence**: `manning_preset_squads` stored directly in Supabase (`fetchPresetSquads`, `savePresetSquad`, `deletePresetSquad`) with local in-memory fallback.
+    - **Per-Team Field Task Registry**: Hidden global task dropdown in Preset Mode; task is bound per-team (`Team Task: Setup & Staging`) on preset cards.
+    - **Candidate Swap Dropdown**: Clicking swap icon on a squad card renders an inline candidate replacement dropdown listing available non-conflicting FIFO candidates.
+    - **Preset Squad Manager Modal**: Added **`Manage Squads`** button opening `PresetSquadManagerModal` for creating, editing, and deleting squad presets.
+  - **Prompt 4 (SLA Indicator & PIN Gate Popup Modal) — COMPLETE ✅**:
+    - **Strict Overdue SLA Indicator**: Countdown badge renders strictly when `isSlaOverdue(task, now)` is `true` (`overdue === true`).
+    - **PIN Review Gate Popup Modal**: Converted `PinGate` full-panel takeover into a floating modal dialog overlay (`fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 backdrop-blur-sm`) over the dimmed/blurred review queue in the background.
+
+  - **Prompt 5 (Dispatch & Logistics Enhancements) — COMPLETE ✅**:
+    - **List Row Assets Summary**: Contained assets (`reconciliation` items) rendered directly inside list row cards.
+    - **Asset Deduplication & Allocation**: `NewBatchModal` with Driver field, master asset list, and quantity deduplication (`Available Qty = Total Qty - Committed in Open Batches`). Items with `Available Qty <= 0` disabled with `Reserved in Open Batch` badge.
+    - **Automated Return Batch Prompt**: Reaching `Delivered` status renders `Outbound Batch Delivered` banner and `+ Return Batch` shortcut button pre-populating return ingress batch.
+    - **Real PDF Manifest Export**: `exportBatchPdf` helper using `jsPDF` (`^4.2.1`) generating formatted `Manifest_[Plate]_[BatchId].pdf` downloads.
+    - **Editable Vehicle & Driver**: `driverName` field added to `DispatchBatch` schema, with dynamic vehicle type, plate number, and driver name editing in `BatchDetailView`.
+    - **Cancel/Delete Batch Action (Feature Addition)**: Exposed red `Cancel / Delete Batch` button in `BatchDetailView` header with confirmation popup modal. Deleting a batch removes it from active fleet store & Supabase (`deleteBatch`), logs to the Dispatch Activity Feed (`getDispatchActivity`), and releases all committed quantities back to the available pool. Reactivity is instant on the active tab/device (`useSyncExternalStore`), with cross-device sync updating upon module open/refresh.
+
+### Next Up / Pending Tasks
+- **Foundation C-F**: (leave-after-assignment auto-release, First-Commit-Wins tie-breaker, no-show flag, Admin Team Lead quota) — parked, non-blocking future tasks.
+- **Foundation G: Centralized Audit Log (parked, cross-module)**:
+  - **Status**: Not started — identified during Prompt 5 Dispatch sign-off review.
+  - **Problem**: Destructive/sensitive actions across modules currently use inconsistent audit patterns. `manning_overrides` has a proper structured table with mandatory justification (gold standard). Dispatch batch deletion only writes a free-text activity log string (no actor, no reason, no snapshot). Preset squad create/rename/delete audit trail status unconfirmed.
+  - **Proposed Fix**: Generic reusable `audit_log` Supabase table usable across all modules (`id`, `actor_id` / `actor_name`, `module`, `action_type`, `target_id`, `target_snapshot` [JSON], `reason`, `created_at`).
+  - **Scope**: Cross-cutting, not tied to one module. Needs its own data-model-first proposal before implementation.
+  - **Related Gap**: Dispatch's current `deleteBatch()` hard-deletes with no soft-delete/archive option — no manifest/reconciliation history preserved. Decision pending on whether this matters for dispute resolution.
+- **Prompt 6**: Replenishment status labels & workflow adjustments.
+- **Prompt 7**: Vendor search & Asset detail fields.
+
+---
+
+## Backlog — Client Walkthrough Notes (Post-WOM Priority)
+
+Status: Logged, not started. Sequenced after current WOM work (build-failure fix →
+Foundation E → Prompt 5 clarifications → Prompt 6 → Prompt 7 → Foundation G).
+
+### Confirmed decisions (ready to scope when we get here)
+- Executive role becomes read-only / insights-only across the system — no sign-off
+  or approval actions anywhere, including Damage Validation.
+- Damage Validation sign-off authority (Repair, Write-off) moves from Executive to
+  WOM (Warehouse Manager / Inventory Officer). Executive becomes notify-only for damage events.
+- Repair sign-off updates the corresponding asset's status in the Asset Registry
+  to 'In Maintenance', with a WOM-accessible 'Complete Maintenance / Return to Stock' flow.
+- Damage Validation UI remains a single page/route (`DamageValidationPage.tsx`),
+  rendering read-only (stripped action buttons, non-editable modal) for Executive credentials.
+- Event Settlement blocking override routes through WOM sign-off instead of Executive.
+- **Admin-Configurable "Allow Self-Validation" Permission**:
+  - Configurable per WOM sub-role in RBAC (`allowSelfValidation`, default: ON for lean teams).
+  - When ON: Single qualifying WOM actor can resolve Held-for-Audit with PIN + mandatory justification (≥20 chars) + acknowledgement checkbox.
+  - When OFF: Strict dual-custody enforced. If understaffed (<2 qualifying accounts), resolution strictly blocked.
+  - **Admin Emergency Unblock Choice (when OFF)**:
+    - **Option A ("One-Time" / Instance - Default)**: Auto-reverts toggle to OFF once the specific claim is resolved.
+    - **Option B ("Permanent")**: Keeps toggle ON permanently; requires mandatory warning modal with explicit acknowledgement checkbox.
+    - **Audit Trail**: Records `originatedFromEmergency: true`, `emergencyReason`, and (for Option B) `madePermanentAt` / `permanentAcknowledged: true`.
+- General UI direction from client: "Simplify, Be Specific" — applies broadly to
+  upcoming redesign work, not just one module.
+
+### Needs clarification before scoping (open questions, not yet resolved with client)
+- **NDA consolidation**: client wants a single consolidated NDA document, described
+  as "event-based" — exact meaning (one NDA per event? one master doc referencing
+  events?) not yet confirmed.
+- **UI fade-out pattern**: resolved/completed items in pending-lists should fade out
+  before moving to the bottom of the list, rather than disappearing or staying in
+  place. Likely applies to multiple screens (Pending Actions, Damage Validation
+  queue, etc.) — needs a full inventory of affected lists before scoping.
+- **Event Planner role**: needs read-only View access to the Manning side. Client
+  mentioned "Manning Responsibility Time" and a "Timeline" view — neither has a
+  clear definition yet; needs follow-up with client before this can be scoped.
+- **PWA / mobile redesign**:
+  - Some capability should be restricted to Team Lead only (which capability,
+    not yet specified).
+  - General simplification pass needed with digital-literacy in mind — assume
+    lower technical familiarity among some field users.
+  - Inventory PWA view needs a summary/overview mode instead of a full list —
+    current catalog is ~5,000 SKUs, too many to browse directly on mobile.
+  - Some feature(s) should be restricted to a specific named person, not a whole
+    role — which feature(s) not yet specified.
+  - Need "acknowledge limitations" confirmation buttons before certain actions —
+    exact actions/copy not yet specified.
+- **Scope reduction — "remove the Event side"**: unclear which surface this refers
+  to (PWA? a specific module?) — needs clarification before scoping.
+- **Kiosk and Brochure**: unclear if this is a new feature request (e.g. a
+  self-service kiosk mode, digital brochure view) or something being removed —
+  needs clarification.
+- **Inventory & Purchasing declutter**: general UI simplification request for
+  these two modules — no specific redesign scoped yet.
+
+### Process note
+When we return to this backlog, resolve the "needs clarification" items with
+the client (via the human PM) before drafting implementation prompts — do not
+guess at ambiguous items the way we've had to flag mid-review before.
 
 ---
 
@@ -833,6 +927,16 @@ For Ground Crew specifically, the backend should preserve the frontend invariant
 ## Caveat on source-of-truth terminology
 
 The UI currently calls `PortalProvider` the “single source of truth” for pending RBAC setup, but that is only true within the running browser session. It is not a durable source of truth across tabs, devices, reloads, or administrators until the RBAC state is persisted and reloaded from the backend.
+
+---
+
+## Known Architectural Gaps (Deferred to Backend Integration Phase)
+
+### Optimistic / Fire-and-Forget Supabase Mutation Divergence
+- **Pattern:** `deleteBatch()` (and other operational Supabase mutations following this pattern) executes an immediate optimistic local delete/mutation, then dispatches an asynchronous, un-awaited Supabase database call in the background.
+- **Failure Handling:** On network or database rejection, failures are caught and logged solely to `console.warn` (`[v0] Supabase delete batch error...`) without reverting optimistic local state, displaying a user-facing error notification, or enqueuing a persistent retry.
+- **Risk:** Silent state divergence between the local browser session and the remote PostgreSQL database once active Supabase production credentials are connected.
+- **Remediation Plan:** Introduce a structured sync-status indicator, rollback/reversion hooks on rejected promises, or an offline mutation/retry queue before promoting these endpoints to production. (Low urgency during prototype phase as the local workspace operates against fallback placeholder credentials).
 
 ---
 

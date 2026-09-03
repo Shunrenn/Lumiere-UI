@@ -114,7 +114,7 @@ export interface Staff {
   employeeId: string
   surname: string
   firstName: string
-  middleName: string
+  middleName?: string
   email: string
   contact: string
   role: StaffRole

@@ -1,33 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { usePortal } from '@/lib/store'
-import { useDeployments } from '@/lib/deployments'
 import { WarehouseHeader } from '@/components/warehouse/WarehouseHeader'
 import { ModuleEntryRow } from '@/components/warehouse/ModuleEntryRow'
-import { StatStrip } from '@/components/warehouse/StatStrip'
-import { EventsSection } from '@/components/warehouse/EventsSection'
+import { WarehouseCalendarEventsView } from '@/components/warehouse/WarehouseCalendarEventsView'
+import { WomInputSummaryModal } from '@/components/warehouse/WomInputSummaryModal'
 import { WarehouseDrilldown, type DrilldownEntry } from '@/components/warehouse/WarehouseDrilldown'
 import { WarehouseEventDetailPage } from '@/pages/WarehouseEventDetailPage'
 import type { WarehouseModuleId } from '@/lib/warehouse-modules'
+import type { PortalEvent } from '@/lib/types'
 
 export function WarehouseHomePage() {
-  const { events, procurement, staff } = usePortal()
-  const deployments = useDeployments()
+  const { events } = usePortal()
   const [searchQuery, setSearchQuery] = useState('')
   const [drilldown, setDrilldown] = useState<DrilldownEntry | null>(null)
-
-  const stats = useMemo(() => {
-    const criticalDeficits = procurement.filter((item) => item.status === 'Critical Deficit').length
-    const pendingProcurements = procurement.filter(
-      (item) => (item.status === 'Critical Deficit' || item.status === 'Low Stock') && !item.poRef,
-    ).length
-    const activeBatchesInTransit = deployments.filter((record) => record.status === 'In Progress').length
-    // Crew-conflict detection lands with the Manpower & Crew module in a later phase;
-    // this placeholder reflects active field crew as a proxy signal for now.
-    const crewConflictsFlagged = staff.filter(
-      (member) => member.role === 'Field & Production Crew' && member.sessionStatus === 'Active Session',
-    ).length
-    return { criticalDeficits, pendingProcurements, activeBatchesInTransit, crewConflictsFlagged }
-  }, [procurement, deployments, staff])
+  const [summaryEvent, setSummaryEvent] = useState<PortalEvent | null>(null)
 
   const openModule = (id: WarehouseModuleId) => setDrilldown({ kind: 'module', moduleId: id })
   const openEvent = (id: string) => {
@@ -51,21 +37,28 @@ export function WarehouseHomePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-10 sm:px-8 sm:py-14">
+      <div className="mx-auto flex max-w-[90rem] w-full flex-col gap-8 sm:gap-10 px-6 py-8 sm:px-10 sm:py-12">
+        {/* Header section — untouched */}
         <WarehouseHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
+        {/* 4-per-row Restructured Module Grid */}
         <ModuleEntryRow onOpenModule={openModule} />
 
-        <StatStrip
-          criticalDeficits={stats.criticalDeficits}
-          pendingProcurements={stats.pendingProcurements}
-          activeBatchesInTransit={stats.activeBatchesInTransit}
-          crewConflictsFlagged={stats.crewConflictsFlagged}
-          onOpenModule={openModule}
+        {/* Month Calendar + Upcoming Events Side Panel */}
+        <WarehouseCalendarEventsView
+          events={events}
+          onSelectEvent={(evt) => setSummaryEvent(evt)}
         />
-
-        <EventsSection events={events} searchQuery={searchQuery} onOpenEvent={openEvent} />
       </div>
+
+      {/* WOM Input Summary Modal */}
+      {summaryEvent && (
+        <WomInputSummaryModal
+          event={summaryEvent}
+          onClose={() => setSummaryEvent(null)}
+          onOpenFullDetail={(id) => openEvent(id)}
+        />
+      )}
     </div>
   )
 }

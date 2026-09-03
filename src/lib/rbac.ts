@@ -405,6 +405,7 @@ export const WOM_MODULE_RBAC_NAME: Record<string, string> = {
   replenishment: 'Replenishment',
   vendors: 'Procurement & Vendors',
   manpower: 'Manpower & Crew',
+  manning: 'Manpower & Crew',
   dispatch: 'Dispatch & Manifest',
   production: 'Production',
 }

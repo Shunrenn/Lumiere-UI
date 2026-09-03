@@ -3,10 +3,9 @@ import { getWarehouseModule, type WarehouseModuleId } from '@/lib/warehouse-modu
 import { AssetCatalogModule } from '@/components/warehouse/asset-catalog/AssetCatalogModule'
 import { ReplenishmentModule } from '@/components/warehouse/replenishment/ReplenishmentModule'
 import { VendorManagementModule } from '@/components/warehouse/vendors/VendorManagementModule'
-import { ManpowerModule } from '@/components/warehouse/manpower/ManpowerModule'
+import { ManningModule } from '@/components/warehouse/manning/ManningModule'
 import { DispatchModule } from '@/components/warehouse/dispatch/DispatchModule'
 import { ProductionModule } from '@/components/warehouse/production/ProductionModule'
-import { ManningSlaModule } from '@/components/warehouse/manning-sla/ManningSlaModule'
 import { IncidentReportingModule } from '@/components/warehouse/incidents/IncidentReportingModule'
 
 interface CompanionPanelProps {
@@ -26,12 +25,8 @@ export function CompanionPanel({ moduleId, onClose }: CompanionPanelProps) {
     return <ReplenishmentModule onClose={onClose} />
   }
 
-  if (moduleId === 'manpower') {
-    return <ManpowerModule onClose={onClose} />
-  }
-
-  if (moduleId === 'manning-sla') {
-    return <ManningSlaModule onClose={onClose} />
+  if (moduleId === 'manning') {
+    return <ManningModule onClose={onClose} />
   }
 
   if (moduleId === 'incidents') {

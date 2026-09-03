@@ -23,6 +23,10 @@ interface BatchDetailViewProps {
   onAdvanceStage: () => void
   onStall?: (reason: string) => void
   onResume?: () => void
+  onUpdateInfo?: (info: Partial<Pick<DispatchBatch, 'vehicleType' | 'plateNumber' | 'driverName'>>) => void
+  onExportPdf?: () => void
+  onCreateReturnBatch?: () => void
+  onDelete?: () => void
 }
 
 export function BatchDetailView({
@@ -37,10 +41,20 @@ export function BatchDetailView({
   onAdvanceStage,
   onStall,
   onResume,
+  onUpdateInfo,
+  onExportPdf,
+  onCreateReturnBatch,
+  onDelete,
 }: BatchDetailViewProps) {
   const [handoffError, setHandoffError] = useState(false)
   const [stallModalOpen, setStallModalOpen] = useState(false)
   const [stallReason, setStallReason] = useState('')
+  const [confirmDeleteModal, setConfirmDeleteModal] = useState(false)
+  const [isEditingInfo, setIsEditingInfo] = useState(false)
+  const [editVehicle, setEditVehicle] = useState(batch.vehicleType)
+  const [editPlate, setEditPlate] = useState(batch.plateNumber)
+  const [editDriver, setEditDriver] = useState(batch.driverName || '')
+
   const finalStage = batch.direction === 'outbound' ? 'Delivered' : 'Returned'
   const isFinal = batch.stage === finalStage
   // The action advances exactly one checkpoint, so the label has to name the
@@ -81,22 +95,169 @@ export function BatchDetailView({
               <div>
                 <h2 className="font-serif text-xl font-medium text-card-foreground">{batch.vehicleType}</h2>
                 <p className="text-[0.65rem] uppercase tracking-[0.08em] text-muted-foreground">
-                  {batch.plateNumber} · {batch.direction === 'outbound' ? 'Outbound / egress' : 'Return / ingress'}
+                  {batch.plateNumber} · Driver: <span className="font-semibold text-foreground">{batch.driverName || 'Unassigned'}</span> · {batch.direction === 'outbound' ? 'Outbound / egress' : 'Return / ingress'}
                 </p>
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close batch detail"
-            className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onExportPdf && (
+              <button
+                type="button"
+                onClick={onExportPdf}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-card-foreground hover:bg-accent"
+              >
+                Export Manifest (PDF)
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteModal(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-destructive hover:bg-destructive/20"
+              >
+                Cancel / Delete Batch
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close batch detail"
+              className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <X className="size-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
+        {/* Confirmation Modal for Batch Deletion */}
+        {confirmDeleteModal && onDelete && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-xl bg-card p-6 shadow-2xl space-y-4 border border-border">
+              <div className="flex items-center gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive">
+                  <AlertTriangle className="size-5" />
+                </span>
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-card-foreground">Delete Batch?</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Deleting {batch.vehicleType} ({batch.plateNumber}) will release all reserved quantities back into the available pool.
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteModal(false)}
+                  className="rounded-md border border-border px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-accent"
+                >
+                  Keep Batch
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmDeleteModal(false)
+                    onDelete()
+                  }}
+                  className="rounded-md bg-destructive px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-destructive-foreground shadow-sm hover:opacity-90"
+                >
+                  Yes, Delete Batch
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-1 flex-col gap-6 px-6 py-6">
+          {/* Automated Ingress / Return Batch Prompt Banner */}
+          {batch.direction === 'outbound' && batch.stage === 'Delivered' && onCreateReturnBatch && (
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                  Outbound Batch Delivered
+                </p>
+                <p className="text-[0.68rem] text-muted-foreground mt-0.5">
+                  All items delivered on-site. Create the corresponding Return Batch (Ingress) for this vehicle.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onCreateReturnBatch}
+                className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-emerald-700 shadow-sm"
+              >
+                + Create Return Batch
+              </button>
+            </div>
+          )}
+
+          {/* Vehicle & Driver Info Editable Controls */}
+          <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Vehicle &amp; Driver Assignment
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isEditingInfo && onUpdateInfo) {
+                    onUpdateInfo({ vehicleType: editVehicle, plateNumber: editPlate, driverName: editDriver })
+                  }
+                  setIsEditingInfo(!isEditingInfo)
+                }}
+                className="text-[0.6rem] font-bold uppercase tracking-wider text-primary hover:underline"
+              >
+                {isEditingInfo ? 'Save Vehicle Info' : 'Edit Vehicle & Driver'}
+              </button>
+            </div>
+
+            {isEditingInfo ? (
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[0.55rem] font-bold uppercase text-muted-foreground">Vehicle Type</span>
+                  <input
+                    type="text"
+                    value={editVehicle}
+                    onChange={(e) => setEditVehicle(e.target.value)}
+                    className="rounded border border-input bg-card px-2.5 py-1 text-xs text-foreground outline-none focus:border-primary"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[0.55rem] font-bold uppercase text-muted-foreground">Plate Number</span>
+                  <input
+                    type="text"
+                    value={editPlate}
+                    onChange={(e) => setEditPlate(e.target.value)}
+                    className="rounded border border-input bg-card px-2.5 py-1 text-xs text-foreground outline-none focus:border-primary"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[0.55rem] font-bold uppercase text-muted-foreground">Driver Name</span>
+                  <input
+                    type="text"
+                    value={editDriver}
+                    onChange={(e) => setEditDriver(e.target.value)}
+                    placeholder="Enter driver name..."
+                    className="rounded border border-input bg-card px-2.5 py-1 text-xs text-foreground outline-none focus:border-primary"
+                  />
+                </label>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div>
+                  <span className="text-[0.58rem] font-bold uppercase text-muted-foreground block">Vehicle</span>
+                  <span className="font-semibold text-foreground">{batch.vehicleType}</span>
+                </div>
+                <div>
+                  <span className="text-[0.58rem] font-bold uppercase text-muted-foreground block">Plate #</span>
+                  <span className="font-semibold text-foreground">{batch.plateNumber}</span>
+                </div>
+                <div>
+                  <span className="text-[0.58rem] font-bold uppercase text-muted-foreground block">Driver</span>
+                  <span className="font-semibold text-foreground">{batch.driverName || 'Unassigned'}</span>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { isTeamLead, isTeamLeadToday, QUALIFIED_LEAD_ROLES } from '@/lib/warehouse-crew'
 
 // =====================================================================
 // Manning & SLA engine + Incident Reporting data access
@@ -388,6 +389,25 @@ let incidentsUsingPreset = false
 
 // ---- SLA helpers -----------------------------------------------------
 
+/** Expand a date or start/end date range into discrete YYYY-MM-DD calendar date strings. */
+export function expandDateRange(startDate: string, endDate?: string | null): string[] {
+  if (!startDate) return []
+  const start = new Date(`${startDate}T00:00:00`)
+  if (isNaN(start.getTime())) return [startDate]
+  if (!endDate || startDate === endDate) return [startDate]
+
+  const end = new Date(`${endDate}T00:00:00`)
+  if (isNaN(end.getTime()) || end.getTime() < start.getTime()) return [startDate]
+
+  const dates: string[] = []
+  const current = new Date(start)
+  while (current.getTime() <= end.getTime()) {
+    dates.push(current.toISOString().slice(0, 10))
+    current.setDate(current.getDate() + 1)
+  }
+  return dates
+}
+
 /** Whether a submitted task has blown its 48h lead-confirmation window. */
 export function isSlaOverdue(task: ManningTask, now: Date = new Date()): boolean {
   if (task.status !== 'Submitted' || !task.sla_due) return false
@@ -441,6 +461,25 @@ export async function createAssignment(
     'work_date' | 'event_name' | 'venue' | 'deployment_ref' | 'lead_name' | 'lead_email' | 'member_names' | 'sub_role' | 'notes'
   > & { inherited_from?: string | null; created_by?: string | null },
 ): Promise<ManningAssignment> {
+  const leadName = input.lead_name?.trim() || ''
+  if (!leadName) {
+    throw new Error(
+      `Cannot finalize assignment: At least 1 active Team Lead must be assigned for sub-role '${input.sub_role || 'General'}' on ${input.work_date}.`,
+    )
+  }
+
+  // Validate that the assigned lead is genuinely isTeamLead-qualified
+  const isQualifiedLead =
+    QUALIFIED_LEAD_ROLES.some((role) => leadName.toLowerCase().includes(role.toLowerCase())) ||
+    isTeamLeadToday(leadName, input.work_date) ||
+    isTeamLead({ id: `lead-${leadName}`, staffId: leadName, name: leadName, role: 'Team Lead', status: 'Available' }, [], [], input.work_date)
+
+  if (!isQualifiedLead) {
+    throw new Error(
+      `Cannot finalize assignment: Assigned lead '${leadName}' is not a qualified Team Lead for ${input.work_date}.`,
+    )
+  }
+
   const { data, error } = await supabase
     .from('manning_assignments')
     .insert(input)
@@ -986,9 +1025,83 @@ export function useIncidentData(): IncidentData {
     }
   }, [])
 
+  return { incidents, loading, error, usingPreset, reload }
+}
+
+// ---- Manning Overrides (Supabase + Local Fallback) -------------------
+
+export interface ManningOverride {
+  id: string
+  staff_id: string
+  staff_name: string
+  event_id: string
+  event_title: string
+  conflict_type: 'On Leave' | 'Double Booked'
+  justification: string
+  overridden_by: string
+  created_at: string
+}
+
+let localOverrides: ManningOverride[] = []
+
+export async function fetchOverrides(): Promise<ManningOverride[]> {
+  try {
+    const { data, error } = await supabase
+      .from('manning_overrides')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    localOverrides = (data ?? []) as ManningOverride[]
+    return localOverrides
+  } catch (err) {
+    console.warn('[v0] manning_overrides table unavailable; using local memory store.', err)
+    return localOverrides
+  }
+}
+
+export async function createOverride(
+  input: Omit<ManningOverride, 'id' | 'created_at'>,
+): Promise<ManningOverride> {
+  const now = new Date().toISOString()
+  const id = `override-${Date.now()}`
+  const override: ManningOverride = { id, created_at: now, ...input }
+
+  try {
+    const { data, error } = await supabase
+      .from('manning_overrides')
+      .insert(override)
+      .select('*')
+      .single()
+    if (!error && data) {
+      localOverrides = [data as ManningOverride, ...localOverrides]
+      return data as ManningOverride
+    }
+  } catch (err) {
+    console.warn('[v0] Failed to insert manning_override to Supabase; storing locally.', err)
+  }
+
+  localOverrides = [override, ...localOverrides]
+  return override
+}
+
+export function useManningOverrides() {
+  const [overrides, setOverrides] = useState<ManningOverride[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const reload = useCallback(async () => {
+    setLoading(true)
+    try {
+      const data = await fetchOverrides()
+      setOverrides(data)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     void reload()
   }, [reload])
 
-  return { incidents, loading, error, usingPreset, reload }
+  return { overrides, loading, reload }
 }
+

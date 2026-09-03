@@ -2,21 +2,26 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, Download, Truck, User, X } from 'lucide-react'
 import { usePortal } from '@/lib/store'
 import {
-  addNewBatch,
+  addNewCustomBatch,
   advanceBatchStage,
   buildConsolidatedManifestCsv,
   buildManifestCsv,
+  createReturnBatchFromDelivered,
+  deleteBatch,
   downloadCsv,
+  exportBatchPdf,
   getEventDispatchSummaries,
   markBatchStalled,
   resolveBatchStall,
   updateBatchHandoffNote,
+  updateBatchInfo,
   updateReconciliationRow,
   useDispatchStore,
   type BatchDirection,
   type DispatchBatch,
   type EventDispatchSummary,
 } from '@/lib/warehouse-dispatch'
+import { getEventDetailSnapshot } from '@/lib/event-detail'
 import { DispatchStepper } from '@/components/warehouse/event-detail/DispatchStepper'
 import { BatchDetailView } from '@/components/warehouse/event-detail/BatchDetailView'
 import { Pill } from '@/components/warehouse/shared/Pill'
@@ -70,6 +75,7 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [activeBatchIndex, setActiveBatchIndex] = useState<number | null>(null)
   const [pendingBatchId, setPendingBatchId] = useState<string | null>(null)
+  const [newBatchModal, setNewBatchModal] = useState<{ eventId: string; direction: BatchDirection } | null>(null)
 
   const selectedEvent = summaries.find((s) => s.eventId === selectedEventId) ?? null
 
@@ -107,12 +113,6 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
     setActiveBatchIndex(index === -1 ? null : index)
   }
 
-  // Staging a batch opens its detail drawer as soon as the store re-derives,
-  // so the action has an unmistakable result instead of appearing inert.
-  const handleNewBatch = (eventId: string, direction: BatchDirection) => {
-    const batch = addNewBatch(eventId, direction, procurement)
-    setPendingBatchId(batch.id)
-  }
 
   useEffect(() => {
     if (!pendingBatchId) return
@@ -211,7 +211,7 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
         ) : selectedEvent ? (
           <EventBatchLevel
             summary={selectedEvent}
-            onNewBatch={(direction) => handleNewBatch(selectedEvent.eventId, direction)}
+            onNewBatch={(direction) => setNewBatchModal({ eventId: selectedEvent.eventId, direction })}
             onOpenBatch={(batchId) => openBatch(selectedEvent.eventId, batchId)}
             onExportManifest={() => exportEventManifest(selectedEvent)}
           />
@@ -237,6 +237,24 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
           onAdvanceStage={() => advanceBatchStage(activeNav.eventId, activeNav.batch.id)}
           onStall={(reason) => markBatchStalled(activeNav.eventId, activeNav.batch.id, reason)}
           onResume={() => resolveBatchStall(activeNav.eventId, activeNav.batch.id)}
+          onUpdateInfo={(info) => updateBatchInfo(activeNav.eventId, activeNav.batch.id, info)}
+          onExportPdf={() => {
+            const ev = events.find((e) => e.id === activeNav.eventId)
+            exportBatchPdf({ eventTitle: activeNav.eventTitle, venue: ev?.venue || '', targetDate: ev?.targetDate || '' }, activeNav.batch)
+          }}
+          onCreateReturnBatch={() => createReturnBatchFromDelivered(activeNav.eventId, activeNav.batch)}
+          onDelete={() => {
+            deleteBatch(activeNav.eventId, activeNav.batch.id)
+            setActiveBatchIndex(null)
+          }}
+        />
+      )}
+
+      {newBatchModal && (
+        <NewBatchModal
+          eventId={newBatchModal.eventId}
+          direction={newBatchModal.direction}
+          onClose={() => setNewBatchModal(null)}
         />
       )}
     </div>
@@ -354,13 +372,12 @@ function EventBatchLevel({
           No dispatch batches created for this event yet.
         </p>
       ) : (
-        <ul className="flex flex-col gap-2.5">
+        <ul className="flex flex-col gap-3">
           {summary.batches.map((batch) => (
-            <li key={batch.id}>
-              <button
-                type="button"
+            <li key={batch.id} className="rounded-xl border border-border bg-card p-4 shadow-xs space-y-3">
+              <div
                 onClick={() => onOpenBatch(batch.id)}
-                className="flex w-full flex-wrap items-center gap-4 rounded-lg border border-border bg-card px-4 py-3.5 text-left transition hover:bg-accent"
+                className="flex w-full flex-wrap items-center gap-4 cursor-pointer hover:opacity-95"
               >
                 <span
                   className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary"
@@ -369,8 +386,10 @@ function EventBatchLevel({
                   {batch.direction === 'outbound' ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
                 </span>
                 <div className="min-w-0 shrink-0">
-                  <p className="truncate text-sm font-medium text-card-foreground">{batch.vehicleType}</p>
-                  <p className="truncate text-[0.62rem] uppercase tracking-[0.06em] text-muted-foreground">{batch.plateNumber}</p>
+                  <p className="truncate text-sm font-bold text-card-foreground">{batch.vehicleType}</p>
+                  <p className="truncate text-[0.62rem] uppercase tracking-[0.06em] text-muted-foreground">
+                    {batch.plateNumber} · Driver: <span className="font-semibold text-foreground">{batch.driverName || 'Unassigned'}</span>
+                  </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {batch.crew.length === 0 ? (
@@ -381,10 +400,56 @@ function EventBatchLevel({
                     batch.crew.slice(0, 3).map((member) => <Avatar key={member.id} name={member.name} />)
                   )}
                 </div>
-                <div className="ml-auto shrink-0">
+
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      exportBatchPdf({ eventTitle: summary.eventTitle, venue: summary.venue, targetDate: summary.targetDate }, batch)
+                    }}
+                    className="inline-flex items-center gap-1 rounded border border-border bg-background px-2.5 py-1 text-[0.58rem] font-bold uppercase tracking-wider text-card-foreground hover:bg-accent"
+                  >
+                    <Download className="size-3" />
+                    PDF
+                  </button>
+
+                  {batch.direction === 'outbound' && batch.stage === 'Delivered' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        createReturnBatchFromDelivered(summary.eventId, batch)
+                      }}
+                      className="inline-flex items-center gap-1 rounded bg-emerald-600 px-2.5 py-1 text-[0.58rem] font-bold uppercase tracking-wider text-white hover:bg-emerald-700"
+                    >
+                      + Return Batch
+                    </button>
+                  )}
+
                   <DispatchStepper direction={batch.direction} stage={batch.stage} stalled={batch.stalled} />
                 </div>
-              </button>
+              </div>
+
+              {/* Contained Assets Summary Row */}
+              <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-2.5">
+                <span className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground">
+                  Contained Assets ({batch.reconciliation.length}):
+                </span>
+                {batch.reconciliation.length === 0 ? (
+                  <span className="text-[0.62rem] text-muted-foreground">No assets staged yet.</span>
+                ) : (
+                  batch.reconciliation.map((item) => (
+                    <span
+                      key={item.id}
+                      className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 text-[0.62rem] font-medium text-foreground"
+                    >
+                      <span>{item.itemName}</span>
+                      <span className="font-bold text-primary">({item.planned})</span>
+                    </span>
+                  ))
+                )}
+              </div>
             </li>
           ))}
         </ul>
@@ -468,6 +533,239 @@ function ConsolidatedBatchTable({
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function NewBatchModal({
+  eventId,
+  direction,
+  onClose,
+}: {
+  eventId: string
+  direction: BatchDirection
+  onClose: () => void
+}) {
+  const { events, staff, procurement } = usePortal()
+  const event = events.find((e) => e.id === eventId)
+  const batchStore = useDispatchStore(events, staff, procurement)
+  const existingBatches = batchStore.get(eventId) ?? []
+
+  const [vehicleType, setVehicleType] = useState('Box Truck (14ft)')
+  const [plateNumber, setPlateNumber] = useState('NBC 1234')
+  const [driverName, setDriverName] = useState('')
+
+  // Event Master Inventory Items
+  const masterItems = useMemo(() => {
+    if (!event) return []
+    return getEventDetailSnapshot(event, staff, procurement).items
+  }, [event, staff, procurement])
+
+  // Deduplication: Calculate open/committed quantities across active outbound batches for this event
+  const itemAvailabilityMap = useMemo(() => {
+    const map = new Map<string, number>()
+    masterItems.forEach((item) => map.set(item.name, item.quantity))
+
+    if (direction === 'outbound') {
+      const openOutboundBatches = existingBatches.filter(
+        (b) => b.direction === 'outbound' && b.stage !== 'Delivered' && b.stage !== 'Returned',
+      )
+      openOutboundBatches.forEach((b) => {
+        b.reconciliation.forEach((r) => {
+          const current = map.get(r.itemName) ?? 0
+          map.set(r.itemName, Math.max(0, current - r.planned))
+        })
+      })
+    }
+    return map
+  }, [masterItems, existingBatches, direction])
+
+  const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({})
+
+  const toggleItem = (name: string, available: number) => {
+    setSelectedQuantities((prev) => {
+      const next = { ...prev }
+      if (next[name] !== undefined) {
+        delete next[name]
+      } else {
+        next[name] = Math.min(available, Math.max(1, available))
+      }
+      return next
+    })
+  }
+
+  const updateQuantity = (name: string, qty: number, available: number) => {
+    setSelectedQuantities((prev) => ({
+      ...prev,
+      [name]: Math.min(available, Math.max(1, qty)),
+    }))
+  }
+
+  const handleCreate = () => {
+    const itemsToAssign = Object.entries(selectedQuantities).map(([itemName, planned]) => ({
+      itemName,
+      planned,
+    }))
+
+    addNewCustomBatch(eventId, direction, vehicleType, plateNumber, driverName, itemsToAssign)
+    onClose()
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-60 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="flex h-full max-h-[44rem] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-card shadow-2xl space-y-4 p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between border-b border-border pb-3">
+          <div>
+            <span className="text-[0.58rem] font-bold uppercase tracking-[0.2em] text-primary">
+              Dispatch &amp; Logistics
+            </span>
+            <h2 className="font-serif text-xl font-bold text-card-foreground">
+              New {direction === 'outbound' ? 'Outbound (Egress)' : 'Return (Ingress)'} Batch
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Target Event: {event?.title}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto space-y-5 pr-1">
+          {/* Vehicle & Driver Info Form */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground">Vehicle Type</span>
+              <input
+                type="text"
+                value={vehicleType}
+                onChange={(e) => setVehicleType(e.target.value)}
+                placeholder="Vehicle type..."
+                className="rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground">Plate Number</span>
+              <input
+                type="text"
+                value={plateNumber}
+                onChange={(e) => setPlateNumber(e.target.value)}
+                placeholder="Plate number..."
+                className="rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground">Driver Name</span>
+              <input
+                type="text"
+                value={driverName}
+                onChange={(e) => setDriverName(e.target.value)}
+                placeholder="Assigned driver..."
+                className="rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
+              />
+            </label>
+          </div>
+
+          {/* Asset Selection with Active Open Batch Deduplication */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                Select Event Assets to Allocate
+              </h3>
+              <span className="text-[0.6rem] text-muted-foreground">
+                {Object.keys(selectedQuantities).length} assets selected
+              </span>
+            </div>
+
+            <div className="rounded-lg border border-border bg-background p-3 space-y-2 max-h-56 overflow-y-auto">
+              {masterItems.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">No allocated master items found for this event.</p>
+              ) : (
+                masterItems.map((item) => {
+                  const available = itemAvailabilityMap.get(item.name) ?? 0
+                  const isSelected = selectedQuantities[item.name] !== undefined
+                  const isFullyReserved = available <= 0
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        'flex items-center justify-between rounded-md border p-2.5 text-xs transition',
+                        isFullyReserved
+                          ? 'border-border bg-muted/40 opacity-60'
+                          : isSelected
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border bg-card',
+                      )}
+                    >
+                      <label className="flex items-center gap-2 cursor-pointer min-w-0 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={isFullyReserved}
+                          onChange={() => toggleItem(item.name, available)}
+                          className="size-4 rounded border-input text-primary focus:ring-primary"
+                        />
+                        <div className="min-w-0">
+                          <p className="font-semibold text-foreground truncate">{item.name}</p>
+                          <p className="text-[0.6rem] text-muted-foreground">
+                            Event Total: {item.quantity} · Available: <span className="font-bold text-primary">{available}</span>
+                          </p>
+                        </div>
+                      </label>
+
+                      {isFullyReserved ? (
+                        <span className="rounded bg-muted px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground border border-border">
+                          Reserved in Open Batch
+                        </span>
+                      ) : isSelected ? (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[0.58rem] font-bold uppercase text-muted-foreground">Load Qty:</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={available}
+                            value={selectedQuantities[item.name]}
+                            onChange={(e) => updateQuantity(item.name, Number(e.target.value) || 1, available)}
+                            className="w-16 rounded border border-input bg-background px-2 py-1 text-xs text-foreground font-bold outline-none focus:border-primary"
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-border px-4 py-2 text-xs font-bold uppercase tracking-wider hover:bg-accent"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleCreate}
+            className="rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-primary-foreground shadow-sm hover:opacity-90"
+          >
+            Create Batch ({Object.keys(selectedQuantities).length} Assets)
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

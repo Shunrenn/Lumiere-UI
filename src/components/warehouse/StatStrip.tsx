@@ -27,7 +27,7 @@ export function StatStrip({
     { label: 'Critical Deficits', value: criticalDeficits, border: 'border-l-destructive', moduleId: 'replenishment' },
     { label: 'Pending Procurements', value: pendingProcurements, border: 'border-l-primary', moduleId: 'replenishment' },
     { label: 'Active Batches In Transit', value: activeBatchesInTransit, border: 'border-l-accent-foreground/40', moduleId: 'dispatch' },
-    { label: 'Crew Conflicts Flagged', value: crewConflictsFlagged, border: 'border-l-muted-foreground', moduleId: 'manpower' },
+    { label: 'Crew Conflicts Flagged', value: crewConflictsFlagged, border: 'border-l-muted-foreground', moduleId: 'manning' },
   ]
 
   return (
