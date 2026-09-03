@@ -23,7 +23,7 @@ import { useNav } from '@/lib/nav'
   import { useAuth } from '@/lib/auth'
   import { usePlanner } from '@/lib/planner'
   import { EventPipelinePanel } from '@/components/EventPipelinePanel'
-  import { KonvaInfiniteCanvas, type KonvaInfiniteCanvasHandle, type CanvasTool, ARTBOARD_W, ARTBOARD_H } from '@/components/canvas/KonvaInfiniteCanvas'
+  import { KonvaInfiniteCanvas, type KonvaInfiniteCanvasHandle, type CanvasTool, type KonvaCanvasAsset, ARTBOARD_W, ARTBOARD_H } from '@/components/canvas/KonvaInfiniteCanvas'
 
 
 /* ─── Types ─── */

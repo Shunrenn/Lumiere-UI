@@ -509,7 +509,7 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
   // Active single page in Thumbnail mode
   const activeSinglePage = effectivePages[currentPageIdx] || effectivePages[0]
 
-  function getPointerStageInfo(evt: MouseEvent | TouchEvent) {
+  function getPointerStageInfo(_evt?: MouseEvent | TouchEvent) {
     const stage = stageRef.current
     if (!stage) return null
     const pointerPos = stage.getPointerPosition()
@@ -940,7 +940,7 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                       width={drawW}
                       height={drawH}
                       listening={false}
-                      clipFunc={(ctx) => {
+                      clipFunc={(ctx: any) => {
                         ctx.rect(ARTBOARD_X, pageY, ARTBOARD_W, ARTBOARD_H)
                       }}
                     />
@@ -1005,7 +1005,7 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                     width={drawW}
                     height={drawH}
                     listening={false}
-                    clipFunc={(ctx) => {
+                    clipFunc={(ctx: any) => {
                       ctx.rect(ARTBOARD_X, ARTBOARD_Y, ARTBOARD_W, ARTBOARD_H)
                     }}
                   />
