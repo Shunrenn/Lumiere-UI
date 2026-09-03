@@ -431,6 +431,28 @@ Damage exceptions lacking photographic evidence are held for audit and require t
 - Audit all warehouse modules for which Supabase imports are present but mutations still fall back to in-memory state.
 - Replace seeded security events with append-only server-side audit records.
 
+### Backlog / Future Considerations (Canvas Workspace — as of Sep 2026)
+
+The items below are explicitly deferred or unverified as of the last working session. They are tracked here so future agents do not assume they are complete.
+
+- **Text tool tab (preset style stubs):** Preset buttons in the Text sidebar tab (Paragraph, Heading 1/2/3) remain visual preset stubs. Placing generic text via the Tools tab is functional, but dedicated typography presets and font picker bindings are deferred.
+- **Tools tab (functional placement, advanced styling deferred):** Tools sidebar tab (Select, Draw, Shapes, Lines, Sticky Note, Text) is fully wired to `KonvaInfiniteCanvas` with active tool placement and auto-reset to Select. Advanced tool customizers (stroke thickness picker, color swatch picker per tool) remain future work.
+- **Projects tab sub-page navigation (no-op):** The Projects sidebar accordion renders per-project page entries. Clicking any sub-page button has no handler — it does not navigate the canvas to that page or switch the active page.
+- **Duplicate action (card metadata only, canvas copy unverified):** The ellipsis menu's "Make a copy" action clones the project card entry and copies the associated localStorage keys (`lumiere-canvas-assets-{id}`, `lumiere-pages-{id}`, `lumiere-page-nav-mode-{id}`). Browser verification confirming full independent canvas mutation without reference leakage is pending.
+- **Background apply (implemented, browser verification pending):** The Background tab's "Apply background" action is wired to update artboard fill color/photo across all pages (with `localStorage` persistence per project keyed by `card.id`) — implemented and TypeScript-clean, live visual verification pending.
+
+### Creatives Dashboard & Canvas Workspace Implementation Summary
+
+- **Routing & Landing Page [COMPLETED]:** Deprecated legacy `EventPipelinePage.tsx`, setting `DesignCanvasHubPage.tsx` as the primary landing route for Event Planners. Reordered header controls (Create Design → Mood Board → Notifications → Theme Toggle → Profile).
+- **Calendar & Needs Editing Layout [COMPLETED]:** Unified 32rem fixed-height card container with padded 42-day calendar grid and responsive `7fr_3fr` ratio.
+- **Cross-project `pc-1` canvas-leak fix [COMPLETED]:** Namespaced all canvas `localStorage` keys with `card.id` (`lumiere-canvas-assets-${card.id}`, `lumiere-pages-${card.id}`, `lumiere-page-nav-mode-${card.id}`, `lumiere-bg-color-${card.id}`, `lumiere-bg-photo-${card.id}`). Eliminated shared static key `lumiere-canvas-assets` that caused elements from project `pc-1` to leak into `pc-2` and other projects.
+- **Continuous vertical page scrolling [COMPLETED]:** Canva-style Flow mode with vertical page stack, bounded scrolling, per-page external headers (rename, hide, duplicate, delete, reorder), and bottom "+ Add page" button.
+- **Per-page asset partitioning [COMPLETED]:** Each placed asset carries `pageId` and renders strictly on its assigned page artboard. Dragging is clamped within the page boundaries.
+- **Dual page navigation modes [COMPLETED]:** Flow mode (continuous scroll) and Thumbnail mode (single page + bottom filmstrip), persisted per project.
+- **Uploads tab drag-to-canvas [COMPLETED]:** Upload tiles support drag-and-drop (`DRAG_MIME`) and click-to-add onto canvas.
+- **Tools Tab Implementation [COMPLETED]:** Wired all 6 tools (Select, Draw, Shapes, Lines, Sticky Note, Text) to `KonvaInfiniteCanvas` with pointer stage math, bounding box clamping, inline editing for text/sticky, and automatic tool reset to `select`.
+- **Background tab [COMPLETED]:** Artboard fill color and cover-fitted Unsplash photos persist per project.
+
 ---
 
 ## 5. Data model summary
