@@ -86,11 +86,16 @@ export function deleteBatch(eventId: string, batchId: string) {
   logActivity(`Dispatch batch ${batchId} was canceled / deleted.`, 'info')
   publish()
 
-  try {
-    supabase.from('manning_dispatch_batches').delete().eq('id', batchId).catch(() => {})
-  } catch (e) {
-    console.warn('[v0] Supabase delete batch fallback to local store.', e)
-  }
+  void (async () => {
+    try {
+      const { error } = await supabase.from('manning_dispatch_batches').delete().eq('id', batchId)
+      if (error) {
+        console.warn('[v0] Supabase delete batch error; falling back to local store.', error)
+      }
+    } catch (e) {
+      console.warn('[v0] Supabase delete batch network fallback to local store.', e)
+    }
+  })()
 }
 
 function ensureSeeded(events: PortalEvent[], staff: Staff[], procurement: ProcurementItem[]) {

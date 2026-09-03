@@ -177,7 +177,6 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
   const [material, setMaterial] = useState('')
   const [colorType, setColorType] = useState<'mono' | 'multi' | 'changeable' | ''>('')
   const [colorPrimary, setColorPrimary] = useState('')
-  const [colorSecondary, setColorSecondary] = useState('')
   const [tagsInput, setTagsInput] = useState('')
 
   // Event Asset Tier Fields (BLANK DEFAULTS)
@@ -209,7 +208,6 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
   const [supplierContact, setSupplierContact] = useState('')
   const [lengthOfRent, setLengthOfRent] = useState('')
   const [overduePenaltyFee, setOverduePenaltyFee] = useState('')
-  const [onLoanDueDate, setOnLoanDueDate] = useState('')
 
   // Office Asset Tier Fields (BLANK DEFAULTS)
   const [vendorDetails, setVendorDetails] = useState('')
@@ -304,12 +302,6 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
       material: material.trim() || undefined,
       colorType: colorType || undefined,
       colorPrimary: colorPrimary.trim() || undefined,
-      colorSecondary: colorSecondary
-        ? colorSecondary
-            .split(',')
-            .map((c) => c.trim())
-            .filter(Boolean)
-        : undefined,
       tags: parsedTags.length > 0 ? parsedTags : undefined,
 
       // Event Asset
@@ -339,7 +331,6 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
       supplierContact: supplierContact.trim() || undefined,
       lengthOfRent: lengthOfRent.trim() || undefined,
       overduePenaltyFee: overduePenaltyFee ? Number(overduePenaltyFee) : undefined,
-      onLoanDueDate: onLoanDueDate || undefined,
 
       // Office Asset
       vendorDetails: vendorDetails.trim() || undefined,

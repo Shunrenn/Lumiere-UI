@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Calendar, ChevronLeft, ChevronRight, Plus, Star, Users, AlertTriangle, ShieldAlert, CheckCircle2 } from 'lucide-react'
-import type { CrewRow, PresetSquad, WarehouseZone, DutyCategory } from '@/lib/warehouse-crew'
-import { getDailyDutyAssignments, removeDailyDutyAssignment, isTeamLeadToday, type DailyDutyAssignment } from '@/lib/warehouse-crew'
+import { Calendar, ChevronLeft, ChevronRight, Plus, Star, AlertTriangle } from 'lucide-react'
+import type { CrewRow, PresetSquad, WarehouseZone } from '@/lib/warehouse-crew'
+import { getDailyDutyAssignments, removeDailyDutyAssignment } from '@/lib/warehouse-crew'
 import { AssignDailyDutyModal } from './AssignDailyDutyModal'
-import { cn } from '@/lib/utils'
 
 const WAREHOUSE_ZONES: WarehouseZone[] = [
   'Logistics & Movement',

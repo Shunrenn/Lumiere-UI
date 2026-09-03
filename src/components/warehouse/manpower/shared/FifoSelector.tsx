@@ -1,6 +1,6 @@
-import type { CrewRow, Staff } from '@/lib/warehouse-crew'
+import type { CrewRow } from '@/lib/warehouse-crew'
+import type { Staff } from '@/lib/types'
 import { isTeamLead } from '@/lib/warehouse-crew'
-import { cn } from '@/lib/utils'
 
 function Avatar({ name }: { name: string }) {
   const initials = name

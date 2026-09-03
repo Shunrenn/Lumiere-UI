@@ -1,6 +1,5 @@
 import {
   Boxes,
-  CalendarClock,
   Hammer,
   PackageSearch,
   ShieldAlert,

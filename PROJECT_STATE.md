@@ -812,6 +812,69 @@ The app is best understood as a polished multi-portal frontend prototype with a 
 
 ---
 
+## Backlog — Client Walkthrough Notes (Post-WOM Priority)
+
+Status: Logged, not started. Sequenced after current WOM work (build-failure fix →
+Foundation E → Prompt 5 clarifications → Prompt 6 → Prompt 7 → Foundation G).
+
+### Confirmed decisions (ready to scope when we get here)
+- Executive role becomes read-only / insights-only across the system — no sign-off
+  or approval actions anywhere, including Damage Validation.
+- Damage Validation sign-off authority (Repair, Write-off) moves from Executive to
+  WOM (Warehouse Manager / Inventory Officer). Executive becomes notify-only for damage events.
+- Repair sign-off updates the corresponding asset's status in the Asset Registry
+  to 'In Maintenance', with a WOM-accessible 'Complete Maintenance / Return to Stock' flow.
+- Damage Validation UI remains a single page/route (`DamageValidationPage.tsx`),
+  rendering read-only (stripped action buttons, non-editable modal) for Executive credentials.
+- Event Settlement blocking override routes through WOM sign-off instead of Executive.
+- **Admin-Configurable "Allow Self-Validation" Permission**:
+  - Configurable per WOM sub-role in RBAC (`allowSelfValidation`, default: ON for lean teams).
+  - When ON: Single qualifying WOM actor can resolve Held-for-Audit with PIN + mandatory justification (≥20 chars) + acknowledgement checkbox.
+  - When OFF: Strict dual-custody enforced. If understaffed (<2 qualifying accounts), resolution strictly blocked.
+  - **Admin Emergency Unblock Choice (when OFF)**:
+    - **Option A ("One-Time" / Instance - Default)**: Auto-reverts toggle to OFF once the specific claim is resolved.
+    - **Option B ("Permanent")**: Keeps toggle ON permanently; requires mandatory warning modal with explicit acknowledgement checkbox.
+    - **Audit Trail**: Records `originatedFromEmergency: true`, `emergencyReason`, and (for Option B) `madePermanentAt` / `permanentAcknowledged: true`.
+- General UI direction from client: "Simplify, Be Specific" — applies broadly to
+  upcoming redesign work, not just one module.
+
+### Needs clarification before scoping (open questions, not yet resolved with client)
+- **NDA consolidation**: client wants a single consolidated NDA document, described
+  as "event-based" — exact meaning (one NDA per event? one master doc referencing
+  events?) not yet confirmed.
+- **UI fade-out pattern**: resolved/completed items in pending-lists should fade out
+  before moving to the bottom of the list, rather than disappearing or staying in
+  place. Likely applies to multiple screens (Pending Actions, Damage Validation
+  queue, etc.) — needs a full inventory of affected lists before scoping.
+- **Event Planner role**: needs read-only View access to the Manning side. Client
+  mentioned "Manning Responsibility Time" and a "Timeline" view — neither has a
+  clear definition yet; needs follow-up with client before this can be scoped.
+- **PWA / mobile redesign**:
+  - Some capability should be restricted to Team Lead only (which capability,
+    not yet specified).
+  - General simplification pass needed with digital-literacy in mind — assume
+    lower technical familiarity among some field users.
+  - Inventory PWA view needs a summary/overview mode instead of a full list —
+    current catalog is ~5,000 SKUs, too many to browse directly on mobile.
+  - Some feature(s) should be restricted to a specific named person, not a whole
+    role — which feature(s) not yet specified.
+  - Need "acknowledge limitations" confirmation buttons before certain actions —
+    exact actions/copy not yet specified.
+- **Scope reduction — "remove the Event side"**: unclear which surface this refers
+  to (PWA? a specific module?) — needs clarification before scoping.
+- **Kiosk and Brochure**: unclear if this is a new feature request (e.g. a
+  self-service kiosk mode, digital brochure view) or something being removed —
+  needs clarification.
+- **Inventory & Purchasing declutter**: general UI simplification request for
+  these two modules — no specific redesign scoped yet.
+
+### Process note
+When we return to this backlog, resolve the "needs clarification" items with
+the client (via the human PM) before drafting implementation prompts — do not
+guess at ambiguous items the way we've had to flag mid-review before.
+
+---
+
 ## Document maintenance
 
 Update this file whenever a feature moves from mock/in-memory to persisted, a permission model changes, a confirmation/security decision changes, or a new portal/screen is introduced. Keep the feature status and backing-store statement together so future handoffs do not confuse a polished UI with a completed backend.
@@ -864,6 +927,16 @@ For Ground Crew specifically, the backend should preserve the frontend invariant
 ## Caveat on source-of-truth terminology
 
 The UI currently calls `PortalProvider` the “single source of truth” for pending RBAC setup, but that is only true within the running browser session. It is not a durable source of truth across tabs, devices, reloads, or administrators until the RBAC state is persisted and reloaded from the backend.
+
+---
+
+## Known Architectural Gaps (Deferred to Backend Integration Phase)
+
+### Optimistic / Fire-and-Forget Supabase Mutation Divergence
+- **Pattern:** `deleteBatch()` (and other operational Supabase mutations following this pattern) executes an immediate optimistic local delete/mutation, then dispatches an asynchronous, un-awaited Supabase database call in the background.
+- **Failure Handling:** On network or database rejection, failures are caught and logged solely to `console.warn` (`[v0] Supabase delete batch error...`) without reverting optimistic local state, displaying a user-facing error notification, or enqueuing a persistent retry.
+- **Risk:** Silent state divergence between the local browser session and the remote PostgreSQL database once active Supabase production credentials are connected.
+- **Remediation Plan:** Introduce a structured sync-status indicator, rollback/reversion hooks on rejected promises, or an offline mutation/retry queue before promoting these endpoints to production. (Low urgency during prototype phase as the local workspace operates against fallback placeholder credentials).
 
 ---
 

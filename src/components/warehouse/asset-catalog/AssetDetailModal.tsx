@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Layers, Tag as TagIcon, Clock, ShieldCheck, DollarSign } from 'lucide-react'
+import { X, Layers, Tag as TagIcon, ShieldCheck } from 'lucide-react'
 import {
   computeStockHealth,
   formatSmartDuration,

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, Download, Truck, User, X } from 'lucide-react'
 import { usePortal } from '@/lib/store'
 import {
-  addNewBatch,
   addNewCustomBatch,
   advanceBatchStage,
   buildConsolidatedManifestCsv,
@@ -114,12 +113,6 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
     setActiveBatchIndex(index === -1 ? null : index)
   }
 
-  // Staging a batch opens its detail drawer as soon as the store re-derives,
-  // so the action has an unmistakable result instead of appearing inert.
-  const handleNewBatch = (eventId: string, direction: BatchDirection) => {
-    const batch = addNewBatch(eventId, direction, procurement)
-    setPendingBatchId(batch.id)
-  }
 
   useEffect(() => {
     if (!pendingBatchId) return

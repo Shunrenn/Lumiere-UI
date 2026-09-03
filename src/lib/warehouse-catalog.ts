@@ -618,7 +618,7 @@ export function getCatalogAssets(): CatalogAsset[] {
         onLoanDueDate: status === 'Deployed' ? dueDate : undefined,
         rentalVendorName: primaryVendor.name,
         supplierDetails: `${primaryVendor.name} (Acct Ref: SUP-${1000 + (seed % 800)})`,
-        supplierContact: primaryVendor.contactPerson || 'Vendor Rep',
+        supplierContact: primaryVendor.contactName || primaryVendor.phone || 'Vendor Rep',
         lengthOfRent: `${7 + (seed % 14)} Days`,
         overduePenaltyFee: 1500 + ((seed * 23) % 4000),
       }

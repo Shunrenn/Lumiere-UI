@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Check, Lock, Search } from 'lucide-react'
-import type { CrewRow, Staff, DutyCategory } from '@/lib/warehouse-crew'
+import type { CrewRow, DutyCategory } from '@/lib/warehouse-crew'
+import type { Staff } from '@/lib/types'
 import { isTeamLead, checkSymmetricConflict, crewHasConflict } from '@/lib/warehouse-crew'
 import { cn } from '@/lib/utils'
 

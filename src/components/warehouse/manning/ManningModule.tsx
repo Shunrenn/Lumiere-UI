@@ -5,9 +5,6 @@ import {
   UserPlus,
   Users,
   X,
-  Copy,
-  Plus,
-  ShieldAlert,
   Search,
   Maximize2,
 } from 'lucide-react'
@@ -17,7 +14,6 @@ import {
   useCrewRows,
   getPresetSquads,
   type CrewRow,
-  type CrewRowStatus,
 } from '@/lib/warehouse-crew'
 import {
   reconcileExpiredDeclarations,
@@ -32,11 +28,9 @@ import {
   isSlaOverdue,
   rejectTask,
   slaRemainingMs,
-  submitTask,
   useManningData,
   type ManningAssignment,
   type ManningTask,
-  type ManningWarning,
 } from '@/lib/manning'
 import { cn } from '@/lib/utils'
 
@@ -54,8 +48,7 @@ function Avatar({ name }: { name: string }) {
 }
 
 type TopLevelTab = 'daily' | 'event'
-type EventSubTab = 'schedule' | 'assignments' | 'tasks' | 'warnings'
-type ScheduleViewMode = 'list' | 'calendar'
+type EventSubTab = 'schedule' | 'assignments' | 'tasks'
 
 interface ManningModuleProps {
   onClose: () => void
@@ -63,7 +56,7 @@ interface ManningModuleProps {
 
 export function ManningModule({ onClose }: ManningModuleProps) {
   const { staff, events } = usePortal()
-  const { hasFullWarehouseAccess, isManningOfficer, adminName, adminEmail } = useAuth()
+  const { adminName, adminEmail } = useAuth()
   const actor = adminName || adminEmail || 'WOM'
 
   // Shared Crew Data
@@ -71,7 +64,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
   const presetSquads = useMemo(() => getPresetSquads(staff), [staff])
 
   // Manning Delegation Data
-  const { assignments, tasks, warnings, loading, error, reload } = useManningData()
+  const { assignments, tasks, reload } = useManningData()
   const declarations = useGroundCrewDeclarations()
 
   // Navigation State
@@ -87,12 +80,10 @@ export function ManningModule({ onClose }: ManningModuleProps) {
   const [rosterOpen, setRosterOpen] = useState(true)
   const [assignOpen, setAssignOpen] = useState(false)
   const [fullRosterModalOpen, setFullRosterModalOpen] = useState(false)
-  const [selectedCrewRow, setSelectedCrewRow] = useState<CrewRow | null>(null)
 
   // Card Click Inspection Detail Modals
   const [selectedAssignment, setSelectedAssignment] = useState<ManningAssignment | null>(null)
   const [selectedTask, setSelectedTask] = useState<ManningTask | null>(null)
-  const [selectedWarning, setSelectedWarning] = useState<ManningWarning | null>(null)
 
   // Real-time clock tick for task countdown displays
   const [now, setNow] = useState<Date>(() => new Date())
@@ -266,17 +257,6 @@ export function ManningModule({ onClose }: ManningModuleProps) {
               >
                 48h Task Confirmations ({tasks.length})
               </button>
-              <button
-                type="button"
-                onClick={() => setEventSubTab('warnings')}
-                aria-pressed={eventSubTab === 'warnings'}
-                className={cn(
-                  'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
-                  eventSubTab === 'warnings' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
-                )}
-              >
-                Warning Ledger ({warnings.length})
-              </button>
             </div>
           </div>
         )}
@@ -342,10 +322,8 @@ export function ManningModule({ onClose }: ManningModuleProps) {
               <p className="py-6 text-center text-xs text-muted-foreground">No crew members match the search filter.</p>
             ) : (
               filteredDirectoryRows.map((crew) => (
-                <button
+                <div
                   key={crew.id}
-                  type="button"
-                  onClick={() => setSelectedCrewRow(crew)}
                   className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left transition hover:border-primary/50 hover:bg-accent/40"
                 >
                   <div className="flex items-center gap-3 min-w-0 pr-2">
@@ -367,7 +345,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                   >
                     {crew.status}
                   </span>
-                </button>
+                </div>
               ))
             )}
           </div>
@@ -504,7 +482,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                rejectTask(task.id, actor, 'Rejected by WOM during task review')
+                                rejectTask(task.id)
                                 reload()
                               }}
                               className="rounded-md border border-destructive/40 px-3 py-1 text-[0.62rem] font-semibold text-destructive hover:bg-destructive/10"
@@ -530,43 +508,6 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                 </div>
               </div>
             )}
-
-            {/* SUB-TAB: WARNINGS */}
-            {eventSubTab === 'warnings' && (
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-bold text-foreground">Three-Tier Warning Ledger</h2>
-                    <p className="text-xs text-muted-foreground">Formal warning log for response delays or operational non-compliance.</p>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {warnings.map((w) => (
-                    <div
-                      key={w.id}
-                      onClick={() => setSelectedWarning(w)}
-                      className="rounded-xl border border-border bg-card p-4 shadow-sm cursor-pointer hover:border-primary/50 hover:bg-accent/40 transition-all"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-foreground text-sm">Tier {w.tier}: {w.recipient_name}</span>
-                            <span className="rounded bg-destructive/10 px-2 py-0.5 text-[0.6rem] font-semibold text-destructive">
-                              {w.recipient_role}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-xs text-foreground/90">{w.reason}</p>
-                          <p className="mt-2 text-[0.62rem] text-muted-foreground">
-                            Issued by: <span className="font-medium text-foreground">{w.issued_by}</span> on {new Date(w.issued_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -586,8 +527,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
         <FullRosterModal
           crewRows={crewRows}
           onClose={() => setFullRosterModalOpen(false)}
-          onSelectMember={(crew) => {
-            setSelectedCrewRow(crew)
+          onSelectMember={() => {
             setFullRosterModalOpen(false)
           }}
         />
@@ -606,20 +546,13 @@ export function ManningModule({ onClose }: ManningModuleProps) {
           task={selectedTask}
           onClose={() => setSelectedTask(null)}
           onReject={() => {
-            rejectTask(selectedTask.id, actor, 'Rejected by WOM during task review')
+            rejectTask(selectedTask.id)
             reload()
           }}
           onConfirm={() => {
             confirmTask(selectedTask.id, actor)
             reload()
           }}
-        />
-      )}
-
-      {selectedWarning && (
-        <WarningDetailModal
-          warning={selectedWarning}
-          onClose={() => setSelectedWarning(null)}
         />
       )}
     </div>
@@ -951,74 +884,4 @@ function TaskDetailModal({
   )
 }
 
-function WarningDetailModal({
-  warning,
-  onClose,
-}: {
-  warning: ManningWarning
-  onClose: () => void
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-lg overflow-hidden rounded-xl bg-card p-6 shadow-2xl space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between border-b border-border pb-3">
-          <div>
-            <span className="text-[0.58rem] font-bold uppercase tracking-[0.2em] text-destructive">
-              Warning Record
-            </span>
-            <h2 className="font-serif text-xl font-medium text-card-foreground">
-              Tier {warning.tier}: {warning.recipient_name}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
 
-        <div className="rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground leading-relaxed">
-          <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-            Reason / Infraction Note
-          </span>
-          {warning.reason}
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 text-xs">
-          <div className="rounded-lg border border-border bg-background p-3">
-            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
-              Recipient Role
-            </span>
-            <span className="font-semibold text-card-foreground">{warning.recipient_role}</span>
-          </div>
-          <div className="rounded-lg border border-border bg-background p-3">
-            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
-              Issued By
-            </span>
-            <span className="font-semibold text-card-foreground">{warning.issued_by}</span>
-          </div>
-        </div>
-
-        <div className="flex justify-end border-t border-border pt-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-border px-4 py-2 text-xs font-bold uppercase tracking-wider hover:bg-accent"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}

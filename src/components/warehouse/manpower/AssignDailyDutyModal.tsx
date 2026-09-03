@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Lock, ShieldAlert, UserCheck, X } from 'lucide-react'
-import type { CrewRow, PresetSquad, WarehouseZone, DutyCategory } from '@/lib/warehouse-crew'
-import { assignDailyDuty, checkSymmetricConflict, crewHasConflict, isTeamLead, type AssignMode } from '@/lib/warehouse-crew'
+import { ShieldAlert, UserCheck, X } from 'lucide-react'
+import type { CrewRow, PresetSquad, WarehouseZone } from '@/lib/warehouse-crew'
+import { assignDailyDuty, checkSymmetricConflict, isTeamLead, type AssignMode } from '@/lib/warehouse-crew'
 import { createOverride, useManningData } from '@/lib/manning'
 import { useAuth } from '@/lib/auth'
 import { usePortal } from '@/lib/store'
@@ -41,8 +41,8 @@ export function AssignDailyDutyModal({
   const [manualIds, setManualIds] = useState<Set<string>>(new Set())
   const [presetId, setPresetId] = useState(presetSquads[0]?.id ?? '')
   const [swappedOut, setSwappedOut] = useState<Set<string>>(new Set())
+  const [swaps, setSwaps] = useState<Record<string, string>>({})
   const [isTeamLeadToday, setIsTeamLeadToday] = useState(false)
-  const [slotsFullNotice, setSlotsFullNotice] = useState(false)
 
   // Emergency Override State & Persistence
   const [overriddenStaffIds, setOverriddenStaffIds] = useState<Set<string>>(new Set())
@@ -72,17 +72,19 @@ export function AssignDailyDutyModal({
     if (!preset) return []
     return preset.memberIds
       .filter((id) => !swappedOut.has(id))
-      .map((id) => crewRows.find((row) => row.staffId === id))
+      .map((id) => {
+        const effectiveId = swaps[id] || id
+        return crewRows.find((row) => row.staffId === effectiveId)
+      })
       .filter((row): row is CrewRow => {
         if (!row) return false
         const symmetric = checkSymmetricConflict(row.staffId, date, department, activeFieldAssignments)
         if (symmetric.hasConflict && !overriddenStaffIds.has(row.staffId)) return false
         return true
       })
-  }, [preset, crewRows, swappedOut, date, department, activeFieldAssignments, overriddenStaffIds])
+  }, [preset, crewRows, swappedOut, swaps, date, department, activeFieldAssignments, overriddenStaffIds])
 
   const toggleManual = (row: CrewRow) => {
-    setSlotsFullNotice(false)
     const staffId = row.staffId
     const symmetric = checkSymmetricConflict(staffId, date, department, activeFieldAssignments)
 
@@ -105,16 +107,11 @@ export function AssignDailyDutyModal({
         return next
       }
       if (next.size >= slotCount) {
-        setSlotsFullNotice(true)
         return prev
       }
       next.add(staffId)
       return next
     })
-  }
-
-  const handleSwap = (outStaffId: string) => {
-    setSwappedOut((prev) => new Set(prev).add(outStaffId))
   }
 
   const handleRemove = (outStaffId: string) => {
@@ -242,7 +239,6 @@ export function AssignDailyDutyModal({
                 max={10}
                 value={slotCount}
                 onChange={(e) => {
-                  setSlotsFullNotice(false)
                   setSlotCount(Math.max(1, Math.min(10, Number(e.target.value) || 1)))
                 }}
                 className="rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
@@ -303,11 +299,14 @@ export function AssignDailyDutyModal({
                 presetId={presetId}
                 onPresetChange={setPresetId}
                 presetMembers={presetMembers}
-                onSwapOut={handleSwap}
+                crewRows={crewRows}
+                date={date}
+                targetCategory={department}
+                overriddenStaffIds={overriddenStaffIds}
+                onSwapMember={(outId, inId) => setSwaps((prev) => ({ ...prev, [outId]: inId }))}
                 onRemove={handleRemove}
                 staffList={staff}
                 declarations={declarations}
-                date={date}
               />
             )}
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Lock, ShieldAlert, UserCheck, X, XCircle } from 'lucide-react'
+import { AlertTriangle, ShieldAlert, UserCheck, X } from 'lucide-react'
 import type { PortalEvent } from '@/lib/types'
 import {
   assignCrewToEvent,
@@ -48,7 +48,7 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
   const [manualIds, setManualIds] = useState<Set<string>>(new Set())
   const [presetId, setPresetId] = useState(presetSquads[0]?.id ?? '')
   const [swappedOut, setSwappedOut] = useState<Set<string>>(new Set())
-  const [slotsFullNotice, setSlotsFullNotice] = useState(false)
+  const [swaps, setSwaps] = useState<Record<string, string>>({})
 
   // Emergency Override State & Persistence
   const [overriddenStaffIds, setOverriddenStaffIds] = useState<Set<string>>(new Set())
@@ -116,7 +116,6 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
   }, [preset, crewRows, swappedOut, swaps, selectedEvent, targetDate, overriddenStaffIds])
 
   const toggleManual = (row: CrewRow) => {
-    setSlotsFullNotice(false)
     const staffId = row.staffId
     const isEventConflict = selectedEvent ? crewHasConflict(row, selectedEvent.id) : false
     const symmetric = targetDate ? checkSymmetricConflict(staffId, targetDate, 'Field') : { hasConflict: false }
@@ -138,16 +137,11 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
         return next
       }
       if (next.size >= slotCount) {
-        setSlotsFullNotice(true)
         return prev
       }
       next.add(staffId)
       return next
     })
-  }
-
-  const handleSwap = (outStaffId: string) => {
-    setSwappedOut((prev) => new Set(prev).add(outStaffId))
   }
 
   const handleRemove = (outStaffId: string) => {
@@ -327,7 +321,6 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
                 max={10}
                 value={slotCount}
                 onChange={(e) => {
-                  setSlotsFullNotice(false)
                   setSlotCount(Math.max(1, Math.min(10, Number(e.target.value) || 1)))
                 }}
                 className="rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:border-primary"
