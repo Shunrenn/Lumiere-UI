@@ -839,26 +839,22 @@ The app is best understood as a polished multi-portal frontend prototype with a 
 Status: Logged, not started. Sequenced after current WOM work (build-failure fix →
 Foundation E → Prompt 5 clarifications → Prompt 6 → Prompt 7 → Foundation G).
 
-### Confirmed decisions (ready to scope when we get here)
-- Executive role becomes read-only / insights-only across the system — no sign-off
-  or approval actions anywhere, including Damage Validation.
-- Damage Validation sign-off authority (Repair, Write-off) moves from Executive to
-  WOM (Warehouse Manager / Inventory Officer). Executive becomes notify-only for damage events.
-- Repair sign-off updates the corresponding asset's status in the Asset Registry
-  to 'In Maintenance', with a WOM-accessible 'Complete Maintenance / Return to Stock' flow.
-- Damage Validation UI remains a single page/route (`DamageValidationPage.tsx`),
-  rendering read-only (stripped action buttons, non-editable modal) for Executive credentials.
-- Event Settlement blocking override routes through WOM sign-off instead of Executive.
-- **Admin-Configurable "Allow Self-Validation" Permission**:
-  - Configurable per WOM sub-role in RBAC (`allowSelfValidation`, default: ON for lean teams).
-  - When ON: Single qualifying WOM actor can resolve Held-for-Audit with PIN + mandatory justification (≥20 chars) + acknowledgement checkbox.
-  - When OFF: Strict dual-custody enforced. If understaffed (<2 qualifying accounts), resolution strictly blocked.
+### Approved Package — "Damage Validation Ownership Change" (Queued Next)
+- **Status:** Approved package; sequenced next behind build stabilization and immediate prompt queue.
+- **Executive Read-Only Transition:** Executive role becomes read-only / insights-only across the system — no sign-off or approval actions anywhere, including Damage Validation.
+- **Sign-Off Authority Migration:** Sign-off authority (Repair, Write-off) moves from Executive to WOM (Warehouse Manager / Inventory Officer). Executive becomes notify-only for damage events.
+- **Unified UI Route:** Damage Validation UI remains a single page/route (`DamageValidationPage.tsx`), rendering read-only (stripped action buttons, non-editable modal) for Executive credentials and interactive for qualifying WOM roles.
+- **Repair Transition to Maintenance:** Repair sign-off updates the corresponding asset's status in the Asset Registry to `'In Maintenance'`, with a WOM-accessible 'Complete Maintenance / Return to Stock' flow back to `'Available'`.
+- **Terminal Event Status ('Settled'):** New terminal event status `Settled`, blocked by unresolved damage exceptions. Event Settlement blocking override routes through WOM sign-off instead of Executive.
+- **Dual-Custody & "Allow Self-Validation" Permission**:
+  - Configurable per WOM sub-role in RBAC (`allowSelfValidation?: boolean`, default: `true` for lean teams).
+  - When `true` (ON): Single qualifying WOM actor can resolve Held-for-Audit with PIN + mandatory justification (≥20 chars) + acknowledgement checkbox.
+  - When `false` (OFF): Strict dual-custody enforced. If understaffed (<2 qualifying accounts), resolution is strictly blocked.
   - **Admin Emergency Unblock Choice (when OFF)**:
     - **Option A ("One-Time" / Instance - Default)**: Auto-reverts toggle to OFF once the specific claim is resolved.
     - **Option B ("Permanent")**: Keeps toggle ON permanently; requires mandatory warning modal with explicit acknowledgement checkbox.
     - **Audit Trail**: Records `originatedFromEmergency: true`, `emergencyReason`, and (for Option B) `madePermanentAt` / `permanentAcknowledged: true`.
-- General UI direction from client: "Simplify, Be Specific" — applies broadly to
-  upcoming redesign work, not just one module.
+- **General Client UI Directive:** "Simplify, Be Specific" — applies broadly across upcoming redesign work.
 
 ### Needs clarification before scoping (open questions, not yet resolved with client)
 - **NDA consolidation**: client wants a single consolidated NDA document, described
@@ -953,6 +949,13 @@ The UI currently calls `PortalProvider` the “single source of truth” for pen
 ---
 
 ## Known Architectural Gaps (Deferred to Backend Integration Phase)
+
+### Critical Verification Process Gap & Standing Build Rule
+- **Root Cause**: The root `tsconfig.json` specifies `"files": []` without an `include` glob, causing standalone `npx tsc --noEmit` to evaluate zero source files and return a false-clean exit. The production build runs `pnpm run build` (`tsc -b && vite build`), compiling against `tsconfig.app.json` with strict unused parameter and reference checks.
+- **Regressions Masked by False Passes**:
+  - *(a) Candidate Swaps*: `swaps`/`setSwaps` dictionary state was dropped during component extraction into `src/components/warehouse/manpower/shared/`, causing runtime ReferenceErrors in `AssignCrewModal.tsx` and `AssignDailyDutyModal.tsx` (now resolved).
+  - *(b) Dispatch Deletion*: `deleteBatch()` chained `.catch()` directly on a `PostgrestFilterBuilder` (TS2339), masking silent remote persistence failure (see [Optimistic / Fire-and-Forget Supabase Mutation Divergence](#optimistic--fire-and-forget-supabase-mutation-divergence) below).
+- **Standing Rule**: Always verify with `pnpm run build` (`tsc -b && vite build`), never `npx tsc --noEmit` alone. Live browser click-through verification remains separately required after every clean build.
 
 ### Optimistic / Fire-and-Forget Supabase Mutation Divergence
 - **Pattern:** `deleteBatch()` (and other operational Supabase mutations following this pattern) executes an immediate optimistic local delete/mutation, then dispatches an asynchronous, un-awaited Supabase database call in the background.
