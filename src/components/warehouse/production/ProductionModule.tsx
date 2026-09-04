@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Plus, Search, X } from 'lucide-react'
+import { AlertTriangle, Plus, Search, X, Calendar, Sliders, LayoutGrid, Table } from 'lucide-react'
 import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import {
   elapsedLabel,
   getTeamCapacity,
   moveProductionItem,
+  flagProductionDelay,
   PRODUCTION_STAGES,
   useProductionItems,
   type ProductionItem,
@@ -15,9 +16,13 @@ import { Pill } from '@/components/warehouse/shared/Pill'
 import type { Tone } from '@/components/warehouse/event-detail/status-tone'
 import { ProductionDetailModal } from '@/components/warehouse/production/ProductionDetailModal'
 import { QuotaEstimationModal } from '@/components/warehouse/production/QuotaEstimationModal'
+import { ProductionGanttView } from '@/components/warehouse/production/ProductionGanttView'
+import { ScheduleBespokeModal } from '@/components/warehouse/production/ScheduleBespokeModal'
+import { SubCategorySettingsModal } from '@/components/warehouse/production/SubCategorySettingsModal'
+import { FlagDelayModal } from '@/components/warehouse/production/FlagDelayModal'
 import { cn } from '@/lib/utils'
 
-type BoardMode = 'grouped' | 'workload'
+type MainModuleView = 'gantt' | 'kanban' | 'workload'
 
 const STAGE_TONE: Record<ProductionStage, Tone> = {
   Unprepped: 'neutral',
@@ -34,18 +39,18 @@ interface ProductionModuleProps {
 
 export function ProductionModule({ onClose }: ProductionModuleProps) {
   const { events, staff } = usePortal()
-  // Production approval authority is scoped to the Production Manager WOM
-  // sub-role (Modify on Production per the RBAC screen) and the full-access
-  // Warehouse Ops Manager super-account — not every WOM account.
   const { hasFullWarehouseAccess, isProductionManager } = useAuth()
   const canApproveProduction = hasFullWarehouseAccess || isProductionManager
   const items = useProductionItems(events, staff)
 
-  const [mode, setMode] = useState<BoardMode>('grouped')
+  const [view, setView] = useState<MainModuleView>('gantt')
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProductionStage | 'All'>('All')
   const [selectedItem, setSelectedItem] = useState<ProductionItem | null>(null)
   const [quotaOpen, setQuotaOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [subCategorySettingsOpen, setSubCategorySettingsOpen] = useState(false)
+  const [delayModalItem, setDelayModalItem] = useState<ProductionItem | null>(null)
   const [savedEstimates, setSavedEstimates] = useState<
     { itemName: string; manCount: number; materialCount: number; estimatedHours: number }[]
   >([])
@@ -67,12 +72,15 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-y-auto">
+      {/* Header */}
       <div className="flex flex-col gap-4 border-b border-border px-6 py-5 sm:px-10">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[0.6rem] font-bold uppercase tracking-[0.24em] text-primary">Warehouse module</p>
             <h1 className="mt-1 font-serif text-2xl font-medium text-foreground">Production &amp; Fabrication</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Fabrication queues, build timelines, and workshop capacity.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Bespoke build estimation, Gantt timeline scheduling, and workshop capacity.
+            </p>
           </div>
           <button
             type="button"
@@ -84,28 +92,43 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
           </button>
         </div>
 
+        {/* View Switcher Bar & Primary Action Buttons */}
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="inline-flex rounded-md border border-border bg-background p-1">
             <button
               type="button"
-              onClick={() => setMode('grouped')}
-              aria-pressed={mode === 'grouped'}
+              onClick={() => setView('gantt')}
+              aria-pressed={view === 'gantt'}
               className={cn(
-                'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
-                mode === 'grouped' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
+                'inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
+                view === 'gantt' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
               )}
             >
-              Event-Grouped
+              <Calendar className="size-3" />
+              Gantt Timeline
             </button>
             <button
               type="button"
-              onClick={() => setMode('workload')}
-              aria-pressed={mode === 'workload'}
+              onClick={() => setView('kanban')}
+              aria-pressed={view === 'kanban'}
               className={cn(
-                'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
-                mode === 'workload' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
+                'inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
+                view === 'kanban' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
               )}
             >
+              <LayoutGrid className="size-3" />
+              Kanban Board
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('workload')}
+              aria-pressed={view === 'workload'}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
+                view === 'workload' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
+              )}
+            >
+              <Table className="size-3" />
               Cross-Event Workload
             </button>
           </div>
@@ -117,21 +140,39 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search items or events…"
-                className="w-56 rounded-md border border-input bg-background py-2.5 pl-9 pr-3 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                className="w-52 rounded-md border border-input bg-background py-2.5 pl-9 pr-3 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
               />
             </div>
+
+            <button
+              type="button"
+              onClick={() => setSubCategorySettingsOpen(true)}
+              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-3 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.08em] text-foreground transition hover:bg-muted"
+            >
+              <Sliders className="size-3.5 text-muted-foreground" />
+              Worker Caps
+            </button>
+
             <button
               type="button"
               onClick={() => setQuotaOpen(true)}
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90"
+              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-3 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.08em] text-foreground transition hover:bg-muted"
+            >
+              Estimate Quota
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setScheduleOpen(true)}
+              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3.5 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90"
             >
               <Plus className="size-3.5" />
-              Estimate Quota
+              + Schedule Bespoke
             </button>
           </div>
         </div>
 
-        {mode === 'grouped' && (
+        {view === 'kanban' && (
           <div className="flex flex-wrap items-center gap-2">
             {STATUS_FILTERS.map((s) => (
               <button
@@ -153,74 +194,54 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
         )}
       </div>
 
+      {/* Main View Area */}
       <div className="flex-1 px-6 py-6 sm:px-10">
-        {mode === 'workload' ? (
+        {view === 'gantt' ? (
+          <ProductionGanttView
+            items={filtered}
+            onOpenItem={setSelectedItem}
+            onFlagDelay={(item) => setDelayModalItem(item)}
+          />
+        ) : view === 'workload' ? (
           <div className="flex flex-col gap-5">
             <TeamCapacityStrip capacity={capacity} />
             <CrossEventWorkloadTable items={filtered} onOpenItem={setSelectedItem} />
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {PRODUCTION_STAGES.map((stage) => {
-              const stageItems = filtered.filter((item) => item.stage === stage)
-              return (
-                <div
-                  key={stage}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => {
-                    if (draggingId) moveProductionItem(draggingId, stage)
-                    setDraggingId(null)
-                  }}
-                  className="flex flex-col gap-3 rounded-xl border border-border bg-card/60 p-3"
-                >
-                  <div className="flex items-center justify-between px-1">
-                    <Pill tone={STAGE_TONE[stage]}>{stage}</Pill>
-                    <span className="text-[0.6rem] font-semibold text-muted-foreground">{stageItems.length}</span>
-                  </div>
-                  <div className="flex min-h-16 flex-col gap-2.5">
-                    {stageItems.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        draggable
-                        onDragStart={() => setDraggingId(item.id)}
-                        onDragEnd={() => setDraggingId(null)}
-                        onClick={() => setSelectedItem(item)}
-                        className={cn(
-                          'flex flex-col gap-2 rounded-lg border border-border bg-card px-3 py-3 text-left transition hover:border-primary/50 hover:bg-accent',
-                          draggingId === item.id && 'opacity-50',
-                        )}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="size-10 shrink-0 overflow-hidden rounded-md bg-muted">
-                            <img src={item.thumbnail || '/placeholder.svg'} alt={item.itemName} crossOrigin="anonymous" className="size-full object-cover" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate text-xs font-semibold text-card-foreground">{item.itemName}</p>
-                            <p className="truncate text-[0.58rem] uppercase tracking-[0.06em] text-muted-foreground">{item.assignedCrew}</p>
-                          </div>
-                        </div>
-                        <p className="text-[0.58rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                          In column · {elapsedLabel(item.startedAt)}
-                        </p>
-                      </button>
-                    ))}
-                    {stageItems.length === 0 && (
-                      <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-[0.6rem] text-muted-foreground">
-                        No items
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          <KanbanBoard
+            filtered={filtered}
+            draggingId={draggingId}
+            onDragStart={(id) => setDraggingId(id)}
+            onDragEnd={() => setDraggingId(null)}
+            onDropStage={(id, stage) => {
+              moveProductionItem(id, stage)
+              setDraggingId(null)
+            }}
+            onOpenItem={setSelectedItem}
+          />
         )}
       </div>
 
-      {activeItem && (
-        <ProductionDetailModal item={activeItem} isProductionManager={canApproveProduction} onClose={() => setSelectedItem(null)} />
+      {/* Modals & Drawers */}
+      {scheduleOpen && (
+        <ScheduleBespokeModal
+          onClose={() => setScheduleOpen(false)}
+          onScheduled={() => setView('gantt')}
+        />
       )}
+
+      {subCategorySettingsOpen && (
+        <SubCategorySettingsModal onClose={() => setSubCategorySettingsOpen(false)} />
+      )}
+
+      {delayModalItem && (
+        <FlagDelayModal
+          item={delayModalItem}
+          onClose={() => setDelayModalItem(null)}
+          onSaveDelay={(delay) => flagProductionDelay(delayModalItem.id, delay)}
+        />
+      )}
+
       {quotaOpen && (
         <QuotaEstimationModal
           onClose={() => setQuotaOpen(false)}
@@ -228,6 +249,14 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
             setSavedEstimates((prev) => [result, ...prev])
             setQuotaOpen(false)
           }}
+        />
+      )}
+
+      {activeItem && (
+        <ProductionDetailModal
+          item={activeItem}
+          isProductionManager={canApproveProduction}
+          onClose={() => setSelectedItem(null)}
         />
       )}
       {savedEstimates.length > 0 && (
@@ -325,6 +354,90 @@ function CrossEventWorkloadTable({
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function KanbanBoard({
+  filtered,
+  draggingId,
+  onDragStart,
+  onDragEnd,
+  onDropStage,
+  onOpenItem,
+}: {
+  filtered: ProductionItem[]
+  draggingId: string | null
+  onDragStart: (id: string) => void
+  onDragEnd: () => void
+  onDropStage: (id: string, stage: ProductionStage) => void
+  onOpenItem: (item: ProductionItem) => void
+}) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {PRODUCTION_STAGES.map((stage) => {
+        const stageItems = filtered.filter((item) => item.stage === stage)
+        return (
+          <div
+            key={stage}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => {
+              if (draggingId) onDropStage(draggingId, stage)
+            }}
+            className="flex flex-col gap-3 rounded-xl border border-border bg-card/60 p-3"
+          >
+            <div className="flex items-center justify-between px-1">
+              <Pill tone={STAGE_TONE[stage]}>{stage}</Pill>
+              <span className="text-[0.6rem] font-semibold text-muted-foreground">{stageItems.length}</span>
+            </div>
+            <div className="flex min-h-16 flex-col gap-2.5">
+              {stageItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  draggable
+                  onDragStart={() => onDragStart(item.id)}
+                  onDragEnd={onDragEnd}
+                  onClick={() => onOpenItem(item)}
+                  className={cn(
+                    'flex flex-col gap-2 rounded-lg border border-border bg-card px-3 py-3 text-left transition hover:border-primary/50 hover:bg-accent',
+                    draggingId === item.id && 'opacity-50',
+                  )}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="size-10 shrink-0 overflow-hidden rounded-md bg-muted">
+                      <img
+                        src={item.thumbnail || '/placeholder.svg'}
+                        alt={item.itemName}
+                        crossOrigin="anonymous"
+                        className="size-full object-cover"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-card-foreground">{item.itemName}</p>
+                      <p className="truncate text-[0.58rem] uppercase tracking-[0.06em] text-muted-foreground">
+                        {item.assignedCrew}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[0.58rem] text-muted-foreground">
+                    <span>{item.quota} units</span>
+                    <span className="font-mono">{item.computedEndDate}</span>
+                  </div>
+                  <p className="text-[0.58rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                    In column · {elapsedLabel(item.startedAt)}
+                  </p>
+                </button>
+              ))}
+              {stageItems.length === 0 && (
+                <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-[0.6rem] text-muted-foreground">
+                  No items
+                </p>
+              )}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { AddMasterItemModal, type MasterItemDraft } from '@/components/warehouse
 import { BulkGenerateFlow } from '@/components/warehouse/replenishment/BulkGenerateFlow'
 import { KebabMenu } from '@/components/warehouse/shared/KebabMenu'
 import { cn } from '@/lib/utils'
+import { exportReplenishmentDeficitPdf } from '@/lib/pdf-exporter'
 
 type ViewMode = 'grouped' | 'consolidated'
 
@@ -111,20 +112,7 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
   }
 
   const exportReport = () => {
-    const header = 'Item,Event,Trigger Source,Current Stock,Threshold,Cost,Priority,Status\n'
-    const rows = filtered
-      .map(
-        (l) =>
-          `"${l.itemName}","${l.eventTitle ?? 'General'}","${l.triggerSource}","${l.currentStock}","${l.threshold}","${lineCost(l)}","${l.priority}","${l.status}"`,
-      )
-      .join('\n')
-    const blob = new Blob([header + rows], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'replenishment-deficit-report.csv'
-    a.click()
-    URL.revokeObjectURL(url)
+    exportReplenishmentDeficitPdf(filtered)
   }
 
   const openCandidates = lines.filter((line) => line.status === 'Flagged' || line.status === 'PO Drafted')
@@ -135,9 +123,9 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[0.6rem] font-bold uppercase tracking-[0.24em] text-primary">Warehouse module</p>
-            <h1 className="mt-1 font-serif text-2xl font-medium text-foreground">Replenishment &amp; Deficits</h1>
+            <h1 className="mt-1 font-serif text-2xl font-medium text-foreground">Replenishment / Deficits</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Deficit tracking, reorder requisitions, and procurement status.
+              Automated deficit detection, inventory replenishment alerts, and purchase order drafting.
             </p>
           </div>
           <button
@@ -151,31 +139,61 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
         </div>
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="inline-flex rounded-md border border-border bg-background p-1">
+          <div className="inline-flex rounded-lg border border-border bg-card p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('grouped')}
+              className={cn(
+                'rounded-md px-4 py-2 text-xs font-bold uppercase tracking-[0.08em] transition',
+                viewMode === 'grouped'
+                  ? 'bg-foreground text-background shadow-sm'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              Event-Bound Deficits ({events.length} Events)
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('consolidated')}
+              className={cn(
+                'rounded-md px-4 py-2 text-xs font-bold uppercase tracking-[0.08em] transition',
+                viewMode === 'consolidated'
+                  ? 'bg-foreground text-background shadow-sm'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              Consolidated Register ({lines.length} Lines)
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3.5 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-foreground hover:bg-muted"
+            >
+              <Plus className="size-3.5" />
+              Add Item
+            </button>
+
+            {openCandidates.length > 0 && (
               <button
                 type="button"
-                onClick={() => setViewMode('grouped')}
-                aria-pressed={viewMode === 'grouped'}
-                className={cn(
-                  'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
-                  viewMode === 'grouped' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
-                )}
+                onClick={() => setBulkOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90"
               >
-                Event-Grouped
+                Draft Master PO ({openCandidates.length})
               </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('consolidated')}
-                aria-pressed={viewMode === 'consolidated'}
-                className={cn(
-                  'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
-                  viewMode === 'consolidated' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
-                )}
-              >
-                Consolidated
-              </button>
-            </div>
+            )}
+
+            <button
+              type="button"
+              onClick={exportReport}
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-border bg-background px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-accent"
+            >
+              <Download className="size-3.5" />
+              Export Deficit Report (PDF)
+            </button>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <input

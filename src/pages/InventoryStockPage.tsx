@@ -90,12 +90,12 @@ const SORT_OPTIONS = [
 ]
 
 export function InventoryStockPage() {
-  const { inventory: items, addInventoryItem, updateInventoryItem } = usePortal()
+  const { inventory: items, addInventoryItem, updateInventoryItem, completeMaintenance } = usePortal()
   const liveOps = useInventoryOps()
-  // Admin has read-only oversight; Warehouse Managers mutate the registry.
-  const { isAdmin } = useAuth()
+  // Executive and Admin have read-only oversight; Warehouse Managers mutate the registry.
+  const { isAdmin, isExecutive } = useAuth()
   const { intent, clearIntent } = useNav()
-  const readOnly = isAdmin
+  const readOnly = isAdmin || isExecutive
   const [query, setQuery] = useState('')
   const [stateFilter, setStateFilter] = useState<StockStatus | 'All'>('All')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -104,6 +104,7 @@ export function InventoryStockPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [selectedAsset, setSelectedAsset] = useState<InventoryItem | null>(null)
   const [reorderItem, setReorderItem] = useState<ProcurementItem | null>(null)
+  const [maintenanceConfirmAsset, setMaintenanceConfirmAsset] = useState<InventoryItem | null>(null)
 
   // A dashboard "restock request" Open hands over a reorder-asset intent.
   // Warehouse Managers get the reorder requisition; read-only roles see the
@@ -359,6 +360,7 @@ export function InventoryStockPage() {
                         <span className="text-[0.6rem] text-muted-foreground">{item.updated}</span>
                         <div className="flex gap-3">
                           {!readOnly && (item.status === 'Critical Deficit' || item.status === 'Low Stock') && <button type="button" onClick={() => openReorder(item)} className="text-[0.58rem] font-bold uppercase tracking-[0.1em] text-rose-600">Reorder</button>}
+                          {!readOnly && item.status === 'In Maintenance' && <button type="button" onClick={() => setMaintenanceConfirmAsset(item)} className="text-[0.58rem] font-bold uppercase tracking-[0.1em] text-indigo-600">Complete Maintenance</button>}
                           <button type="button" onClick={() => setSelectedAsset(item)} className="text-[0.58rem] font-bold uppercase tracking-[0.1em] text-primary">View item</button>
                         </div>
                       </div>
@@ -372,7 +374,7 @@ export function InventoryStockPage() {
       ) : (
         <div className="mt-7 overflow-x-auto rounded-xl border border-border bg-card">
           <table className="w-full min-w-[720px] text-left"><thead><tr className="bg-muted/50">{['Asset', 'Item Name', 'Category', 'Stock Level', 'Status', ''].map((h) => <th key={h} className="px-4 py-3 text-[0.56rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">{h}</th>)}</tr></thead>
-            <tbody>{filtered.map((item) => <tr key={item.id} className="border-t border-border/60 align-middle"><td className="px-4 py-3"><div className="size-12 overflow-hidden rounded-md bg-muted"><img src={item.image || '/placeholder.svg'} alt={item.name} className="size-full object-cover" /></div></td><td className="px-4 py-3"><p className="font-serif text-base font-medium text-card-foreground">{item.name}</p><p className="text-[0.6rem] uppercase tracking-[0.1em] text-muted-foreground">{item.assetId}</p></td><td className="px-4 py-3 text-xs text-muted-foreground">{item.category}</td><td className="px-4 py-3 text-xs text-muted-foreground"><span className="font-serif text-base text-card-foreground">{item.stock}</span> / {item.capacity}</td><td className="px-4 py-3"><StatusBadge status={item.status} /></td><td className="px-4 py-3 text-right"><div className="flex items-center justify-end gap-3">{!readOnly && (item.status === 'Critical Deficit' || item.status === 'Low Stock') && <button type="button" onClick={() => openReorder(item)} className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-rose-600">Reorder</button>}<button type="button" onClick={() => setSelectedAsset(item)} className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary">View Asset</button></div></td></tr>)}</tbody>
+            <tbody>{filtered.map((item) => <tr key={item.id} className="border-t border-border/60 align-middle"><td className="px-4 py-3"><div className="size-12 overflow-hidden rounded-md bg-muted"><img src={item.image || '/placeholder.svg'} alt={item.name} className="size-full object-cover" /></div></td><td className="px-4 py-3"><p className="font-serif text-base font-medium text-card-foreground">{item.name}</p><p className="text-[0.6rem] uppercase tracking-[0.1em] text-muted-foreground">{item.assetId}</p></td><td className="px-4 py-3 text-xs text-muted-foreground">{item.category}</td><td className="px-4 py-3 text-xs text-muted-foreground"><span className="font-serif text-base text-card-foreground">{item.stock}</span> / {item.capacity}</td><td className="px-4 py-3"><StatusBadge status={item.status} /></td><td className="px-4 py-3 text-right"><div className="flex items-center justify-end gap-3">{!readOnly && (item.status === 'Critical Deficit' || item.status === 'Low Stock') && <button type="button" onClick={() => openReorder(item)} className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-rose-600">Reorder</button>}{!readOnly && item.status === 'In Maintenance' && <button type="button" onClick={() => setMaintenanceConfirmAsset(item)} className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-indigo-600">Complete Maintenance</button>}<button type="button" onClick={() => setSelectedAsset(item)} className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary">View Asset</button></div></td></tr>)}</tbody>
           </table>
         </div>
       )}
@@ -498,6 +500,37 @@ export function InventoryStockPage() {
     <ConsoleLayout>
       <div className="mt-4">{headerBlock}</div>
       {bodyContent}
+      {maintenanceConfirmAsset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
+            <h3 className="font-serif text-xl font-medium text-foreground">Confirm Return to Stock</h3>
+            <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+              Are you sure maintenance is complete for <strong className="text-foreground">{maintenanceConfirmAsset.name}</strong> ({maintenanceConfirmAsset.assetId})?
+              This will transition the asset status back to <strong className="text-emerald-600">Available</strong> and record an audit log entry.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setMaintenanceConfirmAsset(null)}
+                className="rounded-md border border-border px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  completeMaintenance(maintenanceConfirmAsset.id, 'Warehouse Ops Manager')
+                  setMaintenanceConfirmAsset(null)
+                  setSelectedAsset(null)
+                }}
+                className="rounded-md bg-indigo-600 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-indigo-700"
+              >
+                Complete Maintenance
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </ConsoleLayout>
   )
 }

@@ -963,6 +963,17 @@ The UI currently calls `PortalProvider` the “single source of truth” for pen
 - **Risk:** Silent state divergence between the local browser session and the remote PostgreSQL database once active Supabase production credentials are connected.
 - **Remediation Plan:** Introduce a structured sync-status indicator, rollback/reversion hooks on rejected promises, or an offline mutation/retry queue before promoting these endpoints to production. (Low urgency during prototype phase as the local workspace operates against fallback placeholder credentials).
 
+### Bespoke Item Time Estimation & Production Gantt Scheduling Architecture
+- **Part A — Asset Registry Simulation Tab:**
+  - Bespoke asset detail modal includes a `Simulation` tab with baseline headcount fixed at 1 worker.
+  - Interactive table allows recording build attempts (`durationMinutes`), computing arithmetic mean as `baseSingleWorkerTimeMinutes`.
+- **Part B — Production Module Gantt Scheduling Engine:**
+  - **Diminishing Returns Formula:** $\text{timePerUnit} = \frac{\text{baseSingleWorkerTime}}{\min(\text{assignedWorkers}, \text{maxParallelWorkers})}$, where `maxParallelWorkers` is configurable per Bespoke subcategory (e.g. Backdrops = 3, Hanging Decor = 2, Stagecraft = 4, Signage = 2, Furniture = 3).
+  - **Shift Configurations:** Morning (8h net, 8:00 AM–5:00 PM), Night (8h net, 5:00 PM–2:00 AM), Both (16h velocity).
+  - **Read-Only Computed End Date & Locked Baseline Snapshots:** Scheduled jobs snapshot `lockedBaseSingleWorkerMinutes` and `lockedMaxParallelWorkers` to prevent retrospective drift from subsequent simulation runs.
+  - **Audit Delay Logging:** Delays are logged as structured exception entries (`reason`, `delayHours`, `timestamp`) rather than direct date mutations, rendering visual `+ Delay` extensions on the Gantt chart.
+  - **Aggregate Capacity Alert:** Non-blocking warning banner when total assigned workers across active jobs exceed available fabrication crew on any given date.
+
 ---
 
 ## Handoff checklist

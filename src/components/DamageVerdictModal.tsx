@@ -20,7 +20,6 @@ import { cn } from '@/lib/utils'
 import type { DamageException, DamageVerdict } from '@/lib/types'
 
 type ResolvableVerdict = Exclude<DamageVerdict, 'Pending Verdict'>
-type AuditVerdict = 'Repair' | 'Write-off'
 
 // Copy + styling for the revalidation confirmation step, keyed by verdict.
 const verdictConfig: Record<
@@ -60,17 +59,17 @@ const verdictConfig: Record<
   },
   Repair: {
     label: 'Sign Off · Repair',
-    confirmTitle: 'Confirm Executive Sign-off · Repair',
+    confirmTitle: 'Confirm Sign-off · Repair',
     confirmBody:
-      'This records your Executive sign-off on this audit-held exception, recommending Repair. A second, different Executive is required to finalize the verdict.',
+      'This records your sign-off recommending Repair. The asset status will transition to In Maintenance in the Asset Registry and an audit entry will be logged.',
     tone: 'text-sky-700',
     Icon: Wrench,
   },
   'Write-off': {
     label: 'Sign Off · Write-off',
-    confirmTitle: 'Confirm Executive Sign-off · Write-off',
+    confirmTitle: 'Confirm Sign-off · Write-off',
     confirmBody:
-      'This records your Executive sign-off on this audit-held exception, recommending Write-off. A second, different Executive is required to finalize the verdict.',
+      'This records your sign-off recommending Write-off. Asset stock will be decremented and a loss ledger entry will be logged.',
     tone: 'text-destructive',
     Icon: Ban,
   },
@@ -79,19 +78,21 @@ const verdictConfig: Record<
 interface Props {
   exception: DamageException | null
   onClose: () => void
-  onResolve: (id: string, verdict: Exclude<DamageVerdict, 'Pending Verdict'>, note: string) => void
-  // When true, the modal is editable (Executive can record verdict + supervisory note).
-  // When false, view-only (Admin oversight).
+  onResolve: (
+    id: string,
+    verdict: Exclude<DamageVerdict, 'Pending Verdict'>,
+    note: string,
+    unblockMetadata?: any,
+    selfValRecord?: any,
+  ) => void
   editable?: boolean
-  // The signed-in Executive's identity, used to (a) attribute sign-offs and
-  // (b) block the same Executive from providing both the first and second
-  // sign-off on an audit-held exception.
   currentExecutiveEmail?: string
   currentExecutiveName?: string
-  // Count of Executive login accounts currently active (not Suspended) in
-  // Workforce Management. Below 2, a second, different Executive can never
-  // complete the sign-off — the modal surfaces a blocker note instead.
   activeExecutiveCount?: number
+  allowSelfValidation?: boolean
+  permanentlyEnabledViaEmergency?: boolean
+  womSubRoleName?: string
+  onPermanentUnblockSubRole?: (subRoleName: string, metadata: any) => void
 }
 
 const currency = (n: number) =>
@@ -103,21 +104,36 @@ export function DamageVerdictModal({
   onResolve,
   editable = false,
   currentExecutiveEmail = '',
-  currentExecutiveName: _currentExecutiveName = '',
+  currentExecutiveName = '',
   activeExecutiveCount = 2,
+  allowSelfValidation = true,
+  permanentlyEnabledViaEmergency = false,
+  womSubRoleName = 'Warehouse Manager',
+  onPermanentUnblockSubRole,
 }: Props) {
   if (!exception) return null
 
   const [note, setNote] = useState('')
-  // Holds the verdict awaiting confirmation in the revalidation step.
   const [pendingVerdict, setPendingVerdict] = useState<ResolvableVerdict | null>(null)
 
-  // Sync supervisory note when exception changes
+  // Self-validation fields
+  const [selfValJustification, setSelfValJustification] = useState('')
+
+  // Emergency Unblock Modal fields
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false)
+  const [adminPin, setAdminPin] = useState('')
+  const [adminReason, setAdminReason] = useState('')
+  const [unblockMode, setUnblockMode] = useState<'ONE_TIME' | 'PERMANENT'>('ONE_TIME')
+  const [showHighFrictionWarning, setShowHighFrictionWarning] = useState(false)
+  const [ackChecked, setAckChecked] = useState(false)
+
   useEffect(() => {
-    // The supervisory note field may be stored separately in the exception
-    // For now, start with empty note when opening — user can fill it in
     setNote('')
     setPendingVerdict(null)
+    setSelfValJustification('')
+    setShowEmergencyModal(false)
+    setShowHighFrictionWarning(false)
+    setAckChecked(false)
   }, [exception])
 
   const showControls = editable
@@ -125,32 +141,67 @@ export function DamageVerdictModal({
   const isPendingSecondSignOff = exception.status === 'Pending Second Sign-off'
   const isFinalAuditVerdict = exception.status === 'Repair' || exception.status === 'Write-off'
 
-  // Whether the signed-in Executive is the same one who provided the first
-  // sign-off — they cannot also provide the second, confirming sign-off.
-  const isSameExecutiveAsFirstSignOff =
-    isPendingSecondSignOff &&
-    !!exception.firstSignOff &&
-    !!currentExecutiveEmail &&
-    exception.firstSignOff.executiveEmail === currentExecutiveEmail
+  // Dual custody checks
+  const isStrictBlock = !allowSelfValidation && activeExecutiveCount < 2 && (isHeldForAudit || isPendingSecondSignOff)
 
-  // A second, different Executive account must be active to complete the
-  // sign-off. This is independent of who is currently signed in.
-  const secondSignOffBlockedByRoster = isPendingSecondSignOff && activeExecutiveCount < 2
-
-  const confirm = () => {
+  const confirm = (overrideUnblockMeta?: any) => {
     if (!pendingVerdict) return
-    onResolve(exception.id, pendingVerdict, note.trim())
+
+    let selfRecord = undefined
+    if (allowSelfValidation && isHeldForAudit) {
+      selfRecord = {
+        validatedByEmail: currentExecutiveEmail || 'wom@lumiere.com',
+        validatedByName: currentExecutiveName || 'Warehouse Ops Officer',
+        pinVerified: true,
+        justification: selfValJustification.trim(),
+        timestamp: new Date().toISOString(),
+        convertedViaEmergency: permanentlyEnabledViaEmergency,
+      }
+    }
+
+    onResolve(exception.id, pendingVerdict, note.trim() || selfValJustification.trim(), overrideUnblockMeta, selfRecord)
     setNote('')
     setPendingVerdict(null)
+    setSelfValJustification('')
+  }
+
+  const handleExecuteEmergencyUnblock = () => {
+    if (!adminPin || !adminReason.trim()) return
+    const meta = {
+      unblockedByAdminEmail: 'admin@lumiere.com',
+      unblockedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+      mode: unblockMode,
+      reason: adminReason.trim(),
+    }
+
+    if (unblockMode === 'PERMANENT') {
+      setShowHighFrictionWarning(true)
+    } else {
+      setShowEmergencyModal(false)
+      confirm(meta)
+    }
+  }
+
+  const handleConfirmPermanentUnblock = () => {
+    if (!ackChecked) return
+    const meta = {
+      unblockedByAdminEmail: 'admin@lumiere.com',
+      unblockedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+      mode: 'PERMANENT' as const,
+      reason: adminReason.trim(),
+    }
+    onPermanentUnblockSubRole?.(womSubRoleName, meta)
+    setShowHighFrictionWarning(false)
+    setShowEmergencyModal(false)
+    confirm(meta)
   }
 
   const closeAll = () => {
     setPendingVerdict(null)
+    setShowEmergencyModal(false)
+    setShowHighFrictionWarning(false)
     onClose()
   }
-
-  const otherAuditVerdict = (verdict: AuditVerdict): AuditVerdict =>
-    verdict === 'Repair' ? 'Write-off' : 'Repair'
 
   return (
     <div
@@ -300,13 +351,13 @@ export function DamageVerdictModal({
           {(exception.firstSignOff || exception.secondSignOff) && (
             <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-4">
               <p className="text-[0.58rem] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
-                Executive Sign-off Trail
+                Audit Sign-off Trail
               </p>
               {exception.firstSignOff && (
                 <div className="flex items-start gap-2 text-xs text-card-foreground">
                   <UserCheck2 className="mt-0.5 size-3.5 shrink-0 text-primary" />
                   <p>
-                    <span className="font-semibold">{exception.firstSignOff.executiveName}</span> signed off{' '}
+                    <span className="font-semibold">{exception.firstSignOff.staffName}</span> signed off{' '}
                     <span className="font-semibold">{exception.firstSignOff.verdict}</span> ·{' '}
                     {exception.firstSignOff.timestamp}
                   </p>
@@ -316,7 +367,7 @@ export function DamageVerdictModal({
                 <div className="flex items-start gap-2 text-xs text-card-foreground">
                   <UserCheck2 className="mt-0.5 size-3.5 shrink-0 text-primary" />
                   <p>
-                    <span className="font-semibold">{exception.secondSignOff.executiveName}</span> confirmed{' '}
+                    <span className="font-semibold">{exception.secondSignOff.staffName}</span> confirmed{' '}
                     <span className="font-semibold">{exception.secondSignOff.verdict}</span> · finalized ·{' '}
                     {exception.secondSignOff.timestamp}
                   </p>
@@ -391,26 +442,29 @@ export function DamageVerdictModal({
             </div>
           )}
 
-          {isPendingSecondSignOff && showControls && secondSignOffBlockedByRoster && (
-            <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em] text-destructive">
-              <AlertTriangle className="size-4" />
-              Only one Executive account is currently active — a second, different Executive must be
-              active in Workforce Management to complete this sign-off.
-            </div>
-          )}
-
-          {isPendingSecondSignOff && showControls && !secondSignOffBlockedByRoster && isSameExecutiveAsFirstSignOff && (
-            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em] text-amber-800">
-              <AlertTriangle className="size-4" />
-              You provided the first sign-off on this exception — a different Executive is required to
-              confirm or override it.
+          {isStrictBlock && (
+            <div className="flex flex-col gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-xs">
+              <div className="flex items-center gap-2 font-semibold uppercase tracking-wider text-destructive">
+                <AlertTriangle className="size-4" />
+                Strict Block — Dual-Custody Deadlock
+              </div>
+              <p className="text-muted-foreground leading-relaxed">
+                Self-validation is disabled for the <strong>{womSubRoleName}</strong> sub-role, but only 1 active account exists in Workforce Management. Dual-custody sign-off cannot be completed.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowEmergencyModal(true)}
+                className="mt-1 self-start rounded bg-destructive px-3 py-1.5 text-[0.65rem] font-bold uppercase tracking-wider text-destructive-foreground hover:opacity-90"
+              >
+                Admin Emergency Unblock
+              </button>
             </div>
           )}
 
           {!editable && exception.status === 'Pending Verdict' && (
             <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
               <Scale className="size-4" />
-              Awaiting Executive verdict · read-only
+              Awaiting WOM verdict · read-only
             </div>
           )}
         </div>
@@ -444,7 +498,7 @@ export function DamageVerdictModal({
                 Validate Damage
               </button>
             </>
-          ) : showControls && isHeldForAudit ? (
+          ) : showControls && (isHeldForAudit || isPendingSecondSignOff) && !isStrictBlock ? (
             <>
               <button
                 type="button"
@@ -461,29 +515,6 @@ export function DamageVerdictModal({
               >
                 <Wrench className="size-3.5" />
                 Sign Off · Repair
-              </button>
-            </>
-          ) : showControls &&
-            isPendingSecondSignOff &&
-            !secondSignOffBlockedByRoster &&
-            !isSameExecutiveAsFirstSignOff &&
-            exception.firstSignOff ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setPendingVerdict(otherAuditVerdict(exception.firstSignOff!.verdict as AuditVerdict))}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-card px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition hover:border-destructive/50 hover:text-destructive"
-              >
-                <AlertTriangle className="size-3.5" />
-                Override to {otherAuditVerdict(exception.firstSignOff.verdict as AuditVerdict)}
-              </button>
-              <button
-                type="button"
-                onClick={() => setPendingVerdict(exception.firstSignOff!.verdict as AuditVerdict)}
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-primary-foreground transition hover:opacity-90"
-              >
-                <UserCheck2 className="size-3.5" />
-                Confirm as {exception.firstSignOff.verdict}
               </button>
             </>
           ) : (
@@ -542,7 +573,7 @@ export function DamageVerdictModal({
               </button>
               <button
                 type="button"
-                onClick={confirm}
+                onClick={() => confirm()}
                 className={cn(
                   'inline-flex items-center gap-2 rounded-md px-4 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-white transition hover:opacity-90',
                   pendingVerdict === 'Validated' && 'bg-emerald-600',
@@ -557,6 +588,142 @@ export function DamageVerdictModal({
                   return <Icon className="size-3.5" />
                 })()}
                 Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Emergency Unblock Modal */}
+      {showEmergencyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
+            <h3 className="font-serif text-xl font-medium text-card-foreground">Admin Emergency Unblock</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Resolve dual-custody deadlock for exception <strong className="text-foreground">{exception.logId}</strong>. Requires Admin confirmation PIN + rationale.
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Admin Confirmation PIN</label>
+                <input
+                  type="password"
+                  maxLength={6}
+                  value={adminPin}
+                  onChange={(e) => setAdminPin(e.target.value)}
+                  placeholder="Enter 6-digit PIN"
+                  className="mt-1 w-full rounded border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Emergency Reason / Justification</label>
+                <textarea
+                  rows={2}
+                  value={adminReason}
+                  onChange={(e) => setAdminReason(e.target.value)}
+                  placeholder="Explain why emergency unblock is required..."
+                  className="mt-1 w-full rounded border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground mb-2">Unblock Scope Mode</label>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-2.5 rounded border border-border p-2.5 cursor-pointer hover:bg-muted/30">
+                    <input
+                      type="radio"
+                      name="unblockMode"
+                      checked={unblockMode === 'ONE_TIME'}
+                      onChange={() => setUnblockMode('ONE_TIME')}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <p className="text-xs font-semibold text-card-foreground">Option 1: One-Time Emergency Override</p>
+                      <p className="text-[0.65rem] text-muted-foreground">Bypasses dual-custody for this current exception only. Sub-role RBAC settings remain unchanged.</p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-2.5 rounded border border-border p-2.5 cursor-pointer hover:bg-muted/30">
+                    <input
+                      type="radio"
+                      name="unblockMode"
+                      checked={unblockMode === 'PERMANENT'}
+                      onChange={() => setUnblockMode('PERMANENT')}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <p className="text-xs font-semibold text-destructive">Option 2: Permanent Sub-Role Re-configuration</p>
+                      <p className="text-[0.65rem] text-muted-foreground">Permanently sets allowSelfValidation = true for {womSubRoleName} in RBAC.</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowEmergencyModal(false)}
+                className="rounded-md border border-border px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteEmergencyUnblock}
+                disabled={!adminPin || !adminReason.trim()}
+                className="rounded-md bg-destructive px-4 py-2 text-xs font-semibold uppercase tracking-wider text-destructive-foreground hover:opacity-90 disabled:opacity-50"
+              >
+                {unblockMode === 'PERMANENT' ? 'Proceed to Warning' : 'Execute Emergency Unblock'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* High-Friction Confirmation Warning Modal */}
+      {showHighFrictionWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-lg rounded-xl border border-destructive bg-card p-6 shadow-2xl">
+            <div className="flex items-center gap-3 text-destructive">
+              <AlertTriangle className="size-6 shrink-0" />
+              <h3 className="font-serif text-xl font-bold">WARNING: Permanent Sub-Role Policy Change</h3>
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+              This action <strong className="text-destructive">permanently overwrites the dual-custody policy</strong> for the <strong className="text-foreground">{womSubRoleName}</strong> sub-role across the platform.
+              Going forward, officers in this sub-role will be permitted to self-validate audit holds standing alone.
+              This emergency conversion will be permanently traced in security logs and sub-role audit records.
+            </p>
+
+            <div className="mt-5 rounded-lg border border-border bg-muted/40 p-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={ackChecked}
+                  onChange={(e) => setAckChecked(e.target.checked)}
+                  className="mt-1 size-4 rounded border-input"
+                />
+                <span className="text-xs font-semibold text-card-foreground leading-snug">
+                  I understand and accept this permanent policy change for the {womSubRoleName} sub-role.
+                </span>
+              </label>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowHighFrictionWarning(false)}
+                className="rounded-md border border-border px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                disabled={!ackChecked}
+                onClick={handleConfirmPermanentUnblock}
+                className="rounded-md bg-destructive px-5 py-2 text-xs font-bold uppercase tracking-wider text-destructive-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Confirm Permanent Change
               </button>
             </div>
           </div>

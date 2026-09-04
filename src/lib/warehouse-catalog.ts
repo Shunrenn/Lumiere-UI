@@ -83,6 +83,21 @@ export function computeStockHealth(
   return 'Healthy Stock'
 }
 
+export interface BespokeSimulationAttempt {
+  id: string
+  attemptNumber: number
+  durationMinutes: number
+  rawInput: string
+  loggedAt: string
+  loggedBy?: string
+}
+
+export interface BespokeSubCategoryConfig {
+  subCategory: string
+  maxParallelWorkers: number
+  description?: string
+}
+
 export interface CatalogAsset {
   id: string
   assetId: string
@@ -127,6 +142,11 @@ export interface CatalogAsset {
   manCount?: number
   finishTimeMinutes?: number
   revisionTimeMinutes?: number
+
+  // Bespoke Simulation State (Asset Registry Part A)
+  simulationHeadcount?: number // Default baseline: 1 worker
+  simulationAttempts?: BespokeSimulationAttempt[]
+  baseSingleWorkerTimeMinutes?: number // Auto-computed arithmetic mean of attempts
 
   // Stockroom Specific
   criticalThreshold?: number
@@ -597,6 +617,20 @@ export function getCatalogAssets(): CatalogAsset[] {
       const finishTimeMinutes = 45 + ((seed * 17) % 3600) // Ranges from 45 mins to ~60 hours
       const revisionTimeMinutes = 15 + ((seed * 7) % 180)
 
+      // Seed initial 5 simulation attempts with baseline headcount = 1
+      const baseSeedMinutes = [42, 50, 45, 55, 48].map((m) => Math.round(m * (1 + (seed % 5) * 0.08)))
+      const simulationAttempts: BespokeSimulationAttempt[] = baseSeedMinutes.map((dur, i) => ({
+        id: `att-${seed}-${i + 1}`,
+        attemptNumber: i + 1,
+        durationMinutes: dur,
+        rawInput: `${dur} min`,
+        loggedAt: dateFromSeed(seed, -(20 - i * 3)),
+        loggedBy: CREW_LEADS[(seed + i) % CREW_LEADS.length],
+      }))
+      const meanTime = Math.round(
+        simulationAttempts.reduce((acc, curr) => acc + curr.durationMinutes, 0) / simulationAttempts.length,
+      )
+
       return {
         ...base,
         status,
@@ -606,6 +640,9 @@ export function getCatalogAssets(): CatalogAsset[] {
         manCount: 2 + (seed % 5),
         finishTimeMinutes,
         revisionTimeMinutes,
+        simulationHeadcount: 1,
+        simulationAttempts,
+        baseSingleWorkerTimeMinutes: meanTime,
       }
     }
 
@@ -742,4 +779,71 @@ function noteFor(type: LedgerEntryType, asset: CatalogAsset): string {
     default:
       return ''
   }
+}
+
+export const DEFAULT_BESPOKE_SUBCATEGORY_CONFIGS: Record<string, BespokeSubCategoryConfig> = {
+  'Fabrication / Backdrops': {
+    subCategory: 'Fabrication / Backdrops',
+    maxParallelWorkers: 3,
+    description: 'Large planar frames & walls; diminishing returns beyond 3 carpenters.',
+  },
+  'Fabrication / Hanging Decor': {
+    subCategory: 'Fabrication / Hanging Decor',
+    maxParallelWorkers: 2,
+    description: 'Delicate aerial rigging & floral installations; cramped physical workspace.',
+  },
+  'Fabrication / Stagecraft': {
+    subCategory: 'Fabrication / Stagecraft',
+    maxParallelWorkers: 4,
+    description: 'Modular platform & risers; allows larger team parallel fabrication.',
+  },
+  'Fabrication / Signage': {
+    subCategory: 'Fabrication / Signage',
+    maxParallelWorkers: 2,
+    description: 'Fine vinyl/acrylic lettering & signage stands; single station workflow.',
+  },
+  'Fabrication / Furniture': {
+    subCategory: 'Fabrication / Furniture',
+    maxParallelWorkers: 3,
+    description: 'Custom tables & facades; bench carpentry.',
+  },
+}
+
+let subCategoryConfigs: Record<string, BespokeSubCategoryConfig> = { ...DEFAULT_BESPOKE_SUBCATEGORY_CONFIGS }
+
+export function getBespokeSubCategoryConfigs(): Record<string, BespokeSubCategoryConfig> {
+  return subCategoryConfigs
+}
+
+export function updateBespokeSubCategoryConfig(subCategory: string, maxParallelWorkers: number) {
+  const current = subCategoryConfigs[subCategory] || { subCategory, maxParallelWorkers: 3 }
+  subCategoryConfigs = {
+    ...subCategoryConfigs,
+    [subCategory]: {
+      ...current,
+      maxParallelWorkers: Math.max(1, Math.min(10, maxParallelWorkers)),
+    },
+  }
+}
+
+export function updateAssetSimulation(
+  assetId: string,
+  attempts: BespokeSimulationAttempt[],
+  headcount = 1,
+): CatalogAsset | null {
+  const assets = getCatalogAssets()
+  const target = assets.find((a) => a.id === assetId || a.assetId === assetId)
+  if (!target) return null
+
+  const validAttempts = attempts.filter((a) => a.durationMinutes > 0)
+  const meanTime =
+    validAttempts.length > 0
+      ? Math.round(validAttempts.reduce((sum, a) => sum + a.durationMinutes, 0) / validAttempts.length)
+      : 0
+
+  target.simulationHeadcount = headcount
+  target.simulationAttempts = attempts
+  target.baseSingleWorkerTimeMinutes = meanTime
+
+  return target
 }

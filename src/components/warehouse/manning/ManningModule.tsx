@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   CalendarClock,
   Clock,
+  Download,
   UserPlus,
   Users,
   X,
@@ -33,6 +34,7 @@ import {
   type ManningTask,
 } from '@/lib/manning'
 import { cn } from '@/lib/utils'
+import { exportCrewRosterPdf } from '@/lib/pdf-exporter'
 
 function Avatar({ name }: { name: string }) {
   const initials = name
@@ -106,6 +108,48 @@ export function ManningModule({ onClose }: ManningModuleProps) {
     })
   }, [crewRows, directoryQuery, directoryStatusFilter])
 
+  const handleExportCrewRoster = (assignment: ManningAssignment) => {
+    const crewMembers = assignment.member_names.map((name) => {
+      const matchedStaff = staff.find((s) => `${s.firstName} ${s.surname}`.trim().toLowerCase() === name.trim().toLowerCase())
+      const matchedRow = crewRows.find((r) => r.name.trim().toLowerCase() === name.trim().toLowerCase())
+      const isLead = name.trim().toLowerCase() === assignment.lead_name.trim().toLowerCase()
+
+      let dept: 'Field' | 'Warehouse' | 'Production' = 'Field'
+      const roleLower = (matchedStaff?.role || matchedRow?.role || '').toLowerCase()
+      if (roleLower.includes('warehouse')) dept = 'Warehouse'
+      else if (roleLower.includes('production') || roleLower.includes('floral') || roleLower.includes('canvas')) dept = 'Production'
+
+      return {
+        name,
+        role: matchedStaff?.role || matchedRow?.role || (isLead ? 'Field Team Lead' : 'Field Operations Crew'),
+        department: dept,
+        isTeamLead: isLead,
+        assignmentDate: assignment.work_date,
+        dutyCategory: `${dept} Duty`,
+      }
+    })
+
+    if (!crewMembers.some((c) => c.isTeamLead) && assignment.lead_name) {
+      crewMembers.unshift({
+        name: assignment.lead_name,
+        role: 'Field Team Lead',
+        department: 'Field',
+        isTeamLead: true,
+        assignmentDate: assignment.work_date,
+        dutyCategory: 'Field Duty',
+      })
+    }
+
+    exportCrewRosterPdf(
+      {
+        eventTitle: assignment.event_name,
+        venue: assignment.venue || 'Event Venue',
+        targetDate: assignment.work_date,
+      },
+      crewMembers,
+    )
+  }
+
   return (
     <div className="flex h-full flex-1 flex-col overflow-y-auto bg-background">
       {/* ─── Header & Title ─── */}
@@ -177,7 +221,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
               Crew Directory ({filteredDirectoryRows.length}/{crewRows.length})
             </button>
 
-            {topTab === 'event' && eventSubTab === 'schedule' && (
+            {topTab === 'event' && (
               <button
                 type="button"
                 onClick={() => setAssignOpen(true)}
@@ -362,13 +406,13 @@ export function ManningModule({ onClose }: ManningModuleProps) {
           )
         ) : (
           <div className="flex flex-col gap-5">
-            {/* SUB-TAB: ASSIGNMENTS */}
-            {eventSubTab === 'assignments' && (
+            {/* SUB-TAB: ASSIGNMENTS / EVENT SCHEDULE */}
+            {(eventSubTab === 'assignments' || eventSubTab === 'schedule') && (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-sm font-bold text-foreground">Event Manning Assignments</h2>
-                    <p className="text-xs text-muted-foreground">Active and upcoming ground crew deployment records.</p>
+                    <h2 className="text-sm font-bold text-foreground">Event Manning &amp; Crew Roster</h2>
+                    <p className="text-xs text-muted-foreground">Active and upcoming ground crew deployment records per event.</p>
                   </div>
                 </div>
 
@@ -377,7 +421,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                     <div
                       key={assignment.id}
                       onClick={() => setSelectedAssignment(assignment)}
-                      className="rounded-xl border border-border bg-card p-4 shadow-sm cursor-pointer hover:border-primary/50 hover:bg-accent/40 transition-all"
+                      className="rounded-xl border border-border bg-card p-4 shadow-sm cursor-pointer hover:border-primary/50 hover:bg-accent/40 transition-all space-y-3"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div>
@@ -395,17 +439,30 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                             {assignment.venue ? ` · Venue: ${assignment.venue}` : ''}
                           </p>
                         </div>
-                        <span
-                          className={cn(
-                            'rounded px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wider',
-                            assignment.status === 'Active' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground',
-                          )}
-                        >
-                          {assignment.status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleExportCrewRoster(assignment)
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-card-foreground transition hover:bg-accent hover:border-primary/50"
+                          >
+                            <Download className="size-3" />
+                            Export Roster (PDF)
+                          </button>
+                          <span
+                            className={cn(
+                              'rounded px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wider',
+                              assignment.status === 'Active' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground',
+                            )}
+                          >
+                            {assignment.status}
+                          </span>
+                        </div>
                       </div>
                       {assignment.member_names.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
+                        <div className="flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
                           {assignment.member_names.map((name) => (
                             <span key={name} className="rounded-md border border-border bg-background px-2.5 py-1 text-[0.65rem] text-foreground">
                               {name}
@@ -538,6 +595,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
         <AssignmentDetailModal
           assignment={selectedAssignment}
           onClose={() => setSelectedAssignment(null)}
+          onExport={handleExportCrewRoster}
         />
       )}
 
@@ -694,9 +752,11 @@ function FullRosterModal({
 function AssignmentDetailModal({
   assignment,
   onClose,
+  onExport,
 }: {
   assignment: ManningAssignment
   onClose: () => void
+  onExport?: (assignment: ManningAssignment) => void
 }) {
   return (
     <div
@@ -781,7 +841,17 @@ function AssignmentDetailModal({
           </div>
         </div>
 
-        <div className="flex justify-end border-t border-border pt-3">
+        <div className="flex items-center justify-between border-t border-border pt-3">
+          <button
+            type="button"
+            onClick={() => {
+              onExport?.(assignment)
+            }}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-card-foreground hover:bg-accent"
+          >
+            <Download className="size-3.5" />
+            Export Roster (PDF)
+          </button>
           <button
             type="button"
             onClick={onClose}

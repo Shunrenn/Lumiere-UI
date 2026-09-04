@@ -7,6 +7,8 @@
 // each company can switch on or off, because not every company staffs every
 // function.
 
+import type { SubRoleEmergencyUnblockMetadata } from '@/lib/types'
+
 export type AccessLevel = 'View' | 'Interact' | 'Modify' | 'None'
 
 // Description of each level for the on-screen legend.
@@ -34,12 +36,12 @@ export interface SubRole {
   permissions: ModulePermission[]
   // Greyed-out, not yet available sub-roles (e.g. Production Crew).
   comingSoon?: boolean
-  // Whether an Admin has explicitly saved this sub-role's permission table at
-  // least once. Undefined/omitted (the case for every pre-existing sub-role
-  // below) is treated as configured — only newly created sub-roles start
-  // out false, via commitPinAction in AdminRolesPage. Once true, it stays
-  // true permanently; later edits never reset it. See isPermissionsConfigured.
   permissionsConfigured?: boolean
+  // Whether self-validation on audit holds is permitted for this sub-role (defaults to true).
+  allowSelfValidation?: boolean
+  // Traces permanent emergency conversion
+  permanentlyEnabledViaEmergency?: boolean
+  emergencyUnblockMetadata?: SubRoleEmergencyUnblockMetadata
 }
 
 // Pre-existing sub-roles never set `permissionsConfigured`, so treat

@@ -8,6 +8,7 @@ import { WarehouseRequestModal } from '@/components/WarehouseRequestModal'
 import { usePortal } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import type { DeficitStatus, ProcurementItem } from '@/lib/types'
+import { exportReplenishmentProcurementPdf } from '@/lib/pdf-exporter'
 
 type Filter = 'All' | DeficitStatus
 
@@ -132,21 +133,8 @@ export function ReplenishmentPage() {
     })
   }, [procurementWithImages, query, filter])
 
-  const exportCsv = () => {
-    const header = 'Asset ID,Item Name,Category,Current Stock,Threshold,Stock %,Status\n'
-    const rows = procurement
-      .map((p) => {
-        const pct = p.threshold > 0 ? Math.round((p.currentStock / p.threshold) * 100) : 100
-        return `"${p.assetId}","${p.name}","${p.category}","${p.currentStock}","${p.threshold}","${pct}%","${p.status}"`
-      })
-      .join('\n')
-    const blob = new Blob([header + rows], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'lumiere-procurement-register.csv'
-    a.click()
-    URL.revokeObjectURL(url)
+  const exportPdf = () => {
+    exportReplenishmentProcurementPdf(procurement as any)
   }
 
   // Reorder the most critical line as a one-tap "initiate reorder" entry point.
@@ -246,11 +234,11 @@ export function ReplenishmentPage() {
             ))}
             <button
               type="button"
-              onClick={exportCsv}
+              onClick={exportPdf}
               className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-muted"
             >
               <Download className="size-3" />
-              Export CSV
+              Export PDF
             </button>
           </div>
         </div>

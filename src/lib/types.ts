@@ -167,6 +167,7 @@ export type EventStatus =
   | 'On Hold'
   | 'Reserved'
   | 'Cancelled'
+  | 'Settled'
 
 export interface PortalEvent {
   id: string
@@ -246,11 +247,29 @@ export type DamageVerdict =
   | 'Repair'
   | 'Write-off'
 
-// A single Executive's sign-off on resolving a Held-for-Audit exception.
+export type DamageCustodyMode = 'SELF_VALIDATION' | 'DUAL_CUSTODY' | 'EMERGENCY_UNBLOCKED'
+
+export interface SubRoleEmergencyUnblockMetadata {
+  unblockedByAdminEmail: string
+  unblockedAt: string
+  mode: 'ONE_TIME' | 'PERMANENT'
+  reason: string
+}
+
+export interface DamageSelfValidationRecord {
+  validatedByEmail: string
+  validatedByName: string
+  pinVerified: boolean
+  justification: string
+  timestamp: string
+  convertedViaEmergency?: boolean
+}
+
 export interface DamageSignOff {
-  executiveEmail: string
-  executiveName: string
-  verdict: 'Repair' | 'Write-off'
+  staffEmail: string
+  staffName: string
+  womRole?: string
+  verdict: 'Repair' | 'Write-off' | 'Validated' | 'Dismissed'
   note: string
   timestamp: string
 }
@@ -271,15 +290,11 @@ export interface DamageException {
   estimatedCost: number
   notes: string
   status: DamageVerdict
-  // Tags this exception as lacking photographic evidence — routes it to
-  // "Held for Audit" and requires two distinct Executive sign-offs to resolve.
   noPhotographicEvidence?: boolean
-  // The first Executive's sign-off while resolving out of "Held for Audit".
-  // Present once status is 'Pending Second Sign-off' or a final audit verdict.
   firstSignOff?: DamageSignOff
-  // The second, confirming/overriding Executive's sign-off. Present only once
-  // the exception has fully resolved to 'Repair' or 'Write-off'.
   secondSignOff?: DamageSignOff
+  unblockMetadata?: SubRoleEmergencyUnblockMetadata
+  selfValidationRecord?: DamageSelfValidationRecord
 }
 
 /* ---------- Inventory / Asset Registry ---------- */

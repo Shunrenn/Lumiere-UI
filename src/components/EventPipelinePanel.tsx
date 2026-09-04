@@ -8,8 +8,12 @@ import {
   ListChecks,
   Square,
   CheckSquare,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react'
 import { usePlanner, type PipelineEvent } from '@/lib/planner'
+import { usePortal } from '@/lib/store'
+import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 
 // Shared Event Pipeline content — the "Logistical Overview / Material Requirement / Design
@@ -30,11 +34,11 @@ const TABS: { key: Tab; label: string }[] = [
 const PIPELINE_STEPS = [
   { label: 'Initialization', state: 'complete' as const },
   { label: 'Client Brief', state: 'complete' as const },
-  { label: 'Pre-Production', state: 'current' as const },
-  { label: 'Vendor Lock-in', state: 'upcoming' as const },
-  { label: 'Staging Rehearsal', state: 'upcoming' as const },
-  { label: 'Event Day', state: 'upcoming' as const },
-  { label: 'Post-Event Wrap', state: 'upcoming' as const },
+  { label: 'Pre-Production', state: 'complete' as const },
+  { label: 'Vendor Lock-in', state: 'complete' as const },
+  { label: 'Staging Rehearsal', state: 'complete' as const },
+  { label: 'Event Day', state: 'complete' as const },
+  { label: 'Post-Event Wrap', state: 'current' as const },
 ]
 
 const TEAM = [
@@ -79,12 +83,25 @@ export function EventPipelinePanel({
   compact?: boolean
 }) {
   const { eventMaterials, eventChecklist, eventDocuments } = usePlanner()
+  const { damageExceptions, events: portalEvents, updateEvent } = usePortal()
+  const { navigate } = useNav()
   const materials = eventMaterials[event.id] ?? []
   const checklist = eventChecklist[event.id] ?? []
   const committedDocs = eventDocuments[event.id] ?? []
 
   const [tab, setTab] = useState<Tab>(materials.length > 0 ? 'materials' : 'overview')
   const [verified, setVerified] = useState<Record<string, boolean>>({})
+
+  // Find bound damage exceptions for this event
+  const boundExceptions = damageExceptions.filter(
+    (d) => d.boundEvent === event.title || d.boundEvent === event.id || d.boundEvent.includes(event.title)
+  )
+  const blockingExceptions = boundExceptions.filter(
+    (d) => d.status === 'Pending Verdict' || d.status === 'Held for Audit' || d.status === 'Pending Second Sign-off'
+  )
+  const portalMatch = portalEvents.find((e) => e.id === event.id || e.title === event.title)
+  const isSettled = (event.status as any) === 'Settled' || portalMatch?.status === 'Settled'
+
   const verifiedCount = checklist.filter((c) => verified[c.id]).length
 
   function changeTab(next: Tab) {
@@ -183,6 +200,78 @@ export function EventPipelinePanel({
                 </div>
               ))}
             </div>
+          </section>
+
+          {/* Event Settlement Enforcement Section */}
+          <section className="mt-6 rounded-xl border border-border bg-card p-6">
+            <h2 className="flex items-center gap-2 text-[0.62rem] font-bold uppercase tracking-[0.16em] text-card-foreground">
+              <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[0.6rem] text-primary-foreground">III</span>
+              Event Settlement & Financial Ledger Closure
+            </h2>
+
+            {isSettled ? (
+              <div className="mt-4 flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-900">
+                <CheckCircle2 className="size-5 text-emerald-600 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold">Event Settled · Terminal State</p>
+                  <p className="text-xs text-emerald-700 mt-0.5">
+                    This event has been fully settled and closed. All bound damage exceptions are resolved and ledger entries are locked.
+                  </p>
+                </div>
+              </div>
+            ) : blockingExceptions.length > 0 ? (
+              <div className="mt-4 flex flex-col gap-4 rounded-lg border border-rose-200 bg-rose-50/80 p-4 sm:flex-row sm:items-center sm:justify-between text-rose-950">
+                <div>
+                  <div className="flex items-center gap-2 font-semibold text-rose-900 text-sm">
+                    <AlertTriangle className="size-4 text-rose-600 shrink-0" />
+                    Settlement Blocked ({blockingExceptions.length} Unresolved Exception{blockingExceptions.length === 1 ? '' : 's'})
+                  </div>
+                  <p className="mt-1 text-xs text-rose-800 leading-relaxed max-w-xl">
+                    Event settlement cannot proceed. {blockingExceptions.length} damage report{blockingExceptions.length === 1 ? '' : 's'} ({blockingExceptions.map(b => b.logId).join(', ')}) remain pending verdict or audit sign-off.
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigate('logs')}
+                    className="rounded-md border border-rose-300 bg-white px-3.5 py-2 text-[0.65rem] font-bold uppercase tracking-wider text-rose-700 hover:bg-rose-100 transition"
+                  >
+                    Review Damage Reports
+                  </button>
+                  <button
+                    type="button"
+                    disabled
+                    title="Event settlement blocked by unresolved damage reports"
+                    className="cursor-not-allowed rounded-md bg-rose-200 px-3.5 py-2 text-[0.65rem] font-bold uppercase tracking-wider text-rose-500 opacity-75"
+                  >
+                    Settle Event
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 flex flex-col gap-4 rounded-lg border border-emerald-200 bg-emerald-50/80 p-4 sm:flex-row sm:items-center sm:justify-between text-emerald-950">
+                <div>
+                  <div className="flex items-center gap-2 font-semibold text-emerald-900 text-sm">
+                    <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
+                    Cleared for Settlement
+                  </div>
+                  <p className="mt-1 text-xs text-emerald-800 leading-relaxed max-w-xl">
+                    All bound damage exceptions have been resolved to final verdicts ({boundExceptions.length} resolved). Click to finalize terminal event settlement.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (portalMatch) {
+                      updateEvent(portalMatch.id, { ...portalMatch, status: 'Settled' as any }, 'Warehouse Ops')
+                    }
+                  }}
+                  className="shrink-0 rounded-md bg-emerald-600 px-4 py-2 text-[0.65rem] font-bold uppercase tracking-wider text-white hover:bg-emerald-700 transition"
+                >
+                  Settle Event
+                </button>
+              </div>
+            )}
           </section>
         </div>
       )}

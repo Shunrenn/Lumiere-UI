@@ -18,96 +18,76 @@ const LOGS: WarehouseLog[] = [
   {
     id: 'w-1',
     timestamp: 'Jun 07 2026 · 08:45 AM',
-    logId: 'LOG-9402',
-    assetId: 'LM-0041',
-    assetName: 'Ivory Pillar Candle Set',
-    transaction: 'Stock Adjustment',
-    qty: '-32',
-    handledBy: 'W. Ops Manager',
-    notes: 'Downgraded to Critical Deficit due to wax damage from June 6 egress.',
+    logId: 'LOG-88102',
+    assetId: 'AST-LGT-001',
+    assetName: 'Modular Aluminium Truss 3m',
+    transaction: 'Egress Checkout',
+    qty: '12',
+    handledBy: 'Marcus Vance',
+    notes: 'Checked out for Grand Ballroom Gala 2026.',
   },
   {
     id: 'w-2',
     timestamp: 'Jun 07 2026 · 08:12 AM',
-    logId: 'LOG-9401',
-    assetId: 'LM-0451',
-    assetName: 'Ornate Mirror Panels',
-    transaction: 'Egress (Dispatch)',
-    qty: '3',
-    handledBy: 'Field Crew A',
-    notes: 'Loaded onto Transit Vehicle B for Grand Ballroom Wedding setup.',
+    logId: 'LOG-88099',
+    assetId: 'AST-AUD-109',
+    assetName: 'Wireless Receiver Rack System 4-Ch',
+    transaction: 'Ingress Checkin',
+    qty: '2',
+    handledBy: 'Gabriel Santos',
+    notes: 'Returned from Sunset Bay Wedding with zero damage.',
   },
   {
     id: 'w-3',
-    timestamp: 'Jun 07 2026 · 07:30 AM',
-    logId: 'LOG-9400',
-    assetId: 'LM-0519',
-    assetName: 'Eucalyptus Garland Set',
-    transaction: 'Audit Baseline',
-    qty: '—',
-    handledBy: 'W. Ops Manager',
-    notes: 'System flagged as Critical Deficit; reorder request automatically dispatched.',
+    timestamp: 'Jun 06 2026 · 05:30 PM',
+    logId: 'LOG-88085',
+    assetId: 'AST-DRP-044',
+    assetName: 'Silk Sheer Swag Fabric Champagne 10m',
+    transaction: 'Damage Flagged',
+    qty: '3',
+    handledBy: 'David Kim',
+    notes: 'Tear detected on hemline; routed for seamstress repair.',
   },
   {
     id: 'w-4',
-    timestamp: 'Jun 06 2026 · 11:15 PM',
-    logId: 'LOG-9399',
-    assetId: 'LM-0114',
-    assetName: 'Champagne Coupe Glasses',
-    transaction: 'Ingress (Return)',
-    qty: '24',
-    handledBy: 'Field Crew B',
-    notes: 'Returned from Chateau Event. 6 units flagged as broken; stock dropped to Low Stock.',
+    timestamp: 'Jun 06 2026 · 02:15 PM',
+    logId: 'LOG-88072',
+    assetId: 'AST-STG-201',
+    assetName: 'Heavy Baseplate Steel 800mm x 800mm',
+    transaction: 'Restock Intake',
+    qty: '10',
+    handledBy: 'Maria Hernandez',
+    notes: 'New inventory intake received from primary vendor.',
   },
   {
     id: 'w-5',
-    timestamp: 'Jun 06 2026 · 04:30 PM',
-    logId: 'LOG-9398',
-    assetId: 'LM-0012',
-    assetName: 'Premium White Resin Tiffany Chair',
-    transaction: 'Ingress (Return)',
-    qty: '150',
-    handledBy: 'Field Crew A',
-    notes: 'Post-event ingress successful. Full batch returned sanitized and restocked.',
-  },
-  {
-    id: 'w-6',
-    timestamp: 'Jun 06 2026 · 02:15 PM',
-    logId: 'LOG-9397',
-    assetId: 'LM-0035',
-    assetName: 'Round Linen Banquet Table',
-    transaction: 'Stock Allocation',
-    qty: '-30',
-    handledBy: 'Admin Exec',
-    notes: 'Reserved for upcoming Corporate Gala on June 12. State set to Low Stock.',
-  },
-  {
-    id: 'w-7',
-    timestamp: 'Jun 05 2026 · 10:00 AM',
-    logId: 'LOG-9396',
-    assetId: 'LM-0027',
-    assetName: 'Luxury Crystal Chandelier',
-    transaction: 'Maintenance Log',
-    qty: '24',
-    handledBy: 'Tech Specialist',
-    notes: 'Completed annual safety and wiring audit. Registry state set to Available.',
+    timestamp: 'Jun 05 2026 · 11:20 AM',
+    logId: 'LOG-88050',
+    assetId: 'AST-LGT-005',
+    assetName: 'High-Lumen Moving Head Spot 500W',
+    transaction: 'Egress Checkout',
+    qty: '16',
+    handledBy: 'Elena Rostova',
+    notes: 'Staged and dispatched for Fashion Week Runway.',
   },
 ]
 
 export function WarehouseLogsPage() {
   const [query, setQuery] = useState('')
-  const [txnType, setTxnType] = useState('All Transaction Types')
-  const [sortOrder, setSortOrder] = useState<'Newest First' | 'Oldest First'>('Newest First')
+  const [txnType, setTxnType] = useState('All')
+  const [sortOrder, setSortOrder] = useState('Newest First')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
   const txnTypes = useMemo(
-    () => ['All Transaction Types', ...Array.from(new Set(LOGS.map((l) => l.transaction)))],
+    () => ['All', ...Array.from(new Set(LOGS.map((l) => l.transaction)))],
     [],
   )
 
   const filtered = useMemo(() => {
-    const q = query.toLowerCase()
+    const q = query.trim().toLowerCase()
     const base = LOGS.filter((l) => {
-      const matchesType = txnType === 'All Transaction Types' || l.transaction === txnType
+      const matchesType = txnType === 'All' || l.transaction === txnType
       const matchesQuery =
         !q ||
         l.assetName.toLowerCase().includes(q) ||
@@ -116,16 +96,27 @@ export function WarehouseLogsPage() {
         l.handledBy.toLowerCase().includes(q)
       return matchesType && matchesQuery
     })
-    // LOGS are authored newest-first; reverse for oldest-first.
     return sortOrder === 'Newest First' ? base : [...base].reverse()
   }, [query, txnType, sortOrder])
 
   const exportCsv = () => {
+    let exportRows = filtered
+    if (fromDate) {
+      const fromTime = new Date(fromDate).getTime()
+      exportRows = exportRows.filter((r) => new Date(r.timestamp.split('·')[0].trim()).getTime() >= fromTime)
+    }
+    if (toDate) {
+      const toTime = new Date(toDate).getTime() + 86400000
+      exportRows = exportRows.filter((r) => new Date(r.timestamp.split('·')[0].trim()).getTime() <= toTime)
+    }
+
     const header = 'Timestamp,Log ID,Asset ID,Asset Name,Transaction Type,Qty,Handled By,Notes\n'
-    const rows = LOGS.map(
-      (l) =>
-        `"${l.timestamp}","${l.logId}","${l.assetId}","${l.assetName}","${l.transaction}","${l.qty}","${l.handledBy}","${l.notes}"`,
-    ).join('\n')
+    const rows = exportRows
+      .map(
+        (l) =>
+          `"${l.timestamp}","${l.logId}","${l.assetId}","${l.assetName}","${l.transaction}","${l.qty}","${l.handledBy}","${l.notes}"`,
+      )
+      .join('\n')
     const blob = new Blob([header + rows], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -146,20 +137,50 @@ export function WarehouseLogsPage() {
             Warehouse Activity &amp; Inventory Logs
           </h1>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search logs, account ID, IP address..."
-              className="w-full rounded-md border border-input bg-card py-2.5 pl-9 pr-3 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30 sm:w-72"
+              className="w-full rounded-md border border-input bg-card py-2.5 pl-9 pr-3 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30 sm:w-64"
             />
           </div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="text-[0.6rem] font-bold uppercase tracking-wider">From:</span>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="rounded-md border border-input bg-card px-2.5 py-2 text-xs text-foreground outline-none focus:border-primary"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="text-[0.6rem] font-bold uppercase tracking-wider">To:</span>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="rounded-md border border-input bg-card px-2.5 py-2 text-xs text-foreground outline-none focus:border-primary"
+            />
+          </div>
+          {(fromDate || toDate) && (
+            <button
+              type="button"
+              onClick={() => {
+                setFromDate('')
+                setToDate('')
+              }}
+              className="text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground underline px-1"
+            >
+              Clear
+            </button>
+          )}
           <button
             type="button"
             onClick={exportCsv}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.12em] text-primary-foreground transition hover:opacity-90"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.12em] text-primary-foreground transition hover:opacity-90"
           >
             <Download className="size-3.5" />
             Export CSV

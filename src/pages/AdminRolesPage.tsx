@@ -714,6 +714,15 @@ export function AdminRolesPage() {
                     onCancelEdit={() => handleCancelEdit(sub.id)}
                     onSaveClick={() => handleSaveClick(parent.id, sub)}
                     onDeleteClick={() => requestDelete(parent.id, sub)}
+                    onToggleSelfValidation={(targetSub) => {
+                      setSubRolesByParent((prev) => ({
+                        ...prev,
+                        [parent.id]: (prev[parent.id] ?? []).map((s) =>
+                          s.id === targetSub.id ? { ...s, allowSelfValidation: !(s.allowSelfValidation !== false) } : s,
+                        ),
+                      }))
+                      showToast(`Self-validation policy updated for '${targetSub.name}'.`)
+                    }}
                   />
                 ))}
 
@@ -948,6 +957,7 @@ interface SubRoleRowProps {
   onCancelEdit: () => void
   onSaveClick: () => void
   onDeleteClick: () => void
+  onToggleSelfValidation?: (sub: SubRole) => void
 }
 
 function SubRoleRow({
@@ -965,6 +975,7 @@ function SubRoleRow({
   onCancelEdit,
   onSaveClick,
   onDeleteClick,
+  onToggleSelfValidation,
 }: SubRoleRowProps) {
   const comingSoon = !!sub.comingSoon
   const effectiveName = draftName ?? sub.name
@@ -1054,6 +1065,26 @@ function SubRoleRow({
               <Trash2 className="size-3.5" aria-hidden="true" />
               Delete sub-role
             </button>
+          </div>
+
+          {/* Self-Validation RBAC Configuration */}
+          <div className="mb-4 rounded-lg border border-border bg-background/60 p-3.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold text-card-foreground">Self-Validation on Audit Holds</p>
+              <p className="text-[0.7rem] text-muted-foreground leading-relaxed">
+                When enabled (ON), officers in this sub-role may self-validate audit holds with PIN & justification. When disabled (OFF), dual-custody is enforced.
+              </p>
+              {sub.permanentlyEnabledViaEmergency && sub.emergencyUnblockMetadata && (
+                <span className="mt-1.5 inline-flex items-center gap-1 rounded bg-amber-500/15 px-2.5 py-0.5 text-[0.6rem] font-semibold text-amber-300">
+                  ⚠️ Permanently enabled via Emergency Unblock on {sub.emergencyUnblockMetadata.unblockedAt} by {sub.emergencyUnblockMetadata.unblockedByAdminEmail}
+                </span>
+              )}
+            </div>
+            <Toggle
+              checked={sub.allowSelfValidation !== false}
+              onChange={() => onToggleSelfValidation?.(sub)}
+              label="Allow Self-Validation"
+            />
           </div>
 
           <p className="mb-3 text-[0.58rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">

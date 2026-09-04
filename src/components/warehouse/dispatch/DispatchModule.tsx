@@ -4,11 +4,8 @@ import { usePortal } from '@/lib/store'
 import {
   addNewCustomBatch,
   advanceBatchStage,
-  buildConsolidatedManifestCsv,
-  buildManifestCsv,
   createReturnBatchFromDelivered,
   deleteBatch,
-  downloadCsv,
   exportBatchPdf,
   getEventDispatchSummaries,
   markBatchStalled,
@@ -23,6 +20,7 @@ import {
 } from '@/lib/warehouse-dispatch'
 import { getEventDetailSnapshot } from '@/lib/event-detail'
 import { DispatchStepper } from '@/components/warehouse/event-detail/DispatchStepper'
+import { exportDispatchConsolidatedPdf, exportDispatchEventPdf } from '@/lib/pdf-exporter'
 import { BatchDetailView } from '@/components/warehouse/event-detail/BatchDetailView'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { cn } from '@/lib/utils'
@@ -123,11 +121,11 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
   }, [pendingBatchId, navList])
 
   const exportEventManifest = (summary: EventDispatchSummary) => {
-    downloadCsv(`dispatch-manifest-${summary.eventTitle.toLowerCase().replace(/\s+/g, '-')}.csv`, buildManifestCsv(summary))
+    exportDispatchEventPdf(summary)
   }
 
   const exportConsolidatedManifest = () => {
-    downloadCsv('dispatch-manifest-consolidated.csv', buildConsolidatedManifestCsv(summaries))
+    exportDispatchConsolidatedPdf(summaries)
   }
 
   return (
@@ -189,7 +187,7 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
               className="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-border bg-background px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-accent"
             >
               <Download className="size-3.5" />
-              Export Manifest
+              Export All (PDF)
             </button>
           )}
         </div>
@@ -348,7 +346,7 @@ function EventBatchLevel({
             className="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-border bg-background px-3.5 py-2.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-accent"
           >
             <Download className="size-3.5" />
-            Export Manifest
+            Export Manifest (PDF)
           </button>
           <button
             type="button"

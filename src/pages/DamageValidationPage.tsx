@@ -34,13 +34,20 @@ type Filter = 'All' | 'Pending' | 'Held for Audit' | 'Second Sign-off' | 'Valida
 const filters: Filter[] = ['All', 'Pending', 'Held for Audit', 'Second Sign-off', 'Validated', 'Dismissed']
 
 export function DamageValidationPage() {
-  const { damageExceptions: items, resolveDamage, staff } = usePortal()
-  const { isAdmin, adminRole, adminEmail, adminName } = useAuth()
+  const { damageExceptions: items, resolveDamage, staff, subRolesByParent, setSubRolesByParent } = usePortal()
+  const { isExecutive, isAdmin, isWarehouse, adminRole, adminEmail, adminName, subRole: userSubRole } = useAuth()
   const { intent, clearIntent, navigate } = useNav()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('All')
   const [active, setActive] = useState<DamageException | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+
+  const canEvaluate = !isExecutive && (isWarehouse || isAdmin)
+
+  const currentWomSubRole = useMemo(() => {
+    const womList = subRolesByParent['warehouse-ops-manager'] ?? []
+    return womList.find((s) => s.name === userSubRole) ?? womList[0]
+  }, [subRolesByParent, userSubRole])
 
   // Count of the two Executive login accounts that are currently active
   // (not Suspended) in Workforce Management. Below 2, a second sign-off on a
@@ -128,6 +135,27 @@ export function DamageValidationPage() {
       </div>
     </div>
   )
+
+  const handlePermanentUnblockSubRole = (subRoleName: string, metadata: any) => {
+    setSubRolesByParent((prev) => {
+      const womList = prev['warehouse-ops-manager'] ?? []
+      const updated = womList.map((s) => {
+        if (s.name === subRoleName) {
+          return {
+            ...s,
+            allowSelfValidation: true,
+            permanentlyEnabledViaEmergency: true,
+            emergencyUnblockMetadata: metadata,
+          }
+        }
+        return s
+      })
+      return {
+        ...prev,
+        'warehouse-ops-manager': updated,
+      }
+    })
+  }
 
   return (
     <ExecutiveShell activeId="damage" onSelect={destination} stickyHeader={stickyHeader}>
@@ -272,7 +300,7 @@ export function DamageValidationPage() {
                       </span>
                       {i.status === 'Pending Second Sign-off' && i.firstSignOff && (
                         <p className="mt-1.5 text-[0.6rem] leading-relaxed text-muted-foreground">
-                          First sign-off: {i.firstSignOff.executiveName} ({i.firstSignOff.verdict})
+                          First sign-off: {i.firstSignOff.staffName} ({i.firstSignOff.verdict})
                         </p>
                       )}
                     </td>
@@ -284,9 +312,9 @@ export function DamageValidationPage() {
                           onClick={() => setActive(i)}
                           className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary underline-offset-4 transition hover:underline"
                         >
-                          {pending ? (isAdmin ? 'Review Report' : 'Evaluate Report') : 'View Report'}
+                          {pending ? (canEvaluate ? 'Evaluate Report' : 'View Report') : 'View Report'}
                         </button>
-                        {!isAdmin && !pending && (
+                        {canEvaluate && !pending && (
                           <div className="relative">
                             <button
                               type="button"
@@ -324,12 +352,16 @@ export function DamageValidationPage() {
 
       <DamageVerdictModal
         exception={active}
-        editable={!isAdmin}
+        editable={canEvaluate}
         onClose={() => setActive(null)}
         onResolve={resolve}
         currentExecutiveEmail={adminEmail}
         currentExecutiveName={adminName}
         activeExecutiveCount={activeExecutiveCount}
+        allowSelfValidation={currentWomSubRole?.allowSelfValidation ?? true}
+        permanentlyEnabledViaEmergency={currentWomSubRole?.permanentlyEnabledViaEmergency ?? false}
+        womSubRoleName={currentWomSubRole?.name ?? 'Warehouse Manager'}
+        onPermanentUnblockSubRole={handlePermanentUnblockSubRole}
       />
     </ExecutiveShell>
   )

@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { Search, Download } from 'lucide-react'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { usePortal } from '@/lib/store'
-import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
@@ -18,33 +17,28 @@ const roleStyles: Record<string, string> = {
 
 export function ActivityLogsPage() {
   const { logs } = usePortal()
-  const { isAdmin } = useAuth()
   const { navigate } = useNav()
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('All')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
-  // Admin sees system-wide audit logs; Executive sees operational audit logs.
-  const isSystemAudit = isAdmin
-  const logTitle = isSystemAudit ? 'Security Audit Logs' : 'Operational Audit Logs'
-  const logSubtitle = isSystemAudit
-    ? 'System-wide security and administrative audit trail — all roles, all actions, read-only record.'
-    : 'Operational event, asset, and personnel audit trail — executive-level activity oversight.'
+  const isSystemAudit = true
 
-  const statusOptions = isSystemAudit
-    ? ['All', 'Success', 'Failed', 'Blocked', 'Warning']
-    : ['All', 'Success', 'Flagged', 'Approved', 'Pending']
+  const statusOptions = useMemo(() => {
+    return ['All', 'Success', 'Failed', 'Blocked', 'Warning']
+  }, [])
 
   const statusCounts = useMemo(() => {
-    const tally: Record<string, number> = { All: logs.length }
+    const counts: Record<string, number> = { All: logs.length }
     logs.forEach((l) => {
-      const status = l.status || 'Success'
-      tally[status] = (tally[status] ?? 0) + 1
+      counts[l.status] = (counts[l.status] ?? 0) + 1
     })
-    return tally
+    return counts
   }, [logs])
 
   const filtered = useMemo(() => {
-    const q = query.toLowerCase()
+    const q = query.trim().toLowerCase()
     return logs.filter((l) => {
       const matchesQuery =
         !q ||
@@ -57,8 +51,18 @@ export function ActivityLogsPage() {
   }, [logs, query, statusFilter, isSystemAudit])
 
   const exportCsv = () => {
+    let exportRows = filtered
+    if (fromDate) {
+      const fromTime = new Date(fromDate).getTime()
+      exportRows = exportRows.filter((r) => new Date(r.date || r.timestamp).getTime() >= fromTime)
+    }
+    if (toDate) {
+      const toTime = new Date(toDate).getTime() + 86400000
+      exportRows = exportRows.filter((r) => new Date(r.date || r.timestamp).getTime() <= toTime)
+    }
+
     const header = 'Timestamp,Log ID,Employee ID,Role,Action,IP\n'
-    const rows = logs
+    const rows = exportRows
       .map(
         (l) =>
           `"${l.timestamp} ${l.date}","${l.logId}","${l.account}","${l.initiatorRole}","${l.action}","${l.ip}"`,
@@ -79,9 +83,9 @@ export function ActivityLogsPage() {
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <h1 className="font-serif text-3xl font-medium tracking-tight text-foreground lg:text-4xl">
-          {logTitle}
+          System Audit Trail &amp; Security Logs
         </h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">{logSubtitle}</p>
+        <p className="mt-1.5 text-sm text-muted-foreground">Cross-account security and system audit log trail.</p>
       </div>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -116,14 +120,47 @@ export function ActivityLogsPage() {
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={exportCsv}
-          className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-5 py-2 text-[0.62rem] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-neutral-800"
-        >
-          <Download className="size-3.5" />
-          Export CSV
-        </button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="text-[0.6rem] font-bold uppercase tracking-wider">From:</span>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="rounded-md border border-input bg-card px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="text-[0.6rem] font-bold uppercase tracking-wider">To:</span>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="rounded-md border border-input bg-card px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+            />
+          </div>
+          {(fromDate || toDate) && (
+            <button
+              type="button"
+              onClick={() => {
+                setFromDate('')
+                setToDate('')
+              }}
+              className="text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground underline px-1"
+            >
+              Clear
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-5 py-2 text-[0.62rem] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-neutral-800"
+          >
+            <Download className="size-3.5" />
+            Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Table */}

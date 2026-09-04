@@ -13,6 +13,7 @@ import type {
   AccountStatus,
   ActivityLog,
   DamageException,
+  DamageSignOff,
   DamageVerdict,
   EventUpdate,
   InventoryItem,
@@ -24,6 +25,7 @@ import type {
   ReorderDraft,
   Staff,
   StaffRole,
+  StockStatus,
   UserAction,
   Vendor,
 } from '@/lib/types'
@@ -1426,6 +1428,14 @@ const randomIp = () =>
 
 const pad = (n: number) => String(n).padStart(4, '0')
 
+const deriveStockStatus = (stock: number, capacity: number): StockStatus => {
+  if (stock <= 0) return 'Depleted'
+  const pct = capacity > 0 ? stock / capacity : 1
+  if (pct <= 0.15) return 'Critical Deficit'
+  if (pct < 0.5) return 'Low Stock'
+  return 'Available'
+}
+
 /* ----------------------------- Context ----------------------------- */
 
 interface PortalContextValue {
@@ -1453,7 +1463,7 @@ interface PortalContextValue {
   updateStaff: (staff: Staff) => void
   forceLogout: (id: string) => void
   addEvent: (draft: NewEventDraft, initiatorRole?: string) => void
-  updateEvent: (id: string, draft: NewEventDraft, initiatorRole?: string) => void
+  updateEvent: (id: string, draft: Partial<PortalEvent>, initiatorRole?: string) => void
   resolveUserAction: (id: string) => void
   routeReorder: (draft: ReorderDraft) => void
   updateThreshold: (id: string, threshold: number) => void
@@ -1465,6 +1475,7 @@ interface PortalContextValue {
     executiveEmail?: string,
     executiveName?: string,
   ) => void
+  completeMaintenance: (assetId: string, initiatorRole?: string) => void
   addInventoryItem: (item: InventoryItem) => void
   updateInventoryItem: (item: InventoryItem) => void
 }
@@ -1899,19 +1910,13 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   )
 
   const updateEvent = useCallback(
-    (id: string, draft: NewEventDraft, initiatorRole = 'Executive') => {
+    (id: string, draft: Partial<PortalEvent>, initiatorRole = 'Executive') => {
       setEvents((prev) =>
         prev.map((e) =>
           e.id === id
             ? {
                 ...e,
-                title: draft.title,
-                client: draft.client,
-                venue: draft.venue,
-                targetDate: draft.targetDate,
-                installationStart: draft.installationStart,
-                installationEnd: draft.installationEnd,
-                moodPlan: draft.moodPlan,
+                ...draft,
               }
             : e,
         ),
@@ -1920,7 +1925,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
         initiatorRole,
         action: 'Event Registry Updated',
-        detail: `Portfolio "${draft.title}" details were edited.`,
+        detail: `Portfolio "${draft.title ?? id}" details were updated.`,
         ip: randomIp(),
         status: 'Success',
       })
@@ -2025,27 +2030,28 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       id: string,
       verdict: Exclude<DamageVerdict, 'Pending Verdict'>,
       note: string,
-      initiatorRole = 'Executive',
+      initiatorRole = 'Warehouse Ops',
       executiveEmail?: string,
       executiveName?: string,
     ) => {
+      let targetItem: DamageException | null = null
       setDamageExceptions((prev) =>
         prev.map((i) => {
           if (i.id !== id) return i
+          targetItem = i
 
           // Resolving a Held-for-Audit item to Repair/Write-off requires two
-          // distinct Executive sign-offs. First submission parks the item at
-          // "Pending Second Sign-off"; a different executive's submission
-          // finalizes it.
+          // distinct sign-offs if held for audit.
           const isAuditResolution =
             (verdict === 'Repair' || verdict === 'Write-off') &&
             (i.status === 'Held for Audit' || i.status === 'Pending Second Sign-off')
 
           if (isAuditResolution) {
-            const signOff = {
-              executiveEmail: executiveEmail ?? '',
-              executiveName: executiveName ?? initiatorRole,
-              verdict,
+            const signOff: DamageSignOff = {
+              staffEmail: executiveEmail ?? '',
+              staffName: executiveName ?? initiatorRole,
+              womRole: initiatorRole,
+              verdict: verdict as any,
               note,
               timestamp: now().timestamp,
             }
@@ -2055,7 +2061,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
                 account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
                 initiatorRole,
                 action: 'Damage Exception First Sign-off',
-                detail: `Exception ${i.logId} for ${i.assetName} received first sign-off "${verdict}" from ${signOff.executiveName}. Awaiting a second, different Executive.${
+                detail: `Exception ${i.logId} for ${i.assetName} received first sign-off "${verdict}" from ${signOff.staffName}. Awaiting a second sign-off.${
                   note ? ` Note: ${note}` : ''
                 }`,
                 ip: randomIp(),
@@ -2068,28 +2074,27 @@ export function PortalProvider({ children }: { children: ReactNode }) {
               }
             }
 
-            // Already Pending Second Sign-off — a different executive confirms
-            // or overrides. Reject if the same executive attempts both sign-offs.
+            // Already Pending Second Sign-off — confirm/override
             if (
               i.firstSignOff &&
               executiveEmail &&
-              i.firstSignOff.executiveEmail === executiveEmail
+              i.firstSignOff.staffEmail === executiveEmail
             ) {
               pushLog({
                 account: 'EXEC-ROOT',
                 initiatorRole,
                 action: 'Damage Exception Second Sign-off Rejected',
-                detail: `Exception ${i.logId}: ${signOff.executiveName} attempted to provide both sign-offs — rejected. A different Executive is required.`,
+                detail: `Exception ${i.logId}: ${signOff.staffName} attempted to provide both sign-offs — rejected. A different user is required.`,
                 ip: randomIp(),
                 status: 'Flagged',
               })
-              return i // unchanged — same executive cannot finalize
+              return i // unchanged — same user cannot finalize
             }
             pushLog({
               account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
               initiatorRole,
               action: 'Damage Exception Second Sign-off',
-              detail: `Exception ${i.logId} for ${i.assetName} received second sign-off "${verdict}" from ${signOff.executiveName}, finalizing the audit verdict.${
+              detail: `Exception ${i.logId} for ${i.assetName} received second sign-off "${verdict}" from ${signOff.staffName}, finalizing verdict.${
                 note ? ` Note: ${note}` : ''
               }`,
               ip: randomIp(),
@@ -2107,7 +2112,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
             account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
             initiatorRole,
             action: `Damage Exception ${verdict}`,
-            detail: `Exception ${i.logId} for ${i.assetName} marked "${verdict}".${
+            detail: `Exception ${i.logId} for ${i.assetName} marked "${verdict}" by ${initiatorRole}.${
               note ? ` Note: ${note}` : ''
             }`,
             ip: randomIp(),
@@ -2117,6 +2122,89 @@ export function PortalProvider({ children }: { children: ReactNode }) {
             ...i,
             status: verdict,
             notes: note ? `${i.notes}\n\nVerdict note: ${note}` : i.notes,
+          }
+        }),
+      )
+
+      // Side Effects on Asset Registry
+      if (targetItem) {
+        const target = targetItem as DamageException
+        if (verdict === 'Repair') {
+          setInventory((inv) =>
+            inv.map((asset) => {
+              if (
+                asset.assetId === target.assetSku ||
+                asset.name.toLowerCase() === target.assetName.toLowerCase()
+              ) {
+                return {
+                  ...asset,
+                  status: 'In Maintenance',
+                  updated: 'In maintenance · Under repair',
+                }
+              }
+              return asset
+            }),
+          )
+          pushLog({
+            account: 'SYS-ROOT',
+            initiatorRole: initiatorRole || 'Warehouse Ops',
+            action: 'Asset Status Updated to In Maintenance',
+            detail: `Asset ${target.assetName} (${target.assetSku}) status changed to 'In Maintenance' following Repair verdict on log ${target.logId}.`,
+            ip: randomIp(),
+            status: 'Success',
+          })
+        } else if (verdict === 'Write-off') {
+          setInventory((inv) =>
+            inv.map((asset) => {
+              if (
+                asset.assetId === target.assetSku ||
+                asset.name.toLowerCase() === target.assetName.toLowerCase()
+              ) {
+                const nextStock = Math.max(0, asset.stock - 1)
+                const nextStatus = nextStock === 0 ? 'Depleted' : deriveStockStatus(nextStock, asset.capacity)
+                return {
+                  ...asset,
+                  stock: nextStock,
+                  status: nextStatus,
+                  updated: 'Stock decremented · Write-off loss ledger',
+                }
+              }
+              return asset
+            }),
+          )
+          pushLog({
+            account: 'SYS-ROOT',
+            initiatorRole: initiatorRole || 'Warehouse Ops',
+            action: 'Asset Written Off — Loss Ledger Updated',
+            detail: `Asset ${target.assetName} (${target.assetSku}) written off following Write-off verdict on log ${target.logId}. Loss-ledger entry logged. Stock decremented.`,
+            ip: randomIp(),
+            status: 'Flagged',
+          })
+        }
+      }
+    },
+    [pushLog],
+  )
+
+  const completeMaintenance = useCallback(
+    (assetId: string, initiatorRole = 'Warehouse Ops') => {
+      setInventory((prev) =>
+        prev.map((item) => {
+          if (item.id !== assetId && item.assetId !== assetId) return item
+          const nextStatus = deriveStockStatus(item.stock, item.capacity)
+          const restoredStatus = nextStatus === 'In Maintenance' ? 'Available' : nextStatus
+          pushLog({
+            account: 'SYS-ROOT',
+            initiatorRole,
+            action: 'Maintenance Completed · Return to Stock',
+            detail: `Maintenance completed for ${item.name} (${item.assetId}). Asset status restored to '${restoredStatus}'.`,
+            ip: randomIp(),
+            status: 'Success',
+          })
+          return {
+            ...item,
+            status: restoredStatus,
+            updated: 'Returned to stock from maintenance',
           }
         }),
       )
@@ -2171,6 +2259,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       routeReorder,
       updateThreshold,
       resolveDamage,
+      completeMaintenance,
       addInventoryItem,
       updateInventoryItem,
     }),
@@ -2201,6 +2290,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       routeReorder,
       updateThreshold,
       resolveDamage,
+      completeMaintenance,
       addInventoryItem,
       updateInventoryItem,
     ],
