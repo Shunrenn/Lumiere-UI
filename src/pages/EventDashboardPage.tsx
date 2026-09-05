@@ -117,11 +117,11 @@ export function EventDashboardPage() {
     if (pendingDamage) {
       items.push({
         id: `dm-${pendingDamage.id}`,
-        title: 'Damage Report Awaiting Review',
+        title: 'Damage Report Insight',
         subtitle: `${pendingDamage.logId} · ${pendingDamage.assetName}`,
         tone: 'rose',
         icon: ShieldAlert,
-        actionLabel: 'Adjudicate',
+        actionLabel: 'View Report',
         onAction: () =>
           navigate('damage', { kind: 'review-damage', payload: { id: pendingDamage.id } }),
       })
@@ -133,11 +133,11 @@ export function EventDashboardPage() {
     if (auditDamage) {
       items.push({
         id: `dm-audit-${auditDamage.id}`,
-        title: 'Audit Exception Sign-off',
+        title: 'Audit Exception Insight',
         subtitle: `${auditDamage.logId} · ${auditDamage.assetName}`,
         tone: 'amber',
         icon: ShieldAlert,
-        actionLabel: 'Sign off',
+        actionLabel: 'View Report',
         onAction: () =>
           navigate('damage', { kind: 'review-damage', payload: { id: auditDamage.id } }),
       })

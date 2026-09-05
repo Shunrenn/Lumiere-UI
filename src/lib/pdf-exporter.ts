@@ -419,7 +419,7 @@ export function exportDispatchConsolidatedPdf(summaries: EventDispatchSummary[])
 }
 
 // ─── 5. Replenishment Deficit Report PDF Exporter ───
-export function exportReplenishmentDeficitPdf(lines: DeficitLine[]) {
+export function exportReplenishmentDeficitPdf(lines: DeficitLine[], reportTitle?: string) {
   const builder = new PdfReportBuilder()
   const totalEstimatedCost = lines.reduce((sum, l) => {
     const required = Math.max(0, l.threshold - l.currentStock)
@@ -427,7 +427,7 @@ export function exportReplenishmentDeficitPdf(lines: DeficitLine[]) {
     return sum + required * unitPrice
   }, 0)
 
-  builder.drawHeader('REPLENISHMENT & DEFICIT REPORT', [
+  builder.drawHeader(reportTitle ? reportTitle.toUpperCase() : 'REPLENISHMENT & DEFICIT REPORT', [
     `Deficit Lines Flagged: ${lines.length} items`,
     `Total Estimated Procurement Cost: PHP ${totalEstimatedCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
     'Scope: Active Deficit & Automated Procurement Candidates',

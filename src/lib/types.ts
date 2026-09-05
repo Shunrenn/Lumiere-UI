@@ -33,10 +33,9 @@ export type Route =
 
 // Lifecycle state of a stocked asset relative to its replenishment threshold.
 export type DeficitStatus =
-  | 'Critical Deficit'
-  | 'Low Stock'
-  | 'Order Placed'
-  | 'Available'
+  | 'Received'
+  | 'Not Purchased'
+  | 'In Procurement'
 
 export interface ProcurementItem {
   id: string
@@ -247,21 +246,28 @@ export type DamageVerdict =
   | 'Repair'
   | 'Write-off'
 
-export type DamageCustodyMode = 'SELF_VALIDATION' | 'DUAL_CUSTODY' | 'EMERGENCY_UNBLOCKED'
+export type DamageCustodyMode =
+  | 'genuine-dual-custody'
+  | 'standing-self-validation'
+  | 'admin-enabled-override'
 
 export interface SubRoleEmergencyUnblockMetadata {
+  originatedFromEmergency: boolean
+  emergencyReason: string
   unblockedByAdminEmail: string
-  unblockedAt: string
-  mode: 'ONE_TIME' | 'PERMANENT'
-  reason: string
+  unblockScope: 'instance' | 'permanent'
+  madePermanentAt?: string
+  permanentAcknowledged?: boolean
 }
 
 export interface DamageSelfValidationRecord {
   validatedByEmail: string
   validatedByName: string
+  womRole: string
   pinVerified: boolean
   justification: string
   timestamp: string
+  custodyMode: DamageCustodyMode
   convertedViaEmergency?: boolean
 }
 
@@ -293,7 +299,9 @@ export interface DamageException {
   noPhotographicEvidence?: boolean
   firstSignOff?: DamageSignOff
   secondSignOff?: DamageSignOff
+  custodyMode?: DamageCustodyMode
   unblockMetadata?: SubRoleEmergencyUnblockMetadata
+  selfValidation?: DamageSelfValidationRecord
   selfValidationRecord?: DamageSelfValidationRecord
 }
 

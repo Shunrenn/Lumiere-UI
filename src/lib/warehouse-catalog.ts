@@ -11,7 +11,7 @@ import type { WarehouseZone } from '@/lib/warehouse-crew'
 
 export type AssetCategory = 'Event Asset' | 'Bespoke' | 'Stockroom' | 'Rental' | 'Office Asset'
 
-export type AssetStatus = 'Available' | 'Low Stock' | 'Critical Deficit' | 'Deployed' | 'Lost In Action'
+export type AssetStatus = 'Available' | 'Low Stock' | 'Critical Deficit' | 'Deployed' | 'Lost In Action' | 'In Maintenance'
 
 export type BespokeStage = 'Unprepped' | 'Prepping' | 'Ready'
 

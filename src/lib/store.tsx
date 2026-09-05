@@ -12,7 +12,9 @@ import {
 import type {
   AccountStatus,
   ActivityLog,
+  DamageCustodyMode,
   DamageException,
+  DamageSelfValidationRecord,
   DamageSignOff,
   DamageVerdict,
   EventUpdate,
@@ -26,6 +28,7 @@ import type {
   Staff,
   StaffRole,
   StockStatus,
+  SubRoleEmergencyUnblockMetadata,
   UserAction,
   Vendor,
 } from '@/lib/types'
@@ -815,7 +818,7 @@ const seedProcurement: ProcurementItem[] = [
     currentStock: 1,
     threshold: 15,
     unit: 'unit',
-    status: 'Critical Deficit',
+    status: 'Not Purchased',
   },
   {
     id: 'p-2',
@@ -825,7 +828,7 @@ const seedProcurement: ProcurementItem[] = [
     currentStock: 8,
     threshold: 40,
     unit: 'units',
-    status: 'Critical Deficit',
+    status: 'Not Purchased',
   },
   {
     id: 'p-3',
@@ -835,7 +838,7 @@ const seedProcurement: ProcurementItem[] = [
     currentStock: 24,
     threshold: 60,
     unit: 'units',
-    status: 'Low Stock',
+    status: 'Not Purchased',
   },
   {
     id: 'p-4',
@@ -845,7 +848,7 @@ const seedProcurement: ProcurementItem[] = [
     currentStock: 18,
     threshold: 30,
     unit: 'units',
-    status: 'Low Stock',
+    status: 'Not Purchased',
   },
   {
     id: 'p-5',
@@ -855,7 +858,10 @@ const seedProcurement: ProcurementItem[] = [
     currentStock: 11,
     threshold: 25,
     unit: 'units',
-    status: 'Low Stock',
+    status: 'In Procurement',
+    reorderQty: 14,
+    poRef: 'PO-44810',
+    etaHours: 24,
   },
   {
     id: 'p-6',
@@ -865,7 +871,7 @@ const seedProcurement: ProcurementItem[] = [
     currentStock: 7,
     threshold: 10,
     unit: 'units',
-    status: 'Order Placed',
+    status: 'In Procurement',
     reorderQty: 6,
     poRef: 'PO-44821',
     etaHours: 48,
@@ -878,17 +884,17 @@ const seedProcurement: ProcurementItem[] = [
     currentStock: 3,
     threshold: 20,
     unit: 'units',
-    status: 'Critical Deficit',
+    status: 'Not Purchased',
   },
   {
     id: 'p-8',
     assetId: 'LM-0035',
     name: 'Round Linen Banquet Tables',
     category: 'Furniture · Banquet',
-    currentStock: 12,
+    currentStock: 30,
     threshold: 30,
     unit: 'units',
-    status: 'Low Stock',
+    status: 'Received',
   },
 ]
 
@@ -1472,10 +1478,13 @@ interface PortalContextValue {
     verdict: Exclude<DamageVerdict, 'Pending Verdict'>,
     note: string,
     initiatorRole?: string,
-    executiveEmail?: string,
-    executiveName?: string,
+    staffEmail?: string,
+    staffName?: string,
+    unblockMetadata?: SubRoleEmergencyUnblockMetadata,
+    selfValidation?: DamageSelfValidationRecord,
   ) => void
   completeMaintenance: (assetId: string, initiatorRole?: string) => void
+  settleEvent: (eventId: string, initiatorRole?: string) => { success: boolean; reason?: string }
   addInventoryItem: (item: InventoryItem) => void
   updateInventoryItem: (item: InventoryItem) => void
 }
@@ -1986,7 +1995,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
           })
           return {
             ...item,
-            status: 'Order Placed',
+            status: 'In Procurement',
             reorderQty: draft.reorderQty,
             poRef,
             etaHours: vendor ? vendor.leadTimeHours : 48,
@@ -2005,10 +2014,9 @@ export function PortalProvider({ children }: { children: ReactNode }) {
           if (item.id !== id) return item
           // Re-evaluate lifecycle state against the new threshold (unless an order is already in flight).
           let status = item.status
-          if (status !== 'Order Placed') {
+          if (status !== 'In Procurement') {
             const ratio = threshold > 0 ? item.currentStock / threshold : 1
-            status =
-              ratio <= 0.3 ? 'Critical Deficit' : ratio < 1 ? 'Low Stock' : 'Available'
+            status = ratio < 1 ? 'Not Purchased' : 'Received'
           }
           pushLog({
             account: 'WAREHOUSE_MGR_01',
@@ -2031,8 +2039,10 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       verdict: Exclude<DamageVerdict, 'Pending Verdict'>,
       note: string,
       initiatorRole = 'Warehouse Ops',
-      executiveEmail?: string,
-      executiveName?: string,
+      staffEmail?: string,
+      staffName?: string,
+      unblockMetadata?: SubRoleEmergencyUnblockMetadata,
+      selfValidation?: DamageSelfValidationRecord,
     ) => {
       let targetItem: DamageException | null = null
       setDamageExceptions((prev) =>
@@ -2040,16 +2050,14 @@ export function PortalProvider({ children }: { children: ReactNode }) {
           if (i.id !== id) return i
           targetItem = i
 
-          // Resolving a Held-for-Audit item to Repair/Write-off requires two
-          // distinct sign-offs if held for audit.
           const isAuditResolution =
-            (verdict === 'Repair' || verdict === 'Write-off') &&
+            (verdict === 'Repair' || verdict === 'Write-off' || verdict === 'Validated' || verdict === 'Dismissed') &&
             (i.status === 'Held for Audit' || i.status === 'Pending Second Sign-off')
 
-          if (isAuditResolution) {
+          if (isAuditResolution && !selfValidation) {
             const signOff: DamageSignOff = {
-              staffEmail: executiveEmail ?? '',
-              staffName: executiveName ?? initiatorRole,
+              staffEmail: staffEmail ?? '',
+              staffName: staffName ?? initiatorRole,
               womRole: initiatorRole,
               verdict: verdict as any,
               note,
@@ -2058,10 +2066,10 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
             if (i.status === 'Held for Audit') {
               pushLog({
-                account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
+                account: 'SYS-ROOT',
                 initiatorRole,
                 action: 'Damage Exception First Sign-off',
-                detail: `Exception ${i.logId} for ${i.assetName} received first sign-off "${verdict}" from ${signOff.staffName}. Awaiting a second sign-off.${
+                detail: `Exception ${i.logId} for ${i.assetName} received first sign-off "${verdict}" from ${signOff.staffName} (${initiatorRole}). Awaiting second sign-off.${
                   note ? ` Note: ${note}` : ''
                 }`,
                 ip: randomIp(),
@@ -2071,30 +2079,31 @@ export function PortalProvider({ children }: { children: ReactNode }) {
                 ...i,
                 status: 'Pending Second Sign-off',
                 firstSignOff: signOff,
+                custodyMode: 'genuine-dual-custody' as DamageCustodyMode,
               }
             }
 
-            // Already Pending Second Sign-off — confirm/override
+            // Already Pending Second Sign-off — check distinct actor
             if (
               i.firstSignOff &&
-              executiveEmail &&
-              i.firstSignOff.staffEmail === executiveEmail
+              staffEmail &&
+              i.firstSignOff.staffEmail === staffEmail
             ) {
               pushLog({
-                account: 'EXEC-ROOT',
+                account: 'SYS-ROOT',
                 initiatorRole,
                 action: 'Damage Exception Second Sign-off Rejected',
-                detail: `Exception ${i.logId}: ${signOff.staffName} attempted to provide both sign-offs — rejected. A different user is required.`,
+                detail: `Exception ${i.logId}: ${signOff.staffName} attempted to provide both sign-offs — rejected. A different qualifying WOM user is required.`,
                 ip: randomIp(),
                 status: 'Flagged',
               })
               return i // unchanged — same user cannot finalize
             }
             pushLog({
-              account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
+              account: 'SYS-ROOT',
               initiatorRole,
               action: 'Damage Exception Second Sign-off',
-              detail: `Exception ${i.logId} for ${i.assetName} received second sign-off "${verdict}" from ${signOff.staffName}, finalizing verdict.${
+              detail: `Exception ${i.logId} for ${i.assetName} received second sign-off "${verdict}" from ${signOff.staffName} (${initiatorRole}), finalizing verdict.${
                 note ? ` Note: ${note}` : ''
               }`,
               ip: randomIp(),
@@ -2104,15 +2113,22 @@ export function PortalProvider({ children }: { children: ReactNode }) {
               ...i,
               status: verdict,
               secondSignOff: signOff,
+              custodyMode: 'genuine-dual-custody' as DamageCustodyMode,
               notes: note ? `${i.notes}\n\nVerdict note: ${note}` : i.notes,
             }
           }
 
+          const mode: DamageCustodyMode = selfValidation
+            ? selfValidation.custodyMode
+            : unblockMetadata
+              ? 'admin-enabled-override'
+              : i.custodyMode ?? 'standing-self-validation'
+
           pushLog({
-            account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
+            account: 'SYS-ROOT',
             initiatorRole,
             action: `Damage Exception ${verdict}`,
-            detail: `Exception ${i.logId} for ${i.assetName} marked "${verdict}" by ${initiatorRole}.${
+            detail: `Exception ${i.logId} for ${i.assetName} marked "${verdict}" by ${initiatorRole} (${staffName || 'Staff'}) [Custody: ${mode}].${
               note ? ` Note: ${note}` : ''
             }`,
             ip: randomIp(),
@@ -2121,6 +2137,10 @@ export function PortalProvider({ children }: { children: ReactNode }) {
           return {
             ...i,
             status: verdict,
+            custodyMode: mode,
+            unblockMetadata: unblockMetadata ?? i.unblockMetadata,
+            selfValidation: selfValidation ?? i.selfValidation,
+            selfValidationRecord: selfValidation ?? i.selfValidationRecord,
             notes: note ? `${i.notes}\n\nVerdict note: ${note}` : i.notes,
           }
         }),
@@ -2212,6 +2232,48 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     [pushLog],
   )
 
+  const settleEvent = useCallback(
+    (eventId: string, initiatorRole = 'Warehouse Ops') => {
+      const target = events.find(
+        (e) => e.id === eventId || e.title === eventId || e.refId === eventId,
+      )
+      if (!target) return { success: false, reason: 'Event not found' }
+
+      const blockingItems = damageExceptions.filter((d) => {
+        const matchesEvent =
+          d.boundEvent === target.title || d.boundEvent === target.refId || d.boundEvent === target.id
+        const isBlocking =
+          d.status === 'Pending Verdict' ||
+          d.status === 'Held for Audit' ||
+          d.status === 'Pending Second Sign-off'
+        return matchesEvent && isBlocking
+      })
+
+      if (blockingItems.length > 0) {
+        return {
+          success: false,
+          reason: `${blockingItems.length} pending damage item(s) must be resolved first`,
+        }
+      }
+
+      setEvents((prev) =>
+        prev.map((e) => (e.id === target.id ? { ...e, status: 'Settled' } : e)),
+      )
+
+      pushLog({
+        account: 'SYS-ROOT',
+        initiatorRole,
+        action: 'Event Portfolio Settled',
+        detail: `Event portfolio "${target.title}" (${target.refId}) transitioned to Settled state following resolution of all damage liabilities.`,
+        ip: randomIp(),
+        status: 'Success',
+      })
+
+      return { success: true }
+    },
+    [events, damageExceptions, pushLog],
+  )
+
   const addInventoryItem = useCallback(
     (item: InventoryItem) => {
       setInventory((prev) => [item, ...prev])
@@ -2260,6 +2322,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       updateThreshold,
       resolveDamage,
       completeMaintenance,
+      settleEvent,
       addInventoryItem,
       updateInventoryItem,
     }),
@@ -2291,6 +2354,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       updateThreshold,
       resolveDamage,
       completeMaintenance,
+      settleEvent,
       addInventoryItem,
       updateInventoryItem,
     ],

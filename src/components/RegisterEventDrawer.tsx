@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { X, FileText, Building2, Palette, CalendarDays, Plus } from 'lucide-react'
 import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
+import { useNav } from '@/lib/nav'
+import { cn } from '@/lib/utils'
 import { EventCalendar } from '@/components/EventCalendar'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import type { NewEventDraft, PortalEvent } from '@/lib/types'
@@ -75,8 +77,9 @@ function SectionHeading({
 }
 
 export function RegisterEventDrawer({ open, onClose, event = null, mode = 'create' }: Props) {
-  const { addEvent, updateEvent, events } = usePortal()
+  const { addEvent, updateEvent, events, damageExceptions, settleEvent } = usePortal()
   const { adminRole } = useAuth()
+  const { navigate } = useNav()
   const [draft, setDraft] = useState<NewEventDraft>(emptyDraft)
   const [showCalendar, setShowCalendar] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -86,6 +89,21 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
   const [newVenue, setNewVenue] = useState('')
 
   const readOnly = mode === 'view'
+
+  const blockingDamageItems = useMemo(() => {
+    if (!event) return []
+    return damageExceptions.filter((d) => {
+      const matchesEvent =
+        d.boundEvent === event.title ||
+        d.boundEvent === event.refId ||
+        d.boundEvent === event.id
+      const isBlocking =
+        d.status === 'Pending Verdict' ||
+        d.status === 'Held for Audit' ||
+        d.status === 'Pending Second Sign-off'
+      return matchesEvent && isBlocking
+    })
+  }, [event, damageExceptions])
 
   // Sync the form with the bound event whenever the drawer opens (or the
   // target event changes). Create mode falls back to a blank draft.
@@ -361,7 +379,67 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
         </fieldset>
 
         {/* Footer */}
-        <div className="border-t border-border px-6 py-4">
+        <div className="space-y-3 border-t border-border px-6 py-4">
+          {event && (event.status === 'Completed' || event.status === 'Settled') && (
+            <div className="rounded-lg border border-border bg-muted/40 p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground">
+                  Event Settlement Status
+                </span>
+                <span
+                  className={cn(
+                    'rounded-full px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider',
+                    event.status === 'Settled'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : blockingDamageItems.length > 0
+                        ? 'bg-rose-100 text-rose-800'
+                        : 'bg-amber-100 text-amber-800',
+                  )}
+                >
+                  {event.status === 'Settled' ? 'Settled' : blockingDamageItems.length > 0 ? 'Settlement Blocked' : 'Ready to Settle'}
+                </span>
+              </div>
+
+              {event.status === 'Completed' && blockingDamageItems.length > 0 && (
+                <div className="flex items-center justify-between gap-2 rounded bg-rose-50 border border-rose-200 p-2 text-xs text-rose-800">
+                  <span>
+                    ⚠️ {blockingDamageItems.length} pending damage item(s) must be resolved first.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      close()
+                      navigate('damage')
+                    }}
+                    className="shrink-0 rounded bg-rose-600 px-2 py-1 text-[0.6rem] font-bold uppercase text-white hover:bg-rose-700"
+                  >
+                    + Review
+                  </button>
+                </div>
+              )}
+
+              {event.status === 'Completed' && blockingDamageItems.length === 0 && (
+                <p className="text-xs text-emerald-700 font-medium">
+                  ✓ All damage exceptions resolved. Event financial settlement can proceed.
+                </p>
+              )}
+
+              {event.status === 'Completed' && (
+                <button
+                  type="button"
+                  disabled={blockingDamageItems.length > 0}
+                  onClick={() => {
+                    const res = settleEvent(event.id)
+                    if (res.success) close()
+                  }}
+                  className="w-full rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40 transition"
+                >
+                  Settle Event
+                </button>
+              )}
+            </div>
+          )}
+
           {readOnly ? (
             <button
               type="button"

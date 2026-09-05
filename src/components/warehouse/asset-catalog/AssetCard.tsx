@@ -13,6 +13,7 @@ export const ASSET_STATUS_TONE: Record<AssetStatus, Tone> = {
   'Critical Deficit': 'critical',
   Deployed: 'progress',
   'Lost In Action': 'critical',
+  'In Maintenance': 'caution',
 }
 
 export function getTierGlanceDisplay(asset: CatalogAsset): {

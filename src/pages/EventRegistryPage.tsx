@@ -13,6 +13,7 @@ import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 // Deterministic dispatch progress derived from an event's lifecycle status,
 // used to render the Operational Progress bars.
 const dispatchProgress: Record<string, number> = {
+  Settled: 100,
   Completed: 100,
   'In Production': 65,
   'On Hold': 40,
@@ -25,6 +26,7 @@ const statusStyles: Record<string, string> = {
   Initialized: 'text-amber-700',
   'In Production': 'text-sky-700',
   Completed: 'text-emerald-700',
+  Settled: 'text-emerald-800 font-semibold',
   'On Hold': 'text-rose-700',
   Reserved: 'text-indigo-700',
   Cancelled: 'text-muted-foreground line-through',
@@ -70,7 +72,7 @@ export function EventRegistryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent])
 
-  const statuses = ['All', 'Initialized', 'In Production', 'On Hold', 'Completed']
+  const statuses = ['All', 'Initialized', 'In Production', 'On Hold', 'Completed', 'Settled']
 
   const metrics = useMemo(
     () => ({

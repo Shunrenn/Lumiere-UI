@@ -130,7 +130,7 @@ export function InventoryStockPage() {
       currentStock: item.stock,
       threshold: item.capacity,
       unit: item.unit ?? 'pcs',
-      status: item.status === 'Critical Deficit' ? 'Critical Deficit' : 'Low Stock',
+      status: 'Not Purchased',
     }
     setReorderItem(procurement)
   }

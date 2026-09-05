@@ -12,13 +12,12 @@ import { exportReplenishmentProcurementPdf } from '@/lib/pdf-exporter'
 
 type Filter = 'All' | DeficitStatus
 
-const FILTERS: Filter[] = ['All', 'Critical Deficit', 'Low Stock', 'Order Placed']
+const FILTERS: Filter[] = ['All', 'Not Purchased', 'In Procurement', 'Received']
 
 const statusStyles: Record<DeficitStatus, { badge: string; bar: string }> = {
-  'Critical Deficit': { badge: 'bg-rose-100 text-rose-700', bar: 'bg-destructive' },
-  'Low Stock': { badge: 'bg-amber-100 text-amber-800', bar: 'bg-amber-500' },
-  'Order Placed': { badge: 'bg-muted text-muted-foreground', bar: 'bg-emerald-600' },
-  Available: { badge: 'bg-emerald-100 text-emerald-700', bar: 'bg-emerald-600' },
+  'Not Purchased': { badge: 'bg-rose-100 text-rose-700', bar: 'bg-destructive' },
+  'In Procurement': { badge: 'bg-amber-100 text-amber-800', bar: 'bg-amber-500' },
+  Received: { badge: 'bg-emerald-100 text-emerald-700', bar: 'bg-emerald-600' },
 }
 
 interface Kpi {
@@ -69,16 +68,18 @@ export function ReplenishmentPage() {
   }, [])
 
   const counts = useMemo(() => {
-    const critical = procurement.filter((p) => p.status === 'Critical Deficit').length
-    const low = procurement.filter((p) => p.status === 'Low Stock').length
-    const orders = procurement.filter((p) => p.status === 'Order Placed')
+    const notPurchased = procurement.filter((p) => p.status === 'Not Purchased').length
+    const inProcurement = procurement.filter((p) => p.status === 'In Procurement').length
+    const received = procurement.filter((p) => p.status === 'Received').length
+    const orders = procurement.filter((p) => p.status === 'In Procurement')
     const minEta = orders.reduce<number | null>(
       (min, o) => (o.etaHours != null && (min === null || o.etaHours < min) ? o.etaHours : min),
       null,
     )
     return {
-      critical,
-      pending: critical + low,
+      notPurchased,
+      inProcurement,
+      received,
       orders: orders.length,
       eta: minEta === null ? '—' : `${minEta}h`,
     }
@@ -86,32 +87,32 @@ export function ReplenishmentPage() {
 
   const kpis: Kpi[] = [
     {
-      label: 'Critical Deficits',
-      value: String(counts.critical),
-      sub: 'Requires immediate action',
+      label: 'Not Purchased',
+      value: String(counts.notPurchased),
+      sub: 'Requires reorder',
       accent: 'bg-destructive/40',
       dot: 'bg-destructive',
     },
     {
-      label: 'Pending Procurements',
-      value: String(counts.pending),
-      sub: 'Lines awaiting reorder',
+      label: 'In Procurement',
+      value: String(counts.inProcurement),
+      sub: 'PO dispatched / in transit',
       accent: 'bg-amber-500/40',
       dot: 'bg-amber-500',
     },
     {
-      label: 'Total Supplier Orders',
-      value: String(counts.orders),
-      sub: 'Active PO dispatches',
-      accent: 'bg-primary/30',
-      dot: 'bg-primary',
+      label: 'Received Stock',
+      value: String(counts.received),
+      sub: 'Fulfilled & in inventory',
+      accent: 'bg-emerald-600/40',
+      dot: 'bg-emerald-600',
     },
     {
       label: 'Estimated Arrival',
       value: counts.eta,
       sub: 'Next incoming shipment',
-      accent: 'bg-emerald-600/40',
-      dot: 'bg-emerald-600',
+      accent: 'bg-primary/40',
+      dot: 'bg-primary',
     },
   ]
 
@@ -140,8 +141,8 @@ export function ReplenishmentPage() {
   // Reorder the most critical line as a one-tap "initiate reorder" entry point.
   const initiateReorder = () => {
     const target =
-      procurement.find((p) => p.status === 'Critical Deficit') ??
-      procurement.find((p) => p.status === 'Low Stock')
+      procurement.find((p) => p.status === 'Not Purchased') ??
+      procurement.find((p) => p.status === 'In Procurement')
     if (target) {
       setReorderItem(target)
       setUserInitiatedReorder(true)
@@ -279,7 +280,7 @@ export function ReplenishmentPage() {
               ) : (
                 filtered.map((p) => {
                   const pct = p.threshold > 0 ? Math.round((p.currentStock / p.threshold) * 100) : 100
-                  const isOrder = p.status === 'Order Placed'
+                  const isOrder = p.status === 'In Procurement'
                   const styles = statusStyles[p.status]
                   return (
                     <FragmentRow

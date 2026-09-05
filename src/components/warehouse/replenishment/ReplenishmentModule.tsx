@@ -24,6 +24,7 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
   const [poLine, setPoLine] = useState<DeficitLine | null>(null)
   const [editLine, setEditLine] = useState<DeficitLine | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [addPresetEvent, setAddPresetEvent] = useState<{ id: string; title: string } | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
@@ -53,7 +54,7 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
 
   const handleGeneratePO = (id: string, quantity: number, vendorId: string) => {
     setLines((prev) =>
-      prev.map((line) => (line.id === id ? { ...line, status: 'PO Sent', quantityNeeded: quantity, primaryVendorId: vendorId } : line)),
+      prev.map((line) => (line.id === id ? { ...line, status: 'In Procurement', quantityNeeded: quantity, primaryVendorId: vendorId } : line)),
     )
     setPoLine(null)
   }
@@ -84,6 +85,8 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
   const handleAddMasterItem = (draft: MasterItemDraft) => {
     const newLine: DeficitLine = {
       id: `def-master-${Date.now()}`,
+      eventId: draft.eventId,
+      eventTitle: draft.eventTitle,
       itemName: draft.itemName,
       category: draft.category,
       unit: draft.unit,
@@ -92,12 +95,13 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
       threshold: draft.threshold,
       costPerUnit: draft.costPerUnit,
       priority: draft.priority,
-      status: 'Flagged',
+      status: 'Not Purchased',
       primaryVendorId: draft.primaryVendorId,
       quantityNeeded: Math.max(1, draft.threshold - draft.currentStock),
     }
     setLines((prev) => [newLine, ...prev])
     setAddOpen(false)
+    setAddPresetEvent(null)
   }
 
   const handleRemove = (id: string) => setLines((prev) => prev.filter((line) => line.id !== id))
@@ -106,7 +110,7 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
     setLines((prev) => prev.map((line) => (line.id === id ? { ...line, taggedForDispatch: !line.taggedForDispatch } : line)))
 
   const handleBulkConfirm = (ids: string[]) => {
-    setLines((prev) => prev.map((line) => (ids.includes(line.id) ? { ...line, status: 'PO Sent' } : line)))
+    setLines((prev) => prev.map((line) => (ids.includes(line.id) ? { ...line, status: 'In Procurement' } : line)))
     setBulkOpen(false)
     setSelectedIds(new Set())
   }
@@ -115,7 +119,7 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
     exportReplenishmentDeficitPdf(filtered)
   }
 
-  const openCandidates = lines.filter((line) => line.status === 'Flagged' || line.status === 'PO Drafted')
+  const openCandidates = lines.filter((line) => line.status === 'Not Purchased')
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-y-auto">
@@ -254,19 +258,42 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
               <p className="text-sm text-muted-foreground">No deficit lines match the current search.</p>
             )}
             {grouped.groups.map(([eventId, group]) => {
-              const total = group.lines.reduce((sum, l) => sum + lineCost(l), 0)
+              const activeLines = group.lines.filter((l) => l.status !== 'Received')
+              const receivedCount = group.lines.length - activeLines.length
+              const activeTotalCost = activeLines.reduce((sum, l) => sum + lineCost(l), 0)
               return (
                 <div key={eventId} className="overflow-hidden rounded-xl border border-border bg-card">
-                  <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                  <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <h2 className="font-serif text-lg font-bold text-card-foreground">{group.title}</h2>
                       <p className="text-[0.6rem] uppercase tracking-[0.08em] text-muted-foreground">
-                        {group.lines.length} deficit line{group.lines.length === 1 ? '' : 's'}
+                        {activeLines.length} active line{activeLines.length === 1 ? '' : 's'} · {receivedCount} Received
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-[0.58rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">Running total</p>
-                      <p className="text-lg font-semibold text-card-foreground">₱{total.toLocaleString()}</p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="text-right sm:pr-2">
+                        <p className="text-[0.58rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">Active Deficit Total</p>
+                        <p className="text-lg font-semibold text-card-foreground">₱{activeTotalCost.toLocaleString()}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddPresetEvent({ id: eventId, title: group.title })
+                          setAddOpen(true)
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary transition hover:bg-primary/20"
+                      >
+                        <Plus className="size-3" />
+                        + Add Item
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => exportReplenishmentDeficitPdf(group.lines, `Deficit Report — ${group.title}`)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-accent"
+                      >
+                        <Download className="size-3" />
+                        Export Report
+                      </button>
                     </div>
                   </div>
                   <DeficitTable
@@ -306,7 +333,16 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
 
       {poLine && <GeneratePOModal line={poLine} onClose={() => setPoLine(null)} onGenerate={handleGeneratePO} />}
       {editLine && <AddMasterItemModal initial={editLine} onClose={() => setEditLine(null)} onSave={handleSaveEdit} />}
-      {addOpen && <AddMasterItemModal onClose={() => setAddOpen(false)} onSave={handleAddMasterItem} />}
+      {addOpen && (
+        <AddMasterItemModal
+          presetEvent={addPresetEvent ?? undefined}
+          onClose={() => {
+            setAddOpen(false)
+            setAddPresetEvent(null)
+          }}
+          onSave={handleAddMasterItem}
+        />
+      )}
       {bulkOpen && (
         <BulkGenerateFlow candidates={openCandidates} onClose={() => setBulkOpen(false)} onConfirm={handleBulkConfirm} />
       )}

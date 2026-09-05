@@ -4,7 +4,7 @@ import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { DamageVerdictModal } from '@/components/DamageVerdictModal'
 import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { usePortal } from '@/lib/store'
-import { useAuth, EXECUTIVE_LOGIN_EMAILS } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import type { DamageException, DamageVerdict } from '@/lib/types'
@@ -49,15 +49,17 @@ export function DamageValidationPage() {
     return womList.find((s) => s.name === userSubRole) ?? womList[0]
   }, [subRolesByParent, userSubRole])
 
-  // Count of the two Executive login accounts that are currently active
-  // (not Suspended) in Workforce Management. Below 2, a second sign-off on a
-  // Held-for-Audit item cannot be completed by a different Executive.
-  const activeExecutiveCount = useMemo(
+  const activeWomCount = useMemo(
     () =>
       staff.filter(
         (s) =>
-          EXECUTIVE_LOGIN_EMAILS.includes(s.email) &&
-          s.accountStatus !== 'Suspended',
+          s.accountStatus !== 'Suspended' &&
+          (s.role === 'Warehouse Manager' ||
+            (s as any).subRole === 'Warehouse Manager' ||
+            (s as any).subRole === 'Inventory Officer' ||
+            (s as any).fullWarehouseAccess === true ||
+            s.email === 'warehouse@lumiere.com' ||
+            s.email === 'warehouseops@lumiere.com'),
       ).length,
     [staff],
   )
@@ -104,8 +106,10 @@ export function DamageValidationPage() {
     id: string,
     verdict: Exclude<DamageVerdict, 'Pending Verdict'>,
     note: string,
+    unblockMetadata?: any,
+    selfValRecord?: any,
   ) => {
-    resolveDamage(id, verdict, note, adminRole || 'Executive', adminEmail, adminName)
+    resolveDamage(id, verdict, note, adminRole || userSubRole || 'Warehouse Manager', adminEmail, adminName, unblockMetadata, selfValRecord)
     setActive(null)
   }
 
@@ -357,7 +361,7 @@ export function DamageValidationPage() {
         onResolve={resolve}
         currentExecutiveEmail={adminEmail}
         currentExecutiveName={adminName}
-        activeExecutiveCount={activeExecutiveCount}
+        activeExecutiveCount={activeWomCount}
         allowSelfValidation={currentWomSubRole?.allowSelfValidation ?? true}
         permanentlyEnabledViaEmergency={currentWomSubRole?.permanentlyEnabledViaEmergency ?? false}
         womSubRoleName={currentWomSubRole?.name ?? 'Warehouse Manager'}

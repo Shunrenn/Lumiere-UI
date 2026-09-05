@@ -1068,24 +1068,45 @@ function SubRoleRow({
           </div>
 
           {/* Self-Validation RBAC Configuration */}
-          <div className="mb-4 rounded-lg border border-border bg-background/60 p-3.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold text-card-foreground">Self-Validation on Audit Holds</p>
-              <p className="text-[0.7rem] text-muted-foreground leading-relaxed">
-                When enabled (ON), officers in this sub-role may self-validate audit holds with PIN & justification. When disabled (OFF), dual-custody is enforced.
-              </p>
-              {sub.permanentlyEnabledViaEmergency && sub.emergencyUnblockMetadata && (
-                <span className="mt-1.5 inline-flex items-center gap-1 rounded bg-amber-500/15 px-2.5 py-0.5 text-[0.6rem] font-semibold text-amber-300">
-                  ⚠️ Permanently enabled via Emergency Unblock on {sub.emergencyUnblockMetadata.unblockedAt} by {sub.emergencyUnblockMetadata.unblockedByAdminEmail}
-                </span>
-              )}
-            </div>
-            <Toggle
-              checked={sub.allowSelfValidation !== false}
-              onChange={() => onToggleSelfValidation?.(sub)}
-              label="Allow Self-Validation"
-            />
-          </div>
+          {(() => {
+            const isSignOffCapable =
+              sub.id === 'warehouse-manager' ||
+              sub.id === 'inventory-officer' ||
+              sub.name === 'Warehouse Manager' ||
+              sub.name === 'Inventory Officer'
+            return (
+              <div className="mb-4 rounded-lg border border-border bg-background/60 p-3.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-semibold text-card-foreground">Self-Validation on Audit Holds</p>
+                    {!isSignOffCapable && (
+                      <span className="rounded bg-muted px-2 py-0.5 text-[0.55rem] font-medium text-muted-foreground">
+                        Not Applicable
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[0.7rem] text-muted-foreground leading-relaxed mt-0.5">
+                    {isSignOffCapable
+                      ? 'When enabled (ON), officers in this sub-role may self-validate audit holds with PIN & justification. When disabled (OFF), dual-custody is enforced.'
+                      : 'Self-validation is only applicable for damage sign-off sub-roles (Warehouse Manager, Inventory Officer).'}
+                  </p>
+                  {sub.permanentlyEnabledViaEmergency && sub.emergencyUnblockMetadata && (
+                    <span className="mt-1.5 inline-flex items-center gap-1 rounded bg-amber-500/15 px-2.5 py-0.5 text-[0.6rem] font-semibold text-amber-300">
+                      ⚠️ Permanently enabled via Emergency Unblock by {sub.emergencyUnblockMetadata.unblockedByAdminEmail}
+                    </span>
+                  )}
+                </div>
+                <div title={!isSignOffCapable ? "Self-validation is only applicable for damage sign-off sub-roles (Warehouse Manager, Inventory Officer)." : undefined}>
+                  <Toggle
+                    checked={isSignOffCapable && sub.allowSelfValidation !== false}
+                    disabled={!isSignOffCapable}
+                    onChange={() => isSignOffCapable && onToggleSelfValidation?.(sub)}
+                    label="Allow Self-Validation"
+                  />
+                </div>
+              </div>
+            )
+          })()}
 
           <p className="mb-3 text-[0.58rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">
             Permission detail — by module

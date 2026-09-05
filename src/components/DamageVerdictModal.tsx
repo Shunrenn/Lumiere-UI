@@ -144,22 +144,33 @@ export function DamageVerdictModal({
   // Dual custody checks
   const isStrictBlock = !allowSelfValidation && activeExecutiveCount < 2 && (isHeldForAudit || isPendingSecondSignOff)
 
+  const selfValJustificationValid = selfValJustification.trim().length >= 20
+
   const confirm = (overrideUnblockMeta?: any) => {
     if (!pendingVerdict) return
 
     let selfRecord = undefined
-    if (allowSelfValidation && isHeldForAudit) {
+    if (allowSelfValidation && (isHeldForAudit || isPendingSecondSignOff)) {
       selfRecord = {
         validatedByEmail: currentExecutiveEmail || 'wom@lumiere.com',
         validatedByName: currentExecutiveName || 'Warehouse Ops Officer',
+        womRole: womSubRoleName,
         pinVerified: true,
         justification: selfValJustification.trim(),
         timestamp: new Date().toISOString(),
+        custodyMode: (overrideUnblockMeta ? 'admin-enabled-override' : 'standing-self-validation') as any,
         convertedViaEmergency: permanentlyEnabledViaEmergency,
       }
     }
 
-    onResolve(exception.id, pendingVerdict, note.trim() || selfValJustification.trim(), overrideUnblockMeta, selfRecord)
+    const effectiveNote = note.trim() || selfValJustification.trim()
+    onResolve(
+      exception.id,
+      pendingVerdict,
+      effectiveNote,
+      overrideUnblockMeta,
+      selfRecord
+    )
     setNote('')
     setPendingVerdict(null)
     setSelfValJustification('')
@@ -168,10 +179,10 @@ export function DamageVerdictModal({
   const handleExecuteEmergencyUnblock = () => {
     if (!adminPin || !adminReason.trim()) return
     const meta = {
+      originatedFromEmergency: true,
+      emergencyReason: adminReason.trim(),
       unblockedByAdminEmail: 'admin@lumiere.com',
-      unblockedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-      mode: unblockMode,
-      reason: adminReason.trim(),
+      unblockScope: unblockMode === 'PERMANENT' ? ('permanent' as const) : ('instance' as const),
     }
 
     if (unblockMode === 'PERMANENT') {
@@ -185,10 +196,12 @@ export function DamageVerdictModal({
   const handleConfirmPermanentUnblock = () => {
     if (!ackChecked) return
     const meta = {
+      originatedFromEmergency: true,
+      emergencyReason: adminReason.trim(),
       unblockedByAdminEmail: 'admin@lumiere.com',
-      unblockedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-      mode: 'PERMANENT' as const,
-      reason: adminReason.trim(),
+      unblockScope: 'permanent' as const,
+      madePermanentAt: new Date().toISOString(),
+      permanentAcknowledged: true,
     }
     onPermanentUnblockSubRole?.(womSubRoleName, meta)
     setShowHighFrictionWarning(false)
@@ -563,6 +576,31 @@ export function DamageVerdictModal({
             <p className="mt-3 rounded-md bg-muted/50 px-3 py-2 text-[0.65rem] uppercase tracking-[0.1em] text-muted-foreground">
               {exception.logId} · {exception.assetName}
             </p>
+            {allowSelfValidation && (isHeldForAudit || isPendingSecondSignOff) && (
+              <div className="mt-4 space-y-2 rounded-lg border border-border bg-muted/30 p-3 text-left">
+                <p className="text-[0.62rem] font-bold uppercase tracking-wider text-card-foreground flex items-center gap-1.5">
+                  <ShieldCheck className="size-3.5 text-primary" /> Standing Self-Validation Justification
+                </p>
+                <div>
+                  <label className="block text-[0.58rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Written Rationale (≥20 Characters Required)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={selfValJustification}
+                    onChange={(e) => setSelfValJustification(e.target.value)}
+                    placeholder="Provide mandatory rationale bypassing dual custody..."
+                    className="mt-1 w-full rounded border border-input bg-card p-2 text-xs text-foreground outline-none focus:border-primary"
+                  />
+                  <div className="mt-1 flex items-center justify-between text-[0.58rem]">
+                    <span className={selfValJustificationValid ? 'text-emerald-600 font-semibold' : 'text-amber-600 font-semibold'}>
+                      {selfValJustification.trim().length} / 20 characters minimum
+                    </span>
+                    {selfValJustificationValid && <span className="text-emerald-600 font-bold">✓ Valid</span>}
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="mt-5 flex items-center justify-end gap-3">
               <button
                 type="button"
@@ -573,9 +611,10 @@ export function DamageVerdictModal({
               </button>
               <button
                 type="button"
+                disabled={allowSelfValidation && (isHeldForAudit || isPendingSecondSignOff) && !selfValJustificationValid}
                 onClick={() => confirm()}
                 className={cn(
-                  'inline-flex items-center gap-2 rounded-md px-4 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-white transition hover:opacity-90',
+                  'inline-flex items-center gap-2 rounded-md px-4 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-white transition hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed',
                   pendingVerdict === 'Validated' && 'bg-emerald-600',
                   pendingVerdict === 'Held for Audit' && 'bg-amber-600',
                   pendingVerdict === 'Dismissed' && 'bg-neutral-900',

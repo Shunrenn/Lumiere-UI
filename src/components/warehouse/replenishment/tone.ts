@@ -10,10 +10,9 @@ export const PRIORITY_TONE: Record<DeficitPriority, Tone> = {
 }
 
 export const DEFICIT_STATUS_TONE: Record<DeficitStatus, Tone> = {
-  Flagged: 'caution',
-  'PO Drafted': 'progress',
-  'PO Sent': 'positive',
-  Resolved: 'neutral',
+  'Not Purchased': 'caution',
+  'In Procurement': 'progress',
+  Received: 'positive',
 }
 
 export const VENDOR_STATUS_TONE: Record<VendorStatus, Tone> = {

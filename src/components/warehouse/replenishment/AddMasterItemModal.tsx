@@ -18,15 +18,18 @@ export interface MasterItemDraft {
   priority: DeficitPriority
   triggerSource: TriggerSource
   primaryVendorId: string
+  eventId?: string
+  eventTitle?: string
 }
 
 interface AddMasterItemModalProps {
   initial?: DeficitLine
+  presetEvent?: { id: string; title: string }
   onClose: () => void
   onSave: (draft: MasterItemDraft) => void
 }
 
-export function AddMasterItemModal({ initial, onClose, onSave }: AddMasterItemModalProps) {
+export function AddMasterItemModal({ initial, presetEvent, onClose, onSave }: AddMasterItemModalProps) {
   const vendors = useWarehouseVendors()
   const [vendorModalOpen, setVendorModalOpen] = useState(false)
   const [itemName, setItemName] = useState(initial?.itemName ?? '')
@@ -53,9 +56,16 @@ export function AddMasterItemModal({ initial, onClose, onSave }: AddMasterItemMo
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between border-b border-border px-6 py-5">
-          <h2 className="font-serif text-xl font-medium text-card-foreground">
-            {initial ? 'Edit Deficit Line' : 'Add Master Item'}
-          </h2>
+          <div>
+            <h2 className="font-serif text-xl font-medium text-card-foreground">
+              {initial ? 'Edit Deficit Line' : presetEvent ? `Add Item · ${presetEvent.title}` : 'Add Master Item'}
+            </h2>
+            {presetEvent && (
+              <p className="mt-0.5 text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-primary">
+                Bound to {presetEvent.title}
+              </p>
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -198,6 +208,8 @@ export function AddMasterItemModal({ initial, onClose, onSave }: AddMasterItemMo
                 priority,
                 triggerSource,
                 primaryVendorId,
+                eventId: presetEvent?.id ?? initial?.eventId,
+                eventTitle: presetEvent?.title ?? initial?.eventTitle,
               })
             }
             className="rounded-md bg-primary px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"

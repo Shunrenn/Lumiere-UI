@@ -26,9 +26,10 @@ const RECON_TONE: Record<ReconciliationTag, Tone> = {
 interface AssetDetailModalProps {
   asset: CatalogAsset
   onClose: () => void
+  onCompleteMaintenance?: () => void
 }
 
-export function AssetDetailModal({ asset, onClose }: AssetDetailModalProps) {
+export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: AssetDetailModalProps) {
   const [tab, setTab] = useState<TabId>('preview')
   const glance = getTierGlanceDisplay(asset)
   const tone = ASSET_STATUS_TONE[asset.status]
@@ -177,6 +178,30 @@ export function AssetDetailModal({ asset, onClose }: AssetDetailModalProps) {
                   </div>
                 )}
               </div>
+
+              {asset.status === 'In Maintenance' && (
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[0.62rem] font-bold uppercase tracking-wider text-indigo-900">
+                        Asset Under Service / Maintenance
+                      </p>
+                      <p className="text-xs text-indigo-700 mt-0.5">
+                        This asset was placed in maintenance following a damage repair verdict.
+                      </p>
+                    </div>
+                    {onCompleteMaintenance && (
+                      <button
+                        type="button"
+                        onClick={onCompleteMaintenance}
+                        className="rounded bg-indigo-600 px-3.5 py-1.5 text-[0.65rem] font-bold uppercase tracking-wider text-white shadow-sm hover:bg-indigo-700 transition"
+                      >
+                        Complete Maintenance / Return to Stock
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {asset.description && (
                 <div className="rounded-lg border border-border/60 bg-muted/20 p-3.5 text-xs text-muted-foreground leading-relaxed">

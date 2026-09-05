@@ -3,7 +3,7 @@
 // Event-Grouped view always reflects the events actually in the portal;
 // a handful of lines are left event-less to represent general stockroom
 // shortages that only ever surface in the Consolidated view.
-import type { PortalEvent } from '@/lib/types'
+import type { PortalEvent, DeficitStatus } from '@/lib/types'
 import { getCatalogAssets, getLowStockAssets, type CatalogAsset } from '@/lib/warehouse-catalog'
 import { getWarehouseVendors } from '@/lib/warehouse-vendors'
 
@@ -11,7 +11,7 @@ export type TriggerSource = 'Canvas' | 'Batch Pahabol' | 'Manual Audit' | 'Auto-
 
 export type DeficitPriority = 'Low' | 'Medium' | 'High' | 'Critical'
 
-export type DeficitStatus = 'Flagged' | 'PO Drafted' | 'PO Sent' | 'Resolved'
+export type { DeficitStatus }
 
 export interface DeficitLine {
   id: string
@@ -38,7 +38,7 @@ function hashOf(value: string) {
 
 const TRIGGER_SOURCES: TriggerSource[] = ['Canvas', 'Batch Pahabol', 'Manual Audit']
 const PRIORITIES: DeficitPriority[] = ['Low', 'Medium', 'High', 'Critical']
-const STATUSES: DeficitStatus[] = ['Flagged', 'Flagged', 'PO Drafted', 'PO Sent']
+const STATUSES: DeficitStatus[] = ['Not Purchased', 'Not Purchased', 'In Procurement', 'Received']
 
 let cache: { key: string; lines: DeficitLine[] } | null = null
 
@@ -101,7 +101,7 @@ export function getDeficitLines(events: PortalEvent[]): DeficitLine[] {
       threshold,
       costPerUnit: asset.costPerUnit,
       priority: currentStock / threshold < 0.15 ? 'Critical' : 'Medium',
-      status: 'Flagged',
+      status: 'Not Purchased',
       primaryVendorId: primaryVendor.id,
       backupVendorId: backupVendor.id !== primaryVendor.id ? backupVendor.id : undefined,
       quantityNeeded: Math.max(4, threshold - currentStock),
@@ -160,7 +160,7 @@ export function checkAndQueueDeficits(
         threshold,
         costPerUnit: asset.costPerUnit,
         priority,
-        status: 'Flagged' as DeficitStatus,
+        status: 'Not Purchased' as DeficitStatus,
         primaryVendorId: primaryVendor.id,
         backupVendorId: backupVendor && backupVendor.id !== primaryVendor.id ? backupVendor.id : undefined,
         quantityNeeded,
