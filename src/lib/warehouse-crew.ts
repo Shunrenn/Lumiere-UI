@@ -6,7 +6,7 @@
 import { useSyncExternalStore } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { PortalEvent, Staff } from '@/lib/types'
-import { expandDateRange } from '@/lib/manning'
+import { expandDateRange, handleCrewLeaveAutoRelease } from '@/lib/manning'
 
 export type CrewRowStatus = 'Available' | 'Assigned' | 'On Leave'
 
@@ -42,6 +42,39 @@ export function updateDailyDutyAttendance(
   flaggedBy?: string,
   noShowReason?: string,
 ): void {
+  const existing = localDailyDuties.find((d) => d.id === id)
+  if (existing && existing.attendanceStatus) {
+    if (existing.attendanceStatus === attendanceStatus) {
+      // Matching outcome: First commit retained, silent no-op (no dispute log needed)
+      return
+    }
+    // Differing outcome: First-Commit-Wins tie-breaker intercepted write
+    const actor = flaggedBy || 'Team Lead'
+    void logAuditEvent({
+      actor_id: actor,
+      actor_name: actor,
+      module: 'manning',
+      action_type: 'DISPUTED_CONFIRMATION',
+      target_id: id,
+      target_snapshot: {
+        staffName: existing.staffName,
+        date: existing.date,
+        firstCommit: {
+          actor: existing.flaggedBy || 'First Lead',
+          timestamp: existing.flaggedAt || existing.assignedAt || new Date().toISOString(),
+          attendanceStatus: existing.attendanceStatus,
+        },
+        attemptedCommit: {
+          actor,
+          timestamp: new Date().toISOString(),
+          attendanceStatus,
+        },
+      },
+      reason: `Conflicting attendance confirmation attempt by ${actor} ('${attendanceStatus}') intercepted for ${existing.staffName}. First commit by ${existing.flaggedBy || 'First Lead'} ('${existing.attendanceStatus}') retained.`,
+    })
+    return
+  }
+
   localDailyDuties = localDailyDuties.map((d) => {
     if (d.id !== id) return d
     if (attendanceStatus === 'no_show') {
@@ -56,11 +89,26 @@ export function updateDailyDutyAttendance(
     return {
       ...d,
       attendanceStatus,
-      flaggedBy: undefined,
-      flaggedAt: undefined,
+      flaggedBy: flaggedBy || 'Team Lead',
+      flaggedAt: new Date().toISOString(),
       noShowReason: undefined,
     }
   })
+
+  if (existing && attendanceStatus === 'absent_approved') {
+    // Sync shift grid cell to 'OFF' for this crew member & date
+    const key = cellKey(existing.staffId, existing.date)
+    grid = { ...grid, [key]: 'OFF' }
+    publish()
+
+    // Trigger auto-release for committed event assignments on this date
+    void handleCrewLeaveAutoRelease(
+      existing.staffId,
+      existing.staffName,
+      existing.date,
+      'Daily Duty Attendance',
+    )
+  }
 }
 
 export function removeDailyDutyAssignment(id: string): void {
@@ -370,7 +418,15 @@ export async function fetchPresetSquads(staff: Staff[]): Promise<PresetSquad[]> 
   return getPresetSquads(staff)
 }
 
-export async function savePresetSquad(squad: PresetSquad): Promise<PresetSquad> {
+import { logAuditEvent } from '@/lib/audit-logger'
+
+export async function savePresetSquad(
+  squad: PresetSquad,
+  actor?: { id: string; name: string },
+  reason?: string,
+): Promise<PresetSquad> {
+  const isNew = !localPresetSquads.some((s) => s.id === squad.id)
+
   try {
     const payload = {
       id: squad.id,
@@ -389,16 +445,44 @@ export async function savePresetSquad(squad: PresetSquad): Promise<PresetSquad> 
   } else {
     localPresetSquads.push(squad)
   }
+
+  void logAuditEvent({
+    actor_id: actor?.id || 'wom-001',
+    actor_name: actor?.name || 'Manning Officer',
+    module: 'squads',
+    action_type: isNew ? 'SQUAD_CREATE' : 'SQUAD_UPDATE',
+    target_id: squad.id,
+    target_snapshot: (squad as unknown) as Record<string, unknown>,
+    reason: reason || (isNew ? `Created preset squad ${squad.name}` : `Updated preset squad ${squad.name}`),
+  })
+
   return squad
 }
 
-export async function deletePresetSquad(squadId: string): Promise<void> {
+export async function deletePresetSquad(
+  squadId: string,
+  actor?: { id: string; name: string },
+  reason?: string,
+): Promise<void> {
+  const targetSquad = localPresetSquads.find((s) => s.id === squadId)
+
   try {
     await supabase.from('manning_preset_squads').delete().eq('id', squadId)
   } catch (e) {
     console.warn('[v0] Failed to delete preset squad from Supabase; using local store.', e)
   }
+
   localPresetSquads = localPresetSquads.filter((s) => s.id !== squadId)
+
+  void logAuditEvent({
+    actor_id: actor?.id || 'wom-001',
+    actor_name: actor?.name || 'Manning Officer',
+    module: 'squads',
+    action_type: 'SQUAD_DELETE',
+    target_id: squadId,
+    target_snapshot: (targetSquad as unknown) as Record<string, unknown>,
+    reason: reason || `Deleted preset squad ${squadId}`,
+  })
 }
 
 export function crewHasConflict(row: CrewRow | undefined, eventId: string): boolean {
@@ -517,15 +601,37 @@ export function getShift(staffId: string, date: string): ShiftCode {
 }
 
 const CYCLE: ShiftCode[] = ['AM', 'PM', 'OFF']
-export function cycleShift(staffId: string, date: string) {
+
+function triggerAutoReleaseIfOff(staffId: string, date: string, shift: ShiftCode, staffName?: string) {
+  if (shift !== 'OFF') return
+  const name = staffName || staffId
+  void handleCrewLeaveAutoRelease(staffId, name, date, 'Shift Grid')
+}
+
+export function cycleShift(staffId: string, date: string, staffName?: string) {
   const key = cellKey(staffId, date)
   const current = grid[key] ?? 'OFF'
   const next = CYCLE[(CYCLE.indexOf(current) + 1) % CYCLE.length]
   grid = { ...grid, [key]: next }
   publish()
+
+  if (next === 'OFF') {
+    triggerAutoReleaseIfOff(staffId, date, 'OFF', staffName)
+  }
 }
 
-export function batchUpdateShifts(updates: Record<string, ShiftCode>) {
+export function batchUpdateShifts(updates: Record<string, ShiftCode>, staffList?: Staff[]) {
   grid = { ...grid, ...updates }
   publish()
+
+  Object.entries(updates).forEach(([key, shift]) => {
+    if (shift === 'OFF') {
+      const [staffId, date] = key.split('__')
+      if (staffId && date) {
+        const staffMember = staffList?.find((s) => s.id === staffId)
+        const staffName = staffMember ? `${staffMember.firstName} ${staffMember.surname}` : staffId
+        triggerAutoReleaseIfOff(staffId, date, 'OFF', staffName)
+      }
+    }
+  })
 }

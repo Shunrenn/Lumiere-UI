@@ -421,8 +421,9 @@ export function exportDispatchConsolidatedPdf(summaries: EventDispatchSummary[])
 // ─── 5. Replenishment Deficit Report PDF Exporter ───
 export function exportReplenishmentDeficitPdf(lines: DeficitLine[], reportTitle?: string) {
   const builder = new PdfReportBuilder()
-  const totalEstimatedCost = lines.reduce((sum, l) => {
-    const required = Math.max(0, l.threshold - l.currentStock)
+  const activeLines = lines.filter((l) => l.status !== 'Received')
+  const totalEstimatedCost = activeLines.reduce((sum, l) => {
+    const required = l.quantityNeeded ?? Math.max(0, l.threshold - l.currentStock)
     const unitPrice = l.costPerUnit ?? (l.category === 'Drapery & Fabrics' ? 350 : 180)
     return sum + required * unitPrice
   }, 0)
@@ -454,7 +455,7 @@ export function exportReplenishmentDeficitPdf(lines: DeficitLine[], reportTitle?
     }
 
     const unitPrice = l.costPerUnit ?? (l.category === 'Drapery & Fabrics' ? 350 : 180)
-    const required = Math.max(0, l.threshold - l.currentStock)
+    const required = l.quantityNeeded ?? Math.max(0, l.threshold - l.currentStock)
     const lineCost = required * unitPrice
 
     doc.setFont('helvetica', 'normal')

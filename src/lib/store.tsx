@@ -1,3 +1,4 @@
+import { logAuditEvent } from '@/lib/audit-logger'
 import {
   createContext,
   useCallback,
@@ -2134,6 +2135,16 @@ export function PortalProvider({ children }: { children: ReactNode }) {
             ip: randomIp(),
             status: verdict === 'Dismissed' ? 'Flagged' : 'Success',
           })
+          void logAuditEvent({
+            actor_id: staffEmail || 'sys-admin',
+            actor_name: staffName || initiatorRole,
+            module: 'damage',
+            action_type: unblockMetadata ? 'EMERGENCY_UNBLOCK' : 'DAMAGE_VERDICT',
+            target_id: i.id,
+            target_snapshot: (i as unknown) as Record<string, unknown>,
+            reason: unblockMetadata?.emergencyReason || note || `Verdict: ${verdict}`,
+          })
+
           return {
             ...i,
             status: verdict,

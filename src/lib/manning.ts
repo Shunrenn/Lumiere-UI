@@ -460,12 +460,29 @@ export async function createAssignment(
     ManningAssignment,
     'work_date' | 'event_name' | 'venue' | 'deployment_ref' | 'lead_name' | 'lead_email' | 'member_names' | 'sub_role' | 'notes'
   > & { inherited_from?: string | null; created_by?: string | null },
+  quotaConfig?: { maxTeamLeads?: number; minTeamLeads?: number },
 ): Promise<ManningAssignment> {
   const leadName = input.lead_name?.trim() || ''
   if (!leadName) {
     throw new Error(
       `Cannot finalize assignment: At least 1 active Team Lead must be assigned for sub-role '${input.sub_role || 'General'}' on ${input.work_date}.`,
     )
+  }
+
+  // Validate maximum Team Lead quota (Foundation F)
+  if (quotaConfig?.maxTeamLeads !== undefined && quotaConfig.maxTeamLeads > 0) {
+    const currentActiveLeads = localAssignments.filter(
+      (a) =>
+        a.status === 'Active' &&
+        a.work_date === input.work_date &&
+        (input.sub_role ? a.sub_role === input.sub_role : true) &&
+        Boolean(a.lead_name?.trim()),
+    ).length
+    if (currentActiveLeads + 1 > quotaConfig.maxTeamLeads) {
+      throw new Error(
+        `Cannot finalize assignment: Exceeds maximum Team Lead quota of ${quotaConfig.maxTeamLeads} for sub-role '${input.sub_role || 'General'}' on ${input.work_date}.`,
+      )
+    }
   }
 
   // Validate that the assigned lead is genuinely isTeamLead-qualified
@@ -521,6 +538,7 @@ export async function inheritAssignment(
   source: ManningAssignment,
   workDate: string,
   createdBy?: string | null,
+  quotaConfig?: { maxTeamLeads?: number; minTeamLeads?: number },
 ): Promise<ManningAssignment> {
   const existing = localAssignments.find(
     (assignment) =>
@@ -567,15 +585,161 @@ export async function inheritAssignment(
     return assignment
   }
 
-  return createAssignment(carried)
+  return createAssignment(carried, quotaConfig)
 }
 
-export async function closeAssignment(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('manning_assignments')
-    .update({ status: 'Closed' })
-    .eq('id', id)
-  if (error) throw error
+export async function closeAssignment(
+  id: string,
+  quotaConfig?: { minTeamLeads?: number },
+): Promise<void> {
+  const target = localAssignments.find((a) => a.id === id)
+  if (target && target.status === 'Active' && Boolean(target.lead_name?.trim())) {
+    const activeLeadsCount = localAssignments.filter(
+      (a) =>
+        a.status === 'Active' &&
+        a.work_date === target.work_date &&
+        (target.sub_role ? a.sub_role === target.sub_role : true) &&
+        Boolean(a.lead_name?.trim()),
+    ).length
+    if (
+      quotaConfig?.minTeamLeads !== undefined &&
+      quotaConfig.minTeamLeads > 0 &&
+      activeLeadsCount - 1 < quotaConfig.minTeamLeads
+    ) {
+      throw new Error(
+        `Cannot remove assignment: Operating below minimum Team Lead quota of ${quotaConfig.minTeamLeads} for sub-role '${target.sub_role || 'General'}' on ${target.work_date}.`,
+      )
+    }
+  }
+
+  try {
+    const { error } = await supabase
+      .from('manning_assignments')
+      .update({ status: 'Closed' })
+      .eq('id', id)
+    if (error) console.warn('[v0] Supabase close assignment fallback:', error)
+  } catch (e) {
+    console.warn('[v0] Failed to close assignment in Supabase; updating local state.', e)
+  }
+
+  localAssignments = localAssignments.map((a) => (a.id === id ? { ...a, status: 'Closed' } : a))
+}
+
+/**
+ * Foundation C — Leave-after-assignment auto-release.
+ * When a committed crew member goes on leave / marks a date Unavailable (via Shift Grid 'OFF' or Daily Duty 'absent_approved'),
+ * auto-release their assignment slot and emit a structured audit log (and flag Team Lead quota deficit if applicable).
+ */
+export async function handleCrewLeaveAutoRelease(
+  staffId: string,
+  staffName: string,
+  date: string,
+  source: 'Shift Grid' | 'Daily Duty Attendance' = 'Shift Grid',
+): Promise<void> {
+  const normName = staffName.trim().toLowerCase()
+  if (!normName) return
+
+  // Find active assignments matching staffName and target date
+  const targetAssignments = localAssignments.filter((assignment) => {
+    if (assignment.status !== 'Active') return false
+    const matchesDate = assignment.work_date === date
+    if (!matchesDate) return false
+
+    const isLead = Boolean(assignment.lead_name && assignment.lead_name.trim().toLowerCase().includes(normName))
+    const isMember = Boolean(assignment.member_names && assignment.member_names.some((m) => m.trim().toLowerCase().includes(normName)))
+    return isLead || isMember
+  })
+
+  if (targetAssignments.length === 0) return
+
+  for (const assignment of targetAssignments) {
+    const wasLead = Boolean(assignment.lead_name && assignment.lead_name.trim().toLowerCase().includes(normName))
+    const updatedMembers = (assignment.member_names || []).filter((m) => !m.trim().toLowerCase().includes(normName))
+    let nextLeadName = assignment.lead_name
+    let nextStatus: 'Active' | 'Closed' = 'Active'
+
+    if (wasLead) {
+      if (updatedMembers.length > 0) {
+        // Promote next member in roster to Lead slot if available
+        nextLeadName = updatedMembers[0]
+      } else {
+        // Sole assigned lead went on leave; release lock completely by setting status to Closed
+        nextLeadName = ''
+        nextStatus = 'Closed'
+      }
+    } else if (updatedMembers.length === 0 && (!nextLeadName || nextLeadName.trim().toLowerCase().includes(normName))) {
+      nextStatus = 'Closed'
+    }
+
+    // Update assignment state in local store
+    localAssignments = localAssignments.map((a) => {
+      if (a.id !== assignment.id) return a
+      const autoNote = `[Auto-released: ${staffName} marked ${source} OFF/Leave on ${date}]`
+      return {
+        ...a,
+        member_names: updatedMembers,
+        lead_name: nextLeadName,
+        status: nextStatus,
+        notes: a.notes ? `${a.notes} | ${autoNote}` : autoNote,
+      }
+    })
+
+    // Try updating Supabase if connected
+    try {
+      await supabase
+        .from('manning_assignments')
+        .update({
+          member_names: updatedMembers,
+          lead_name: nextLeadName,
+          status: nextStatus,
+        })
+        .eq('id', assignment.id)
+    } catch (e) {
+      console.warn('[v0] Supabase auto-release assignment sync fallback:', e)
+    }
+
+    // Evaluate Team Lead quota deficit (Foundation F minimum quota threshold)
+    const subRole = assignment.sub_role || 'General'
+    const activeLeadsRemaining = localAssignments.filter(
+      (a) =>
+        a.status === 'Active' &&
+        a.work_date === date &&
+        (a.sub_role || 'General') === subRole &&
+        Boolean(a.lead_name?.trim()),
+    ).length
+
+    const minQuota = 1
+    const quotaDeficitTriggered = wasLead && activeLeadsRemaining < minQuota
+
+    // Emit structured audit log
+    void logAuditEvent({
+      actor_id: 'system-auto-release',
+      actor_name: 'Manning System',
+      module: 'manning',
+      action_type: 'ASSIGNMENT_AUTO_RELEASED',
+      target_id: assignment.id,
+      target_snapshot: {
+        staffId,
+        staffName,
+        date,
+        eventName: assignment.event_name,
+        subRole,
+        previousLead: assignment.lead_name,
+        updatedLead: nextLeadName,
+        remainingMembers: updatedMembers,
+        status: nextStatus,
+        quotaDeficitTriggered,
+        minQuota,
+        activeLeadsRemaining,
+        source,
+      },
+      reason: `Auto-released assignment lock for '${assignment.event_name}' on ${date} due to crew member ${staffName} declaring leave (${source}).${
+        quotaDeficitTriggered
+          ? ` URGENT: Active Team Lead headcount (${activeLeadsRemaining}) dropped below minimum quota (${minQuota})!`
+          : ''
+      }`,
+    })
+  }
 }
 
 // ---- Tasks -----------------------------------------------------------
@@ -676,6 +840,36 @@ export async function setTaskStatus(id: string, status: ManningTaskStatus): Prom
 
 /** Lead confirms a submitted task inside the SLA window. */
 export async function confirmTask(id: string, confirmedBy: string): Promise<void> {
+  const existing = localTasks.find((t) => t.id === id)
+  if (existing && (existing.status === 'Confirmed' || existing.status === 'Rejected')) {
+    if (existing.status === 'Confirmed') {
+      // Matching outcome ('Confirmed' === 'Confirmed'): First commit retained, silent no-op (no dispute log needed)
+      return
+    }
+    // Differing outcome ('Confirmed' vs existing 'Rejected'): First-Commit-Wins tie-breaker intercepted write
+    await logAuditEvent({
+      actor_id: confirmedBy,
+      actor_name: confirmedBy,
+      module: 'manning',
+      action_type: 'DISPUTED_CONFIRMATION',
+      target_id: id,
+      target_snapshot: {
+        firstCommit: {
+          actor: existing.confirmed_by || 'First Lead',
+          timestamp: existing.confirmed_at || existing.created_at,
+          status: existing.status,
+        },
+        attemptedCommit: {
+          actor: confirmedBy,
+          timestamp: new Date().toISOString(),
+          status: 'Confirmed',
+        },
+      },
+      reason: `Conflicting confirmation attempt by ${confirmedBy} ('Confirmed') intercepted for task '${existing.title}'. First commit by ${existing.confirmed_by || 'First Lead'} ('${existing.status}') retained.`,
+    })
+    return
+  }
+
   const confirmedAt = new Date().toISOString()
   const { error } = await supabase
     .from('manning_tasks')
@@ -702,7 +896,37 @@ export async function confirmTask(id: string, confirmedBy: string): Promise<void
   throw error
 }
 
-export async function rejectTask(id: string): Promise<void> {
+export async function rejectTask(id: string, rejectedBy: string = 'Team Lead'): Promise<void> {
+  const existing = localTasks.find((t) => t.id === id)
+  if (existing && (existing.status === 'Confirmed' || existing.status === 'Rejected')) {
+    if (existing.status === 'Rejected') {
+      // Matching outcome ('Rejected' === 'Rejected'): First commit retained, silent no-op (no dispute log needed)
+      return
+    }
+    // Differing outcome ('Rejected' vs existing 'Confirmed'): First-Commit-Wins tie-breaker intercepted write
+    await logAuditEvent({
+      actor_id: rejectedBy,
+      actor_name: rejectedBy,
+      module: 'manning',
+      action_type: 'DISPUTED_CONFIRMATION',
+      target_id: id,
+      target_snapshot: {
+        firstCommit: {
+          actor: existing.confirmed_by || 'First Lead',
+          timestamp: existing.confirmed_at || existing.created_at,
+          status: existing.status,
+        },
+        attemptedCommit: {
+          actor: rejectedBy,
+          timestamp: new Date().toISOString(),
+          status: 'Rejected',
+        },
+      },
+      reason: `Conflicting confirmation attempt by ${rejectedBy} ('Rejected') intercepted for task '${existing.title}'. First commit by ${existing.confirmed_by || 'First Lead'} ('${existing.status}') retained.`,
+    })
+    return
+  }
+
   const { error } = await supabase.from('manning_tasks').update({ status: 'Rejected' }).eq('id', id)
   if (!error) return
 
@@ -1042,46 +1266,54 @@ export interface ManningOverride {
   created_at: string
 }
 
+import { fetchAuditLogs, logAuditEvent, type AuditLogEntry } from '@/lib/audit-logger'
+
 let localOverrides: ManningOverride[] = []
+
+function auditEntryToManningOverride(entry: AuditLogEntry): ManningOverride {
+  const snapshot = (entry.target_snapshot as Record<string, any>) || null
+  return {
+    id: entry.id,
+    staff_id: snapshot?.staff_id ?? entry.target_id,
+    staff_name: snapshot?.staff_name ?? 'Unknown Staff',
+    event_id: snapshot?.event_id ?? 'unknown-event',
+    event_title: snapshot?.event_title ?? 'Unknown Event',
+    conflict_type: (snapshot?.conflict_type as any) ?? 'Double Booked',
+    justification: entry.reason,
+    overridden_by: entry.actor_name,
+    created_at: entry.created_at,
+  }
+}
 
 export async function fetchOverrides(): Promise<ManningOverride[]> {
   try {
-    const { data, error } = await supabase
-      .from('manning_overrides')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (error) throw error
-    localOverrides = (data ?? []) as ManningOverride[]
-    return localOverrides
+    const logs = await fetchAuditLogs({ module: 'manning', action_type: 'MANNING_OVERRIDE' })
+    if (logs && logs.length > 0) {
+      localOverrides = logs.map(auditEntryToManningOverride)
+      return localOverrides
+    }
   } catch (err) {
-    console.warn('[v0] manning_overrides table unavailable; using local memory store.', err)
-    return localOverrides
+    console.warn('[v0] fetchAuditLogs for manning overrides fallback to local cache.', err)
   }
+  return localOverrides
 }
 
 export async function createOverride(
   input: Omit<ManningOverride, 'id' | 'created_at'>,
 ): Promise<ManningOverride> {
-  const now = new Date().toISOString()
-  const id = `override-${Date.now()}`
-  const override: ManningOverride = { id, created_at: now, ...input }
+  const auditEntry = await logAuditEvent({
+    actor_id: input.overridden_by || 'wom-001',
+    actor_name: input.overridden_by || 'Manning Officer',
+    module: 'manning',
+    action_type: 'MANNING_OVERRIDE',
+    target_id: input.staff_id,
+    target_snapshot: (input as unknown) as Record<string, unknown>,
+    reason: input.justification,
+  })
 
-  try {
-    const { data, error } = await supabase
-      .from('manning_overrides')
-      .insert(override)
-      .select('*')
-      .single()
-    if (!error && data) {
-      localOverrides = [data as ManningOverride, ...localOverrides]
-      return data as ManningOverride
-    }
-  } catch (err) {
-    console.warn('[v0] Failed to insert manning_override to Supabase; storing locally.', err)
-  }
-
-  localOverrides = [override, ...localOverrides]
-  return override
+  const created = auditEntryToManningOverride(auditEntry)
+  localOverrides = [created, ...localOverrides]
+  return created
 }
 
 export function useManningOverrides() {

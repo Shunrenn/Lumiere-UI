@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, Download, Truck, User, X } from 'lucide-react'
+import { AlertTriangle, Archive, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Download, Truck, User, X } from 'lucide-react'
 import { usePortal } from '@/lib/store'
 import {
   addNewCustomBatch,
@@ -7,6 +7,7 @@ import {
   createReturnBatchFromDelivered,
   deleteBatch,
   exportBatchPdf,
+  getArchivedBatches,
   getEventDispatchSummaries,
   markBatchStalled,
   resolveBatchStall,
@@ -22,6 +23,7 @@ import { getEventDetailSnapshot } from '@/lib/event-detail'
 import { DispatchStepper } from '@/components/warehouse/event-detail/DispatchStepper'
 import { exportDispatchConsolidatedPdf, exportDispatchEventPdf } from '@/lib/pdf-exporter'
 import { BatchDetailView } from '@/components/warehouse/event-detail/BatchDetailView'
+import { ConfirmArchiveBatchModal } from '@/components/warehouse/dispatch/ConfirmArchiveBatchModal'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { cn } from '@/lib/utils'
 
@@ -57,8 +59,11 @@ function Avatar({ name }: { name: string }) {
   )
 }
 
+import { useAuth } from '@/lib/auth'
+
 export function DispatchModule({ onClose }: DispatchModuleProps) {
   const { events, staff, procurement } = usePortal()
+  const { adminEmail, adminName } = useAuth()
   // The store snapshot has to be part of the memo key — without it a stage
   // advance or a newly staged batch mutates the store but never re-derives
   // the summaries the UI renders from.
@@ -74,6 +79,7 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
   const [activeBatchIndex, setActiveBatchIndex] = useState<number | null>(null)
   const [pendingBatchId, setPendingBatchId] = useState<string | null>(null)
   const [newBatchModal, setNewBatchModal] = useState<{ eventId: string; direction: BatchDirection } | null>(null)
+  const [archiveBatchTarget, setArchiveBatchTarget] = useState<{ eventId: string; batch: DispatchBatch } | null>(null)
 
   const selectedEvent = summaries.find((s) => s.eventId === selectedEventId) ?? null
 
@@ -179,18 +185,17 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
               Consolidated
             </button>
           </div>
-
-          {viewMode === 'consolidated' && (
-            <button
-              type="button"
-              onClick={exportConsolidatedManifest}
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-border bg-background px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-accent"
-            >
-              <Download className="size-3.5" />
-              Export All (PDF)
-            </button>
-          )}
-        </div>
+            {viewMode === 'consolidated' && (
+              <button
+                type="button"
+                onClick={exportConsolidatedManifest}
+                className="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-border bg-background px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-accent"
+              >
+                <Download className="size-3.5" />
+                Export All (PDF)
+              </button>
+            )}
+          </div>
 
         {viewMode === 'grouped' && selectedEvent && (
           <div className="flex items-center gap-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -242,9 +247,27 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
           }}
           onCreateReturnBatch={() => createReturnBatchFromDelivered(activeNav.eventId, activeNav.batch)}
           onDelete={() => {
-            deleteBatch(activeNav.eventId, activeNav.batch.id)
+            setArchiveBatchTarget({ eventId: activeNav.eventId, batch: activeNav.batch })
+          }}
+        />
+      )}
+
+      {archiveBatchTarget && (
+        <ConfirmArchiveBatchModal
+          isOpen={!!archiveBatchTarget}
+          onClose={() => setArchiveBatchTarget(null)}
+          onConfirm={(reason) => {
+            deleteBatch(archiveBatchTarget.eventId, archiveBatchTarget.batch.id, reason, {
+              id: adminEmail || 'wom-001',
+              name: adminName || 'Warehouse Operations Manager',
+            })
+            setArchiveBatchTarget(null)
             setActiveBatchIndex(null)
           }}
+          batchCode={archiveBatchTarget.batch.id}
+          driverName={archiveBatchTarget.batch.driverName}
+          vehicleType={archiveBatchTarget.batch.vehicleType}
+          itemCount={archiveBatchTarget.batch.reconciliation.length}
         />
       )}
 
@@ -332,6 +355,8 @@ function EventBatchLevel({
   onOpenBatch: (batchId: string) => void
   onExportManifest: () => void
 }) {
+  const [showArchived, setShowArchived] = useState(false)
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -452,6 +477,63 @@ function EventBatchLevel({
           ))}
         </ul>
       )}
+
+      {/* Collapsible Archived Batches Section */}
+      {(() => {
+        const archived = getArchivedBatches(summary.eventId)
+        if (archived.length === 0) return null
+        return (
+          <div className="mt-4 rounded-xl border border-destructive/20 bg-destructive/5 p-4 space-y-3">
+            <button
+              type="button"
+              onClick={() => setShowArchived((v) => !v)}
+              className="flex w-full items-center justify-between text-xs font-semibold text-destructive hover:opacity-90"
+            >
+              <div className="flex items-center gap-2">
+                <Archive className="h-4 w-4 shrink-0" />
+                <span>Archived / Canceled Batches ({archived.length})</span>
+              </div>
+              <ChevronDown className={cn('h-4 w-4 transition-transform duration-200', showArchived && 'rotate-180')} />
+            </button>
+
+            {showArchived && (
+              <div className="space-y-2.5 border-t border-destructive/20 pt-3 animate-in fade-in-0">
+                {archived.map((batch) => (
+                  <div key={batch.id} className="rounded-lg border border-border bg-card p-3.5 text-xs space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+                      <div className="flex items-center gap-2 font-bold text-foreground">
+                        <span className="rounded bg-destructive/15 px-2 py-0.5 text-[0.62rem] font-bold text-destructive uppercase tracking-wider">Canceled</span>
+                        <span>{batch.vehicleType} ({batch.plateNumber})</span>
+                        <span className="text-[0.7rem] font-normal text-muted-foreground">· Batch ID: {batch.id}</span>
+                      </div>
+                      <span className="text-[0.68rem] text-muted-foreground font-mono">
+                        {batch.archivedAt ? new Date(batch.archivedAt).toLocaleString() : 'Archived'}
+                      </span>
+                    </div>
+
+                    <div className="grid gap-1.5 rounded-md bg-muted/40 p-2.5 text-[0.75rem]">
+                      <div>
+                        <span className="font-semibold text-foreground">Archived By: </span>
+                        <span className="text-muted-foreground">{batch.archivedBy || 'Warehouse Manager'}</span>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-foreground">Operational Reason: </span>
+                        <span className="text-destructive font-medium">{batch.archiveReason || 'No reason specified'}</span>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-foreground">Manifest Snapshot: </span>
+                        <span className="text-muted-foreground">
+                          {batch.reconciliation.length} items ({batch.reconciliation.map((r) => `${r.itemName} [${r.planned}]`).join(', ') || 'None'})
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }

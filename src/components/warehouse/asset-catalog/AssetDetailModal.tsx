@@ -395,7 +395,7 @@ export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: Asse
                 {/* 4. RENTAL */}
                 {asset.category === 'Rental' && (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <DetailField label="Supplier Details" value={asset.supplierDetails ?? asset.rentalVendorName ?? 'Ritz Suppliers'} />
+                    <DetailField label="Supplier / Vendor" value={primaryVendor?.name ?? asset.supplierDetails ?? asset.rentalVendorName ?? 'Ritz Suppliers'} />
                     <DetailField label="Supplier Contact" value={asset.supplierContact ?? 'Vendor Representative'} />
                     <DetailField label="Rental Fee / Rate" value={`₱${asset.purchaseCost.toLocaleString()}`} />
                     <DetailField label="Length of Rent" value={asset.lengthOfRent ?? '7 Days'} />
@@ -410,10 +410,13 @@ export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: Asse
                 {/* 5. OFFICE ASSET */}
                 {asset.category === 'Office Asset' && (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <DetailField label="Vendor Details" value={asset.vendorDetails ?? primaryVendor?.name ?? 'Direct Purchase'} />
+                    <DetailField label="Vendor / Source" value={primaryVendor?.name ?? asset.vendorDetails ?? 'Direct Purchase'} />
                     <DetailField label="Purchase Cost" value={`₱${asset.purchaseCost.toLocaleString()}`} />
                     <DetailField label="Life Span / Warranty" value={asset.lifeSpan ?? '5 Years Warranty'} />
                     <DetailField label="Assigned Custodian" value={asset.custodian ?? 'Unassigned — In Storage'} />
+                    {asset.deviceModel && <DetailField label="Device Model" value={asset.deviceModel} />}
+                    {asset.serialNumber && <DetailField label="Serial Number" value={asset.serialNumber} />}
+                    {asset.deviceSpecs && <DetailField label="Hardware Specs" value={asset.deviceSpecs} />}
                   </div>
                 )}
               </div>

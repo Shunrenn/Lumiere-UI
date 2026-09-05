@@ -78,24 +78,70 @@ function publish(targetEventId?: string, targetBatch?: DispatchBatch) {
   }
 }
 
-export function deleteBatch(eventId: string, batchId: string) {
+import { logAuditEvent } from '@/lib/audit-logger'
+
+export function deleteBatch(
+  eventId: string,
+  batchId: string,
+  reason: string,
+  actor: { id: string; name: string },
+) {
   const batches = batchesByEvent.get(eventId)
   if (!batches) return
-  const updated = batches.filter((b) => b.id !== batchId)
-  batchesByEvent.set(eventId, updated)
-  logActivity(`Dispatch batch ${batchId} was canceled / deleted.`, 'info')
-  publish()
 
+  const targetBatch = batches.find((b) => b.id === batchId)
+  if (!targetBatch) return
+
+  const now = new Date().toISOString()
+  const updatedBatch: DispatchBatch = {
+    ...targetBatch,
+    isArchived: true,
+    archivedAt: now,
+    archivedBy: actor.name,
+    archiveReason: reason,
+  }
+
+  const updated = batches.map((b) => (b.id === batchId ? updatedBatch : b))
+  batchesByEvent.set(eventId, updated)
+
+  logActivity(`Dispatch batch ${batchId} was canceled & archived by ${actor.name}. Reason: ${reason}`, 'info')
+  publish(eventId, updatedBatch)
+
+  // Log structured audit entry
+  void logAuditEvent({
+    actor_id: actor.id,
+    actor_name: actor.name,
+    module: 'dispatch',
+    action_type: 'BATCH_ARCHIVE',
+    target_id: batchId,
+    target_snapshot: (targetBatch as unknown) as Record<string, unknown>,
+    reason,
+  })
+
+  // Update Supabase dispatch batch soft-delete state
   void (async () => {
     try {
-      const { error } = await supabase.from('manning_dispatch_batches').delete().eq('id', batchId)
+      const { error } = await supabase
+        .from('manning_dispatch_batches')
+        .update({
+          is_archived: true,
+          archived_at: now,
+          archived_by: actor.name,
+          archive_reason: reason,
+        })
+        .eq('id', batchId)
       if (error) {
-        console.warn('[v0] Supabase delete batch error; falling back to local store.', error)
+        console.warn('[v0] Supabase archive batch error; falling back to local store.', error)
       }
     } catch (e) {
-      console.warn('[v0] Supabase delete batch network fallback to local store.', e)
+      console.warn('[v0] Supabase archive batch network fallback to local store.', e)
     }
   })()
+}
+
+export function getArchivedBatches(eventId: string): DispatchBatch[] {
+  const batches = batchesByEvent.get(eventId) ?? []
+  return batches.filter((b) => b.isArchived === true)
 }
 
 function ensureSeeded(events: PortalEvent[], staff: Staff[], procurement: ProcurementItem[]) {
@@ -128,17 +174,18 @@ export function getEventDispatchSummaries(
 ): EventDispatchSummary[] {
   ensureSeeded(events, staff, procurement)
   return events.map((event) => {
-    const batches = batchesByEvent.get(event.id) ?? []
-    const { percent, hasPahabol } = computeHandshake(batches)
+    const allBatches = batchesByEvent.get(event.id) ?? []
+    const activeBatches = allBatches.filter((batch) => !batch.isArchived)
+    const { percent, hasPahabol } = computeHandshake(activeBatches)
     return {
       eventId: event.id,
       eventTitle: event.title,
       venue: event.venue,
       targetDate: event.targetDate,
-      batches,
+      batches: activeBatches,
       handshakePercent: percent,
       hasPahabol,
-      hasStalled: batches.some((batch) => batch.stalled),
+      hasStalled: activeBatches.some((batch) => batch.stalled),
     }
   })
 }

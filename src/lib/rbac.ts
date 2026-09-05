@@ -39,6 +39,9 @@ export interface SubRole {
   permissionsConfigured?: boolean
   // Whether self-validation on audit holds is permitted for this sub-role (defaults to true).
   allowSelfValidation?: boolean
+  // Team Lead headcount quota limits (Foundation F)
+  minTeamLeads?: number
+  maxTeamLeads?: number
   // Traces permanent emergency conversion
   permanentlyEnabledViaEmergency?: boolean
   emergencyUnblockMetadata?: SubRoleEmergencyUnblockMetadata
@@ -207,6 +210,9 @@ export interface SubRoleNode {
   // leaf nodes. See isNodeConfigured.
   permissionsConfigured?: boolean
   comingSoon?: boolean
+  // Team Lead headcount quota limits (Foundation F)
+  minTeamLeads?: number
+  maxTeamLeads?: number
   children: SubRoleNode[]
 }
 

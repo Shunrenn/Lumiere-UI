@@ -723,6 +723,15 @@ export function AdminRolesPage() {
                       }))
                       showToast(`Self-validation policy updated for '${targetSub.name}'.`)
                     }}
+                    onUpdateQuota={(targetSub, minLeads, maxLeads) => {
+                      setSubRolesByParent((prev) => ({
+                        ...prev,
+                        [parent.id]: (prev[parent.id] ?? []).map((s) =>
+                          s.id === targetSub.id ? { ...s, minTeamLeads: minLeads, maxTeamLeads: maxLeads } : s,
+                        ),
+                      }))
+                      showToast(`Team Lead quotas updated for '${targetSub.name}'.`)
+                    }}
                   />
                 ))}
 
@@ -958,6 +967,7 @@ interface SubRoleRowProps {
   onSaveClick: () => void
   onDeleteClick: () => void
   onToggleSelfValidation?: (sub: SubRole) => void
+  onUpdateQuota?: (sub: SubRole, minLeads?: number, maxLeads?: number) => void
 }
 
 function SubRoleRow({
@@ -976,6 +986,7 @@ function SubRoleRow({
   onSaveClick,
   onDeleteClick,
   onToggleSelfValidation,
+  onUpdateQuota,
 }: SubRoleRowProps) {
   const comingSoon = !!sub.comingSoon
   const effectiveName = draftName ?? sub.name
@@ -1107,6 +1118,50 @@ function SubRoleRow({
               </div>
             )
           })()}
+
+          {/* Team Lead Headcount Quota Configuration (Foundation F) */}
+          <div className="mb-4 rounded-lg border border-border bg-background/60 p-3.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold text-card-foreground">Team Lead Headcount Quotas</p>
+              <p className="text-[0.7rem] text-muted-foreground leading-relaxed mt-0.5">
+                Set active Team Lead limits for this sub-role. Assignment creation enforces maximum quota; assignment closing/removal enforces minimum quota.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-1.5">
+                <label className="text-[0.65rem] font-medium text-muted-foreground" htmlFor={`min-lead-${sub.id}`}>Min Leads:</label>
+                <input
+                  id={`min-lead-${sub.id}`}
+                  type="number"
+                  min="0"
+                  max="99"
+                  placeholder="None"
+                  value={sub.minTeamLeads ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value, 10) || 0)
+                    onUpdateQuota?.(sub, val, sub.maxTeamLeads)
+                  }}
+                  className="w-16 rounded border border-input bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <label className="text-[0.65rem] font-medium text-muted-foreground" htmlFor={`max-lead-${sub.id}`}>Max Leads:</label>
+                <input
+                  id={`max-lead-${sub.id}`}
+                  type="number"
+                  min="0"
+                  max="99"
+                  placeholder="None"
+                  value={sub.maxTeamLeads ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value, 10) || 0)
+                    onUpdateQuota?.(sub, sub.minTeamLeads, val)
+                  }}
+                  className="w-16 rounded border border-input bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+          </div>
 
           <p className="mb-3 text-[0.58rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">
             Permission detail — by module

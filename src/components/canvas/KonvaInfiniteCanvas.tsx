@@ -51,6 +51,10 @@ export interface KonvaCanvasAsset {
   strokeColor?: string
   strokeWidth?: number
   fontSize?: number
+  fontStyle?: string
+  textDecoration?: string
+  align?: string
+  fontFamily?: string
 }
 
 export interface KonvaDroppedAsset {
@@ -247,7 +251,21 @@ function CanvasElement({
       </Group>
     )
   } else if (kind === 'text') {
-    nodeEl = <KonvaText {...commonProps} width={asset.w} height={asset.h} text={isEditing ? '' : (asset.text || 'Add text')} fontSize={asset.fontSize || 20} fontFamily="sans-serif" fill={asset.strokeColor || '#0f172a'} wrap="word" />
+    nodeEl = (
+      <KonvaText
+        {...commonProps}
+        width={asset.w}
+        height={asset.h}
+        text={isEditing ? '' : (asset.text || 'Add text')}
+        fontSize={asset.fontSize || 20}
+        fontFamily={asset.fontFamily || 'sans-serif'}
+        fontStyle={asset.fontStyle || 'normal'}
+        textDecoration={asset.textDecoration || ''}
+        align={asset.align || 'left'}
+        fill={asset.strokeColor || asset.fill || '#0f172a'}
+        wrap="word"
+      />
+    )
   }
 
   return (

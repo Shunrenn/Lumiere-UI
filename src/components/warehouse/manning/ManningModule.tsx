@@ -23,7 +23,9 @@ import {
 import { CrewOpsGrid } from '@/components/warehouse/manpower/CrewOpsGrid'
 import { DailyZoneDutyView } from '@/components/warehouse/manpower/DailyZoneDutyView'
 import { AssignCrewModal } from '@/components/warehouse/manpower/AssignCrewModal'
+import { PARENT_ROLES } from '@/lib/rbac'
 import {
+  closeAssignment,
   confirmTask,
   formatSlaCountdown,
   isSlaOverdue,
@@ -35,6 +37,7 @@ import {
 } from '@/lib/manning'
 import { cn } from '@/lib/utils'
 import { exportCrewRosterPdf } from '@/lib/pdf-exporter'
+import { ManningSlaModule } from '@/components/warehouse/manning-sla/ManningSlaModule'
 
 function Avatar({ name }: { name: string }) {
   const initials = name
@@ -82,6 +85,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
   const [rosterOpen, setRosterOpen] = useState(true)
   const [assignOpen, setAssignOpen] = useState(false)
   const [fullRosterModalOpen, setFullRosterModalOpen] = useState(false)
+  const [slaModuleOpen, setSlaModuleOpen] = useState(false)
 
   // Card Click Inspection Detail Modals
   const [selectedAssignment, setSelectedAssignment] = useState<ManningAssignment | null>(null)
@@ -206,6 +210,15 @@ export function ManningModule({ onClose }: ManningModuleProps) {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSlaModuleOpen(true)}
+              className="inline-flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[0.65rem] font-bold uppercase tracking-[0.1em] text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition"
+            >
+              <Clock className="size-3.5" />
+              SLA & Disputed Confirmations
+            </button>
+
             <button
               type="button"
               onClick={() => setRosterOpen((prev) => !prev)}
@@ -596,6 +609,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
           assignment={selectedAssignment}
           onClose={() => setSelectedAssignment(null)}
           onExport={handleExportCrewRoster}
+          onAssignmentClosed={reload}
         />
       )}
 
@@ -613,6 +627,8 @@ export function ManningModule({ onClose }: ManningModuleProps) {
           }}
         />
       )}
+
+      {slaModuleOpen && <ManningSlaModule onClose={() => setSlaModuleOpen(false)} />}
     </div>
   )
 }
@@ -753,11 +769,41 @@ function AssignmentDetailModal({
   assignment,
   onClose,
   onExport,
+  onAssignmentClosed,
 }: {
   assignment: ManningAssignment
   onClose: () => void
   onExport?: (assignment: ManningAssignment) => void
+  onAssignmentClosed?: () => void
 }) {
+  const { subRolesByParent } = usePortal()
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [closing, setClosing] = useState(false)
+
+  async function handleCloseAssignment() {
+    setErrorMsg(null)
+    setClosing(true)
+    try {
+      const targetSubRole = assignment.sub_role?.trim() || ''
+      const allSubRoles = PARENT_ROLES.flatMap((p) => subRolesByParent[p.id] ?? [])
+      const matched = allSubRoles.find(
+        (s) =>
+          s.name.toLowerCase() === targetSubRole.toLowerCase() ||
+          s.id.toLowerCase() === targetSubRole.toLowerCase(),
+      )
+      await closeAssignment(
+        assignment.id,
+        matched ? { minTeamLeads: matched.minTeamLeads } : undefined,
+      )
+      onAssignmentClosed?.()
+      onClose()
+    } catch (err: any) {
+      console.error('[v0] close assignment failed', err)
+      setErrorMsg(err?.message || 'Failed to remove assignment')
+      setClosing(false)
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
@@ -786,6 +832,12 @@ function AssignmentDetailModal({
             <X className="size-4" />
           </button>
         </div>
+
+        {errorMsg && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs font-medium text-destructive">
+            {errorMsg}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3 text-xs">
           <div className="rounded-lg border border-border bg-background p-3">
@@ -842,20 +894,32 @@ function AssignmentDetailModal({
         </div>
 
         <div className="flex items-center justify-between border-t border-border pt-3">
-          <button
-            type="button"
-            onClick={() => {
-              onExport?.(assignment)
-            }}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-card-foreground hover:bg-accent"
-          >
-            <Download className="size-3.5" />
-            Export Roster (PDF)
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                onExport?.(assignment)
+              }}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-card-foreground hover:bg-accent"
+            >
+              <Download className="size-3.5" />
+              Export Roster (PDF)
+            </button>
+            {assignment.status === 'Active' && (
+              <button
+                type="button"
+                disabled={closing}
+                onClick={handleCloseAssignment}
+                className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-destructive hover:bg-destructive/20 disabled:opacity-50"
+              >
+                {closing ? 'Removing...' : 'Remove Assignment'}
+              </button>
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-border px-4 py-2 text-xs font-bold uppercase tracking-wider hover:bg-accent"
+            className="rounded-md border border-border px-4 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-accent"
           >
             Close
           </button>

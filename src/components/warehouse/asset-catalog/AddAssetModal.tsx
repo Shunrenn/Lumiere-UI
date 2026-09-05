@@ -5,7 +5,7 @@ import type {
   AssetDimensions,
   BespokeStage,
 } from '@/lib/warehouse-catalog'
-import { getWarehouseVendors } from '@/lib/warehouse-vendors'
+import { SearchableVendorSelect } from '@/components/warehouse/shared/SearchableVendorSelect'
 import { cn } from '@/lib/utils'
 
 const CATEGORIES: AssetCategory[] = [
@@ -86,6 +86,9 @@ export interface NewAssetDraft {
   // Office Asset
   vendorDetails?: string
   custodian?: string
+  deviceModel?: string
+  serialNumber?: string
+  deviceSpecs?: string
 }
 
 interface AddAssetModalProps {
@@ -151,8 +154,6 @@ async function processBackgroundRemoval(dataUrl: string): Promise<string | null>
 }
 
 export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
-  const vendors = getWarehouseVendors()
-
   // Photo state & BG removal toggle
   const [originalImage, setOriginalImage] = useState<string | null>(null)
   const [bgRemovedImage, setBgRemovedImage] = useState<string | null>(null)
@@ -204,14 +205,15 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
   const [ceilingCap, setCeilingCap] = useState('')
 
   // Rental Tier Fields (BLANK DEFAULTS)
-  const [supplierDetails, setSupplierDetails] = useState('')
   const [supplierContact, setSupplierContact] = useState('')
   const [lengthOfRent, setLengthOfRent] = useState('')
   const [overduePenaltyFee, setOverduePenaltyFee] = useState('')
 
   // Office Asset Tier Fields (BLANK DEFAULTS)
-  const [vendorDetails, setVendorDetails] = useState('')
   const [custodian, setCustodian] = useState('')
+  const [deviceModel, setDeviceModel] = useState('')
+  const [serialNumber, setSerialNumber] = useState('')
+  const [deviceSpecs, setDeviceSpecs] = useState('')
 
   const canSubmit = name.trim().length > 0
 
@@ -327,14 +329,15 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
       pricePerPack: pricePerPack ? Number(pricePerPack) : undefined,
 
       // Rental
-      supplierDetails: supplierDetails.trim() || undefined,
       supplierContact: supplierContact.trim() || undefined,
       lengthOfRent: lengthOfRent.trim() || undefined,
       overduePenaltyFee: overduePenaltyFee ? Number(overduePenaltyFee) : undefined,
 
       // Office Asset
-      vendorDetails: vendorDetails.trim() || undefined,
       custodian: custodian || undefined,
+      deviceModel: deviceModel.trim() || undefined,
+      serialNumber: serialNumber.trim() || undefined,
+      deviceSpecs: deviceSpecs.trim() || undefined,
     }
 
     onCreate(draft)
@@ -705,36 +708,18 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
                 </div>
 
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1">
-                    <span className="text-[0.58rem] font-bold uppercase text-muted-foreground">Primary Vendor</span>
-                    <select
-                      value={primaryVendorId}
-                      onChange={(e) => setPrimaryVendorId(e.target.value)}
-                      className="rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none"
-                    >
-                      <option value="">Select primary vendor...</option>
-                      {vendors.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-[0.58rem] font-bold uppercase text-muted-foreground">Backup Vendor</span>
-                    <select
-                      value={backupVendorId}
-                      onChange={(e) => setBackupVendorId(e.target.value)}
-                      className="rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none"
-                    >
-                      <option value="">Select backup vendor...</option>
-                      {vendors.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <SearchableVendorSelect
+                    label="Primary Vendor"
+                    value={primaryVendorId}
+                    onChange={setPrimaryVendorId}
+                    placeholder="Select primary vendor…"
+                  />
+                  <SearchableVendorSelect
+                    label="Backup Vendor"
+                    value={backupVendorId}
+                    onChange={setBackupVendorId}
+                    placeholder="Select backup vendor…"
+                  />
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-3">
@@ -917,6 +902,21 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
                   </label>
                 </div>
 
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <SearchableVendorSelect
+                    label="Primary Vendor"
+                    value={primaryVendorId}
+                    onChange={setPrimaryVendorId}
+                    placeholder="Select primary vendor…"
+                  />
+                  <SearchableVendorSelect
+                    label="Backup Vendor"
+                    value={backupVendorId}
+                    onChange={setBackupVendorId}
+                    placeholder="Select backup vendor…"
+                  />
+                </div>
+
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-3">
                   <label className="flex flex-col gap-1">
                     <span className="text-[0.58rem] font-bold uppercase text-muted-foreground">Price / Pack (₱)</span>
@@ -956,17 +956,14 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
             {category === 'Rental' && (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <SearchableVendorSelect
+                    label="Primary Vendor"
+                    value={primaryVendorId}
+                    onChange={setPrimaryVendorId}
+                    placeholder="Select primary rental vendor…"
+                  />
                   <label className="flex flex-col gap-1">
-                    <span className="text-[0.58rem] font-bold uppercase text-muted-foreground">Supplier Details</span>
-                    <input
-                      value={supplierDetails}
-                      onChange={(e) => setSupplierDetails(e.target.value)}
-                      placeholder="e.g. Ritz Logistics & Rental Co."
-                      className="rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-[0.58rem] font-bold uppercase text-muted-foreground">Supplier Contact</span>
+                    <span className="text-[0.58rem] font-bold uppercase text-muted-foreground">Supplier Contact / Ref</span>
                     <input
                       value={supplierContact}
                       onChange={(e) => setSupplierContact(e.target.value)}
@@ -1014,15 +1011,12 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
             {category === 'Office Asset' && (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1">
-                    <span className="text-[0.58rem] font-bold uppercase text-muted-foreground">Vendor Details</span>
-                    <input
-                      value={vendorDetails}
-                      onChange={(e) => setVendorDetails(e.target.value)}
-                      placeholder="e.g. Direct Warehouse Procurement"
-                      className="rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none"
-                    />
-                  </label>
+                  <SearchableVendorSelect
+                    label="Primary Vendor"
+                    value={primaryVendorId}
+                    onChange={setPrimaryVendorId}
+                    placeholder="Select primary vendor…"
+                  />
                   <label className="flex flex-col gap-1">
                     <span className="text-[0.58rem] font-bold uppercase text-muted-foreground">Assigned Custodian</span>
                     <select
@@ -1037,6 +1031,42 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
                         </option>
                       ))}
                     </select>
+                  </label>
+                </div>
+
+                {/* Device Info Fields */}
+                <div className="rounded-md border border-border bg-muted/20 p-2.5 space-y-2">
+                  <span className="text-[0.58rem] font-bold uppercase tracking-[0.08em] text-primary block">
+                    Device Info &amp; Hardware Specs
+                  </span>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[0.55rem] font-bold uppercase text-muted-foreground">Device Model / Type</span>
+                      <input
+                        value={deviceModel}
+                        onChange={(e) => setDeviceModel(e.target.value)}
+                        placeholder="e.g. MacBook Pro 16 M3 Max"
+                        className="rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[0.55rem] font-bold uppercase text-muted-foreground">Serial Number / Asset Tag</span>
+                      <input
+                        value={serialNumber}
+                        onChange={(e) => setSerialNumber(e.target.value)}
+                        placeholder="e.g. SN-2026-88401"
+                        className="rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none"
+                      />
+                    </label>
+                  </div>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[0.55rem] font-bold uppercase text-muted-foreground">Technical Specs / Condition</span>
+                    <input
+                      value={deviceSpecs}
+                      onChange={(e) => setDeviceSpecs(e.target.value)}
+                      placeholder="e.g. 36GB RAM, 1TB SSD — MINT CONDITION"
+                      className="rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none"
+                    />
                   </label>
                 </div>
 

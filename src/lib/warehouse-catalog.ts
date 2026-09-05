@@ -164,6 +164,9 @@ export interface CatalogAsset {
   // Office Asset Specific
   custodian?: string
   vendorDetails?: string
+  deviceModel?: string
+  serialNumber?: string
+  deviceSpecs?: string
 }
 
 function hashOf(value: string) {

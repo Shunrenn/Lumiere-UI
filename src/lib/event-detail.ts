@@ -73,6 +73,11 @@ export interface DispatchBatch {
   // and it can resume from exactly where it stopped.
   stalled: boolean
   stalledReason: string
+  // Soft-delete archiving metadata
+  isArchived?: boolean
+  archivedAt?: string
+  archivedBy?: string
+  archiveReason?: string
 }
 
 // A single event field that an Admin edited since the planner's last view.

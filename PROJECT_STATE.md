@@ -218,14 +218,14 @@ The operational UI maps module IDs such as `assets`, `production`, `manpower`, a
 - **Page management:** Add, Duplicate, Hide (opacity toggle), Delete, Move Up/Down, and Rename page actions, all accessible from Flow mode's external header bars and Thumbnail mode's page context controls.
 - **Uploads tab drag-to-canvas:** uploaded images (and demo reference images) are draggable onto the canvas using the same `DRAG_MIME` pattern as the Elements tab. Click-to-add is also supported.
 
-**Canvas workspace sidebar audit (current status):**
+**Canvas workspace sidebar audit (COMPLETED & BROWSER-VERIFIED):**
 
 - **Elements tab:** fully functional end-to-end (search → drag → place → allocation tracking).
-- **Text tab:** visual placeholder only — no buttons are wired to place Konva Text nodes.
+- **Text tab:** fully functional — hero button (`+ Add a paragraph text`) + 4 typography style presets (Header, Subheading, Body, Caption) place Konva Text nodes. Quick formatting controls (Bold, Italic, Underline, Align) render visibly disabled when no text element is selected, and format active text nodes when selected.
 - **Uploads tab:** fully functional — file upload + drag-to-canvas + click-to-add.
-- **Tools tab:** visual placeholder only — tool selection state is local, never reaches canvas.
-- **Projects tab:** search/accordion works, but sub-page navigation buttons are not wired.
-- **Background tab:** UI controls work (color swatches, photo upload), but "Apply" button does not actually change the Konva artboard fill.
+- **Tools tab:** fully functional — all 6 tools (Select, Draw freehand, Shapes, Lines, Sticky Note, Text) wired to Konva canvas with drag math, inline editing at 150% zoom, auto-reset to Select tool, and `localStorage` persistence.
+- **Projects tab:** fully functional — lists Designs and Mood Boards. Supports single sub-page insertion (`+ INSERT`) and full project/board insertion (`+ ALL PAGES` / `+ IMPORT BOARD`) appending appended pages to the current project canvas with complete asset path-data preservation (`points` array) and zero reference leakage.
+- **Background tab:** fully functional — preset color swatches and custom photo upload apply cover-fitted backdrops across all project pages with green success badge and `localStorage` persistence.
 
 **Persistence:** mostly frontend-only/in-memory.
 
@@ -257,7 +257,7 @@ The operational UI maps module IDs such as `assets`, `production`, `manpower`, a
 
 ### 2.9 Replenishment, procurement, and vendors
 
-**Status:** frontend prototype; mostly mock/in-memory.
+**Status:** frontend prototype; completed Prompt 6 & Prompt 7 enhancements.
 
 **What it does:**
 
@@ -266,6 +266,14 @@ The operational UI maps module IDs such as `assets`, `production`, `manpower`, a
 - Reorder requisition drawer/modal.
 - Vendor matching, supplier details, lead times, ratings, preferred vendors, and price tiers.
 - Generate purchase order and bulk generation flows.
+- **Replenishment PDF Active Deficit Alignment (Prompt 6 COMPLETE):** `exportReplenishmentDeficitPdf` total calculation strictly filters out "Received" status items (`item.status !== 'Received'`), matching the on-screen active deficit total (e.g. ₱302,976 on Versailles Mirror Gallery Banquet).
+- **Searchable Vendor Select (Prompt 7 COMPLETE):** Converted vendor selects (`SearchableVendorSelect.tsx`) across Add Master Item, Edit Deficit Line, and Asset Registration forms into searchable type-to-filter inputs with inline `+ Add new vendor...` creation modal support and status badges.
+- **Category-Specific Asset Registration Fields (Prompt 7 COMPLETE):**
+  - **Event Asset:** Primary Vendor + Backup Vendor + Dimensions (H/W/D) + Weight.
+  - **Stockroom:** Primary Vendor + Backup Vendor.
+  - **Rental:** Primary Vendor only (no Backup Vendor), Unit field hidden.
+  - **Office Asset:** Primary Vendor only (no Backup Vendor) + Device Info fields (`deviceModel`, `serialNumber`, `deviceSpecs`).
+- **Legacy Fallback Display (Prompt 7 COMPLETE):** Unlinked legacy Rental assets preserve free-text `supplierDetails` / `rentalVendorName` fallback in detail modals when `primaryVendorId` is empty.
 
 **Persistence:** frontend-only/in-memory in the current app. No complete purchase-order, requisition, vendor, or threshold persistence path is established.
 
@@ -306,7 +314,33 @@ Implemented surfaces include:
 - Some warehouse catalog, production, dispatch, crew, and vendor modules use in-memory stores with listener-based updates; several have Supabase imports or optional database paths that need auditing individually.
 - Many displayed records and workflow statuses remain seeded demo data.
 
-### 2.12 Access requests, password reset requests, and account actions
+### 2.12 Unified Audit Logging & Dispatch Archiving
+
+**Status:** COMPLETE (Unified cross-module audit logging & soft-delete batch archiving).
+
+**What it does:**
+
+- **Generic `audit_logs` Schema & Utility (`src/lib/audit-logger.ts`):** Centralized structured audit ledger (`id`, `actor_id`, `actor_name`, `module`, `action_type`, `target_id`, `target_snapshot`, `reason`, `created_at`).
+- **Postgres DDL & `NOT NULL` Enforcement (`supabase/audit_logs.sql`):** Defines production DDL table with strict `reason TEXT NOT NULL` constraint and indexing.
+- **Prototype `localStorage` Fallback (`lumiere_audit_logs`):** Automatically persists audit records across reloads when Supabase is operating on placeholder credentials.
+- **Dispatch `deleteBatch()` Soft-Delete Archiving (`src/lib/warehouse-dispatch.ts`):** Replaces hard-deletion with `is_archived = true`, requiring mandatory user justification modal (`ConfirmArchiveBatchModal.tsx`) and saving full manifest snapshots.
+- **Collapsible "Archived Batches" UI (`DispatchModule.tsx`):** Displays archived/canceled batches directly in the Dispatch view with reason, timestamp, actor, and snapshot history.
+- **Legacy `manning_overrides` Consolidation:** Retired `manning_overrides` table in favor of `audit_logs` single source of truth, eliminating dual-write table drift.
+- **Preset Squad & Damage Audit Trails:** Instruments squad creation/deletion (`src/lib/warehouse-crew.ts`) and damage verdicts/emergency unblocks (`src/lib/store.tsx`) with audit log emissions.
+
+### 2.13 Foundation F: Admin-Configured Team Lead Quotas per Sub-Role
+
+**Status:** COMPLETE (Admin-configured Team Lead headcount limits per sub-role).
+
+**What it does:**
+
+- **SubRole Quota Schema (`src/lib/rbac.ts`):** Extended `SubRole` and `SubRoleNode` interfaces with optional `minTeamLeads?: number` and `maxTeamLeads?: number` properties.
+- **Admin Configuration UI (`AdminRolesPage.tsx`):** Added interactive "Team Lead Headcount Quotas" input controls (Min Leads, Max Leads) in each sub-role card on the Roles & Sub-Roles configuration page.
+- **Max Quota Creation Enforcement (`createAssignment` in `src/lib/manning.ts`):** Enforces hard-block error (`throw new Error(...)`) during assignment creation if assigning a Team Lead for a sub-role on `work_date` would push active Team Lead headcount beyond `maxTeamLeads`.
+- **Min Quota Removal Enforcement (`closeAssignment` in `src/lib/manning.ts`):** Enforces hard-block error (`throw new Error(...)`) during assignment closing/removal if removing an active Team Lead assignment drops active Team Lead headcount for that sub-role on `work_date` below `minTeamLeads`.
+- **UI Error Feedback (`ManningSlaModule.tsx`):** Surfaces structured error messages in assignment creation modals when quota limits are violated.
+
+### 2.14 Access requests, password reset requests, and account actions
 
 **Status:** partially done.
 
@@ -821,40 +855,32 @@ The app is best understood as a polished multi-portal frontend prototype with a 
     - **Editable Vehicle & Driver**: `driverName` field added to `DispatchBatch` schema, with dynamic vehicle type, plate number, and driver name editing in `BatchDetailView`.
     - **Cancel/Delete Batch Action (Feature Addition)**: Exposed red `Cancel / Delete Batch` button in `BatchDetailView` header with confirmation popup modal. Deleting a batch removes it from active fleet store & Supabase (`deleteBatch`), logs to the Dispatch Activity Feed (`getDispatchActivity`), and releases all committed quantities back to the available pool. Reactivity is instant on the active tab/device (`useSyncExternalStore`), with cross-device sync updating upon module open/refresh.
 
-### Next Up / Pending Tasks
-- **Foundation C-F**: (leave-after-assignment auto-release, First-Commit-Wins tie-breaker, no-show flag, Admin Team Lead quota) — parked, non-blocking future tasks.
-- **Foundation G: Centralized Audit Log (parked, cross-module)**:
-  - **Status**: Not started — identified during Prompt 5 Dispatch sign-off review.
-  - **Problem**: Destructive/sensitive actions across modules currently use inconsistent audit patterns. `manning_overrides` has a proper structured table with mandatory justification (gold standard). Dispatch batch deletion only writes a free-text activity log string (no actor, no reason, no snapshot). Preset squad create/rename/delete audit trail status unconfirmed.
-  - **Proposed Fix**: Generic reusable `audit_log` Supabase table usable across all modules (`id`, `actor_id` / `actor_name`, `module`, `action_type`, `target_id`, `target_snapshot` [JSON], `reason`, `created_at`).
-  - **Scope**: Cross-cutting, not tied to one module. Needs its own data-model-first proposal before implementation.
-  - **Related Gap**: Dispatch's current `deleteBatch()` hard-deletes with no soft-delete/archive option — no manifest/reconciliation history preserved. Decision pending on whether this matters for dispute resolution.
-- **Prompt 6**: Replenishment status labels & workflow adjustments.
-- **Prompt 7**: Vendor search & Asset detail fields.
+  - **Prompt 6 (Replenishment Deficits & Status/PDF Fixes) — COMPLETE ✅**:
+    - **Deficit Line Statuses**: Status options updated to `'Not Purchased'`, `'In Procurement'`, `'Received'`, and `'Cancelled'` across replenishment table and modals.
+    - **Master PO & Bulk Generation**: Supports bulk line status updates to `'In Procurement'` with selected vendor mapping.
+    - **PDF Exporter Mismatch Fix**: [`exportReplenishmentDeficitPdf`](file:///c:/Users/T480s/Downloads/Lumiere_Frontend/src/lib/pdf-exporter.ts#L422) now filters `activeLines = lines.filter(l => l.status !== 'Received')` and computes `totalEstimatedCost` using `quantityNeeded`, ensuring the PDF header (`Total Estimated Procurement Cost`) matches the on-screen Active Deficit Total (e.g. Versailles Mirror Gallery Banquet correctly displays ₱302,976 on both screen and PDF).
 
 ---
 
-## Backlog — Client Walkthrough Notes (Post-WOM Priority)
+## WOM Session Completion Summary (September 2026)
 
-Status: Logged, not started. Sequenced after current WOM work (build-failure fix →
-Foundation E → Prompt 5 clarifications → Prompt 6 → Prompt 7 → Foundation G).
+This session completed the full suite of Warehouse Operations Manager (WOM) foundational engine upgrades, Prompt packages, audit trail standardizations, and export conversions:
 
-### Approved Package — "Damage Validation Ownership Change" (Queued Next)
-- **Status:** Approved package; sequenced next behind build stabilization and immediate prompt queue.
-- **Executive Read-Only Transition:** Executive role becomes read-only / insights-only across the system — no sign-off or approval actions anywhere, including Damage Validation.
-- **Sign-Off Authority Migration:** Sign-off authority (Repair, Write-off) moves from Executive to WOM (Warehouse Manager / Inventory Officer). Executive becomes notify-only for damage events.
-- **Unified UI Route:** Damage Validation UI remains a single page/route (`DamageValidationPage.tsx`), rendering read-only (stripped action buttons, non-editable modal) for Executive credentials and interactive for qualifying WOM roles.
-- **Repair Transition to Maintenance:** Repair sign-off updates the corresponding asset's status in the Asset Registry to `'In Maintenance'`, with a WOM-accessible 'Complete Maintenance / Return to Stock' flow back to `'Available'`.
-- **Terminal Event Status ('Settled'):** New terminal event status `Settled`, blocked by unresolved damage exceptions. Event Settlement blocking override routes through WOM sign-off instead of Executive.
-- **Dual-Custody & "Allow Self-Validation" Permission**:
-  - Configurable per WOM sub-role in RBAC (`allowSelfValidation?: boolean`, default: `true` for lean teams).
-  - When `true` (ON): Single qualifying WOM actor can resolve Held-for-Audit with PIN + mandatory justification (≥20 chars) + acknowledgement checkbox.
-  - When `false` (OFF): Strict dual-custody enforced. If understaffed (<2 qualifying accounts), resolution is strictly blocked.
-  - **Admin Emergency Unblock Choice (when OFF)**:
-    - **Option A ("One-Time" / Instance - Default)**: Auto-reverts toggle to OFF once the specific claim is resolved.
-    - **Option B ("Permanent")**: Keeps toggle ON permanently; requires mandatory warning modal with explicit acknowledgement checkbox.
-    - **Audit Trail**: Records `originatedFromEmergency: true`, `emergencyReason`, and (for Option B) `madePermanentAt` / `permanentAcknowledged: true`.
-- **General Client UI Directive:** "Simplify, Be Specific" — applies broadly across upcoming redesign work.
+- **Build-Failure Verification Fix**: Identified and resolved the root `tsconfig.json` false-positive pass issue (`"files": []` without glob). Standing verification rule established: always execute `pnpm run build` (`tsc -b && vite build`), never `npx tsc --noEmit` alone.
+- **Damage Validation Ownership Change Package**: Transitioned Executive role to read-only system-wide. Moved sign-off authority (Repair, Write-off) exclusively to WOM roles (Warehouse Manager / Inventory Officer). Added configurable per-sub-role `allowSelfValidation` dual-custody toggle with Admin Emergency Unblock (One-Time and Permanent options), and enforced the `Settled` event status blocking rule.
+- **Prompt 6 (Replenishment & Deficits) & Prompt 7 (Vendor Search + Asset Fields)**: Successfully closed and verified.
+- **PDF Export Conversion & Audit Log CSV Export**: Reverted Security Audit Logs to clean CSV export with custom date range selector. Converted Dispatch Manifests, Replenishment Requisitions, and Crew Rosters to branded PDF downloads via shared `pdf-exporter.ts`.
+- **Bespoke Item Time Estimation & Production Gantt Scheduling**: Added `Simulation` tab in Asset Detail modal for mean-based time estimation from build attempts. Implemented Production Gantt chart scheduling with diminishing-returns worker scaling formula, locked baseline snapshots, and non-blocking crew capacity warnings.
+- **Foundation G — Centralized Audit Log**: Implemented reusable generic `audit_logs` schema with `localStorage` fallback layer. Retired legacy `manning_overrides` table in favor of `audit_logs`. Added soft-delete batch archiving pattern for Dispatch manifests.
+- **Foundation F — Admin-Configured Team Lead Quotas**: Added `minTeamLeads` and `maxTeamLeads` configuration per WOM sub-role. Enforced `maxTeamLeads` as a hard block during assignment creation and `minTeamLeads` at assignment removal/closure.
+- **Foundation D — First-Commit-Wins Confirmation Tie-Breaker**: Implemented tie-breaker logic for conflicting Team Lead task confirmations and daily attendance updates. Redundant matching outcomes silently no-op (retaining first commit without dispute log clutter); differing outcomes block second commit and emit a `DISPUTED_CONFIRMATION` audit log for Manning review.
+- **Foundation C — Leave-After-Assignment Auto-Release**: Implemented auto-release of committed assignment slots when a crew member marks a date Unavailable/OFF. Dual-path triggers wired into Shift Grid (`'OFF'`) and Daily Duty Attendance (`'absent_approved'`) with cross-subsystem lockstep grid sync, Team Lead promotion/closure logic, and integration with Foundation F Quota Deficit alerts.
+
+---
+
+## Backlog — Client Walkthrough Notes (Blocked on Client Input)
+
+**Status:** All active implementation work across WOM modules is **COMPLETE**. The items listed below represent open design and scope questions awaiting client input via the human PM.
 
 ### Needs clarification before scoping (open questions, not yet resolved with client)
 - **NDA consolidation**: client wants a single consolidated NDA document, described
@@ -911,8 +937,8 @@ Update this file whenever a feature moves from mock/in-memory to persisted, a pe
 | Event planning | Broad UI | Planner context/seed data | Mostly not persisted |
 | Canvas | Broad UI + dual page modes + per-page partitioning | React/localStorage (per-project scoped) | Mostly not persisted |
 | Inventory | Broad UI | Store + selected Supabase writes | Partial |
-| Replenishment/vendors | Broad UI | Seed/in-memory | Not persisted |
-| Damage validation | Interactive workflow | Store/seed data | Not persisted |
+| Replenishment/vendors | Complete UI + Prompt 7 Searchable Select | Seed/in-memory | Not persisted |
+| Damage validation | Interactive workflow (Prompt 6 package COMPLETE) | Store/seed data | Not persisted |
 | Manning | Interactive workflow | Module state + Supabase paths | Partial Supabase |
 | Warehouse operations | Broad UI | Module stores/seed data | Mixed/needs audit |
 | Password/access requests | Partial | React + `access_requests` | Partial Supabase |
@@ -973,6 +999,13 @@ The UI currently calls `PortalProvider` the “single source of truth” for pen
   - **Read-Only Computed End Date & Locked Baseline Snapshots:** Scheduled jobs snapshot `lockedBaseSingleWorkerMinutes` and `lockedMaxParallelWorkers` to prevent retrospective drift from subsequent simulation runs.
   - **Audit Delay Logging:** Delays are logged as structured exception entries (`reason`, `delayHours`, `timestamp`) rather than direct date mutations, rendering visual `+ Delay` extensions on the Gantt chart.
   - **Aggregate Capacity Alert:** Non-blocking warning banner when total assigned workers across active jobs exceed available fabrication crew on any given date.
+
+### Canvas Workspace Backlog & Sidebar Verification (Completed Sep 2026)
+- **Tools Tab:** Click-to-place (Shapes, Sticky Note, Text) and drag-to-draw (Lines, Draw freehand path) with auto-reset to Select tool, 150% zoom inline text editing positioning math, and `localStorage` persistence (`lumiere-canvas-assets-${cardId}`).
+- **Duplicate Project Independence:** Ellipsis menu `"Make a copy"` creates a bidirectionally independent project copy with isolated namespaced `localStorage` keys (`lumiere-canvas-assets-${newId}`, `lumiere-pages-${newId}`).
+- **Background Apply:** Preset color swatches and custom photo upload apply cover-fitted backdrops across all project pages with `"APPLIED TO ALL PAGES!"` success badge and `localStorage` persistence (`lumiere-bg-color-${cardId}`, `lumiere-bg-photo-${cardId}`).
+- **Projects Tab Sub-Page & Mood Board Insertion:** Sub-page `+ INSERT` and project `+ ALL PAGES` / `+ IMPORT BOARD` append pages to current project canvas with complete asset path-data preservation (`points` array for Lines and Draw paths) and fresh unique asset IDs.
+- **Text Tab Presets & Quick Formatting:** Hero button (`+ Add a paragraph text`) + 4 typography style presets (Header, Subheading, Body, Caption). Quick formatting controls (Bold, Italic, Underline, Align) render visibly disabled (`opacity-40 cursor-not-allowed`) when no text/sticky node is selected, and format active text nodes when selected.
 
 ---
 

@@ -2,11 +2,10 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import type { DeficitLine, DeficitPriority, TriggerSource } from '@/lib/warehouse-replenishment'
 import { useWarehouseVendors } from '@/lib/warehouse-vendors'
-import { AddVendorModal } from '@/components/warehouse/vendors/AddVendorModal'
+import { SearchableVendorSelect } from '@/components/warehouse/shared/SearchableVendorSelect'
 
 const PRIORITIES: DeficitPriority[] = ['Low', 'Medium', 'High', 'Critical']
 const TRIGGERS: TriggerSource[] = ['Canvas', 'Batch Pahabol', 'Manual Audit', 'Auto-Threshold']
-const NEW_VENDOR = '__new_vendor__'
 
 export interface MasterItemDraft {
   itemName: string
@@ -31,7 +30,6 @@ interface AddMasterItemModalProps {
 
 export function AddMasterItemModal({ initial, presetEvent, onClose, onSave }: AddMasterItemModalProps) {
   const vendors = useWarehouseVendors()
-  const [vendorModalOpen, setVendorModalOpen] = useState(false)
   const [itemName, setItemName] = useState(initial?.itemName ?? '')
   const [category, setCategory] = useState(initial?.category ?? 'Event Asset')
   const [unit, setUnit] = useState(initial?.unit ?? 'pcs')
@@ -159,31 +157,17 @@ export function AddMasterItemModal({ initial, presetEvent, onClose, onSave }: Ad
               ))}
             </select>
           </label>
-          <label className="col-span-2 flex flex-col gap-1.5">
-            <span className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">Primary vendor</span>
-            <select
+          <div className="col-span-2 flex flex-col gap-1.5">
+            <SearchableVendorSelect
+              label="Primary vendor"
               value={primaryVendorId}
-              onChange={(e) => {
-                if (e.target.value === NEW_VENDOR) {
-                  setVendorModalOpen(true)
-                  return
-                }
-                setPrimaryVendorId(e.target.value)
-              }}
-              className="rounded-md border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
-            >
-              {vendors.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                  {v.status !== 'Active' ? ` · ${v.status}` : ''}
-                </option>
-              ))}
-              <option value={NEW_VENDOR}>+ Add new vendor…</option>
-            </select>
+              onChange={setPrimaryVendorId}
+              placeholder="Search or select primary vendor…"
+            />
             <span className="text-[0.6rem] text-muted-foreground">
-              Pulled live from the Vendor Registry — new vendors are available everywhere immediately.
+              Pulled live from the Vendor Registry — type to filter or create a new vendor inline.
             </span>
-          </label>
+          </div>
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
@@ -218,13 +202,6 @@ export function AddMasterItemModal({ initial, presetEvent, onClose, onSave }: Ad
           </button>
         </div>
       </div>
-
-      {vendorModalOpen && (
-        <AddVendorModal
-          onClose={() => setVendorModalOpen(false)}
-          onCreated={(vendor) => setPrimaryVendorId(vendor.id)}
-        />
-      )}
     </div>
   )
 }

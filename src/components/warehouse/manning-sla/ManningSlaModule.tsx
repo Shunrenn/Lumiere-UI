@@ -11,6 +11,8 @@ import {
   X,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
+import { usePortal } from '@/lib/store'
+import { PARENT_ROLES } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
 import { useGroundCrewDeclarations, reconcileExpiredDeclarations, getManningFallbackDeclarations, getApproachingDeclarationsSummary, type GroundCrewDeclaration } from '@/lib/ground-crew-declarations'
 import {
@@ -31,7 +33,9 @@ import {
   type ManningTask,
 } from '@/lib/manning'
 
-type Tab = 'assignments' | 'tasks' | 'warnings'
+import { fetchAuditLogs, type AuditLogEntry } from '@/lib/audit-logger'
+
+type Tab = 'assignments' | 'tasks' | 'warnings' | 'disputes'
 
 interface ManningSlaModuleProps {
   onClose: () => void
@@ -46,6 +50,14 @@ export function ManningSlaModule({ onClose }: ManningSlaModuleProps) {
   const [now, setNow] = useState(() => new Date())
   const [busy, setBusy] = useState<string | null>(null)
   const [carriedKeys, setCarriedKeys] = useState<string[]>([])
+  const [disputeLogs, setDisputeLogs] = useState<AuditLogEntry[]>([])
+
+  // Load disputed confirmation & auto-release audit logs on tab switch / mount
+  useEffect(() => {
+    fetchAuditLogs({ module: 'manning' })
+      .then((logs) => setDisputeLogs(logs.filter((l) => l.action_type === 'DISPUTED_CONFIRMATION' || l.action_type === 'ASSIGNMENT_AUTO_RELEASED')))
+      .catch((e) => console.warn('Failed to load disputed confirmation logs', e))
+  }, [tab, busy])
 
   // Live SLA countdowns — re-render every 30s so badges stay current.
   useEffect(() => {
@@ -69,8 +81,9 @@ export function ManningSlaModule({ onClose }: ManningSlaModuleProps) {
       awaitingConfirm: submitted.length,
       overdue: submitted.filter((t) => isSlaOverdue(t, now)).length,
       escalated: tasks.filter((t) => t.status === 'Escalated').length,
+      disputes: disputeLogs.length,
     }
-  }, [assignments, tasks, now])
+  }, [assignments, tasks, now, disputeLogs])
 
   async function run(key: string, fn: () => Promise<unknown>) {
     setBusy(key)
@@ -105,13 +118,13 @@ export function ManningSlaModule({ onClose }: ManningSlaModuleProps) {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {[
             { label: 'Active Assignments', value: stats.activeAssignments, border: 'border-l-foreground/30' },
             { label: 'Awaiting Confirm', value: stats.awaitingConfirm, border: 'border-l-primary' },
             { label: 'SLA Overdue', value: stats.overdue, border: 'border-l-destructive' },
             { label: 'Approaching 48h', value: totalApproachingCount, border: 'border-l-primary' },
-            { label: 'Escalated', value: stats.escalated, border: 'border-l-destructive' },
+            { label: 'Disputed Confirms', value: stats.disputes, border: 'border-l-amber-500' },
           ].map((stat) => (
             <div
               key={stat.label}
@@ -132,6 +145,7 @@ export function ManningSlaModule({ onClose }: ManningSlaModuleProps) {
                 { id: 'assignments', label: 'Assignments', icon: CalendarClock },
                 { id: 'tasks', label: 'SLA Tasks', icon: ClipboardList },
                 { id: 'warnings', label: 'Warnings', icon: ShieldAlert },
+                { id: 'disputes', label: `Disputed Confirmations (${disputeLogs.length})`, icon: AlertTriangle },
               ] as const
             ).map((t) => (
               <button
@@ -176,10 +190,10 @@ export function ManningSlaModule({ onClose }: ManningSlaModuleProps) {
       <div className="flex-1 px-6 py-6 sm:px-10">
         {error && (
           <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-  {error}
-  </div>
-  )}
-  {loading ? (
+            {error}
+          </div>
+        )}
+        {loading ? (
           <p className="text-sm text-muted-foreground">Loading manning workspace…</p>
         ) : tab === 'assignments' ? (
           <AssignmentsView
@@ -201,15 +215,17 @@ export function ManningSlaModule({ onClose }: ManningSlaModuleProps) {
           <div className="space-y-5">
             <EscalatedDeclarations declarations={fallbackDeclarations} />
             <TasksView
-            tasks={tasks}
-            now={now}
-            busy={busy}
-            onSubmit={(t) => run(`submit-${t.id}`, () => submitTask(t.id))}
-            onConfirm={(t) => run(`confirm-${t.id}`, () => confirmTask(t.id, actor))}
-            onReject={(t) => run(`reject-${t.id}`, () => rejectTask(t.id))}
-            onWarn={(t) => setWarnFor(t)}
+              tasks={tasks}
+              now={now}
+              busy={busy}
+              onSubmit={(t) => run(`submit-${t.id}`, () => submitTask(t.id))}
+              onConfirm={(t) => run(`confirm-${t.id}`, () => confirmTask(t.id, actor))}
+              onReject={(t) => run(`reject-${t.id}`, () => rejectTask(t.id))}
+              onWarn={(t) => setWarnFor(t)}
             />
           </div>
+        ) : tab === 'disputes' ? (
+          <DisputedConfirmationsView logs={disputeLogs} />
         ) : (
           <WarningsView warnings={warnings} />
         )}
@@ -449,6 +465,115 @@ function TasksView({
   )
 }
 
+// ---- Disputed Confirmations view ------------------------------------
+
+function DisputedConfirmationsView({ logs }: { logs: AuditLogEntry[] }) {
+  if (logs.length === 0) {
+    return (
+      <EmptyState
+        icon={AlertTriangle}
+        title="No disputes or auto-releases"
+        hint="Intercepted conflicting Team Lead confirmations and auto-released leave assignments will appear here for Manning review."
+      />
+    )
+  }
+
+  return (
+    <ul className="space-y-3">
+      {logs.map((log) => {
+        const isAutoRelease = log.action_type === 'ASSIGNMENT_AUTO_RELEASED'
+        const snapshot = (log.target_snapshot as Record<string, any>) || {}
+        const first = snapshot.firstCommit || {}
+        const attempted = snapshot.attemptedCommit || {}
+        const hasQuotaDeficit = Boolean(snapshot.quotaDeficitTriggered)
+
+        return (
+          <li
+            key={log.id}
+            className={cn(
+              'rounded-xl border bg-card px-5 py-4 border-l-4 space-y-3',
+              hasQuotaDeficit
+                ? 'border-destructive/60 border-l-destructive bg-destructive/5'
+                : isAutoRelease
+                  ? 'border-amber-500/50 border-l-amber-500 bg-amber-500/5'
+                  : 'border-amber-500/50 border-l-amber-500',
+            )}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-serif text-lg font-medium text-card-foreground">
+                    {isAutoRelease ? 'Assignment Lock Auto-Released' : 'Disputed Confirmation Intercepted'}
+                  </h3>
+                  <span
+                    className={cn(
+                      'rounded-full px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-[0.1em]',
+                      hasQuotaDeficit
+                        ? 'bg-destructive/15 text-destructive font-mono'
+                        : isAutoRelease
+                          ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                          : 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+                    )}
+                  >
+                    {hasQuotaDeficit ? '⚠️ Quota Deficit Alert' : isAutoRelease ? `Leave (${snapshot.source || 'OFF'})` : 'First-Commit-Wins Retained'}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Target ID: <span className="font-mono">{log.target_id}</span> · Logged at {new Date(log.created_at).toLocaleString()}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-card-foreground font-medium">{log.reason}</p>
+
+            {isAutoRelease ? (
+              <div className="grid gap-3 sm:grid-cols-3 text-xs border-t border-border/60 pt-3">
+                <div className="rounded-lg border border-border bg-background p-2.5">
+                  <p className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block mb-0.5">Crew Member</p>
+                  <p className="font-semibold text-foreground">{snapshot.staffName || 'Crew'}</p>
+                  <p className="text-[0.65rem] text-muted-foreground">ID: {snapshot.staffId}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-background p-2.5">
+                  <p className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block mb-0.5">Event / Sub-Role</p>
+                  <p className="font-semibold text-foreground">{snapshot.eventName || 'Event'}</p>
+                  <p className="text-[0.65rem] text-muted-foreground">{snapshot.subRole || 'General'}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-background p-2.5">
+                  <p className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block mb-0.5">Assignment Status</p>
+                  <p className="font-semibold text-amber-600 dark:text-amber-400">{snapshot.status || 'Updated'}</p>
+                  <p className="text-[0.65rem] text-muted-foreground">Remaining: {snapshot.remainingMembers?.length ?? 0} members</p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 text-xs border-t border-border/60 pt-3">
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
+                  <p className="text-[0.55rem] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block mb-1">
+                    ✓ Winning First Commit (Retained)
+                  </p>
+                  <p className="font-medium text-card-foreground">Actor: {first.actor || log.actor_name}</p>
+                  <p className="text-[0.68rem] text-muted-foreground mt-0.5">
+                    Outcome: <strong className="text-foreground">{first.status || first.attendanceStatus || 'Confirmed'}</strong>
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+                  <p className="text-[0.55rem] font-bold uppercase tracking-wider text-destructive block mb-1">
+                    ⚡ Attempted Conflict (Blocked)
+                  </p>
+                  <p className="font-medium text-card-foreground">Attempted by: {attempted.actor || log.actor_name}</p>
+                  <p className="text-[0.68rem] text-muted-foreground mt-0.5">
+                    Attempted Outcome: <strong className="text-destructive">{attempted.status || attempted.attendanceStatus || 'Disputed'}</strong>
+                  </p>
+                </div>
+              </div>
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 // ---- Warnings view ---------------------------------------------------
 
 function WarningsView({ warnings }: { warnings: ReturnType<typeof useManningData>['warnings'] }) {
@@ -615,6 +740,7 @@ function AssignmentModal({
   onSaved: () => void
 }) {
   const [eventName, setEventName] = useState('')
+  const { subRolesByParent } = usePortal()
   const [venue, setVenue] = useState('')
   const [ref, setRef] = useState('')
   const [lead, setLead] = useState('')
@@ -622,29 +748,40 @@ function AssignmentModal({
   const [members, setMembers] = useState('')
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   async function save() {
     if (!eventName.trim() || !lead.trim()) return
+    setErrorMsg(null)
     setSaving(true)
     try {
-      await createAssignment({
-        work_date: new Date().toISOString().slice(0, 10),
-        event_name: eventName.trim(),
-        venue: venue.trim() || null,
-        deployment_ref: ref.trim() || null,
-        lead_name: lead.trim(),
-        lead_email: null,
-        sub_role: subRole.trim() || null,
-        member_names: members
-          .split(',')
-          .map((m) => m.trim())
-          .filter(Boolean),
-        notes: notes.trim() || null,
-        created_by: actor,
-      })
+      const targetSubRole = subRole.trim()
+      const allSubRoles = PARENT_ROLES.flatMap((p) => subRolesByParent[p.id] ?? [])
+      const matched = allSubRoles.find(
+        (s) => s.name.toLowerCase() === targetSubRole.toLowerCase() || s.id.toLowerCase() === targetSubRole.toLowerCase(),
+      )
+      await createAssignment(
+        {
+          work_date: new Date().toISOString().slice(0, 10),
+          event_name: eventName.trim(),
+          venue: venue.trim() || null,
+          deployment_ref: ref.trim() || null,
+          lead_name: lead.trim(),
+          lead_email: null,
+          sub_role: subRole.trim() || null,
+          member_names: members
+            .split(',')
+            .map((m) => m.trim())
+            .filter(Boolean),
+          notes: notes.trim() || null,
+          created_by: actor,
+        },
+        matched ? { maxTeamLeads: matched.maxTeamLeads, minTeamLeads: matched.minTeamLeads } : undefined,
+      )
       onSaved()
-    } catch (err) {
+    } catch (err: any) {
       console.error('[v0] create assignment failed', err)
+      setErrorMsg(err?.message || 'Failed to create assignment')
       setSaving(false)
     }
   }
@@ -652,6 +789,11 @@ function AssignmentModal({
   return (
     <ModalShell title="New manning assignment" onClose={onClose}>
       <div className="space-y-4">
+        {errorMsg && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs font-medium text-destructive">
+            {errorMsg}
+          </div>
+        )}
         <div>
           <label className={labelClass}>Event / deployment *</label>
           <input className={fieldClass} value={eventName} onChange={(e) => setEventName(e.target.value)} />
