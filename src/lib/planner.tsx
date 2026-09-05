@@ -29,6 +29,7 @@ export type PortfolioStatus =
   | 'Floor Plan Layout'
   | 'Finalizing PO'
   | 'Ready for Logistics'
+  | 'Settled'
 
 export interface PipelineEvent {
   id: string

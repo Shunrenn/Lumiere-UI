@@ -83,7 +83,7 @@ export function EventPipelinePanel({
   compact?: boolean
 }) {
   const { eventMaterials, eventChecklist, eventDocuments } = usePlanner()
-  const { damageExceptions, events: portalEvents, updateEvent } = usePortal()
+  const { damageExceptions, events: portalEvents, settleEvent } = usePortal()
   const { navigate } = useNav()
   const materials = eventMaterials[event.id] ?? []
   const checklist = eventChecklist[event.id] ?? []
@@ -100,7 +100,7 @@ export function EventPipelinePanel({
     (d) => d.status === 'Pending Verdict' || d.status === 'Held for Audit' || d.status === 'Pending Second Sign-off'
   )
   const portalMatch = portalEvents.find((e) => e.id === event.id || e.title === event.title)
-  const isSettled = (event.status as any) === 'Settled' || portalMatch?.status === 'Settled'
+  const isSettled = event.status === 'Settled' || portalMatch?.status === 'Settled'
 
   const verifiedCount = checklist.filter((c) => verified[c.id]).length
 
@@ -262,8 +262,10 @@ export function EventPipelinePanel({
                 <button
                   type="button"
                   onClick={() => {
-                    if (portalMatch) {
-                      updateEvent(portalMatch.id, { ...portalMatch, status: 'Settled' as any }, 'Warehouse Ops')
+                    const targetId = portalMatch?.id || event.id || event.title
+                    const res = settleEvent(targetId)
+                    if (!res.success) {
+                      console.warn(`[EventPipelinePanel] Settle Event failed for "${event.title}": ${res.reason}`)
                     }
                   }}
                   className="shrink-0 rounded-md bg-emerald-600 px-4 py-2 text-[0.65rem] font-bold uppercase tracking-wider text-white hover:bg-emerald-700 transition"
