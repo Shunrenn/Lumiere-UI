@@ -135,14 +135,12 @@ export function EventDistributionCard({
   )
 }
 
-/* ----------------------------- Report Distribution Donut ----------------------------- */
+/* ----------------------------- Damage Case Status Donut ----------------------------- */
 
-const REPORT_SEGMENTS = [
-  { label: 'Pending Verdict', color: 'text-amber-500', dot: 'bg-amber-500' },
-  { label: 'Validated', color: 'text-emerald-500', dot: 'bg-emerald-500' },
-  { label: 'Held for Audit', color: 'text-rose-500', dot: 'bg-rose-500' },
-  { label: 'Second Sign-off', color: 'text-purple-500', dot: 'bg-purple-500' },
-  { label: 'Dismissed', color: 'text-muted-foreground', dot: 'bg-muted-foreground' },
+const DAMAGE_CASE_SEGMENTS = [
+  { label: 'Pending', color: 'text-amber-500', dot: 'bg-amber-500' },
+  { label: 'Repaired', color: 'text-emerald-500', dot: 'bg-emerald-500' },
+  { label: 'Written Off', color: 'text-rose-500', dot: 'bg-rose-500' },
 ]
 
 export function ReportDistributionCard({
@@ -154,12 +152,12 @@ export function ReportDistributionCard({
   onSelect?: () => void
   compact?: boolean
 }) {
-  const total = REPORT_SEGMENTS.reduce((sum, s) => sum + (counts[s.label] ?? 0), 0)
+  const total = DAMAGE_CASE_SEGMENTS.reduce((sum, s) => sum + (counts[s.label] ?? 0), 0)
   const circumference = 2 * Math.PI * 45
   const { flashing, trigger } = useClickFlash(onSelect)
 
   let offset = 0
-  const arcs = REPORT_SEGMENTS.map((seg) => {
+  const arcs = DAMAGE_CASE_SEGMENTS.map((seg) => {
     const value = counts[seg.label] ?? 0
     const fraction = total > 0 ? value / total : 0
     const dash = fraction * circumference
@@ -181,7 +179,7 @@ export function ReportDistributionCard({
       )}
     >
       <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">
-        Report Distribution
+        Damage Case Status
       </h3>
       <div className={cn('flex items-center justify-center', compact ? 'mt-4' : 'mt-6')}>
         <div className="relative inline-flex items-center justify-center">
@@ -189,7 +187,7 @@ export function ReportDistributionCard({
             className={cn('-rotate-90', compact ? 'h-24 w-24' : 'h-32 w-32')}
             viewBox="0 0 100 100"
             role="img"
-            aria-label="Report distribution by verdict status"
+            aria-label="Damage case status distribution"
           >
             {arcs.map(({ seg, dash, offset: dashOffset }) => (
               <circle
@@ -218,7 +216,7 @@ export function ReportDistributionCard({
           compact ? 'mt-4 flex flex-col gap-1.5' : 'mt-6 grid grid-cols-2 gap-3',
         )}
       >
-        {REPORT_SEGMENTS.map((seg) => (
+        {DAMAGE_CASE_SEGMENTS.map((seg) => (
           <div key={seg.label} className="flex items-center gap-2">
             <div className={cn('size-2 shrink-0 rounded-full', seg.dot)} aria-hidden="true" />
             <span className="truncate">
@@ -244,7 +242,7 @@ const eventActivityData = [
   { label: 'Jun', value: 29 },
 ]
 
-const damageAdjudicationData = [
+const damageSettlementData = [
   { label: 'Jan', value: 14 },
   { label: 'Feb', value: 19 },
   { label: 'Mar', value: 12 },
@@ -255,23 +253,23 @@ const damageAdjudicationData = [
 
 const TREND_TABS: { value: TrendMode; label: string }[] = [
   { value: 'events', label: 'Event Activity' },
-  { value: 'damage', label: 'Damage Adjudication' },
+  { value: 'damage', label: 'Damage Settlement' },
 ]
 
 export function ExecutiveTrendAnalyticsCard({
-  onViewRegistry,
+  onViewSummary,
 }: {
-  onViewRegistry?: () => void
+  onViewSummary?: (mode: TrendMode) => void
 }) {
   const [mode, setMode] = useState<TrendMode>('events')
-  const data = mode === 'events' ? eventActivityData : damageAdjudicationData
-  const title = mode === 'events' ? 'Event Activity' : 'Damage Adjudication'
+  const data = mode === 'events' ? eventActivityData : damageSettlementData
+  const title = mode === 'events' ? 'Event Activity' : 'Damage Settlement'
 
   const geometry = useMemo(() => {
     const w = 640
-    const h = 240
+    const h = 180
     const padX = 40
-    const padY = 24
+    const padY = 18
     const max = Math.max(...data.map((d) => d.value), 1)
     const range = max || 1
     const stepX = (w - padX * 2) / Math.max(data.length - 1, 1)
@@ -334,23 +332,23 @@ export function ExecutiveTrendAnalyticsCard({
               {title} · Latest
             </span>
           </div>
-          {onViewRegistry && (
+          {onViewSummary && (
             <button
               type="button"
-              onClick={onViewRegistry}
+              onClick={() => onViewSummary(mode)}
               className="rounded-md px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary transition hover:bg-primary/10"
             >
-              View Portfolios
+              View Summary
             </button>
           )}
         </div>
 
         <svg
           viewBox={`0 0 ${geometry.w} ${geometry.h}`}
-          className="mt-4 w-full"
+          className="mt-3 w-full"
           role="img"
           aria-label={`${title} trend chart`}
-          style={{ minHeight: '200px' }}
+          style={{ minHeight: '140px' }}
         >
           <defs>
             <linearGradient id="exec-trend-fill" x1="0" y1="0" x2="0" y2="1">

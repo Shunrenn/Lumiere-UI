@@ -1,4 +1,3 @@
-import { logAuditEvent } from '@/lib/audit-logger'
 import {
   createContext,
   useCallback,
@@ -13,10 +12,7 @@ import {
 import type {
   AccountStatus,
   ActivityLog,
-  DamageCustodyMode,
   DamageException,
-  DamageSelfValidationRecord,
-  DamageSignOff,
   DamageVerdict,
   EventUpdate,
   InventoryItem,
@@ -28,8 +24,6 @@ import type {
   ReorderDraft,
   Staff,
   StaffRole,
-  StockStatus,
-  SubRoleEmergencyUnblockMetadata,
   UserAction,
   Vendor,
 } from '@/lib/types'
@@ -64,10 +58,10 @@ function rowToStaff(row: any): Staff {
     sessionStatus,
     lastAccess: row.updated_at
       ? new Date(row.updated_at).toLocaleDateString('en-US', {
-          month: 'short',
-          day: '2-digit',
-          year: 'numeric',
-        })
+        month: 'short',
+        day: '2-digit',
+        year: 'numeric',
+      })
       : '—',
     recordKind: 'full-account',
     accountStatus,
@@ -211,10 +205,10 @@ const seedStaffRaw: Staff[] = [
     lastAccess: 'May 28, 2026 · 12:45',
     dateAdded: 'May 12, 2026',
   },
-  // These two staff records mirror the two Executive login accounts
-  // (executive@lumiere.com / executive2@lumiere.com) so Admin's Workforce
-  // suspend toggle can simulate "only one Executive active" for the
-  // two-sign-off Damage Validation flow.
+  // executive@lumiere.com remains the active Executive account. The former
+  // second Executive account (executive2@lumiere.com, s-12) supported the
+  // old two-sign-off Damage Validation flow, now superseded by the
+  // WOM→Executive escalation model, and has been fully removed.
   {
     id: 's-11',
     employeeId: 'LM-0011',
@@ -227,19 +221,6 @@ const seedStaffRaw: Staff[] = [
     sessionStatus: 'Active Session',
     lastAccess: 'May 30, 2026 · 09:10',
     dateAdded: 'Jun 02, 2026',
-  },
-  {
-    id: 's-12',
-    employeeId: 'LM-0012',
-    surname: 'Whitfield',
-    firstName: 'Marcus',
-    middleName: '',
-    email: 'executive2@lumiere.com',
-    contact: '09822334455',
-    role: 'Executive',
-    sessionStatus: 'Active Session',
-    lastAccess: 'May 30, 2026 · 09:12',
-    dateAdded: 'Jun 20, 2026',
   },
   {
     id: 's-13',
@@ -819,7 +800,7 @@ const seedProcurement: ProcurementItem[] = [
     currentStock: 1,
     threshold: 15,
     unit: 'unit',
-    status: 'Not Purchased',
+    status: 'Critical Deficit',
   },
   {
     id: 'p-2',
@@ -829,7 +810,7 @@ const seedProcurement: ProcurementItem[] = [
     currentStock: 8,
     threshold: 40,
     unit: 'units',
-    status: 'Not Purchased',
+    status: 'Critical Deficit',
   },
   {
     id: 'p-3',
@@ -839,7 +820,7 @@ const seedProcurement: ProcurementItem[] = [
     currentStock: 24,
     threshold: 60,
     unit: 'units',
-    status: 'Not Purchased',
+    status: 'Low Stock',
   },
   {
     id: 'p-4',
@@ -849,7 +830,7 @@ const seedProcurement: ProcurementItem[] = [
     currentStock: 18,
     threshold: 30,
     unit: 'units',
-    status: 'Not Purchased',
+    status: 'Low Stock',
   },
   {
     id: 'p-5',
@@ -859,10 +840,7 @@ const seedProcurement: ProcurementItem[] = [
     currentStock: 11,
     threshold: 25,
     unit: 'units',
-    status: 'In Procurement',
-    reorderQty: 14,
-    poRef: 'PO-44810',
-    etaHours: 24,
+    status: 'Low Stock',
   },
   {
     id: 'p-6',
@@ -872,7 +850,7 @@ const seedProcurement: ProcurementItem[] = [
     currentStock: 7,
     threshold: 10,
     unit: 'units',
-    status: 'In Procurement',
+    status: 'Order Placed',
     reorderQty: 6,
     poRef: 'PO-44821',
     etaHours: 48,
@@ -885,17 +863,17 @@ const seedProcurement: ProcurementItem[] = [
     currentStock: 3,
     threshold: 20,
     unit: 'units',
-    status: 'Not Purchased',
+    status: 'Critical Deficit',
   },
   {
     id: 'p-8',
     assetId: 'LM-0035',
     name: 'Round Linen Banquet Tables',
     category: 'Furniture · Banquet',
-    currentStock: 30,
+    currentStock: 12,
     threshold: 30,
     unit: 'units',
-    status: 'Received',
+    status: 'Low Stock',
   },
 ]
 
@@ -1002,7 +980,8 @@ const seedDamage: DamageException[] = [
     exifVerified: true,
     estimatedCost: 4200,
     notes: 'Chair leg snapped during teardown. Captured under venue floodlight, EXIF intact.',
-    status: 'Validated',
+    status: 'Pending Resolution',
+    validated: true,
   },
   {
     id: 'd2',
@@ -1036,7 +1015,8 @@ const seedDamage: DamageException[] = [
     exifVerified: true,
     estimatedCost: 2100,
     notes: 'Cosmetic chip on front edge. Refinishing quote pending from vendor.',
-    status: 'Validated',
+    status: 'Pending Resolution',
+    validated: true,
   },
   {
     id: 'd4',
@@ -1053,8 +1033,8 @@ const seedDamage: DamageException[] = [
     exifVerified: false,
     estimatedCost: 6800,
     notes:
-      'Low-light capture during late strike. No photographic evidence was captured on site — EXIF timestamp could not be authenticated. Held for audit pending two Executive sign-offs.',
-    status: 'Held for Audit',
+      'Low-light capture during late strike. No photographic evidence was captured on site — EXIF timestamp could not be authenticated. Escalated to Executive for review.',
+    status: 'Escalated — Round 1 Review',
     noPhotographicEvidence: true,
   },
   {
@@ -1072,8 +1052,8 @@ const seedDamage: DamageException[] = [
     exifVerified: false,
     estimatedCost: 5400,
     notes:
-      'Fixture found shattered during breakdown; no photographic evidence was captured on site — EXIF timestamp could not be authenticated. Held for audit pending two Executive sign-offs.',
-    status: 'Held for Audit',
+      'Fixture found shattered during breakdown; no photographic evidence was captured on site — EXIF timestamp could not be authenticated. Escalated to Executive for review.',
+    status: 'Escalated — Round 2 Review',
     noPhotographicEvidence: true,
   },
   {
@@ -1435,14 +1415,6 @@ const randomIp = () =>
 
 const pad = (n: number) => String(n).padStart(4, '0')
 
-const deriveStockStatus = (stock: number, capacity: number): StockStatus => {
-  if (stock <= 0) return 'Depleted'
-  const pct = capacity > 0 ? stock / capacity : 1
-  if (pct <= 0.15) return 'Critical Deficit'
-  if (pct < 0.5) return 'Low Stock'
-  return 'Available'
-}
-
 /* ----------------------------- Context ----------------------------- */
 
 interface PortalContextValue {
@@ -1470,22 +1442,18 @@ interface PortalContextValue {
   updateStaff: (staff: Staff) => void
   forceLogout: (id: string) => void
   addEvent: (draft: NewEventDraft, initiatorRole?: string) => void
-  updateEvent: (id: string, draft: Partial<PortalEvent>, initiatorRole?: string) => void
+  updateEvent: (id: string, draft: NewEventDraft, initiatorRole?: string) => void
   resolveUserAction: (id: string) => void
   routeReorder: (draft: ReorderDraft) => void
   updateThreshold: (id: string, threshold: number) => void
   resolveDamage: (
     id: string,
+    round: 1 | 2,
     verdict: Exclude<DamageVerdict, 'Pending Verdict'>,
     note: string,
-    initiatorRole?: string,
-    staffEmail?: string,
-    staffName?: string,
-    unblockMetadata?: SubRoleEmergencyUnblockMetadata,
-    selfValidation?: DamageSelfValidationRecord,
+    decidedBy: 'WOM' | 'Executive',
+    isEdit?: boolean,
   ) => void
-  completeMaintenance: (assetId: string, initiatorRole?: string) => void
-  settleEvent: (eventId: string, initiatorRole?: string) => { success: boolean; reason?: string }
   addInventoryItem: (item: InventoryItem) => void
   updateInventoryItem: (item: InventoryItem) => void
 }
@@ -1494,33 +1462,56 @@ const PortalContext = createContext<PortalContextValue | null>(null)
 
 export function PortalProvider({ children }: { children: ReactNode }) {
   const [staff, setStaff] = useState<Staff[]>(seedStaff)
-  const [events, setEvents] = useState<PortalEvent[]>(seedEvents)
+  const [events, setEvents] = useState<PortalEvent[]>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('lumiere_events')
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        } catch (e) {
+          console.error('[store] Failed to parse stored events', e)
+        }
+      }
+    }
+    return seedEvents
+  })
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('lumiere_events', JSON.stringify(events))
+      } catch (e) {
+        console.error('[store] Failed to persist events', e)
+      }
+    }
+  }, [events])
 
   // Hydrate the staff directory from the database (portal_accounts is the source of truth).
   useEffect(() => {
     let active = true
-    ;(async () => {
-      const { data, error } = await supabase
-        .from('portal_accounts')
-        .select(
-          'id, email, name, role, temporary_password, employee_id, surname, first_name, middle_name, contact, session_status, updated_at',
-        )
-        .order('employee_id', { ascending: true })
+      ; (async () => {
+        const { data, error } = await supabase
+          .from('portal_accounts')
+          .select(
+            'id, email, name, role, temporary_password, employee_id, surname, first_name, middle_name, contact, session_status, updated_at',
+          )
+          .order('employee_id', { ascending: true })
 
-      if (!active) return
-      if (error) {
-        console.error('[v0] Failed to load staff from database:', error)
-        return
-      }
-      if (data) {
-        // Full accounts are DB-owned; employee records live only in the client,
-        // so preserve them when the directory syncs from the database.
-        setStaff((prev) => {
-          const records = prev.filter((s) => s.recordKind === 'employee-record')
-          return [...data.map(rowToStaff), ...records]
-        })
-      }
-    })()
+        if (!active) return
+        if (error) {
+          console.error('[v0] Failed to load staff from database:', error)
+          return
+        }
+        if (data) {
+          // Full accounts are DB-owned; employee records live only in the client,
+          // so preserve them when the directory syncs from the database.
+          setStaff((prev) => {
+            const records = prev.filter((s) => s.recordKind === 'employee-record')
+            return [...data.map(rowToStaff), ...records]
+          })
+        }
+      })()
     return () => {
       active = false
     }
@@ -1531,27 +1522,27 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   // Hydrate pending account requests (forgot-password / request-access) from the database.
   useEffect(() => {
     let active = true
-    ;(async () => {
-      const { data, error } = await supabase
-        .from('access_requests')
-        .select('id, email, type, status')
-        .order('created_at', { ascending: false })
+      ; (async () => {
+        const { data, error } = await supabase
+          .from('access_requests')
+          .select('id, email, type, status')
+          .order('created_at', { ascending: false })
 
-      if (!active) return
-      if (error) {
-        console.error('[v0] Failed to load access requests:', error)
-        return
-      }
-      if (data) {
-        const fromDb: UserAction[] = data.map((row: any) => ({
-          id: row.id,
-          type: row.type as UserAction['type'],
-          user: row.email,
-          status: row.status as UserAction['status'],
-        }))
-        setUserActions([...fromDb, ...seedUserActions])
-      }
-    })()
+        if (!active) return
+        if (error) {
+          console.error('[v0] Failed to load access requests:', error)
+          return
+        }
+        if (data) {
+          const fromDb: UserAction[] = data.map((row: any) => ({
+            id: row.id,
+            type: row.type as UserAction['type'],
+            user: row.email,
+            status: row.status as UserAction['status'],
+          }))
+          setUserActions([...fromDb, ...seedUserActions])
+        }
+      })()
     return () => {
       active = false
     }
@@ -1764,9 +1755,8 @@ export function PortalProvider({ children }: { children: ReactNode }) {
           account: target.employeeId,
           initiatorRole: 'Admin',
           action: suspending ? 'Employee Record Archived' : 'Employee Record Reactivated',
-          detail: `${fullName} (${target.employmentType ?? 'employee record'}) was ${
-            suspending ? 'archived' : 'reactivated from the archive'
-          }.`,
+          detail: `${fullName} (${target.employmentType ?? 'employee record'}) was ${suspending ? 'archived' : 'reactivated from the archive'
+            }.`,
           ip: randomIp(),
           status: 'Success',
         })
@@ -1891,9 +1881,8 @@ export function PortalProvider({ children }: { children: ReactNode }) {
           account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
           initiatorRole,
           action: 'Event Registry Initialized',
-          detail: `New portfolio "${draft.title}" registered${
-            draft.client ? ` for ${draft.client}` : ''
-          }. Ref ${refId}.`,
+          detail: `New portfolio "${draft.title}" registered${draft.client ? ` for ${draft.client}` : ''
+            }. Ref ${refId}.`,
           ip: randomIp(),
           status: 'Success',
         })
@@ -1910,7 +1899,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
             installationStart: draft.installationStart,
             installationEnd: draft.installationEnd,
             budget: 0,
-            status: 'Initialized',
+            status: draft.status || 'Initialized',
             moodPlan: draft.moodPlan,
           },
         ]
@@ -1920,14 +1909,21 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   )
 
   const updateEvent = useCallback(
-    (id: string, draft: Partial<PortalEvent>, initiatorRole = 'Executive') => {
+    (id: string, draft: NewEventDraft, initiatorRole = 'Executive') => {
       setEvents((prev) =>
         prev.map((e) =>
           e.id === id
             ? {
-                ...e,
-                ...draft,
-              }
+              ...e,
+              title: draft.title,
+              client: draft.client,
+              venue: draft.venue,
+              targetDate: draft.targetDate,
+              installationStart: draft.installationStart,
+              installationEnd: draft.installationEnd,
+              status: draft.status || e.status,
+              moodPlan: draft.moodPlan,
+            }
             : e,
         ),
       )
@@ -1935,7 +1931,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
         initiatorRole,
         action: 'Event Registry Updated',
-        detail: `Portfolio "${draft.title ?? id}" details were updated.`,
+        detail: `Portfolio "${draft.title}" details were edited.`,
         ip: randomIp(),
         status: 'Success',
       })
@@ -1988,15 +1984,14 @@ export function PortalProvider({ children }: { children: ReactNode }) {
             account: 'WAREHOUSE_MGR_01',
             initiatorRole: 'Warehouse Manager',
             action: 'Inventory Reorder Requisition Routed',
-            detail: `Reorder of ${draft.reorderQty} ${item.unit} for ${item.name} (${item.assetId}) routed to ${
-              vendor ? vendor.name : 'Purchasing'
-            }. ${poRef} dispatched.${draft.note ? ` Note: ${draft.note}` : ''}`,
+            detail: `Reorder of ${draft.reorderQty} ${item.unit} for ${item.name} (${item.assetId}) routed to ${vendor ? vendor.name : 'Purchasing'
+              }. ${poRef} dispatched.${draft.note ? ` Note: ${draft.note}` : ''}`,
             ip: randomIp(),
             status: 'Success',
           })
           return {
             ...item,
-            status: 'In Procurement',
+            status: 'Order Placed',
             reorderQty: draft.reorderQty,
             poRef,
             etaHours: vendor ? vendor.leadTimeHours : 48,
@@ -2015,9 +2010,10 @@ export function PortalProvider({ children }: { children: ReactNode }) {
           if (item.id !== id) return item
           // Re-evaluate lifecycle state against the new threshold (unless an order is already in flight).
           let status = item.status
-          if (status !== 'In Procurement') {
+          if (status !== 'Order Placed') {
             const ratio = threshold > 0 ? item.currentStock / threshold : 1
-            status = ratio < 1 ? 'Not Purchased' : 'Received'
+            status =
+              ratio <= 0.3 ? 'Critical Deficit' : ratio < 1 ? 'Low Stock' : 'Available'
           }
           pushLog({
             account: 'WAREHOUSE_MGR_01',
@@ -2037,252 +2033,58 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const resolveDamage = useCallback(
     (
       id: string,
+      round: 1 | 2,
       verdict: Exclude<DamageVerdict, 'Pending Verdict'>,
       note: string,
-      initiatorRole = 'Warehouse Ops',
-      staffEmail?: string,
-      staffName?: string,
-      unblockMetadata?: SubRoleEmergencyUnblockMetadata,
-      selfValidation?: DamageSelfValidationRecord,
+      decidedBy: 'WOM' | 'Executive',
+      isEdit = false,
     ) => {
-      let targetItem: DamageException | null = null
       setDamageExceptions((prev) =>
         prev.map((i) => {
           if (i.id !== id) return i
-          targetItem = i
 
-          const isAuditResolution =
-            (verdict === 'Repair' || verdict === 'Write-off' || verdict === 'Validated' || verdict === 'Dismissed') &&
-            (i.status === 'Held for Audit' || i.status === 'Pending Second Sign-off')
+          const isEscalateAction =
+            verdict === 'Escalated — Round 1 Review' || verdict === 'Escalated — Round 2 Review'
 
-          if (isAuditResolution && !selfValidation) {
-            const signOff: DamageSignOff = {
-              staffEmail: staffEmail ?? '',
-              staffName: staffName ?? initiatorRole,
-              womRole: initiatorRole,
-              verdict: verdict as any,
-              note,
-              timestamp: now().timestamp,
-            }
+          pushLog({
+            account: decidedBy === 'Executive' ? 'EXEC-ROOT' : 'WOM-ROOT',
+            initiatorRole: decidedBy,
+            action: `Damage Exception ${verdict}`,
+            detail: `Exception ${i.logId} for ${i.assetName} marked "${verdict}".${note ? ` Note: ${note}` : ''}`,
+            ip: randomIp(),
+            status: verdict === 'Dismissed' ? 'Flagged' : 'Success',
+          })
 
-            if (i.status === 'Held for Audit') {
-              pushLog({
-                account: 'SYS-ROOT',
-                initiatorRole,
-                action: 'Damage Exception First Sign-off',
-                detail: `Exception ${i.logId} for ${i.assetName} received first sign-off "${verdict}" from ${signOff.staffName} (${initiatorRole}). Awaiting second sign-off.${
-                  note ? ` Note: ${note}` : ''
-                }`,
-                ip: randomIp(),
-                status: 'Success',
-              })
-              return {
-                ...i,
-                status: 'Pending Second Sign-off',
-                firstSignOff: signOff,
-                custodyMode: 'genuine-dual-custody' as DamageCustodyMode,
-              }
-            }
+          // Escalating is a delegation, not a decision — never sets a decider.
+          if (isEscalateAction) {
+            return { ...i, status: verdict, notes: note ? `${i.notes}\n\nNote: ${note}` : i.notes }
+          }
 
-            // Already Pending Second Sign-off — check distinct actor
-            if (
-              i.firstSignOff &&
-              staffEmail &&
-              i.firstSignOff.staffEmail === staffEmail
-            ) {
-              pushLog({
-                account: 'SYS-ROOT',
-                initiatorRole,
-                action: 'Damage Exception Second Sign-off Rejected',
-                detail: `Exception ${i.logId}: ${signOff.staffName} attempted to provide both sign-offs — rejected. A different qualifying WOM user is required.`,
-                ip: randomIp(),
-                status: 'Flagged',
-              })
-              return i // unchanged — same user cannot finalize
-            }
-            pushLog({
-              account: 'SYS-ROOT',
-              initiatorRole,
-              action: 'Damage Exception Second Sign-off',
-              detail: `Exception ${i.logId} for ${i.assetName} received second sign-off "${verdict}" from ${signOff.staffName} (${initiatorRole}), finalizing verdict.${
-                note ? ` Note: ${note}` : ''
-              }`,
-              ip: randomIp(),
-              status: 'Success',
-            })
+          if (round === 1) {
+            // Editing Round 1 after Round 2 was already decided wipes Round 2 —
+            // the UI must warn the user before calling this with isEdit=true.
+            const overridingRound2 = isEdit && !!i.round2DecidedBy
             return {
               ...i,
               status: verdict,
-              secondSignOff: signOff,
-              custodyMode: 'genuine-dual-custody' as DamageCustodyMode,
+              round1DecidedBy: decidedBy,
+              round2DecidedBy: overridingRound2 ? undefined : i.round2DecidedBy,
+              validated: verdict === 'Pending Resolution',
               notes: note ? `${i.notes}\n\nVerdict note: ${note}` : i.notes,
             }
           }
 
-          const mode: DamageCustodyMode = selfValidation
-            ? selfValidation.custodyMode
-            : unblockMetadata
-              ? 'admin-enabled-override'
-              : i.custodyMode ?? 'standing-self-validation'
-
-          pushLog({
-            account: 'SYS-ROOT',
-            initiatorRole,
-            action: `Damage Exception ${verdict}`,
-            detail: `Exception ${i.logId} for ${i.assetName} marked "${verdict}" by ${initiatorRole} (${staffName || 'Staff'}) [Custody: ${mode}].${
-              note ? ` Note: ${note}` : ''
-            }`,
-            ip: randomIp(),
-            status: verdict === 'Dismissed' ? 'Flagged' : 'Success',
-          })
-          void logAuditEvent({
-            actor_id: staffEmail || 'sys-admin',
-            actor_name: staffName || initiatorRole,
-            module: 'damage',
-            action_type: unblockMetadata ? 'EMERGENCY_UNBLOCK' : 'DAMAGE_VERDICT',
-            target_id: i.id,
-            target_snapshot: (i as unknown) as Record<string, unknown>,
-            reason: unblockMetadata?.emergencyReason || note || `Verdict: ${verdict}`,
-          })
-
+          // round === 2
           return {
             ...i,
             status: verdict,
-            custodyMode: mode,
-            unblockMetadata: unblockMetadata ?? i.unblockMetadata,
-            selfValidation: selfValidation ?? i.selfValidation,
-            selfValidationRecord: selfValidation ?? i.selfValidationRecord,
+            round2DecidedBy: decidedBy,
             notes: note ? `${i.notes}\n\nVerdict note: ${note}` : i.notes,
           }
         }),
       )
-
-      // Side Effects on Asset Registry
-      if (targetItem) {
-        const target = targetItem as DamageException
-        if (verdict === 'Repair') {
-          setInventory((inv) =>
-            inv.map((asset) => {
-              if (
-                asset.assetId === target.assetSku ||
-                asset.name.toLowerCase() === target.assetName.toLowerCase()
-              ) {
-                return {
-                  ...asset,
-                  status: 'In Maintenance',
-                  updated: 'In maintenance · Under repair',
-                }
-              }
-              return asset
-            }),
-          )
-          pushLog({
-            account: 'SYS-ROOT',
-            initiatorRole: initiatorRole || 'Warehouse Ops',
-            action: 'Asset Status Updated to In Maintenance',
-            detail: `Asset ${target.assetName} (${target.assetSku}) status changed to 'In Maintenance' following Repair verdict on log ${target.logId}.`,
-            ip: randomIp(),
-            status: 'Success',
-          })
-        } else if (verdict === 'Write-off') {
-          setInventory((inv) =>
-            inv.map((asset) => {
-              if (
-                asset.assetId === target.assetSku ||
-                asset.name.toLowerCase() === target.assetName.toLowerCase()
-              ) {
-                const nextStock = Math.max(0, asset.stock - 1)
-                const nextStatus = nextStock === 0 ? 'Depleted' : deriveStockStatus(nextStock, asset.capacity)
-                return {
-                  ...asset,
-                  stock: nextStock,
-                  status: nextStatus,
-                  updated: 'Stock decremented · Write-off loss ledger',
-                }
-              }
-              return asset
-            }),
-          )
-          pushLog({
-            account: 'SYS-ROOT',
-            initiatorRole: initiatorRole || 'Warehouse Ops',
-            action: 'Asset Written Off — Loss Ledger Updated',
-            detail: `Asset ${target.assetName} (${target.assetSku}) written off following Write-off verdict on log ${target.logId}. Loss-ledger entry logged. Stock decremented.`,
-            ip: randomIp(),
-            status: 'Flagged',
-          })
-        }
-      }
     },
     [pushLog],
-  )
-
-  const completeMaintenance = useCallback(
-    (assetId: string, initiatorRole = 'Warehouse Ops') => {
-      setInventory((prev) =>
-        prev.map((item) => {
-          if (item.id !== assetId && item.assetId !== assetId) return item
-          const nextStatus = deriveStockStatus(item.stock, item.capacity)
-          const restoredStatus = nextStatus === 'In Maintenance' ? 'Available' : nextStatus
-          pushLog({
-            account: 'SYS-ROOT',
-            initiatorRole,
-            action: 'Maintenance Completed · Return to Stock',
-            detail: `Maintenance completed for ${item.name} (${item.assetId}). Asset status restored to '${restoredStatus}'.`,
-            ip: randomIp(),
-            status: 'Success',
-          })
-          return {
-            ...item,
-            status: restoredStatus,
-            updated: 'Returned to stock from maintenance',
-          }
-        }),
-      )
-    },
-    [pushLog],
-  )
-
-  const settleEvent = useCallback(
-    (eventId: string, initiatorRole = 'Warehouse Ops') => {
-      const target = events.find(
-        (e) => e.id === eventId || e.title === eventId || e.refId === eventId,
-      )
-      if (!target) return { success: false, reason: 'Event not found' }
-
-      const blockingItems = damageExceptions.filter((d) => {
-        const matchesEvent =
-          d.boundEvent === target.title || d.boundEvent === target.refId || d.boundEvent === target.id
-        const isBlocking =
-          d.status === 'Pending Verdict' ||
-          d.status === 'Held for Audit' ||
-          d.status === 'Pending Second Sign-off'
-        return matchesEvent && isBlocking
-      })
-
-      if (blockingItems.length > 0) {
-        return {
-          success: false,
-          reason: `${blockingItems.length} pending damage item(s) must be resolved first`,
-        }
-      }
-
-      setEvents((prev) =>
-        prev.map((e) => (e.id === target.id ? { ...e, status: 'Settled' } : e)),
-      )
-
-      pushLog({
-        account: 'SYS-ROOT',
-        initiatorRole,
-        action: 'Event Portfolio Settled',
-        detail: `Event portfolio "${target.title}" (${target.refId}) transitioned to Settled state following resolution of all damage liabilities.`,
-        ip: randomIp(),
-        status: 'Success',
-      })
-
-      return { success: true }
-    },
-    [events, damageExceptions, pushLog],
   )
 
   const addInventoryItem = useCallback(
@@ -2332,8 +2134,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       routeReorder,
       updateThreshold,
       resolveDamage,
-      completeMaintenance,
-      settleEvent,
       addInventoryItem,
       updateInventoryItem,
     }),
@@ -2364,8 +2164,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       routeReorder,
       updateThreshold,
       resolveDamage,
-      completeMaintenance,
-      settleEvent,
       addInventoryItem,
       updateInventoryItem,
     ],

@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import type { DeficitLine, DeficitPriority, TriggerSource } from '@/lib/warehouse-replenishment'
 import { useWarehouseVendors } from '@/lib/warehouse-vendors'
-import { SearchableVendorSelect } from '@/components/warehouse/shared/SearchableVendorSelect'
+import { AddVendorModal } from '@/components/warehouse/vendors/AddVendorModal'
 
 const PRIORITIES: DeficitPriority[] = ['Low', 'Medium', 'High', 'Critical']
 const TRIGGERS: TriggerSource[] = ['Canvas', 'Batch Pahabol', 'Manual Audit', 'Auto-Threshold']
+const NEW_VENDOR = '__new_vendor__'
 
 export interface MasterItemDraft {
   itemName: string
@@ -17,19 +18,17 @@ export interface MasterItemDraft {
   priority: DeficitPriority
   triggerSource: TriggerSource
   primaryVendorId: string
-  eventId?: string
-  eventTitle?: string
 }
 
 interface AddMasterItemModalProps {
   initial?: DeficitLine
-  presetEvent?: { id: string; title: string }
   onClose: () => void
   onSave: (draft: MasterItemDraft) => void
 }
 
-export function AddMasterItemModal({ initial, presetEvent, onClose, onSave }: AddMasterItemModalProps) {
+export function AddMasterItemModal({ initial, onClose, onSave }: AddMasterItemModalProps) {
   const vendors = useWarehouseVendors()
+  const [vendorModalOpen, setVendorModalOpen] = useState(false)
   const [itemName, setItemName] = useState(initial?.itemName ?? '')
   const [category, setCategory] = useState(initial?.category ?? 'Event Asset')
   const [unit, setUnit] = useState(initial?.unit ?? 'pcs')
@@ -54,16 +53,9 @@ export function AddMasterItemModal({ initial, presetEvent, onClose, onSave }: Ad
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between border-b border-border px-6 py-5">
-          <div>
-            <h2 className="font-serif text-xl font-medium text-card-foreground">
-              {initial ? 'Edit Deficit Line' : presetEvent ? `Add Item · ${presetEvent.title}` : 'Add Master Item'}
-            </h2>
-            {presetEvent && (
-              <p className="mt-0.5 text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-primary">
-                Bound to {presetEvent.title}
-              </p>
-            )}
-          </div>
+          <h2 className="font-serif text-xl font-medium text-card-foreground">
+            {initial ? 'Edit Deficit Line' : 'Add Master Item'}
+          </h2>
           <button
             type="button"
             onClick={onClose}
@@ -157,17 +149,31 @@ export function AddMasterItemModal({ initial, presetEvent, onClose, onSave }: Ad
               ))}
             </select>
           </label>
-          <div className="col-span-2 flex flex-col gap-1.5">
-            <SearchableVendorSelect
-              label="Primary vendor"
+          <label className="col-span-2 flex flex-col gap-1.5">
+            <span className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">Primary vendor</span>
+            <select
               value={primaryVendorId}
-              onChange={setPrimaryVendorId}
-              placeholder="Search or select primary vendor…"
-            />
+              onChange={(e) => {
+                if (e.target.value === NEW_VENDOR) {
+                  setVendorModalOpen(true)
+                  return
+                }
+                setPrimaryVendorId(e.target.value)
+              }}
+              className="rounded-md border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+            >
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                  {v.status !== 'Active' ? ` · ${v.status}` : ''}
+                </option>
+              ))}
+              <option value={NEW_VENDOR}>+ Add new vendor…</option>
+            </select>
             <span className="text-[0.6rem] text-muted-foreground">
-              Pulled live from the Vendor Registry — type to filter or create a new vendor inline.
+              Pulled live from the Vendor Registry — new vendors are available everywhere immediately.
             </span>
-          </div>
+          </label>
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
@@ -192,8 +198,6 @@ export function AddMasterItemModal({ initial, presetEvent, onClose, onSave }: Ad
                 priority,
                 triggerSource,
                 primaryVendorId,
-                eventId: presetEvent?.id ?? initial?.eventId,
-                eventTitle: presetEvent?.title ?? initial?.eventTitle,
               })
             }
             className="rounded-md bg-primary px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
@@ -202,6 +206,13 @@ export function AddMasterItemModal({ initial, presetEvent, onClose, onSave }: Ad
           </button>
         </div>
       </div>
+
+      {vendorModalOpen && (
+        <AddVendorModal
+          onClose={() => setVendorModalOpen(false)}
+          onCreated={(vendor) => setPrimaryVendorId(vendor.id)}
+        />
+      )}
     </div>
   )
 }

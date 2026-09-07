@@ -45,10 +45,12 @@ function hashOf(value: string) {
 }
 
 interface AssetCatalogModuleProps {
-  onClose: () => void
+  onClose?: () => void
+  readOnly?: boolean
+  embedded?: boolean
 }
 
-export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
+export function AssetCatalogModule({ onClose, readOnly = false, embedded = false }: AssetCatalogModuleProps) {
   const assets = useCatalogAssets()
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<AssetCategory | 'All'>('All')
@@ -80,6 +82,7 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
   }, [filtered])
 
   const handleCreate = (draft: NewAssetDraft) => {
+    if (readOnly) return
     const seed = hashOf(`${draft.name}-${Date.now()}`)
     const assetId = `LM-${draft.category.slice(0, 2).toUpperCase()}-${1000 + assets.length + (seed % 900)}`
     const isFractional = draft.category === 'Event Asset' || draft.category === 'Stockroom'
@@ -151,24 +154,50 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
     setAddOpen(false)
   }
 
-  return (
-    <div className="relative flex h-full flex-1 flex-col overflow-y-auto">
-      {/* Header controls & filters */}
-      <div className="flex flex-col gap-1.5 border-b border-border px-6 py-2.5 sm:px-10">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[0.56rem] font-bold uppercase tracking-[0.24em] text-primary">Warehouse module</p>
-            <h1 className="font-serif text-lg font-medium leading-tight text-foreground">Asset Catalog</h1>
+  const gridContent = (
+    <div className="space-y-6 pb-6">
+      {tierGroups.map(([tierName, tierItems]) => (
+        <div key={tierName} className="space-y-3">
+          {/* Sticky Section Header */}
+          <div className="sticky top-0 z-10 border-b border-border/80 bg-background/95 py-2 backdrop-blur-sm">
+            <span className="text-[0.65rem] font-bold uppercase tracking-[0.15em] text-primary">
+              {tierName} ({tierItems.length})
+            </span>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close and return to dashboard"
-            className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </button>
+
+          {/* 6-Column Card Grid for this Tier */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 sm:gap-4">
+            {tierItems.map((asset) => (
+              <AssetCard key={asset.id} asset={asset} onOpen={() => setSelectedAsset(asset)} />
+            ))}
+          </div>
         </div>
+      ))}
+    </div>
+  )
+
+  return (
+    <div className={cn('relative flex flex-col', embedded ? '' : 'h-full flex-1 overflow-y-auto')}>
+      {/* Header controls & filters */}
+      <div className={cn('flex flex-col gap-1.5 border-b border-border py-2.5', embedded ? 'px-0' : 'px-6 sm:px-10')}>
+        {!embedded && (
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[0.56rem] font-bold uppercase tracking-[0.24em] text-primary">Warehouse module</p>
+              <h1 className="font-serif text-lg font-medium leading-tight text-foreground">Asset Catalog</h1>
+            </div>
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close and return to dashboard"
+                className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative w-full lg:w-64">
@@ -201,14 +230,16 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
                 <List className="size-3.5" />
               </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setAddOpen(true)}
-              className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90"
-            >
-              <Plus className="size-3.5" />
-              Add Item
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => setAddOpen(true)}
+                className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90"
+              >
+                <Plus className="size-3.5" />
+                Add Item
+              </button>
+            )}
           </div>
         </div>
 
@@ -254,37 +285,23 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
       </div>
 
       {/* Main Content Area (Tier-Grouped Sections with Sticky Headers) */}
-      <div className="flex-1 px-6 py-4 sm:px-10">
+      <div className={cn('flex-1 py-4', embedded ? 'px-0' : 'px-6 sm:px-10')}>
         {tierGroups.length === 0 ? (
           <div className="mt-10 text-center text-sm font-semibold uppercase tracking-[0.15em] text-muted-foreground">
             No assets match the current filters
           </div>
         ) : viewMode === 'grid' ? (
-          /* ─── GRID VIEW: Tier-Grouped Sections with Sticky Headers ─── */
-          <GridRevealContainer maxHeightClass="max-h-[calc(100vh-230px)]">
-            <div className="space-y-6 pb-6">
-              {tierGroups.map(([tierName, tierItems]) => (
-                <div key={tierName} className="space-y-3">
-                  {/* Sticky Section Header */}
-                  <div className="sticky top-0 z-10 border-b border-border/80 bg-background/95 py-2 backdrop-blur-sm">
-                    <span className="text-[0.65rem] font-bold uppercase tracking-[0.15em] text-primary">
-                      {tierName} ({tierItems.length})
-                    </span>
-                  </div>
-
-                  {/* 6-Column Card Grid for this Tier */}
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 sm:gap-4">
-                    {tierItems.map((asset) => (
-                      <AssetCard key={asset.id} asset={asset} onOpen={() => setSelectedAsset(asset)} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </GridRevealContainer>
+          /* ─── GRID VIEW ─── */
+          embedded ? (
+            gridContent
+          ) : (
+            <GridRevealContainer maxHeightClass="max-h-[calc(100vh-230px)]">
+              {gridContent}
+            </GridRevealContainer>
+          )
         ) : (
-          /* ─── LIST VIEW: Tier-Grouped Sections with Sticky Headers ─── */
-          <div className="space-y-6 max-h-[calc(100vh-230px)] overflow-y-auto pr-1">
+          /* ─── LIST VIEW ─── */
+          <div className={cn('space-y-6', embedded ? '' : 'max-h-[calc(100vh-230px)] overflow-y-auto pr-1')}>
             {tierGroups.map(([tierName, tierItems]) => (
               <div key={tierName} className="space-y-2">
                 {/* Sticky Section Header */}
@@ -352,17 +369,19 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
       </div>
 
       {/* Floating Add Item FAB */}
-      <button
-        type="button"
-        onClick={() => setAddOpen(true)}
-        aria-label="Add item"
-        className="fixed bottom-8 right-8 z-30 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:opacity-90"
-      >
-        <Plus className="size-6" aria-hidden="true" />
-      </button>
+      {!readOnly && (
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          aria-label="Add item"
+          className="fixed bottom-8 right-8 z-30 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:opacity-90"
+        >
+          <Plus className="size-6" aria-hidden="true" />
+        </button>
+      )}
 
       {selectedAsset && <AssetDetailModal asset={selectedAsset} onClose={() => setSelectedAsset(null)} />}
-      {addOpen && <AddAssetModal onClose={() => setAddOpen(false)} onCreate={handleCreate} />}
+      {!readOnly && addOpen && <AddAssetModal onClose={() => setAddOpen(false)} onCreate={handleCreate} />}
     </div>
   )
 }

@@ -59,11 +59,12 @@ export interface PortalAccount {
 // state in the Manning/Crew person-info modal.
 export const MANNING_OFFICER_SUBROLE: WomSubRole = 'Manning Officer'
 
-// The two Executive login accounts. Damage Validation's two-sign-off rule for
-// audit-held exceptions checks this list (cross-referenced against each
-// account's live Workforce Management suspension state) to determine whether
-// a second, distinct Executive is currently available to sign off.
-export const EXECUTIVE_LOGIN_EMAILS = ['executive@lumiere.com', 'executive2@lumiere.com']
+// DEPRECATED — Originally used by the two-Executive-sign-off rule for
+// Held-for-Audit damage exceptions. That mechanism is now superseded by the
+// WOM→Executive escalation model. executive2@lumiere.com has been fully
+// removed (see login page and MOCK_ACCOUNTS); retained here only in case
+// another file still imports this constant.
+export const EXECUTIVE_LOGIN_EMAILS = ['executive@lumiere.com']
 
 // Hardcoded mock demo accounts — always available as fallback
 const MOCK_ACCOUNTS: Record<string, PortalAccount> = {
@@ -79,16 +80,6 @@ const MOCK_ACCOUNTS: Record<string, PortalAccount> = {
     id: 'mock-executive-001',
     email: 'executive@lumiere.com',
     name: 'Adrienne Devereux',
-    role: 'Executive',
-    portal: 'web',
-    temporaryPassword: false,
-  },
-  // Second Executive account — required alongside the first to resolve a
-  // Damage Validation exception held for audit (two-sign-off rule).
-  'executive2@lumiere.com': {
-    id: 'mock-executive-002',
-    email: 'executive2@lumiere.com',
-    name: 'Marcus Whitfield',
     role: 'Executive',
     portal: 'web',
     temporaryPassword: false,
@@ -265,7 +256,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string, portal?: PortalKind): Promise<{ ok: boolean; reason?: 'wrong-portal' | 'invalid' }> => {
     const normalizedEmail = email.trim().toLowerCase()
-    
+
     try {
       // First, check if credentials match a hardcoded mock account (password: lumiere2026)
       const mockAccount = MOCK_ACCOUNTS[normalizedEmail]

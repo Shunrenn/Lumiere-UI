@@ -268,11 +268,9 @@ export function ReorderRequisitionModal({ item, onClose }: Props) {
               <span
                 className={cn(
                   'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[0.58rem] font-bold uppercase tracking-[0.12em]',
-                  item.status === 'Not Purchased'
+                  item.status === 'Critical Deficit'
                     ? 'bg-rose-100 text-rose-700'
-                    : item.status === 'In Procurement'
-                      ? 'bg-amber-100 text-amber-800'
-                      : 'bg-emerald-100 text-emerald-700',
+                    : 'bg-amber-100 text-amber-800',
                 )}
               >
                 <span className="size-1.5 rounded-full bg-current" />

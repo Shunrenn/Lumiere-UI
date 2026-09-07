@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { CalendarClock, ShieldAlert } from 'lucide-react'
+import { ArrowUpCircle, AlertTriangle, CheckCircle2, PackageSearch } from 'lucide-react'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import {
   ExecutiveStatCard,
@@ -8,7 +8,10 @@ import {
   ExecutiveTrendAnalyticsCard,
 } from '@/components/executive/ExecutiveAnalytics'
 import { ExecutiveLiveFeed } from '@/components/executive/ExecutiveLiveFeed'
-import { ExecutivePendingActions, type ExecutivePendingItem } from '@/components/executive/ExecutivePendingActions'
+import { ExecutiveOngoingAlerts, type TickerItem } from '@/components/executive/ExecutiveOngoingAlerts'
+import { getEventProgress, getUrgentLowReadinessEvents } from '@/lib/event-progress'
+import { getOperationalEvents } from '@/lib/operational-events'
+import { ExecutiveTrendSummaryModal } from '@/components/executive/ExecutiveTrendSummaryModal'
 import { PortfolioHealthMethodologyModal } from '@/components/executive/PortfolioHealthMethodologyModal'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
@@ -19,9 +22,11 @@ type DashboardMetricMode = 'events' | 'reports'
 
 export function EventDashboardPage() {
   const { navigate } = useNav()
-  const { events, damageExceptions } = usePortal()
+  const { events, damageExceptions, procurement } = usePortal()
   const [metricMode, setMetricMode] = useState<DashboardMetricMode>('events')
   const [healthModalOpen, setHealthModalOpen] = useState(false)
+  const [trendSummaryOpen, setTrendSummaryOpen] = useState(false)
+  const [trendSummaryMode, setTrendSummaryMode] = useState<'events' | 'damage'>('events')
 
   // Event metrics
   const totalEvents = events.length
@@ -57,9 +62,9 @@ export function EventDashboardPage() {
     () =>
       damageExceptions.filter(
         (d) =>
-          d.status !== 'Pending Verdict' &&
-          d.status !== 'Held for Audit' &&
-          d.status !== 'Pending Second Sign-off',
+          d.status === 'Dismissed' ||
+          d.status === 'Sent for Repair' ||
+          d.status === 'Sent for Write-off',
       ).length,
     [damageExceptions],
   )
@@ -67,84 +72,112 @@ export function EventDashboardPage() {
     () =>
       damageExceptions.filter(
         (d) =>
-          d.status === 'Pending Verdict' ||
-          d.status === 'Held for Audit' ||
-          d.status === 'Pending Second Sign-off',
+          d.status === 'Escalated — Round 1 Review' ||
+          d.status === 'Escalated — Round 2 Review',
       ).length,
     [damageExceptions],
   )
 
-  // Report distribution counts
+  // Damage Case Status counts (for the current status-based donut — see note
+  // above: Phase 5 calls for this to become a Damaged vs. Missing split
+  // instead, pending a data-model decision).
   const reportCounts = useMemo(() => {
     const tally: Record<string, number> = {
       'Pending Verdict': 0,
-      Validated: 0,
-      'Held for Audit': 0,
-      'Second Sign-off': 0,
+      'Escalated — Round 1 Review': 0,
+      'Escalated — Round 2 Review': 0,
+      'Pending Resolution': 0,
+      'Sent for Repair': 0,
+      'Sent for Write-off': 0,
       Dismissed: 0,
     }
     damageExceptions.forEach((d) => {
-      if (d.status === 'Pending Second Sign-off') {
-        tally['Second Sign-off'] = (tally['Second Sign-off'] ?? 0) + 1
-      } else if (tally[d.status] !== undefined) {
+      if (tally[d.status] !== undefined) {
         tally[d.status] += 1
       }
     })
     return tally
   }, [damageExceptions])
 
-  // Operations-oriented pending actions
-  const pendingActionItems: ExecutivePendingItem[] = useMemo(() => {
-    const items: ExecutivePendingItem[] = []
+  // Single shared source — same one Live Operations Feed and Operational
+  // Audit Logs read from, so the Ongoing Alerts ticker uses identical
+  // wording for the same underlying events (Phase 6, item 2).
+  const operationalEvents = useMemo(
+    () => getOperationalEvents(events, damageExceptions, procurement),
+    [events, damageExceptions, procurement],
+  )
 
-    const awaitingEvent = events.find(
-      (e) => e.status === 'Initialized' || e.status === 'On Hold',
-    )
-    if (awaitingEvent) {
-      items.push({
-        id: `ev-${awaitingEvent.id}`,
-        title: 'Event Awaiting Confirmation',
-        subtitle: awaitingEvent.title,
-        tone: 'sky',
-        icon: CalendarClock,
-        actionLabel: 'Review',
-        onAction: () =>
-          navigate('registry', { kind: 'view-event', payload: { id: awaitingEvent.id } }),
+  // Urgent: escalated damage reports (actionable) + low-readiness events
+  // with an approaching date (informational flag, no action button — no
+  // OperationalEventType exists for this yet, see event-progress.ts).
+  const urgentItems: TickerItem[] = useMemo(() => {
+    const items: TickerItem[] = []
+
+    // 1. Map escalated damage exceptions (both Round 1 and Round 2)
+    damageExceptions
+      .filter(
+        (d) =>
+          d.status === 'Escalated — Round 1 Review' ||
+          d.status === 'Escalated — Round 2 Review',
+      )
+      .forEach((d) => {
+        items.push({
+          id: `urgent-damage-${d.id}`,
+          title: d.status,
+          subtitle: `${d.logId} · ${d.assetName} (${d.boundEvent})`,
+          tone: 'rose',
+          icon: ArrowUpCircle,
+          actionLabel: 'Evaluate',
+          onAction: () =>
+            navigate('damage', { kind: 'review-damage', payload: { id: d.id } }),
+        })
       })
-    }
 
-    const pendingDamage = damageExceptions.find((d) => d.status === 'Pending Verdict')
-    if (pendingDamage) {
+    // 2. Map low-readiness events with an approaching target date
+    getUrgentLowReadinessEvents(events).forEach((e) => {
       items.push({
-        id: `dm-${pendingDamage.id}`,
-        title: 'Damage Report Insight',
-        subtitle: `${pendingDamage.logId} · ${pendingDamage.assetName}`,
-        tone: 'rose',
-        icon: ShieldAlert,
-        actionLabel: 'View Report',
-        onAction: () =>
-          navigate('damage', { kind: 'review-damage', payload: { id: pendingDamage.id } }),
-      })
-    }
-
-    const auditDamage = damageExceptions.find(
-      (d) => d.status === 'Held for Audit' || d.status === 'Pending Second Sign-off',
-    )
-    if (auditDamage) {
-      items.push({
-        id: `dm-audit-${auditDamage.id}`,
-        title: 'Audit Exception Insight',
-        subtitle: `${auditDamage.logId} · ${auditDamage.assetName}`,
+        id: `readiness-${e.id}`,
+        title: 'Low Dispatch Readiness — Date Approaching',
+        subtitle: `${e.title} · ${getEventProgress(e)}% ready · ${e.targetDate}`,
         tone: 'amber',
-        icon: ShieldAlert,
-        actionLabel: 'View Report',
-        onAction: () =>
-          navigate('damage', { kind: 'review-damage', payload: { id: auditDamage.id } }),
+        icon: AlertTriangle,
       })
-    }
+    })
 
     return items
-  }, [events, damageExceptions, navigate])
+  }, [damageExceptions, events, navigate])
+
+  // Highlight: notable, informational-only outcomes.
+  const highlightItems: TickerItem[] = useMemo(() => {
+    return operationalEvents
+      .filter(
+        (op) => op.eventType === 'Damage Verdict Recorded' || op.eventType === 'Event Registered',
+      )
+      .slice(0, 5)
+      .map((op) => ({
+        id: op.id,
+        title: op.eventType,
+        subtitle: op.title,
+        tone: 'emerald' as const,
+        icon: CheckCircle2,
+      }))
+  }, [operationalEvents])
+
+  // Soft Alert: FYI-only items WOM owns resolution for.
+  const softAlertItems: TickerItem[] = useMemo(() => {
+    return operationalEvents
+      .filter(
+        (op) =>
+          op.eventType === 'Asset Restock Requested' || op.eventType === 'Damage Report Submitted',
+      )
+      .map((op) => ({
+        id: op.id,
+        title: op.eventType,
+        subtitle: op.title,
+        tone: 'sky' as const,
+        icon: PackageSearch,
+      }))
+  }, [operationalEvents])
 
   const destination = (id: ExecutiveDestinationId) => navigate(id)
 
@@ -286,17 +319,42 @@ export function EventDashboardPage() {
             </div>
           </div>
 
-          {/* Row 2: Pending Actions (30%) + Trend Analytics (70%) */}
+          {/* Row 2: Ongoing Alerts (30%) + Trend Analytics (70%) */}
           <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-10">
             <div className="lg:col-span-3">
-              <ExecutivePendingActions items={pendingActionItems} />
+              <ExecutiveOngoingAlerts
+                urgent={urgentItems}
+                highlight={highlightItems}
+                softAlert={softAlertItems}
+              />
             </div>
             <div className="lg:col-span-7">
-              <ExecutiveTrendAnalyticsCard onViewRegistry={() => navigate('registry')} />
+              <ExecutiveTrendAnalyticsCard
+                onViewSummary={(mode) => {
+                  setTrendSummaryMode(mode)
+                  setTrendSummaryOpen(true)
+                }}
+              />
             </div>
           </div>
         </div>
       </ExecutiveShell>
+
+      <ExecutiveTrendSummaryModal
+        open={trendSummaryOpen}
+        mode={trendSummaryMode}
+        events={events}
+        damageExceptions={damageExceptions}
+        onClose={() => setTrendSummaryOpen(false)}
+        onViewEvent={(id) => {
+          setTrendSummaryOpen(false)
+          navigate('registry', { kind: 'view-event', payload: { id } })
+        }}
+        onViewDamageReport={(id) => {
+          setTrendSummaryOpen(false)
+          navigate('damage', { kind: 'review-damage', payload: { id } })
+        }}
+      />
 
       <PortfolioHealthMethodologyModal
         open={healthModalOpen}

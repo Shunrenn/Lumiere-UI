@@ -14,26 +14,24 @@ import {
   AlertTriangle,
   Wrench,
   Ban,
-  UserCheck2,
+  ArrowUpCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { DamageException, DamageVerdict } from '@/lib/types'
 
-type ResolvableVerdict = Exclude<DamageVerdict, 'Pending Verdict'>
+export type ResolvableVerdict = Exclude<DamageVerdict, 'Pending Verdict'>
+export type ExecutiveModalMode =
+  | 'view'
+  | 'evaluate-round1'
+  | 'evaluate-round2'
+  | 'edit-round1'
+  | 'edit-round2'
 
-// Copy + styling for the revalidation confirmation step, keyed by verdict.
+// Copy + styling for the revalidation confirmation step, keyed by active verdicts.
 const verdictConfig: Record<
   ResolvableVerdict,
   { label: string; confirmTitle: string; confirmBody: string; tone: string; Icon: typeof Scale }
 > = {
-  Validated: {
-    label: 'Validate Damage',
-    confirmTitle: 'Confirm Damage Validation',
-    confirmBody:
-      'This will validate the exception and post the estimated liability against the inventory ledger. This action is logged to the audit trail.',
-    tone: 'text-emerald-700',
-    Icon: CheckCircle2,
-  },
   Dismissed: {
     label: 'Dismiss Claim',
     confirmTitle: 'Confirm Claim Dismissal',
@@ -42,30 +40,37 @@ const verdictConfig: Record<
     tone: 'text-destructive',
     Icon: XCircle,
   },
-  'Held for Audit': {
-    label: 'Hold for Audit',
-    confirmTitle: 'Hold Exception for Audit',
+  'Pending Resolution': {
+    label: 'Pending Resolution',
+    confirmTitle: 'Confirm Pending Resolution',
     confirmBody:
-      'This places the exception on a formal audit hold. The asset is frozen and liability remains open pending review.',
-    tone: 'text-amber-700',
-    Icon: Scale,
+      'This validates the exception and flags it for disposition processing. Liability is recorded in the audit trail.',
+    tone: 'text-emerald-700',
+    Icon: CheckCircle2,
   },
-  'Pending Second Sign-off': {
-    label: 'Sign Off',
-    confirmTitle: 'Confirm Sign-off',
-    confirmBody: 'This records your Executive sign-off on this audit-held exception.',
-    tone: 'text-amber-700',
-    Icon: UserCheck2,
+  'Escalated — Round 1 Review': {
+    label: 'Escalated (Round 1)',
+    confirmTitle: 'Escalated for Round 1 Executive Review',
+    confirmBody: 'This exception has been escalated for Round 1 Executive review.',
+    tone: 'text-rose-700',
+    Icon: ArrowUpCircle,
   },
-  Repair: {
+  'Escalated — Round 2 Review': {
+    label: 'Escalated (Round 2)',
+    confirmTitle: 'Escalated for Round 2 Executive Review',
+    confirmBody: 'This exception has been escalated for final Round 2 Executive review.',
+    tone: 'text-rose-700',
+    Icon: ArrowUpCircle,
+  },
+  'Sent for Repair': {
     label: 'Sign Off · Repair',
     confirmTitle: 'Confirm Sign-off · Repair',
     confirmBody:
-      'This records your sign-off recommending Repair. The asset status will transition to In Maintenance in the Asset Registry and an audit entry will be logged.',
+      'This records your sign-off recommending Repair. The asset status will transition to In Maintenance in the Asset Registry.',
     tone: 'text-sky-700',
     Icon: Wrench,
   },
-  'Write-off': {
+  'Sent for Write-off': {
     label: 'Sign Off · Write-off',
     confirmTitle: 'Confirm Sign-off · Write-off',
     confirmBody:
@@ -77,21 +82,23 @@ const verdictConfig: Record<
 
 interface Props {
   exception: DamageException | null
-  onClose: () => void
-  onResolve: (
-    id: string,
-    verdict: Exclude<DamageVerdict, 'Pending Verdict'>,
-    note: string,
-    unblockMetadata?: any,
-    selfValRecord?: any,
-  ) => void
+  mode?: ExecutiveModalMode
   editable?: boolean
+  evaluateForExecutive?: boolean
   currentExecutiveEmail?: string
   currentExecutiveName?: string
   activeExecutiveCount?: number
   allowSelfValidation?: boolean
   permanentlyEnabledViaEmergency?: boolean
   womSubRoleName?: string
+  onClose: () => void
+  onResolve: (
+    id: string,
+    verdict: ResolvableVerdict,
+    note: string,
+    unblockMetadata?: any,
+    selfValRecord?: any
+  ) => void
   onPermanentUnblockSubRole?: (subRoleName: string, metadata: any) => void
 }
 
@@ -103,6 +110,7 @@ export function DamageVerdictModal({
   onClose,
   onResolve,
   editable = false,
+  evaluateForExecutive = false,
   currentExecutiveEmail = '',
   currentExecutiveName = '',
   activeExecutiveCount = 2,
@@ -137,20 +145,18 @@ export function DamageVerdictModal({
   }, [exception])
 
   const showControls = editable
-  const isHeldForAudit = exception.status === 'Held for Audit'
-  const isPendingSecondSignOff = exception.status === 'Pending Second Sign-off'
-  const isFinalAuditVerdict = exception.status === 'Repair' || exception.status === 'Write-off'
+  const isEscalatedForExecutive =
+    exception.status === 'Escalated — Round 1 Review' ||
+    exception.status === 'Escalated — Round 2 Review'
+  const isPendingResolution = exception.status === 'Pending Resolution'
+  const isFinalAuditVerdict =
+    exception.status === 'Sent for Repair' || exception.status === 'Sent for Write-off'
 
-  // Dual custody checks
-  const isStrictBlock = !allowSelfValidation && activeExecutiveCount < 2 && (isHeldForAudit || isPendingSecondSignOff)
-
-  const selfValJustificationValid = selfValJustification.trim().length >= 20
-
-  const confirm = (overrideUnblockMeta?: any) => {
+  const handleConfirmAction = (overrideUnblockMeta?: any) => {
     if (!pendingVerdict) return
 
     let selfRecord = undefined
-    if (allowSelfValidation && (isHeldForAudit || isPendingSecondSignOff)) {
+    if (allowSelfValidation && isPendingResolution) {
       selfRecord = {
         validatedByEmail: currentExecutiveEmail || 'wom@lumiere.com',
         validatedByName: currentExecutiveName || 'Warehouse Ops Officer',
@@ -189,7 +195,7 @@ export function DamageVerdictModal({
       setShowHighFrictionWarning(true)
     } else {
       setShowEmergencyModal(false)
-      confirm(meta)
+      handleConfirmAction(meta)
     }
   }
 
@@ -206,7 +212,7 @@ export function DamageVerdictModal({
     onPermanentUnblockSubRole?.(womSubRoleName, meta)
     setShowHighFrictionWarning(false)
     setShowEmergencyModal(false)
-    confirm(meta)
+    handleConfirmAction(meta)
   }
 
   const closeAll = () => {
@@ -215,6 +221,9 @@ export function DamageVerdictModal({
     setShowHighFrictionWarning(false)
     onClose()
   }
+
+  const isStrictBlock = !allowSelfValidation && activeExecutiveCount < 2 && isPendingResolution
+  const selfValJustificationValid = selfValJustification.trim().length >= 20
 
   return (
     <div
@@ -253,7 +262,6 @@ export function DamageVerdictModal({
 
         {/* Body */}
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
-          {/* Field-captured evidence photo uploaded by ground crew */}
           {exception.noPhotographicEvidence ? (
             <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
               <AlertTriangle className="size-4 shrink-0" />
@@ -321,7 +329,6 @@ export function DamageVerdictModal({
             </div>
           </div>
 
-          {/* Damage + EXIF banner */}
           <div className="rounded-lg border border-border bg-muted/40 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -360,36 +367,6 @@ export function DamageVerdictModal({
             </p>
           </div>
 
-          {/* Sign-off trail for audit-held exceptions */}
-          {(exception.firstSignOff || exception.secondSignOff) && (
-            <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-4">
-              <p className="text-[0.58rem] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
-                Audit Sign-off Trail
-              </p>
-              {exception.firstSignOff && (
-                <div className="flex items-start gap-2 text-xs text-card-foreground">
-                  <UserCheck2 className="mt-0.5 size-3.5 shrink-0 text-primary" />
-                  <p>
-                    <span className="font-semibold">{exception.firstSignOff.staffName}</span> signed off{' '}
-                    <span className="font-semibold">{exception.firstSignOff.verdict}</span> ·{' '}
-                    {exception.firstSignOff.timestamp}
-                  </p>
-                </div>
-              )}
-              {exception.secondSignOff && (
-                <div className="flex items-start gap-2 text-xs text-card-foreground">
-                  <UserCheck2 className="mt-0.5 size-3.5 shrink-0 text-primary" />
-                  <p>
-                    <span className="font-semibold">{exception.secondSignOff.staffName}</span> confirmed{' '}
-                    <span className="font-semibold">{exception.secondSignOff.verdict}</span> · finalized ·{' '}
-                    {exception.secondSignOff.timestamp}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Supervisory note — editable when in edit mode for pending reports */}
           <div>
             <label
               htmlFor="verdict-note"
@@ -413,15 +390,15 @@ export function DamageVerdictModal({
             />
           </div>
 
-          {exception.status === 'Validated' || exception.status === 'Dismissed' ? (
+          {exception.status === 'Pending Resolution' || exception.status === 'Dismissed' ? (
             <div
               className={cn(
                 'flex items-center gap-2 rounded-lg border px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em]',
-                exception.status === 'Validated' && 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                exception.status === 'Pending Resolution' && 'border-emerald-200 bg-emerald-50 text-emerald-700',
                 exception.status === 'Dismissed' && 'border-border bg-muted/50 text-muted-foreground',
               )}
             >
-              {exception.status === 'Validated' && <CheckCircle2 className="size-4" />}
+              {exception.status === 'Pending Resolution' && <CheckCircle2 className="size-4" />}
               {exception.status === 'Dismissed' && <XCircle className="size-4" />}
               {`Verdict recorded · ${exception.status}`}
             </div>
@@ -431,27 +408,20 @@ export function DamageVerdictModal({
             <div
               className={cn(
                 'flex items-center gap-2 rounded-lg border px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em]',
-                exception.status === 'Repair' && 'border-sky-200 bg-sky-50 text-sky-700',
-                exception.status === 'Write-off' && 'border-border bg-muted/50 text-muted-foreground',
+                exception.status === 'Sent for Repair' && 'border-sky-200 bg-sky-50 text-sky-700',
+                exception.status === 'Sent for Write-off' && 'border-border bg-muted/50 text-muted-foreground',
               )}
             >
-              {exception.status === 'Repair' && <Wrench className="size-4" />}
-              {exception.status === 'Write-off' && <Ban className="size-4" />}
-              {`Audit resolved · ${exception.status} · two Executive sign-offs recorded`}
+              {exception.status === 'Sent for Repair' && <Wrench className="size-4" />}
+              {exception.status === 'Sent for Write-off' && <Ban className="size-4" />}
+              {`Audit resolved · ${exception.status} · Executive sign-off recorded`}
             </div>
           )}
 
-          {isHeldForAudit && !showControls && (
-            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em] text-amber-800">
-              <Scale className="size-4" />
-              On audit hold · awaiting first Executive sign-off
-            </div>
-          )}
-
-          {isPendingSecondSignOff && !showControls && (
-            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em] text-amber-800">
-              <UserCheck2 className="size-4" />
-              Pending a second, different Executive sign-off
+          {isEscalatedForExecutive && !showControls && (
+            <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em] text-rose-700">
+              <ArrowUpCircle className="size-4" />
+              Escalated for Executive Review · awaiting Executive verdict
             </div>
           )}
 
@@ -462,7 +432,7 @@ export function DamageVerdictModal({
                 Strict Block — Dual-Custody Deadlock
               </div>
               <p className="text-muted-foreground leading-relaxed">
-                Self-validation is disabled for the <strong>{womSubRoleName}</strong> sub-role, but only 1 active account exists in Workforce Management. Dual-custody sign-off cannot be completed.
+                Self-validation is disabled for the <strong>{womSubRoleName}</strong> sub-role, but only 1 active account exists in Workforce Management.
               </p>
               <button
                 type="button"
@@ -482,9 +452,9 @@ export function DamageVerdictModal({
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer actions */}
         <div className="flex flex-col items-stretch gap-3 border-t border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-end shrink-0">
-          {showControls && exception.status === 'Pending Verdict' ? (
+          {showControls && evaluateForExecutive ? (
             <>
               <button
                 type="button"
@@ -496,26 +466,45 @@ export function DamageVerdictModal({
               </button>
               <button
                 type="button"
-                onClick={() => setPendingVerdict('Held for Audit')}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-amber-800 transition hover:bg-amber-100"
-              >
-                <Scale className="size-3.5" />
-                Hold for Audit
-              </button>
-              <button
-                type="button"
-                onClick={() => setPendingVerdict('Validated')}
+                onClick={() => setPendingVerdict('Pending Resolution')}
                 className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-primary-foreground transition hover:opacity-90"
               >
                 <CheckCircle2 className="size-3.5" />
                 Validate Damage
               </button>
             </>
-          ) : showControls && (isHeldForAudit || isPendingSecondSignOff) && !isStrictBlock ? (
+          ) : showControls && exception.status === 'Pending Verdict' ? (
             <>
               <button
                 type="button"
-                onClick={() => setPendingVerdict('Write-off')}
+                onClick={() => setPendingVerdict('Dismissed')}
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-card px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition hover:border-destructive/50 hover:text-destructive"
+              >
+                <XCircle className="size-3.5" />
+                Dismiss Claim
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingVerdict('Escalated — Round 1 Review')}
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-amber-800 transition hover:bg-amber-100"
+              >
+                <ArrowUpCircle className="size-3.5" />
+                Escalate (Round 1)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingVerdict('Pending Resolution')}
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-primary-foreground transition hover:opacity-90"
+              >
+                <CheckCircle2 className="size-3.5" />
+                Validate Damage
+              </button>
+            </>
+          ) : showControls && isPendingResolution && !isStrictBlock ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setPendingVerdict('Sent for Write-off')}
                 className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-card px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition hover:border-destructive/50 hover:text-destructive"
               >
                 <Ban className="size-3.5" />
@@ -523,7 +512,7 @@ export function DamageVerdictModal({
               </button>
               <button
                 type="button"
-                onClick={() => setPendingVerdict('Repair')}
+                onClick={() => setPendingVerdict('Sent for Repair')}
                 className="inline-flex items-center justify-center gap-2 rounded-md border border-sky-300 bg-sky-50 px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-sky-700 transition hover:bg-sky-100"
               >
                 <Wrench className="size-3.5" />
@@ -558,11 +547,11 @@ export function DamageVerdictModal({
             <div
               className={cn(
                 'flex size-11 items-center justify-center rounded-full',
-                pendingVerdict === 'Validated' && 'bg-emerald-100',
-                pendingVerdict === 'Held for Audit' && 'bg-amber-100',
+                pendingVerdict === 'Pending Resolution' && 'bg-emerald-100',
                 pendingVerdict === 'Dismissed' && 'bg-muted',
-                pendingVerdict === 'Repair' && 'bg-sky-100',
-                pendingVerdict === 'Write-off' && 'bg-muted',
+                pendingVerdict === 'Sent for Repair' && 'bg-sky-100',
+                pendingVerdict === 'Sent for Write-off' && 'bg-muted',
+                (pendingVerdict === 'Escalated — Round 1 Review' || pendingVerdict === 'Escalated — Round 2 Review') && 'bg-rose-100',
               )}
             >
               <AlertTriangle className={cn('size-5', verdictConfig[pendingVerdict].tone)} />
@@ -576,7 +565,7 @@ export function DamageVerdictModal({
             <p className="mt-3 rounded-md bg-muted/50 px-3 py-2 text-[0.65rem] uppercase tracking-[0.1em] text-muted-foreground">
               {exception.logId} · {exception.assetName}
             </p>
-            {allowSelfValidation && (isHeldForAudit || isPendingSecondSignOff) && (
+            {allowSelfValidation && isPendingResolution && (
               <div className="mt-4 space-y-2 rounded-lg border border-border bg-muted/30 p-3 text-left">
                 <p className="text-[0.62rem] font-bold uppercase tracking-wider text-card-foreground flex items-center gap-1.5">
                   <ShieldCheck className="size-3.5 text-primary" /> Standing Self-Validation Justification
@@ -611,15 +600,15 @@ export function DamageVerdictModal({
               </button>
               <button
                 type="button"
-                disabled={allowSelfValidation && (isHeldForAudit || isPendingSecondSignOff) && !selfValJustificationValid}
-                onClick={() => confirm()}
+                disabled={allowSelfValidation && isPendingResolution && !selfValJustificationValid}
+                onClick={() => handleConfirmAction()}
                 className={cn(
                   'inline-flex items-center gap-2 rounded-md px-4 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-white transition hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed',
-                  pendingVerdict === 'Validated' && 'bg-emerald-600',
-                  pendingVerdict === 'Held for Audit' && 'bg-amber-600',
+                  pendingVerdict === 'Pending Resolution' && 'bg-emerald-600',
                   pendingVerdict === 'Dismissed' && 'bg-neutral-900',
-                  pendingVerdict === 'Repair' && 'bg-sky-600',
-                  pendingVerdict === 'Write-off' && 'bg-neutral-900',
+                  pendingVerdict === 'Sent for Repair' && 'bg-sky-600',
+                  pendingVerdict === 'Sent for Write-off' && 'bg-neutral-900',
+                  (pendingVerdict === 'Escalated — Round 1 Review' || pendingVerdict === 'Escalated — Round 2 Review') && 'bg-rose-600',
                 )}
               >
                 {(() => {
