@@ -16,7 +16,6 @@ import type { PortalEvent } from '@/lib/types'
 import { usePortal } from '@/lib/store'
 import { useCrewRows } from '@/lib/warehouse-crew'
 import { useDispatchStore } from '@/lib/warehouse-dispatch'
-import { getEventDetailSnapshot } from '@/lib/event-detail'
 import { cn } from '@/lib/utils'
 
 interface WomInputSummaryModalProps {
@@ -39,19 +38,14 @@ function Avatar({ name }: { name: string }) {
 }
 
 export function WomInputSummaryModal({ event, onClose, onOpenFullDetail }: WomInputSummaryModalProps) {
-  const { staff, events, procurement } = usePortal()
-  const dispatchRecords = useDispatchStore(events, staff, procurement)
+  const { staff, events } = usePortal()
+  const dispatchRecords = useDispatchStore()
   const crewRows = useCrewRows(staff, events)
-
-  const allocatedItems = useMemo(() => {
-    if (!event) return []
-    return getEventDetailSnapshot(event, staff, procurement).items
-  }, [event, staff, procurement])
 
   if (!event) return null
 
   // ---- Section A: Event Planner Asset Plan Mock/Derived Status ----
-  const hasAllocatedItems = allocatedItems.length > 0
+  const hasAllocatedItems = Boolean(event.items && event.items.length > 0)
   const isPlanSettled = hasAllocatedItems && event.status !== 'On Hold' && event.status !== 'Cancelled'
 
   // ---- Section B: Assigned Crew Mock/Derived Status ----
@@ -68,8 +62,9 @@ export function WomInputSummaryModal({ event, onClose, onOpenFullDetail }: WomIn
 
   // ---- Section C: Dispatch & Logistics Mock/Derived Status ----
   const dispatchBatch = useMemo(() => {
-    const batches = dispatchRecords.get(event.id) ?? []
-    return batches[0]
+    return dispatchRecords.find(
+      (record) => record.event.trim().toLowerCase() === event.title.trim().toLowerCase(),
+    )
   }, [dispatchRecords, event])
 
   // ---- Section D: Executive Registry Metadata ----
@@ -164,7 +159,7 @@ export function WomInputSummaryModal({ event, onClose, onOpenFullDetail }: WomIn
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="rounded-lg border border-border bg-background p-3">
                   <p className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground">Allocated Decor Items</p>
-                  <p className="mt-1 font-serif text-xl font-medium text-foreground">{allocatedItems.length}</p>
+                  <p className="mt-1 font-serif text-xl font-medium text-foreground">{event.items.length}</p>
                 </div>
                 <div className="rounded-lg border border-border bg-background p-3">
                   <p className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground">Plan Finalization</p>
@@ -175,7 +170,7 @@ export function WomInputSummaryModal({ event, onClose, onOpenFullDetail }: WomIn
                 <div className="rounded-lg border border-border bg-background p-3">
                   <p className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground">Special Custom Fab</p>
                   <p className="mt-1 text-xs font-semibold text-foreground">
-                    {allocatedItems.some((i) => i.name.toLowerCase().includes('arch') || i.name.toLowerCase().includes('custom'))
+                    {event.items.some((i) => i.name.toLowerCase().includes('arch') || i.name.toLowerCase().includes('custom'))
                       ? 'Required (In Production)'
                       : 'Standard Stock Catalog'}
                   </p>
@@ -269,14 +264,14 @@ export function WomInputSummaryModal({ event, onClose, onOpenFullDetail }: WomIn
                 <span
                   className={cn(
                     'rounded-full px-2.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider',
-                    dispatchBatch.stage === 'In Transit'
+                    dispatchBatch.status === 'In Progress'
                       ? 'bg-accent text-accent-foreground'
-                      : dispatchBatch.stage === 'Delivered'
+                      : dispatchBatch.status === 'Delivered'
                         ? 'bg-emerald-500/15 text-emerald-600'
                         : 'bg-muted text-muted-foreground',
                   )}
                 >
-                  {dispatchBatch.stage}
+                  {dispatchBatch.status === 'In Progress' ? 'In Transit' : dispatchBatch.status}
                 </span>
               ) : (
                 <span className="text-[0.62rem] font-bold text-muted-foreground">No Active Batches</span>
@@ -287,15 +282,15 @@ export function WomInputSummaryModal({ event, onClose, onOpenFullDetail }: WomIn
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="rounded-lg border border-border bg-background p-3">
                   <p className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground">Driver / Courier</p>
-                  <p className="mt-1 text-xs font-semibold text-foreground">{dispatchBatch.driverName || 'Designated Courier'}</p>
+                  <p className="mt-1 text-xs font-semibold text-foreground">{dispatchBatch.driver}</p>
                 </div>
                 <div className="rounded-lg border border-border bg-background p-3">
                   <p className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground">Vehicle Allocation</p>
-                  <p className="mt-1 text-xs font-semibold text-foreground">{dispatchBatch.vehicleType} ({dispatchBatch.plateNumber})</p>
+                  <p className="mt-1 text-xs font-semibold text-foreground">{dispatchBatch.vehicle}</p>
                 </div>
                 <div className="rounded-lg border border-border bg-background p-3">
                   <p className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground">Manifest Status</p>
-                  <p className="mt-1 text-xs font-semibold text-foreground">{dispatchBatch.reconciliation.length} Manifest Line Items</p>
+                  <p className="mt-1 text-xs font-semibold text-foreground">{dispatchBatch.manifestCount} Manifest Line Items</p>
                 </div>
               </div>
             ) : (

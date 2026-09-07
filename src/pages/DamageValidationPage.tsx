@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, CheckCircle2, XCircle, Clock3, Scale, MoreVertical, Wrench, Ban, UserCheck2 } from 'lucide-react'
+import {
+  Search,
+  CheckCircle2,
+  XCircle,
+  Clock3,
+  MoreVertical,
+  Wrench,
+  Ban,
+  ArrowUpCircle,
+  AlertTriangle,
+  BadgeCheck,
+} from 'lucide-react'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { DamageVerdictModal } from '@/components/DamageVerdictModal'
 import { CompactStatStrip } from '@/components/CompactStatStrip'
@@ -10,75 +21,96 @@ import { cn } from '@/lib/utils'
 import type { DamageException, DamageVerdict } from '@/lib/types'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 
+// Updated to the 6-status model (Phase 4b cleanup) — Scale/UserCheck2 icons
+// dropped since 'Held for Audit' / 'Pending Second Sign-off' no longer exist.
 const statusStyles: Record<DamageVerdict, string> = {
   'Pending Verdict': 'border border-primary/40 bg-primary/10 text-primary',
-  Validated: 'bg-emerald-100 text-emerald-700',
-  Dismissed: 'bg-muted text-muted-foreground',
-  'Held for Audit': 'bg-amber-100 text-amber-800',
-  'Pending Second Sign-off': 'bg-amber-100 text-amber-800',
-  Repair: 'bg-sky-100 text-sky-700',
-  'Write-off': 'bg-muted text-muted-foreground',
+  'Escalated — Round 1 Review': 'bg-rose-100 text-rose-700 border border-rose-200',
+  'Dismissed': 'bg-muted text-muted-foreground',
+  'Pending Resolution': 'bg-emerald-100 text-emerald-700',
+  'Escalated — Round 2 Review': 'bg-rose-100 text-rose-700 border border-rose-200',
+  'Sent for Repair': 'bg-sky-100 text-sky-700',
+  'Sent for Write-off': 'bg-muted text-muted-foreground',
 }
 
 const statusIcon: Record<DamageVerdict, typeof Clock3> = {
   'Pending Verdict': Clock3,
-  Validated: CheckCircle2,
-  Dismissed: XCircle,
-  'Held for Audit': Scale,
-  'Pending Second Sign-off': UserCheck2,
-  Repair: Wrench,
-  'Write-off': Ban,
+  'Escalated — Round 1 Review': ArrowUpCircle,
+  'Dismissed': XCircle,
+  'Pending Resolution': CheckCircle2,
+  'Escalated — Round 2 Review': ArrowUpCircle,
+  'Sent for Repair': Wrench,
+  'Sent for Write-off': Ban,
 }
 
-type Filter = 'All' | 'Pending' | 'Held for Audit' | 'Second Sign-off' | 'Validated' | 'Dismissed'
-const filters: Filter[] = ['All', 'Pending', 'Held for Audit', 'Second Sign-off', 'Validated', 'Dismissed']
+type Filter =
+  | 'All'
+  | 'Pending Verdict'
+  | 'Escalated — Round 1 Review'
+  | 'Dismissed'
+  | 'Pending Resolution'
+  | 'Escalated — Round 2 Review'
+  | 'Sent for Repair'
+  | 'Sent for Write-off'
+
+const filters: Filter[] = [
+  'All',
+  'Pending Verdict',
+  'Escalated — Round 1 Review',
+  'Pending Resolution',
+  'Escalated — Round 2 Review',
+  'Sent for Repair',
+  'Sent for Write-off',
+  'Dismissed',
+]
+
+type ExecutiveModalMode =
+  | 'view'
+  | 'evaluate-round1'
+  | 'evaluate-round2'
+  | 'edit-round1'
+  | 'edit-round2'
 
 export function DamageValidationPage() {
-  const { damageExceptions: items, resolveDamage, staff, subRolesByParent, setSubRolesByParent } = usePortal()
-  const { isExecutive, isAdmin, isWarehouse, adminRole, adminEmail, adminName, subRole: userSubRole } = useAuth()
+  const { damageExceptions: items, resolveDamage } = usePortal()
+  const { isAdmin } = useAuth()
   const { intent, clearIntent, navigate } = useNav()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('All')
   const [active, setActive] = useState<DamageException | null>(null)
+  const [modalMode, setModalMode] = useState<ExecutiveModalMode>('view')
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
-  const canEvaluate = !isExecutive && (isWarehouse || isAdmin)
-
-  const currentWomSubRole = useMemo(() => {
-    const womList = subRolesByParent['warehouse-ops-manager'] ?? []
-    return womList.find((s) => s.name === userSubRole) ?? womList[0]
-  }, [subRolesByParent, userSubRole])
-
-  const activeWomCount = useMemo(
-    () =>
-      staff.filter(
-        (s) =>
-          s.accountStatus !== 'Suspended' &&
-          (s.role === 'Warehouse Manager' ||
-            (s as any).subRole === 'Warehouse Manager' ||
-            (s as any).subRole === 'Inventory Officer' ||
-            (s as any).fullWarehouseAccess === true ||
-            s.email === 'warehouse@lumiere.com' ||
-            s.email === 'warehouseops@lumiere.com'),
-      ).length,
-    [staff],
-  )
-
-  // Consume a "review-damage" intent handed over from the Executive dashboard.
   useEffect(() => {
     if (intent?.kind === 'review-damage') {
       const target = items.find((i) => i.id === intent.payload?.id)
-      if (target) setActive(target)
+      if (target) {
+        setModalMode('view')
+        setActive(target)
+      }
       clearIntent()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent])
 
+  useEffect(() => {
+    if (!openMenuId) return
+    const handler = () => setOpenMenuId(null)
+    document.addEventListener('click', handler)
+    return () => document.removeEventListener('click', handler)
+  }, [openMenuId])
+
   const stats = useMemo(
     () => ({
       total: items.length,
       pending: items.filter((i) => i.status === 'Pending Verdict').length,
-      resolved: items.filter((i) => i.status !== 'Pending Verdict').length,
+      escalated: items.filter((i) => i.status === 'Escalated — Round 1 Review' || i.status === 'Escalated — Round 2 Review').length,
+      resolved: items.filter(
+        (i) =>
+          i.status === 'Dismissed' ||
+          i.status === 'Sent for Repair' ||
+          i.status === 'Sent for Write-off',
+      ).length,
     }),
     [items],
   )
@@ -93,24 +125,29 @@ export function DamageValidationPage() {
         i.reportingOfficer.toLowerCase().includes(q) ||
         i.assetName.toLowerCase().includes(q) ||
         i.assetSku.toLowerCase().includes(q)
-      const matchesFilter =
-        filter === 'All' ||
-        (filter === 'Pending' && i.status === 'Pending Verdict') ||
-        (filter === 'Second Sign-off' && i.status === 'Pending Second Sign-off') ||
-        (filter !== 'Pending' && filter !== 'Second Sign-off' && i.status === filter)
+      const matchesFilter = filter === 'All' || i.status === filter
       return matchesQuery && matchesFilter
     })
   }, [items, query, filter])
 
+  // Trimmed to match resolveDamage's simplified 4-arg signature (Phase 4b —
+  // the two-sign-off mechanism, which needed executiveEmail/executiveName
+  // for identity checks, no longer exists).
   const resolve = (
     id: string,
     verdict: Exclude<DamageVerdict, 'Pending Verdict'>,
     note: string,
-    unblockMetadata?: any,
-    selfValRecord?: any,
   ) => {
-    resolveDamage(id, verdict, note, adminRole || userSubRole || 'Warehouse Manager', adminEmail, adminName, unblockMetadata, selfValRecord)
+    const round: 1 | 2 = modalMode === 'evaluate-round2' || modalMode === 'edit-round2' ? 2 : 1
+    const isEdit = modalMode === 'edit-round1' || modalMode === 'edit-round2'
+    resolveDamage(id, round, verdict, note, 'Executive', isEdit)
     setActive(null)
+    setModalMode('view')
+  }
+
+  const openView = (exception: DamageException) => {
+    setModalMode('view')
+    setActive(exception)
   }
 
   const destination = (id: ExecutiveDestinationId) => navigate(id)
@@ -140,38 +177,12 @@ export function DamageValidationPage() {
     </div>
   )
 
-  const handlePermanentUnblockSubRole = (subRoleName: string, metadata: any) => {
-    setSubRolesByParent((prev) => {
-      const womList = prev['warehouse-ops-manager'] ?? []
-      const updated = womList.map((s) => {
-        if (s.name === subRoleName) {
-          return {
-            ...s,
-            allowSelfValidation: true,
-            permanentlyEnabledViaEmergency: true,
-            emergencyUnblockMetadata: metadata,
-          }
-        }
-        return s
-      })
-      return {
-        ...prev,
-        'warehouse-ops-manager': updated,
-      }
-    })
-  }
-
   return (
     <ExecutiveShell activeId="damage" onSelect={destination} stickyHeader={stickyHeader}>
       {/* Filter tabs */}
       <div className="mt-6 flex flex-wrap items-center gap-1.5">
         {filters.map((f) => {
-          const count =
-            f === 'All'
-              ? items.length
-              : f === 'Pending'
-                ? stats.pending
-                : items.filter((i) => i.status === f).length
+          const count = f === 'All' ? items.length : items.filter((i) => i.status === f).length
           return (
             <button
               key={f}
@@ -200,172 +211,222 @@ export function DamageValidationPage() {
             { label: 'Total Reports', value: stats.total },
             { label: 'Resolved Cases', value: stats.resolved },
             { label: 'Pending Verdicts', value: stats.pending },
+            { label: 'Escalated to Executive', value: stats.escalated },
           ]}
         />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[940px] text-left">
-          <thead>
-            <tr className="bg-muted/50">
-              {[
-                'PREVIEW',
-                'LOG ID',
-                'EVENT TITLE',
-                'SUBMITTER',
-                'ROLE',
-                'ASSET',
-                'DETAILS',
-                'STATUS',
-                'ACTIONS',
-              ].map((h) => (
-                <th
-                  key={h}
-                  className="px-4 py-3 text-[0.56rem] font-bold uppercase tracking-[0.12em] text-muted-foreground"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="px-4 py-16 text-center text-xs text-muted-foreground">
-                  No exceptions match your search.
-                </td>
-              </tr>
-            ) : (
-              filtered.map((i) => {
-                const Icon = statusIcon[i.status]
-                const pending = i.status === 'Pending Verdict'
-                return (
-                  <tr
-                    key={i.id}
-                    className={cn(
-                      'border-t border-border/60 align-top',
-                      pending && 'bg-primary/5',
-                    )}
+            <thead>
+              <tr className="bg-muted/50">
+                {[
+                  'PREVIEW',
+                  'LOG ID',
+                  'EVENT TITLE',
+                  'SUBMITTER',
+                  'ROLE',
+                  'ASSET',
+                  'DETAILS',
+                  'STATUS',
+                  'ACTIONS',
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-3 text-[0.56rem] font-bold uppercase tracking-[0.12em] text-muted-foreground"
                   >
-                    {/* Preview */}
-                    <td className="px-4 py-4">
-                      <div className="size-6 rounded bg-muted" />
-                    </td>
-                    {/* Log ID */}
-                    <td className="px-4 py-4">
-                      <span
-                        className={cn(
-                          'text-xs font-bold tracking-wide',
-                          pending ? 'text-primary' : 'text-card-foreground',
-                        )}
-                      >
-                        {i.logId}
-                      </span>
-                    </td>
-                    {/* Event Title */}
-                    <td className="px-4 py-4 font-serif text-sm text-card-foreground">
-                      {i.boundEvent}
-                    </td>
-                    {/* Submitter */}
-                    <td className="px-4 py-4 text-xs font-semibold text-card-foreground">
-                      {i.reportingOfficer}
-                    </td>
-                    {/* Role */}
-                    <td className="px-4 py-4 text-[0.6rem] uppercase tracking-[0.1em] text-muted-foreground">
-                      {i.officerRole}
-                    </td>
-                    {/* Asset */}
-                    <td className="max-w-xs px-4 py-4">
-                      <p
-                        className={cn(
-                          'text-sm font-semibold',
-                          pending ? 'text-primary' : 'text-card-foreground',
-                        )}
-                      >
-                        {i.assetName}
-                      </p>
-                      <p className="mt-0.5 text-[0.6rem] uppercase tracking-[0.1em] text-muted-foreground">
-                        SKU: {i.assetSku}
-                      </p>
-                    </td>
-                    {/* Details */}
-                    <td className="px-4 py-4 font-mono text-[0.65rem] leading-relaxed text-muted-foreground">
-                      <p>GPS: {i.gps}</p>
-                      <p>{i.capturedAt}</p>
-                    </td>
-                    {/* Status */}
-                    <td className="px-4 py-4">
-                      <span
-                        className={cn(
-                          'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.55rem] font-bold uppercase tracking-[0.1em]',
-                          statusStyles[i.status],
-                        )}
-                      >
-                        <Icon className="size-3" />
-                        {i.status}
-                      </span>
-                      {i.status === 'Pending Second Sign-off' && i.firstSignOff && (
-                        <p className="mt-1.5 text-[0.6rem] leading-relaxed text-muted-foreground">
-                          First sign-off: {i.firstSignOff.staffName} ({i.firstSignOff.verdict})
-                        </p>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-16 text-center text-xs text-muted-foreground">
+                    No exceptions match your search.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((i) => {
+                  const Icon = statusIcon[i.status]
+                  const canEvaluateRound1 = i.status === 'Escalated — Round 1 Review'
+                  const canEvaluateRound2 = i.status === 'Escalated — Round 2 Review'
+                  const canEditRound1 = i.round1DecidedBy === 'Executive'
+                  const canEditRound2 = i.round2DecidedBy === 'Executive'
+                  const isEscalated = canEvaluateRound1 || canEvaluateRound2
+                  const canAct = isEscalated || canEditRound1 || canEditRound2
+                  return (
+                    <tr
+                      key={i.id}
+                      onClick={() => openView(i)}
+                      className={cn(
+                        'cursor-pointer border-t border-border/60 align-top transition-colors hover:bg-muted/40',
+                        isEscalated && 'bg-rose-50/60 hover:bg-rose-50',
                       )}
-                    </td>
-                    {/* Actions */}
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setActive(i)}
-                          className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary underline-offset-4 transition hover:underline"
+                    >
+                      <td className="px-4 py-4">
+                        <div className="size-6 rounded bg-muted" />
+                      </td>
+                      <td className="px-4 py-4">
+                        <span
+                          className={cn(
+                            'text-xs font-bold tracking-wide',
+                            isEscalated ? 'text-rose-700' : 'text-card-foreground',
+                          )}
                         >
-                          {pending ? (canEvaluate ? 'Evaluate Report' : 'View Report') : 'View Report'}
-                        </button>
-                        {canEvaluate && !pending && (
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={() => setOpenMenuId(openMenuId === i.id ? null : i.id)}
-                              className="rounded p-1 text-muted-foreground hover:bg-muted"
+                          {i.logId}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 font-serif text-sm text-card-foreground">
+                        {i.boundEvent}
+                      </td>
+                      <td className="px-4 py-4 text-xs font-semibold text-card-foreground">
+                        {i.reportingOfficer}
+                      </td>
+                      <td className="px-4 py-4 text-[0.6rem] uppercase tracking-[0.1em] text-muted-foreground">
+                        {i.officerRole}
+                      </td>
+                      <td className="max-w-xs px-4 py-4">
+                        <p
+                          className={cn(
+                            'text-sm font-semibold',
+                            isEscalated ? 'text-rose-700' : 'text-card-foreground',
+                          )}
+                        >
+                          {i.assetName}
+                        </p>
+                        <p className="mt-0.5 text-[0.6rem] uppercase tracking-[0.1em] text-muted-foreground">
+                          SKU: {i.assetSku}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4 font-mono text-[0.65rem] leading-relaxed text-muted-foreground">
+                        <p>GPS: {i.gps}</p>
+                        <p>{i.capturedAt}</p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.55rem] font-bold uppercase tracking-[0.1em]',
+                            statusStyles[i.status],
+                          )}
+                        >
+                          <Icon className="size-3" />
+                          {i.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4" onClick={(evt) => evt.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-2">
+                          {canAct && !isAdmin ? (
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={(evt) => {
+                                  evt.stopPropagation()
+                                  setOpenMenuId(openMenuId === i.id ? null : i.id)
+                                }}
+                                className="rounded p-1.5 text-muted-foreground transition hover:bg-muted"
+                                aria-label="Actions"
+                              >
+                                <MoreVertical className="size-4" />
+                              </button>
+                              {openMenuId === i.id && (
+                                <div className="absolute right-0 z-10 w-48 rounded-md border border-border bg-card py-1 shadow-lg">
+                                  {canEvaluateRound1 && (
+                                    <button
+                                      type="button"
+                                      onClick={(evt) => {
+                                        evt.stopPropagation()
+                                        setModalMode('evaluate-round1')
+                                        setActive(i)
+                                        setOpenMenuId(null)
+                                      }}
+                                      className="block w-full px-3 py-1.5 text-left text-[0.65rem] font-bold uppercase tracking-[0.12em] text-rose-700 transition hover:bg-rose-50"
+                                    >
+                                      Evaluate
+                                    </button>
+                                  )}
+                                  {canEvaluateRound2 && (
+                                    <button
+                                      type="button"
+                                      onClick={(evt) => {
+                                        evt.stopPropagation()
+                                        setModalMode('evaluate-round2')
+                                        setActive(i)
+                                        setOpenMenuId(null)
+                                      }}
+                                      className="block w-full px-3 py-1.5 text-left text-[0.65rem] font-bold uppercase tracking-[0.12em] text-rose-700 transition hover:bg-rose-50"
+                                    >
+                                      Evaluate
+                                    </button>
+                                  )}
+                                  {canEditRound1 && (
+                                    <button
+                                      type="button"
+                                      onClick={(evt) => {
+                                        evt.stopPropagation()
+                                        setModalMode('edit-round1')
+                                        setActive(i)
+                                        setOpenMenuId(null)
+                                      }}
+                                      className="block w-full px-3 py-1.5 text-left text-[0.65rem] font-bold uppercase tracking-[0.12em] text-card-foreground transition hover:bg-muted"
+                                    >
+                                      {canEditRound2 ? 'Edit Round 1 Decision' : 'Edit'}
+                                    </button>
+                                  )}
+                                  {canEditRound2 && (
+                                    <button
+                                      type="button"
+                                      onClick={(evt) => {
+                                        evt.stopPropagation()
+                                        setModalMode('edit-round2')
+                                        setActive(i)
+                                        setOpenMenuId(null)
+                                      }}
+                                      className="block w-full px-3 py-1.5 text-left text-[0.65rem] font-bold uppercase tracking-[0.12em] text-card-foreground transition hover:bg-muted"
+                                    >
+                                      {canEditRound1 ? 'Edit Round 2 Decision' : 'Edit'}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span
+                              className="flex size-7 items-center justify-center rounded p-1.5 text-sm text-muted-foreground/40"
+                              aria-label="No actions available"
                             >
-                              <MoreVertical className="size-4" />
-                            </button>
-                            {openMenuId === i.id && (
-                              <div className="absolute right-0 z-10 rounded-md border border-border bg-card shadow-lg">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActive(i)
-                                    setOpenMenuId(null)
-                                  }}
-                                  className="block w-full px-4 py-2 text-left text-[0.6rem] font-bold uppercase tracking-[0.12em] text-card-foreground hover:bg-muted rounded"
-                                >
-                                  Edit
-                                </button>
-                              </div>
-                            )}
+                              —
+                            </span>
+                          )}
+                          <div className="flex w-3.5 items-center justify-center">
+                            {i.noPhotographicEvidence ? (
+                              <span title="Evidence gap — incomplete verification">
+                                <AlertTriangle className="size-3.5 text-amber-500" />
+                              </span>
+                            ) : i.validated ? (
+                              <span title="Validated at Step 1">
+                                <BadgeCheck className="size-3.5 text-emerald-600" />
+                              </span>
+                            ) : null}
                           </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
       <DamageVerdictModal
         exception={active}
-        editable={canEvaluate}
-        onClose={() => setActive(null)}
+        mode={isAdmin ? 'view' : modalMode}
+        onClose={() => {
+          setActive(null)
+          setModalMode('view')
+        }}
         onResolve={resolve}
-        currentExecutiveEmail={adminEmail}
-        currentExecutiveName={adminName}
-        activeExecutiveCount={activeWomCount}
-        allowSelfValidation={currentWomSubRole?.allowSelfValidation ?? true}
-        permanentlyEnabledViaEmergency={currentWomSubRole?.permanentlyEnabledViaEmergency ?? false}
-        womSubRoleName={currentWomSubRole?.name ?? 'Warehouse Manager'}
-        onPermanentUnblockSubRole={handlePermanentUnblockSubRole}
       />
     </ExecutiveShell>
   )

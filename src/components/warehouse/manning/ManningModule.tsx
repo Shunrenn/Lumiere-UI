@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   CalendarClock,
   Clock,
-  Download,
   UserPlus,
   Users,
   X,
+  Copy,
+  Plus,
+  ShieldAlert,
   Search,
   Maximize2,
 } from 'lucide-react'
@@ -15,6 +17,7 @@ import {
   useCrewRows,
   getPresetSquads,
   type CrewRow,
+  type CrewRowStatus,
 } from '@/lib/warehouse-crew'
 import {
   reconcileExpiredDeclarations,
@@ -23,21 +26,19 @@ import {
 import { CrewOpsGrid } from '@/components/warehouse/manpower/CrewOpsGrid'
 import { DailyZoneDutyView } from '@/components/warehouse/manpower/DailyZoneDutyView'
 import { AssignCrewModal } from '@/components/warehouse/manpower/AssignCrewModal'
-import { PARENT_ROLES } from '@/lib/rbac'
 import {
-  closeAssignment,
   confirmTask,
   formatSlaCountdown,
   isSlaOverdue,
   rejectTask,
   slaRemainingMs,
+  submitTask,
   useManningData,
   type ManningAssignment,
   type ManningTask,
+  type ManningWarning,
 } from '@/lib/manning'
 import { cn } from '@/lib/utils'
-import { exportCrewRosterPdf } from '@/lib/pdf-exporter'
-import { ManningSlaModule } from '@/components/warehouse/manning-sla/ManningSlaModule'
 
 function Avatar({ name }: { name: string }) {
   const initials = name
@@ -53,7 +54,8 @@ function Avatar({ name }: { name: string }) {
 }
 
 type TopLevelTab = 'daily' | 'event'
-type EventSubTab = 'schedule' | 'assignments' | 'tasks'
+type EventSubTab = 'schedule' | 'assignments' | 'tasks' | 'warnings'
+type ScheduleViewMode = 'list' | 'calendar'
 
 interface ManningModuleProps {
   onClose: () => void
@@ -61,7 +63,7 @@ interface ManningModuleProps {
 
 export function ManningModule({ onClose }: ManningModuleProps) {
   const { staff, events } = usePortal()
-  const { adminName, adminEmail } = useAuth()
+  const { hasFullWarehouseAccess, isManningOfficer, adminName, adminEmail } = useAuth()
   const actor = adminName || adminEmail || 'WOM'
 
   // Shared Crew Data
@@ -69,7 +71,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
   const presetSquads = useMemo(() => getPresetSquads(staff), [staff])
 
   // Manning Delegation Data
-  const { assignments, tasks, reload } = useManningData()
+  const { assignments, tasks, warnings, loading, error, reload } = useManningData()
   const declarations = useGroundCrewDeclarations()
 
   // Navigation State
@@ -85,11 +87,12 @@ export function ManningModule({ onClose }: ManningModuleProps) {
   const [rosterOpen, setRosterOpen] = useState(true)
   const [assignOpen, setAssignOpen] = useState(false)
   const [fullRosterModalOpen, setFullRosterModalOpen] = useState(false)
-  const [slaModuleOpen, setSlaModuleOpen] = useState(false)
+  const [selectedCrewRow, setSelectedCrewRow] = useState<CrewRow | null>(null)
 
   // Card Click Inspection Detail Modals
   const [selectedAssignment, setSelectedAssignment] = useState<ManningAssignment | null>(null)
   const [selectedTask, setSelectedTask] = useState<ManningTask | null>(null)
+  const [selectedWarning, setSelectedWarning] = useState<ManningWarning | null>(null)
 
   // Real-time clock tick for task countdown displays
   const [now, setNow] = useState<Date>(() => new Date())
@@ -111,48 +114,6 @@ export function ManningModule({ onClose }: ManningModuleProps) {
       return matchesStatus && matchesQuery
     })
   }, [crewRows, directoryQuery, directoryStatusFilter])
-
-  const handleExportCrewRoster = (assignment: ManningAssignment) => {
-    const crewMembers = assignment.member_names.map((name) => {
-      const matchedStaff = staff.find((s) => `${s.firstName} ${s.surname}`.trim().toLowerCase() === name.trim().toLowerCase())
-      const matchedRow = crewRows.find((r) => r.name.trim().toLowerCase() === name.trim().toLowerCase())
-      const isLead = name.trim().toLowerCase() === assignment.lead_name.trim().toLowerCase()
-
-      let dept: 'Field' | 'Warehouse' | 'Production' = 'Field'
-      const roleLower = (matchedStaff?.role || matchedRow?.role || '').toLowerCase()
-      if (roleLower.includes('warehouse')) dept = 'Warehouse'
-      else if (roleLower.includes('production') || roleLower.includes('floral') || roleLower.includes('canvas')) dept = 'Production'
-
-      return {
-        name,
-        role: matchedStaff?.role || matchedRow?.role || (isLead ? 'Field Team Lead' : 'Field Operations Crew'),
-        department: dept,
-        isTeamLead: isLead,
-        assignmentDate: assignment.work_date,
-        dutyCategory: `${dept} Duty`,
-      }
-    })
-
-    if (!crewMembers.some((c) => c.isTeamLead) && assignment.lead_name) {
-      crewMembers.unshift({
-        name: assignment.lead_name,
-        role: 'Field Team Lead',
-        department: 'Field',
-        isTeamLead: true,
-        assignmentDate: assignment.work_date,
-        dutyCategory: 'Field Duty',
-      })
-    }
-
-    exportCrewRosterPdf(
-      {
-        eventTitle: assignment.event_name,
-        venue: assignment.venue || 'Event Venue',
-        targetDate: assignment.work_date,
-      },
-      crewMembers,
-    )
-  }
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-y-auto bg-background">
@@ -212,15 +173,6 @@ export function ManningModule({ onClose }: ManningModuleProps) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setSlaModuleOpen(true)}
-              className="inline-flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[0.65rem] font-bold uppercase tracking-[0.1em] text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition"
-            >
-              <Clock className="size-3.5" />
-              SLA & Disputed Confirmations
-            </button>
-
-            <button
-              type="button"
               onClick={() => setRosterOpen((prev) => !prev)}
               aria-pressed={rosterOpen}
               className={cn(
@@ -234,7 +186,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
               Crew Directory ({filteredDirectoryRows.length}/{crewRows.length})
             </button>
 
-            {topTab === 'event' && (
+            {topTab === 'event' && eventSubTab === 'schedule' && (
               <button
                 type="button"
                 onClick={() => setAssignOpen(true)}
@@ -314,6 +266,17 @@ export function ManningModule({ onClose }: ManningModuleProps) {
               >
                 48h Task Confirmations ({tasks.length})
               </button>
+              <button
+                type="button"
+                onClick={() => setEventSubTab('warnings')}
+                aria-pressed={eventSubTab === 'warnings'}
+                className={cn(
+                  'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
+                  eventSubTab === 'warnings' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
+                )}
+              >
+                Warning Ledger ({warnings.length})
+              </button>
             </div>
           </div>
         )}
@@ -379,8 +342,10 @@ export function ManningModule({ onClose }: ManningModuleProps) {
               <p className="py-6 text-center text-xs text-muted-foreground">No crew members match the search filter.</p>
             ) : (
               filteredDirectoryRows.map((crew) => (
-                <div
+                <button
                   key={crew.id}
+                  type="button"
+                  onClick={() => setSelectedCrewRow(crew)}
                   className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left transition hover:border-primary/50 hover:bg-accent/40"
                 >
                   <div className="flex items-center gap-3 min-w-0 pr-2">
@@ -402,7 +367,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                   >
                     {crew.status}
                   </span>
-                </div>
+                </button>
               ))
             )}
           </div>
@@ -419,13 +384,13 @@ export function ManningModule({ onClose }: ManningModuleProps) {
           )
         ) : (
           <div className="flex flex-col gap-5">
-            {/* SUB-TAB: ASSIGNMENTS / EVENT SCHEDULE */}
-            {(eventSubTab === 'assignments' || eventSubTab === 'schedule') && (
+            {/* SUB-TAB: ASSIGNMENTS */}
+            {eventSubTab === 'assignments' && (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-sm font-bold text-foreground">Event Manning &amp; Crew Roster</h2>
-                    <p className="text-xs text-muted-foreground">Active and upcoming ground crew deployment records per event.</p>
+                    <h2 className="text-sm font-bold text-foreground">Event Manning Assignments</h2>
+                    <p className="text-xs text-muted-foreground">Active and upcoming ground crew deployment records.</p>
                   </div>
                 </div>
 
@@ -434,7 +399,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                     <div
                       key={assignment.id}
                       onClick={() => setSelectedAssignment(assignment)}
-                      className="rounded-xl border border-border bg-card p-4 shadow-sm cursor-pointer hover:border-primary/50 hover:bg-accent/40 transition-all space-y-3"
+                      className="rounded-xl border border-border bg-card p-4 shadow-sm cursor-pointer hover:border-primary/50 hover:bg-accent/40 transition-all"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div>
@@ -452,30 +417,17 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                             {assignment.venue ? ` · Venue: ${assignment.venue}` : ''}
                           </p>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleExportCrewRoster(assignment)
-                            }}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-card-foreground transition hover:bg-accent hover:border-primary/50"
-                          >
-                            <Download className="size-3" />
-                            Export Roster (PDF)
-                          </button>
-                          <span
-                            className={cn(
-                              'rounded px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wider',
-                              assignment.status === 'Active' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground',
-                            )}
-                          >
-                            {assignment.status}
-                          </span>
-                        </div>
+                        <span
+                          className={cn(
+                            'rounded px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wider',
+                            assignment.status === 'Active' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground',
+                          )}
+                        >
+                          {assignment.status}
+                        </span>
                       </div>
                       {assignment.member_names.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
+                        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
                           {assignment.member_names.map((name) => (
                             <span key={name} className="rounded-md border border-border bg-background px-2.5 py-1 text-[0.65rem] text-foreground">
                               {name}
@@ -552,7 +504,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                rejectTask(task.id)
+                                rejectTask(task.id, actor, 'Rejected by WOM during task review')
                                 reload()
                               }}
                               className="rounded-md border border-destructive/40 px-3 py-1 text-[0.62rem] font-semibold text-destructive hover:bg-destructive/10"
@@ -578,6 +530,43 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                 </div>
               </div>
             )}
+
+            {/* SUB-TAB: WARNINGS */}
+            {eventSubTab === 'warnings' && (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-bold text-foreground">Three-Tier Warning Ledger</h2>
+                    <p className="text-xs text-muted-foreground">Formal warning log for response delays or operational non-compliance.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {warnings.map((w) => (
+                    <div
+                      key={w.id}
+                      onClick={() => setSelectedWarning(w)}
+                      className="rounded-xl border border-border bg-card p-4 shadow-sm cursor-pointer hover:border-primary/50 hover:bg-accent/40 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-foreground text-sm">Tier {w.tier}: {w.recipient_name}</span>
+                            <span className="rounded bg-destructive/10 px-2 py-0.5 text-[0.6rem] font-semibold text-destructive">
+                              {w.recipient_role}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-foreground/90">{w.reason}</p>
+                          <p className="mt-2 text-[0.62rem] text-muted-foreground">
+                            Issued by: <span className="font-medium text-foreground">{w.issued_by}</span> on {new Date(w.issued_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -597,7 +586,8 @@ export function ManningModule({ onClose }: ManningModuleProps) {
         <FullRosterModal
           crewRows={crewRows}
           onClose={() => setFullRosterModalOpen(false)}
-          onSelectMember={() => {
+          onSelectMember={(crew) => {
+            setSelectedCrewRow(crew)
             setFullRosterModalOpen(false)
           }}
         />
@@ -608,8 +598,6 @@ export function ManningModule({ onClose }: ManningModuleProps) {
         <AssignmentDetailModal
           assignment={selectedAssignment}
           onClose={() => setSelectedAssignment(null)}
-          onExport={handleExportCrewRoster}
-          onAssignmentClosed={reload}
         />
       )}
 
@@ -618,7 +606,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
           task={selectedTask}
           onClose={() => setSelectedTask(null)}
           onReject={() => {
-            rejectTask(selectedTask.id)
+            rejectTask(selectedTask.id, actor, 'Rejected by WOM during task review')
             reload()
           }}
           onConfirm={() => {
@@ -628,7 +616,12 @@ export function ManningModule({ onClose }: ManningModuleProps) {
         />
       )}
 
-      {slaModuleOpen && <ManningSlaModule onClose={() => setSlaModuleOpen(false)} />}
+      {selectedWarning && (
+        <WarningDetailModal
+          warning={selectedWarning}
+          onClose={() => setSelectedWarning(null)}
+        />
+      )}
     </div>
   )
 }
@@ -768,42 +761,10 @@ function FullRosterModal({
 function AssignmentDetailModal({
   assignment,
   onClose,
-  onExport,
-  onAssignmentClosed,
 }: {
   assignment: ManningAssignment
   onClose: () => void
-  onExport?: (assignment: ManningAssignment) => void
-  onAssignmentClosed?: () => void
 }) {
-  const { subRolesByParent } = usePortal()
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [closing, setClosing] = useState(false)
-
-  async function handleCloseAssignment() {
-    setErrorMsg(null)
-    setClosing(true)
-    try {
-      const targetSubRole = assignment.sub_role?.trim() || ''
-      const allSubRoles = PARENT_ROLES.flatMap((p) => subRolesByParent[p.id] ?? [])
-      const matched = allSubRoles.find(
-        (s) =>
-          s.name.toLowerCase() === targetSubRole.toLowerCase() ||
-          s.id.toLowerCase() === targetSubRole.toLowerCase(),
-      )
-      await closeAssignment(
-        assignment.id,
-        matched ? { minTeamLeads: matched.minTeamLeads } : undefined,
-      )
-      onAssignmentClosed?.()
-      onClose()
-    } catch (err: any) {
-      console.error('[v0] close assignment failed', err)
-      setErrorMsg(err?.message || 'Failed to remove assignment')
-      setClosing(false)
-    }
-  }
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
@@ -832,12 +793,6 @@ function AssignmentDetailModal({
             <X className="size-4" />
           </button>
         </div>
-
-        {errorMsg && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs font-medium text-destructive">
-            {errorMsg}
-          </div>
-        )}
 
         <div className="grid grid-cols-2 gap-3 text-xs">
           <div className="rounded-lg border border-border bg-background p-3">
@@ -893,33 +848,11 @@ function AssignmentDetailModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-border pt-3">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                onExport?.(assignment)
-              }}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-card-foreground hover:bg-accent"
-            >
-              <Download className="size-3.5" />
-              Export Roster (PDF)
-            </button>
-            {assignment.status === 'Active' && (
-              <button
-                type="button"
-                disabled={closing}
-                onClick={handleCloseAssignment}
-                className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-destructive hover:bg-destructive/20 disabled:opacity-50"
-              >
-                {closing ? 'Removing...' : 'Remove Assignment'}
-              </button>
-            )}
-          </div>
+        <div className="flex justify-end border-t border-border pt-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-border px-4 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-accent"
+            className="rounded-md border border-border px-4 py-2 text-xs font-bold uppercase tracking-wider hover:bg-accent"
           >
             Close
           </button>
@@ -1018,4 +951,74 @@ function TaskDetailModal({
   )
 }
 
+function WarningDetailModal({
+  warning,
+  onClose,
+}: {
+  warning: ManningWarning
+  onClose: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg overflow-hidden rounded-xl bg-card p-6 shadow-2xl space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between border-b border-border pb-3">
+          <div>
+            <span className="text-[0.58rem] font-bold uppercase tracking-[0.2em] text-destructive">
+              Warning Record
+            </span>
+            <h2 className="font-serif text-xl font-medium text-card-foreground">
+              Tier {warning.tier}: {warning.recipient_name}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
 
+        <div className="rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground leading-relaxed">
+          <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+            Reason / Infraction Note
+          </span>
+          {warning.reason}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="rounded-lg border border-border bg-background p-3">
+            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
+              Recipient Role
+            </span>
+            <span className="font-semibold text-card-foreground">{warning.recipient_role}</span>
+          </div>
+          <div className="rounded-lg border border-border bg-background p-3">
+            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
+              Issued By
+            </span>
+            <span className="font-semibold text-card-foreground">{warning.issued_by}</span>
+          </div>
+        </div>
+
+        <div className="flex justify-end border-t border-border pt-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-border px-4 py-2 text-xs font-bold uppercase tracking-wider hover:bg-accent"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -8,16 +8,16 @@ import { WarehouseRequestModal } from '@/components/WarehouseRequestModal'
 import { usePortal } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import type { DeficitStatus, ProcurementItem } from '@/lib/types'
-import { exportReplenishmentProcurementPdf } from '@/lib/pdf-exporter'
 
 type Filter = 'All' | DeficitStatus
 
-const FILTERS: Filter[] = ['All', 'Not Purchased', 'In Procurement', 'Received']
+const FILTERS: Filter[] = ['All', 'Critical Deficit', 'Low Stock', 'Order Placed']
 
 const statusStyles: Record<DeficitStatus, { badge: string; bar: string }> = {
-  'Not Purchased': { badge: 'bg-rose-100 text-rose-700', bar: 'bg-destructive' },
-  'In Procurement': { badge: 'bg-amber-100 text-amber-800', bar: 'bg-amber-500' },
-  Received: { badge: 'bg-emerald-100 text-emerald-700', bar: 'bg-emerald-600' },
+  'Critical Deficit': { badge: 'bg-rose-100 text-rose-700', bar: 'bg-destructive' },
+  'Low Stock': { badge: 'bg-amber-100 text-amber-800', bar: 'bg-amber-500' },
+  'Order Placed': { badge: 'bg-muted text-muted-foreground', bar: 'bg-emerald-600' },
+  Available: { badge: 'bg-emerald-100 text-emerald-700', bar: 'bg-emerald-600' },
 }
 
 interface Kpi {
@@ -68,18 +68,16 @@ export function ReplenishmentPage() {
   }, [])
 
   const counts = useMemo(() => {
-    const notPurchased = procurement.filter((p) => p.status === 'Not Purchased').length
-    const inProcurement = procurement.filter((p) => p.status === 'In Procurement').length
-    const received = procurement.filter((p) => p.status === 'Received').length
-    const orders = procurement.filter((p) => p.status === 'In Procurement')
+    const critical = procurement.filter((p) => p.status === 'Critical Deficit').length
+    const low = procurement.filter((p) => p.status === 'Low Stock').length
+    const orders = procurement.filter((p) => p.status === 'Order Placed')
     const minEta = orders.reduce<number | null>(
       (min, o) => (o.etaHours != null && (min === null || o.etaHours < min) ? o.etaHours : min),
       null,
     )
     return {
-      notPurchased,
-      inProcurement,
-      received,
+      critical,
+      pending: critical + low,
       orders: orders.length,
       eta: minEta === null ? '—' : `${minEta}h`,
     }
@@ -87,32 +85,32 @@ export function ReplenishmentPage() {
 
   const kpis: Kpi[] = [
     {
-      label: 'Not Purchased',
-      value: String(counts.notPurchased),
-      sub: 'Requires reorder',
+      label: 'Critical Deficits',
+      value: String(counts.critical),
+      sub: 'Requires immediate action',
       accent: 'bg-destructive/40',
       dot: 'bg-destructive',
     },
     {
-      label: 'In Procurement',
-      value: String(counts.inProcurement),
-      sub: 'PO dispatched / in transit',
+      label: 'Pending Procurements',
+      value: String(counts.pending),
+      sub: 'Lines awaiting reorder',
       accent: 'bg-amber-500/40',
       dot: 'bg-amber-500',
     },
     {
-      label: 'Received Stock',
-      value: String(counts.received),
-      sub: 'Fulfilled & in inventory',
-      accent: 'bg-emerald-600/40',
-      dot: 'bg-emerald-600',
+      label: 'Total Supplier Orders',
+      value: String(counts.orders),
+      sub: 'Active PO dispatches',
+      accent: 'bg-primary/30',
+      dot: 'bg-primary',
     },
     {
       label: 'Estimated Arrival',
       value: counts.eta,
       sub: 'Next incoming shipment',
-      accent: 'bg-primary/40',
-      dot: 'bg-primary',
+      accent: 'bg-emerald-600/40',
+      dot: 'bg-emerald-600',
     },
   ]
 
@@ -134,15 +132,28 @@ export function ReplenishmentPage() {
     })
   }, [procurementWithImages, query, filter])
 
-  const exportPdf = () => {
-    exportReplenishmentProcurementPdf(procurement as any)
+  const exportCsv = () => {
+    const header = 'Asset ID,Item Name,Category,Current Stock,Threshold,Stock %,Status\n'
+    const rows = procurement
+      .map((p) => {
+        const pct = p.threshold > 0 ? Math.round((p.currentStock / p.threshold) * 100) : 100
+        return `"${p.assetId}","${p.name}","${p.category}","${p.currentStock}","${p.threshold}","${pct}%","${p.status}"`
+      })
+      .join('\n')
+    const blob = new Blob([header + rows], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'lumiere-procurement-register.csv'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   // Reorder the most critical line as a one-tap "initiate reorder" entry point.
   const initiateReorder = () => {
     const target =
-      procurement.find((p) => p.status === 'Not Purchased') ??
-      procurement.find((p) => p.status === 'In Procurement')
+      procurement.find((p) => p.status === 'Critical Deficit') ??
+      procurement.find((p) => p.status === 'Low Stock')
     if (target) {
       setReorderItem(target)
       setUserInitiatedReorder(true)
@@ -235,11 +246,11 @@ export function ReplenishmentPage() {
             ))}
             <button
               type="button"
-              onClick={exportPdf}
+              onClick={exportCsv}
               className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-muted"
             >
               <Download className="size-3" />
-              Export PDF
+              Export CSV
             </button>
           </div>
         </div>
@@ -280,7 +291,7 @@ export function ReplenishmentPage() {
               ) : (
                 filtered.map((p) => {
                   const pct = p.threshold > 0 ? Math.round((p.currentStock / p.threshold) * 100) : 100
-                  const isOrder = p.status === 'In Procurement'
+                  const isOrder = p.status === 'Order Placed'
                   const styles = statusStyles[p.status]
                   return (
                     <FragmentRow

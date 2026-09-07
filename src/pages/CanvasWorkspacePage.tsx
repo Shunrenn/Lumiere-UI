@@ -23,7 +23,7 @@ import { useNav } from '@/lib/nav'
   import { useAuth } from '@/lib/auth'
   import { usePlanner } from '@/lib/planner'
   import { EventPipelinePanel } from '@/components/EventPipelinePanel'
-  import { KonvaInfiniteCanvas, type KonvaInfiniteCanvasHandle, type CanvasTool, type KonvaCanvasAsset, ARTBOARD_W, ARTBOARD_H } from '@/components/canvas/KonvaInfiniteCanvas'
+  import { KonvaInfiniteCanvas, type KonvaInfiniteCanvasHandle, ARTBOARD_W, ARTBOARD_H } from '@/components/canvas/KonvaInfiniteCanvas'
 
 
 /* ─── Types ─── */
@@ -59,8 +59,21 @@ interface DroppedAsset {
 const DRAG_MIME = 'application/lumiere-asset'
 
 /* ─── Demo canvas asset (the thing you click/select) ─── */
-type CanvasAsset = KonvaCanvasAsset
-
+interface CanvasAsset {
+  id: string
+  label: string
+  src: string
+  x: number
+  y: number
+  w: number
+  h: number
+  rotation: number
+  opacity: number
+  locked: boolean
+  hidden: boolean
+  zIndex: number
+  pageId?: string
+}
 
 interface CanvasPage {
   id: string
@@ -467,70 +480,26 @@ function ElementsTab({ onDropAsset, assets, onRouteToDeficit }: {
   )
 }
 
-function TextTab({
-  onPlacePresetText,
-  selectedAsset,
-  onUpdateFormatting,
-}: {
-  onPlacePresetText: (preset: { label: string; text: string; fontSize: number; fontWeight?: string; fontStyle?: string; fill?: string }) => void
-  selectedAsset: CanvasAsset | null
-  onUpdateFormatting: (type: 'bold' | 'italic' | 'underline' | 'align') => void
-}) {
-  const isTextSelected = Boolean(selectedAsset && (selectedAsset.kind === 'text' || selectedAsset.kind === 'sticky'))
-
+function TextTab() {
   return (
     <div className="flex flex-col gap-3 p-3 overflow-y-auto flex-1">
       <p className="text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Click to add text</p>
-      <button
-        type="button"
-        onClick={() => onPlacePresetText({ label: 'Paragraph Text', text: 'Add a paragraph text', fontSize: 16, fill: '#0f172a' })}
-        className="w-full rounded-xl border border-dashed border-border bg-background py-3 text-[0.65rem] font-medium text-muted-foreground transition hover:border-primary/50 hover:text-foreground cursor-pointer"
-      >
+      <button type="button" className="w-full rounded-xl border border-dashed border-border bg-background py-3 text-[0.65rem] font-medium text-muted-foreground transition hover:border-primary/50 hover:text-foreground">
         + Add a paragraph text
       </button>
       <p className="mt-1 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Text styles</p>
       <div className="flex flex-col gap-1.5">
-        {FONT_STYLES.map((s) => {
-          let preset = { label: s.label, text: s.sample, fontSize: 14, fontWeight: 'normal', fill: '#334155' }
-          if (s.label === 'Header') preset = { label: 'Header', text: 'Add a heading', fontSize: 32, fontWeight: 'bold', fill: '#0f172a' }
-          else if (s.label === 'Subheading') preset = { label: 'Subheading', text: 'Add a subheading', fontSize: 22, fontWeight: 'bold', fill: '#1e293b' }
-          else if (s.label === 'Body') preset = { label: 'Body', text: 'Add a little bit of body text', fontSize: 14, fontWeight: 'normal', fill: '#334155' }
-          else if (s.label === 'Caption') preset = { label: 'Caption', text: 'Add a caption', fontSize: 11, fontWeight: 'normal', fill: '#64748b' }
-
-          return (
-            <button
-              key={s.label}
-              type="button"
-              onClick={() => onPlacePresetText(preset)}
-              className="group flex w-full flex-col gap-0.5 rounded-xl border border-border bg-background px-3 py-2.5 text-left transition hover:border-primary/50 hover:bg-accent cursor-pointer"
-            >
-              <span className={cn('text-foreground leading-tight font-sans', s.size, s.weight)}>{s.sample}</span>
-              <span className="text-[0.55rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{s.label}</span>
-            </button>
-          )
-        })}
+        {FONT_STYLES.map((s) => (
+          <button key={s.label} type="button" className="group flex w-full flex-col gap-0.5 rounded-xl border border-border bg-background px-3 py-2.5 text-left transition hover:border-primary/50 hover:bg-accent">
+            <span className={cn('text-foreground leading-tight font-sans', s.size, s.weight)}>{s.sample}</span>
+            <span className="text-[0.55rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{s.label}</span>
+          </button>
+        ))}
       </div>
       <p className="mt-1 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Quick formatting</p>
       <div className="grid grid-cols-4 gap-1">
-        {[
-          { icon: Bold, label: 'Bold', type: 'bold' as const },
-          { icon: Italic, label: 'Italic', type: 'italic' as const },
-          { icon: Underline, label: 'Underline', type: 'underline' as const },
-          { icon: AlignLeft, label: 'Align', type: 'align' as const },
-        ].map(({ icon: Icon, label, type }) => (
-          <button
-            key={label}
-            type="button"
-            aria-label={label}
-            disabled={!isTextSelected}
-            onClick={() => onUpdateFormatting(type)}
-            className={cn(
-              'flex flex-col items-center gap-1 rounded-lg border py-2 text-muted-foreground transition',
-              isTextSelected
-                ? 'border-border bg-background hover:border-primary/50 hover:text-foreground cursor-pointer'
-                : 'border-border/40 bg-muted/20 text-muted-foreground/40 cursor-not-allowed opacity-40',
-            )}
-          >
+        {[{ icon: Bold, label: 'Bold' }, { icon: Italic, label: 'Italic' }, { icon: Underline, label: 'Underline' }, { icon: AlignLeft, label: 'Align' }].map(({ icon: Icon, label }) => (
+          <button key={label} type="button" aria-label={label} className="flex flex-col items-center gap-1 rounded-lg border border-border bg-background py-2 text-muted-foreground transition hover:border-primary/50 hover:text-foreground">
             <Icon className="size-3.5" />
             <span className="text-[0.5rem] uppercase tracking-wide">{label}</span>
           </button>
@@ -545,16 +514,8 @@ function UploadsTab({ onDropAsset }: { onDropAsset: (asset: DroppedAsset) => voi
   const fileRef = useRef<HTMLInputElement>(null)
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
-    if (!files.length) return
-    files.forEach((file, i) => {
-      const reader = new FileReader()
-      reader.onload = (loadEvent) => {
-        const result = loadEvent.target?.result as string
-        if (!result) return
-        setUploads((u) => [{ id: `upload-${Date.now()}-${i}`, src: result, label: file.name.replace(/\.[^.]+$/, '') }, ...u])
-      }
-      reader.readAsDataURL(file)
-    })
+    const next = files.map((f, i) => ({ id: `new-${Date.now()}-${i}`, src: URL.createObjectURL(f), label: f.name.replace(/\.[^.]+$/, '') }))
+    setUploads((u) => [...next, ...u])
     e.target.value = ''
   }
   function handleDragStart(e: React.DragEvent, item: { id: string; label: string; src: string }) {
@@ -597,16 +558,8 @@ function UploadsTab({ onDropAsset }: { onDropAsset: (asset: DroppedAsset) => voi
   )
 }
 
-const TOOL_DESCRIPTIONS: Record<CanvasTool, string> = {
-  select: 'Click or drag to select and move elements.',
-  draw: 'Click and drag to draw a freehand line.',
-  shapes: 'Click the canvas to place a rectangle.',
-  lines: 'Click and drag to draw a straight line.',
-  sticky: 'Click the canvas to place a sticky note. Double-tap to edit text.',
-  text: 'Click the canvas to place a text element.',
-}
-
-function ToolsTab({ activeTool, onToolChange }: { activeTool: CanvasTool; onToolChange: (tool: CanvasTool) => void }) {
+function ToolsTab() {
+  const [activeTool, setActiveTool] = useState<string | null>('select')
   return (
     <div className="flex flex-col gap-3 p-3 overflow-y-auto flex-1">
       <p className="text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Canvas tools</p>
@@ -615,7 +568,7 @@ function ToolsTab({ activeTool, onToolChange }: { activeTool: CanvasTool; onTool
           const Icon = tool.icon
           const isActive = activeTool === tool.id
           return (
-            <button key={tool.id} type="button" onClick={() => onToolChange(tool.id as CanvasTool)}
+            <button key={tool.id} type="button" onClick={() => setActiveTool(tool.id)}
               className={cn('flex flex-col items-center gap-2 rounded-xl border py-3 transition',
                 isActive ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}>
               <Icon className="size-4" />
@@ -627,230 +580,67 @@ function ToolsTab({ activeTool, onToolChange }: { activeTool: CanvasTool; onTool
       {activeTool && (
         <div className="rounded-xl border border-border bg-background p-3 text-[0.62rem] text-muted-foreground space-y-1">
           <p className="font-bold uppercase tracking-[0.1em] text-foreground">{DEMO_TOOLS.find((t) => t.id === activeTool)?.label}</p>
-          <p>{TOOL_DESCRIPTIONS[activeTool]}</p>
+          {DEMO_TOOLS.find((t) => t.id === activeTool)?.textOk
+            ? <p>Double-tap to insert text into this element.</p>
+            : <p>Text insertion is not supported for this tool.</p>}
         </div>
       )}
     </div>
   )
 }
 
-interface ProjectItem {
-  id: string
-  title: string
-  type: 'Design' | 'Mood Board'
-  pages: string[]
-}
-
-function ProjectsTab({
-  onInsertPage,
-  onInsertAllPages,
-}: {
-  onInsertPage: (sourceProjId: string, pageTitle: string) => void
-  onInsertAllPages: (sourceProjId: string) => void
-}) {
+function ProjectsTab() {
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
-
-  // Load real project cards from localStorage or fallback to DEMO_PROJECTS
-  const [projectsList] = useState<ProjectItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('lumiere-recents-cards')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((c: any) => {
-            let pages = ['Page 1', 'Page 2']
-            try {
-              const savedPages = localStorage.getItem(`lumiere-pages-${c.id}`)
-              if (savedPages) {
-                const p = JSON.parse(savedPages)
-                if (Array.isArray(p)) pages = p.map((pageObj: any) => pageObj.title)
-              }
-            } catch { /* ignore */ }
-            return {
-              id: c.id,
-              title: c.title,
-              type: c.type || 'Design',
-              pages,
-            }
-          })
-        }
-      }
-    } catch { /* ignore */ }
-
-    return DEMO_PROJECTS.map((p) => ({
-      id: p.id,
-      title: p.title,
-      type: p.id === 'p3' ? 'Mood Board' : 'Design',
-      pages: p.pages,
-    }))
-  })
-
-  const filtered = projectsList.filter((p) => !query || p.title.toLowerCase().includes(query.toLowerCase()))
-  const designs = filtered.filter((p) => p.type !== 'Mood Board')
-  const moodBoards = filtered.filter((p) => p.type === 'Mood Board')
-
+  const filtered = DEMO_PROJECTS.filter((p) => !query || p.title.toLowerCase().includes(query.toLowerCase()))
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-3 pt-3 pb-2 shrink-0">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search projects & mood boards…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full rounded-lg border border-border bg-background py-1.5 pl-7 pr-3 text-[0.65rem] text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none"
-          />
+          <input type="text" placeholder="Search projects…" value={query} onChange={(e) => setQuery(e.target.value)}
+            className="w-full rounded-lg border border-border bg-background py-1.5 pl-7 pr-3 text-[0.65rem] text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none" />
         </div>
       </div>
-
-      <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-4">
-        {/* DESIGNS SECTION */}
-        <div>
-          <p className="mb-2 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Designs</p>
-          <div className="space-y-1.5">
-            {designs.map((proj) => (
-              <div key={proj.id} className="rounded-xl border border-border bg-background overflow-hidden">
-                <div className="flex items-center justify-between gap-1 px-3 py-2 transition hover:bg-accent/50">
-                  <button
-                    type="button"
-                    onClick={() => setExpanded((e) => (e === proj.id ? null : proj.id))}
-                    className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer"
-                  >
-                    <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className="truncate text-[0.65rem] font-semibold text-foreground">{proj.title}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onInsertAllPages(proj.id)}
-                    title="Insert all pages from this project"
-                    className="flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[0.52rem] font-bold uppercase tracking-[0.08em] text-primary transition hover:bg-primary hover:text-primary-foreground shrink-0 cursor-pointer"
-                  >
-                    <Plus className="size-2.5" /> All Pages
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setExpanded((e) => (e === proj.id ? null : proj.id))}
-                    className="p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
-                  >
-                    <ChevronDown className={cn('size-3 shrink-0 transition-transform', expanded === proj.id && 'rotate-180')} />
-                  </button>
-                </div>
-
-                {expanded === proj.id && (
-                  <div className="border-t border-border px-3 py-2 flex flex-col gap-1 bg-muted/20">
-                    {proj.pages.map((pageTitle) => (
-                      <div key={pageTitle} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-[0.62rem] text-muted-foreground hover:bg-accent hover:text-foreground transition">
-                        <span className="flex items-center gap-1.5 truncate">
-                          <ChevronRight className="size-2.5 shrink-0" />
-                          {pageTitle}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => onInsertPage(proj.id, pageTitle)}
-                          className="flex items-center gap-1 rounded bg-background border border-border px-1.5 py-0.5 text-[0.5rem] font-semibold uppercase tracking-wider text-muted-foreground hover:border-primary/50 hover:text-primary transition shrink-0 cursor-pointer"
-                        >
-                          <Plus className="size-2" /> Insert
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+      <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-1.5">
+        {filtered.map((proj) => (
+          <div key={proj.id} className="rounded-xl border border-border bg-background overflow-hidden">
+            <button type="button" onClick={() => setExpanded((e) => (e === proj.id ? null : proj.id))}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition hover:bg-accent">
+              <div className="flex items-center gap-2 min-w-0">
+                <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate text-[0.65rem] font-semibold text-foreground">{proj.title}</span>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* MOOD BOARDS SECTION */}
-        <div>
-          <p className="mb-2 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Mood Boards</p>
-          <div className="space-y-1.5">
-            {moodBoards.map((proj) => (
-              <div key={proj.id} className="rounded-xl border border-border bg-background overflow-hidden">
-                <div className="flex items-center justify-between gap-1 px-3 py-2 transition hover:bg-accent/50">
-                  <button
-                    type="button"
-                    onClick={() => setExpanded((e) => (e === proj.id ? null : proj.id))}
-                    className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer"
-                  >
-                    <LayoutGrid className="size-3.5 shrink-0 text-amber-400" />
-                    <span className="truncate text-[0.65rem] font-semibold text-foreground">{proj.title}</span>
+              <ChevronDown className={cn('size-3 shrink-0 text-muted-foreground transition-transform', expanded === proj.id && 'rotate-180')} />
+            </button>
+            {expanded === proj.id && (
+              <div className="border-t border-border px-3 py-2 flex flex-col gap-1">
+                {proj.pages.map((page) => (
+                  <button key={page} type="button" className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[0.62rem] text-muted-foreground transition hover:bg-accent hover:text-foreground">
+                    <ChevronRight className="size-2.5 shrink-0" />{page}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => onInsertAllPages(proj.id)}
-                    title="Insert all mood board pages"
-                    className="flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[0.52rem] font-bold uppercase tracking-[0.08em] text-amber-500 transition hover:bg-amber-500 hover:text-white shrink-0 cursor-pointer"
-                  >
-                    <Plus className="size-2.5" /> Import Board
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setExpanded((e) => (e === proj.id ? null : proj.id))}
-                    className="p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
-                  >
-                    <ChevronDown className={cn('size-3 shrink-0 transition-transform', expanded === proj.id && 'rotate-180')} />
-                  </button>
-                </div>
-
-                {expanded === proj.id && (
-                  <div className="border-t border-border px-3 py-2 flex flex-col gap-1 bg-muted/20">
-                    {proj.pages.map((pageTitle) => (
-                      <div key={pageTitle} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-[0.62rem] text-muted-foreground hover:bg-accent hover:text-foreground transition">
-                        <span className="flex items-center gap-1.5 truncate">
-                          <ChevronRight className="size-2.5 shrink-0" />
-                          {pageTitle}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => onInsertPage(proj.id, pageTitle)}
-                          className="flex items-center gap-1 rounded bg-background border border-border px-1.5 py-0.5 text-[0.5rem] font-semibold uppercase tracking-wider text-muted-foreground hover:border-primary/50 hover:text-primary transition shrink-0 cursor-pointer"
-                        >
-                          <Plus className="size-2" /> Insert
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        </div>
+        ))}
       </div>
     </div>
   )
 }
 
-function BackgroundTab({ onApply }: { onApply: (color: string | null, photoDataUrl: string | null) => void }) {
+function BackgroundTab() {
   const [activeColor, setActiveColor] = useState<string | null>(null)
   const [bgMode, setBgMode] = useState<'color' | 'photo'>('color')
   const fileRef = useRef<HTMLInputElement>(null)
   const [bgPhoto, setBgPhoto] = useState<string | null>(null)
   const [applied, setApplied] = useState(false)
-
-  function apply() {
-    if (bgMode === 'color' && activeColor) {
-      onApply(activeColor, null)
-    } else if (bgMode === 'photo' && bgPhoto) {
-      onApply(null, bgPhoto)
-    }
-    setApplied(true)
-    setTimeout(() => setApplied(false), 1500)
-  }
-
+  function apply() { setApplied(true); setTimeout(() => setApplied(false), 1500) }
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
-    if (!f) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string
-      setBgPhoto(dataUrl)
-    }
-    reader.readAsDataURL(f)
+    if (f) setBgPhoto(URL.createObjectURL(f))
     e.target.value = ''
   }
-
   return (
     <div className="flex flex-col gap-4 p-3 overflow-y-auto flex-1">
       <div className="flex rounded-lg border border-border overflow-hidden">
@@ -980,32 +770,11 @@ function EventReferencePanel({ eventAlias }: { eventAlias: string }) {
   )
 }
 
-function LeftPanel({
-  onDropAsset,
-  eventAlias,
-  assets,
-  onRouteToDeficit,
-  onApplyBackground,
-  activeTool,
-  onToolChange,
-  onPlacePresetText,
-  selectedAsset,
-  onUpdateFormatting,
-  onInsertPage,
-  onInsertAllPages,
-}: {
+function LeftPanel({ onDropAsset, eventAlias, assets, onRouteToDeficit }: {
   onDropAsset: (asset: DroppedAsset) => void
   eventAlias?: string
   assets: AllocatedAsset[]
   onRouteToDeficit: (item: { id: string; name: string; unit: string }) => void
-  onApplyBackground: (color: string | null, photoDataUrl: string | null) => void
-  activeTool: CanvasTool
-  onToolChange: (tool: CanvasTool) => void
-  onPlacePresetText: (preset: { label: string; text: string; fontSize: number; fontWeight?: string; fontStyle?: string; fill?: string }) => void
-  selectedAsset: CanvasAsset | null
-  onUpdateFormatting: (type: 'bold' | 'italic' | 'underline' | 'align') => void
-  onInsertPage: (sourceProjId: string, pageTitle: string) => void
-  onInsertAllPages: (sourceProjId: string) => void
 }) {
   const [activeTab, setActiveTab] = useState<PanelTab>('elements')
   const [collapsed, setCollapsed] = useState(false)
@@ -1037,11 +806,11 @@ function LeftPanel({
           </div>
           <div className="flex flex-1 flex-col overflow-hidden">
             {activeTab === 'elements'   && <ElementsTab onDropAsset={onDropAsset} assets={assets} onRouteToDeficit={onRouteToDeficit} />}
-            {activeTab === 'text'       && <TextTab onPlacePresetText={onPlacePresetText} selectedAsset={selectedAsset} onUpdateFormatting={onUpdateFormatting} />}
+            {activeTab === 'text'       && <TextTab />}
             {activeTab === 'uploads'    && <UploadsTab onDropAsset={onDropAsset} />}
-            {activeTab === 'tools'      && <ToolsTab activeTool={activeTool} onToolChange={onToolChange} />}
-            {activeTab === 'projects'   && <ProjectsTab onInsertPage={onInsertPage} onInsertAllPages={onInsertAllPages} />}
-            {activeTab === 'background' && <BackgroundTab onApply={onApplyBackground} />}
+            {activeTab === 'tools'      && <ToolsTab />}
+            {activeTab === 'projects'   && <ProjectsTab />}
+            {activeTab === 'background' && <BackgroundTab />}
           </div>
         </div>
       )}
@@ -2668,13 +2437,13 @@ export function CanvasWorkspacePage() {
   })
 
   const isMoodBoard = card?.type === 'Mood Board'
-  const [boardName, setBoardName] = useState(card?.title ?? (isMoodBoard ? 'Untitled Mood Board' : 'Untitled Design'))
+  const [boardName, setBoardName] = useState(card?.title ?? 'Untitled Design')
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState(boardName)
   const [starred, setStarred] = useState(card?.starred ?? false)
-  // Per the spec: ALL projects (event-based Designs and Mood Boards alike)
-  // open in Viewing mode by default. Switching to any edit mode requires PIN verification.
-  const [mode, setMode] = useState<WorkspaceMode>('Viewing')
+  // A brand-new blank design (no linked card) drops straight into Designing mode,
+  // bypassing the PIN flow. Opening an existing project defaults to Viewing.
+  const [mode, setMode] = useState<WorkspaceMode>(card ? 'Viewing' : 'Designing')
   const [pendingMode, setPendingMode] = useState<WorkspaceMode | null>(null)
   const [showShare, setShowShare] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
@@ -2955,248 +2724,6 @@ export function CanvasWorkspacePage() {
   const canvasColumnRef = useRef<HTMLDivElement>(null)
   const [isCanvasFullscreen, setIsCanvasFullscreen] = useState(false)
 
-  /* ── Canvas active tool state ── */
-  const [activeTool, setActiveTool] = useState<CanvasTool>('select')
-  useEffect(() => {
-    if (activeTool !== 'select') {
-      setSelectedAssetId(null)
-    }
-  }, [activeTool])
-
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
-
-  function showToast(msg: string) {
-    setToastMessage(msg)
-    setTimeout(() => {
-      setToastMessage((curr) => (curr === msg ? null : curr))
-    }, 2500)
-  }
-
-  function handlePlacePresetText(preset: { label: string; text: string; fontSize: number; fontWeight?: string; fontStyle?: string; fill?: string }) {
-    const newAsset: KonvaCanvasAsset = {
-      id: `asset-text-${Date.now()}`,
-      label: preset.label,
-      src: '',
-      kind: 'text',
-      x: ARTBOARD_W / 2 - 120,
-      y: ARTBOARD_H / 2 - 20,
-      w: 240,
-      h: preset.fontSize * 2,
-      rotation: 0,
-      opacity: 1,
-      locked: false,
-      hidden: false,
-      zIndex: canvasAssets.length + 1,
-      pageId: currentPage,
-      text: preset.text,
-      fontSize: preset.fontSize,
-      fontStyle: preset.fontStyle || (preset.fontWeight === 'bold' ? 'bold' : 'normal'),
-      fill: preset.fill || '#0f172a',
-      strokeColor: preset.fill || '#0f172a',
-      align: 'left',
-    }
-    setCanvasAssets((prev) => [...prev, newAsset])
-    setSelectedAssetId(newAsset.id)
-    showToast(`Placed ${preset.label} on canvas`)
-  }
-
-  function handleUpdateFormatting(type: 'bold' | 'italic' | 'underline' | 'align') {
-    if (!selectedAssetId) return
-    const targetAsset = canvasAssets.find((a) => a.id === selectedAssetId)
-    if (!targetAsset || (targetAsset.kind !== 'text' && targetAsset.kind !== 'sticky')) return
-
-    const changes: Partial<KonvaCanvasAsset> = {}
-    const currStyle = targetAsset.fontStyle || 'normal'
-    const isBold = currStyle.includes('bold')
-    const isItalic = currStyle.includes('italic')
-
-    if (type === 'bold') {
-      const nextBold = !isBold
-      if (nextBold && isItalic) changes.fontStyle = 'bold italic'
-      else if (nextBold) changes.fontStyle = 'bold'
-      else if (isItalic) changes.fontStyle = 'italic'
-      else changes.fontStyle = 'normal'
-    } else if (type === 'italic') {
-      const nextItalic = !isItalic
-      if (nextItalic && isBold) changes.fontStyle = 'bold italic'
-      else if (nextItalic) changes.fontStyle = 'italic'
-      else if (isBold) changes.fontStyle = 'bold'
-      else changes.fontStyle = 'normal'
-    } else if (type === 'underline') {
-      changes.textDecoration = targetAsset.textDecoration === 'underline' ? '' : 'underline'
-    } else if (type === 'align') {
-      const aligns = ['left', 'center', 'right', 'justify']
-      const currIdx = aligns.indexOf(targetAsset.align || 'left')
-      changes.align = aligns[(currIdx + 1) % aligns.length]
-    }
-
-    setCanvasAssets((prev) => prev.map((a) => (a.id === targetAsset.id ? { ...a, ...changes } : a)))
-  }
-
-  function handleInsertPage(sourceProjId: string, sourcePageTitle: string) {
-    const newPageId = `pg${Date.now()}`
-    const newPageTitle = `${sourcePageTitle} (Imported)`
-    setPages((prev) => [...prev, { id: newPageId, title: newPageTitle, hidden: false }])
-    setCurrentPage(newPageId)
-
-    try {
-      const rawPages = localStorage.getItem(`lumiere-pages-${sourceProjId}`)
-      const rawAssets = localStorage.getItem(`lumiere-canvas-assets-${sourceProjId}`)
-      let srcPageId = ''
-      if (rawPages) {
-        const parsedPages = JSON.parse(rawPages)
-        const matchingPage = parsedPages.find((p: any) => p.title === sourcePageTitle)
-        if (matchingPage) srcPageId = matchingPage.id
-      }
-
-      let sourceAssets: KonvaCanvasAsset[] = []
-      if (rawAssets) {
-        const parsedAssets = JSON.parse(rawAssets) as KonvaCanvasAsset[]
-        sourceAssets = srcPageId
-          ? parsedAssets.filter((a) => (a.pageId || 'pg1') === srcPageId)
-          : parsedAssets
-      }
-
-      const clonedAssets = sourceAssets.map((a) => ({
-        ...a,
-        id: `asset-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        pageId: newPageId,
-      }))
-
-      setCanvasAssets((prev) => [...prev, ...clonedAssets])
-      showToast(`Inserted "${sourcePageTitle}" into current project!`)
-    } catch (err) {
-      console.error('Failed to insert page from project:', err)
-    }
-
-    setTimeout(() => {
-      canvasHandleRef.current?.scrollToPage(newPageId)
-    }, 50)
-  }
-
-  function handleInsertAllPages(sourceProjId: string) {
-    try {
-      const rawPages = localStorage.getItem(`lumiere-pages-${sourceProjId}`)
-      const rawAssets = localStorage.getItem(`lumiere-canvas-assets-${sourceProjId}`)
-      const parsedPages = rawPages ? JSON.parse(rawPages) : []
-      const parsedAssets = rawAssets ? (JSON.parse(rawAssets) as KonvaCanvasAsset[]) : []
-
-      if (parsedPages.length === 0) {
-        handleInsertPage(sourceProjId, 'Page 1')
-        return
-      }
-
-      const timestamp = Date.now()
-      const newPagesList: CanvasPage[] = []
-      const newAssetsList: KonvaCanvasAsset[] = []
-
-      parsedPages.forEach((srcPage: CanvasPage, idx: number) => {
-        const newPageId = `pg${timestamp}-${idx}`
-        newPagesList.push({
-          id: newPageId,
-          title: `${srcPage.title} (Imported)`,
-          hidden: false,
-        })
-
-        const pageAssets = parsedAssets.filter((a) => (a.pageId || 'pg1') === srcPage.id)
-        pageAssets.forEach((a, aIdx) => {
-          newAssetsList.push({
-            ...a,
-            id: `asset-${timestamp}-${idx}-${aIdx}-${Math.random().toString(36).slice(2, 6)}`,
-            pageId: newPageId,
-          })
-        })
-      })
-
-      setPages((prev) => [...prev, ...newPagesList])
-      setCanvasAssets((prev) => [...prev, ...newAssetsList])
-      if (newPagesList[0]) {
-        setCurrentPage(newPagesList[0].id)
-        setTimeout(() => {
-          canvasHandleRef.current?.scrollToPage(newPagesList[0].id)
-        }, 50)
-      }
-
-      showToast(`Inserted ${newPagesList.length} pages into current project!`)
-    } catch (err) {
-      console.error('Failed to insert all project pages:', err)
-    }
-  }
-
-  function handlePlaceElement(element: Partial<KonvaCanvasAsset>) {
-    const newAsset: KonvaCanvasAsset = {
-      id: element.id || `el-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      label: element.label || 'Canvas Element',
-      src: element.src || '',
-      x: element.x ?? 100,
-      y: element.y ?? 100,
-      w: element.w ?? 150,
-      h: element.h ?? 150,
-      rotation: element.rotation ?? 0,
-      opacity: element.opacity ?? 100,
-      locked: element.locked ?? false,
-      hidden: element.hidden ?? false,
-      zIndex: Date.now(),
-      pageId: element.pageId || currentPage,
-      kind: element.kind || 'rect',
-      points: element.points,
-      text: element.text,
-      fill: element.fill,
-      strokeColor: element.strokeColor,
-      strokeWidth: element.strokeWidth,
-      fontSize: element.fontSize,
-    }
-    setCanvasAssets((prev) => [...prev, newAsset])
-    setSelectedAssetId(newAsset.id)
-  }
-
-  /* ── Artboard Background (color or photo) — persisted per project ── */
-  const [artboardBgColor, setArtboardBgColor] = useState<string>(() => {
-    if (card?.id) {
-      try {
-        const saved = localStorage.getItem(`lumiere-bg-color-${card.id}`)
-        if (saved) return saved
-      } catch { /* ignore */ }
-    }
-    return '#fbf8f1'
-  })
-  const [artboardBgPhotoDataUrl, setArtboardBgPhotoDataUrl] = useState<string | null>(() => {
-    if (card?.id) {
-      try {
-        return localStorage.getItem(`lumiere-bg-photo-${card.id}`) ?? null
-      } catch { /* ignore */ }
-    }
-    return null
-  })
-
-  // Load the photo bg as an HTMLImageElement for Konva consumption
-  const [artboardBgImageEl, setArtboardBgImageEl] = useState<HTMLImageElement | null>(null)
-  useEffect(() => {
-    if (!artboardBgPhotoDataUrl) { setArtboardBgImageEl(null); return }
-    const img = new window.Image()
-    img.onload = () => setArtboardBgImageEl(img)
-    img.onerror = () => setArtboardBgImageEl(null)
-    img.src = artboardBgPhotoDataUrl
-  }, [artboardBgPhotoDataUrl])
-
-  function handleApplyBackground(color: string | null, photoDataUrl: string | null) {
-    if (color) {
-      setArtboardBgColor(color)
-      setArtboardBgPhotoDataUrl(null)
-      if (card?.id) {
-        localStorage.setItem(`lumiere-bg-color-${card.id}`, color)
-        localStorage.removeItem(`lumiere-bg-photo-${card.id}`)
-      }
-    } else if (photoDataUrl) {
-      setArtboardBgPhotoDataUrl(photoDataUrl)
-      if (card?.id) {
-        try {
-          localStorage.setItem(`lumiere-bg-photo-${card.id}`, photoDataUrl)
-        } catch { /* quota — silently skip photo persistence */ }
-      }
-    }
-  }
-
   useEffect(() => {
     function onFullscreenChange() {
       setIsCanvasFullscreen(document.fullscreenElement === canvasColumnRef.current)
@@ -3357,23 +2884,7 @@ export function CanvasWorkspacePage() {
     setMode(m)
   }
   function onPinSuccess() { if (pendingMode) setMode(pendingMode); setPendingMode(null) }
-  function commitName() {
-    const nextName = nameDraft.trim() || boardName
-    setBoardName(nextName)
-    setEditingName(false)
-    if (card?.id) {
-      try {
-        const saved = localStorage.getItem('lumiere-recents-cards')
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          if (Array.isArray(parsed)) {
-            const updated = parsed.map((c: WorkspaceCard) => c.id === card.id ? { ...c, title: nextName, lastEdited: 'Just now' } : c)
-            localStorage.setItem('lumiere-recents-cards', JSON.stringify(updated))
-          }
-        }
-      } catch { /* ignore */ }
-    }
-  }
+  function commitName() { setBoardName(nameDraft.trim() || boardName); setEditingName(false) }
 
   const selectedAsset =
     canvasAssets.find((a) => a.id === selectedAssetId && (a.pageId || pages[0]?.id) === currentPage) ?? null
@@ -3408,18 +2919,10 @@ export function CanvasWorkspacePage() {
           {/* Alias/date/last-edited meta only applies to a linked/existing project */}
           {card && (
             <div className="hidden items-center gap-2 lg:flex shrink-0">
-              {card.eventAlias ? (
-                <>
-                  <span className="text-border">·</span>
-                  <span className="text-[0.58rem] font-medium uppercase tracking-[0.1em] text-muted-foreground">{card.eventAlias}</span>
-                </>
-              ) : null}
-              {card.eventDate ? (
-                <>
-                  <span className="text-border">·</span>
-                  <span className="text-[0.58rem] text-muted-foreground">{card.eventDate}</span>
-                </>
-              ) : null}
+              <span className="text-border">·</span>
+              <span className="text-[0.58rem] font-medium uppercase tracking-[0.1em] text-muted-foreground">{card.eventAlias}</span>
+              <span className="text-border">·</span>
+              <span className="text-[0.58rem] text-muted-foreground">{card.eventDate}</span>
               <span className="text-border">·</span>
               <span className="text-[0.58rem] text-muted-foreground italic">{card.lastEdited}</span>
             </div>
@@ -3466,28 +2969,8 @@ export function CanvasWorkspacePage() {
       )}
 
       {/* ══════════ BODY ══════════ */}
-      <div className="flex flex-1 overflow-hidden relative">
-        {toastMessage && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-xl border border-primary/30 bg-card/95 px-4 py-2 text-xs font-semibold text-foreground shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2">
-            <Check className="size-4 text-emerald-500 shrink-0" />
-            <span>{toastMessage}</span>
-          </div>
-        )}
-
-        <LeftPanel
-          onDropAsset={handleDropFromPanel}
-          eventAlias={card?.eventAlias}
-          assets={assets}
-          onRouteToDeficit={handleRouteToDeficit}
-          onApplyBackground={handleApplyBackground}
-          activeTool={activeTool}
-          onToolChange={setActiveTool}
-          onPlacePresetText={handlePlacePresetText}
-          selectedAsset={selectedAsset}
-          onUpdateFormatting={handleUpdateFormatting}
-          onInsertPage={handleInsertPage}
-          onInsertAllPages={handleInsertAllPages}
-        />
+      <div className="flex flex-1 overflow-hidden">
+        <LeftPanel onDropAsset={handleDropFromPanel} eventAlias={card?.eventAlias} assets={assets} onRouteToDeficit={handleRouteToDeficit} />
 
         {/* Canvas + bottom bar */}
         <div ref={canvasColumnRef} className="flex flex-1 flex-col overflow-hidden bg-background">
@@ -3515,9 +2998,6 @@ export function CanvasWorkspacePage() {
             onDuplicate={duplicateAsset}
             onDelete={deleteAsset}
             onDropAsset={handleDropOnCanvas}
-            onPlaceElement={handlePlaceElement}
-            activeTool={activeTool}
-            onToolReset={() => setActiveTool('select')}
             onZoomChange={setZoom}
             onContextMenu={(x, y, assetId) => setCtxMenu({ x, y, assetId })}
             onCopy={copyAsset}
@@ -3529,8 +3009,6 @@ export function CanvasWorkspacePage() {
             onToggleHidden={handleToggleHidden}
             onDeletePage={handleDeletePage}
             onAddPage={handleAddPage}
-            artboardBg={artboardBgColor}
-            artboardBgImage={artboardBgImageEl}
           />
           {ctxMenu && (
             <ContextMenu

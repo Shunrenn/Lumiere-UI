@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ArrowLeftRight, Plus, Settings, Trash2, X, XCircle } from 'lucide-react'
-import type { CrewRow, PresetSquad } from '@/lib/warehouse-crew'
-import type { Staff } from '@/lib/types'
+import type { CrewRow, PresetSquad, Staff } from '@/lib/warehouse-crew'
 import { checkSymmetricConflict, crewHasConflict, isTeamLead, savePresetSquad, deletePresetSquad } from '@/lib/warehouse-crew'
 import { cn } from '@/lib/utils'
 
@@ -58,6 +57,7 @@ export function PresetSelector({
   eventId,
   date,
   targetCategory = 'Field',
+  overriddenStaffIds = new Set(),
   onSwapMember,
   onRemove,
   onSquadsUpdated,
@@ -250,6 +250,7 @@ export function PresetSelector({
       {managerOpen && (
         <PresetSquadManagerModal
           presetSquads={presetSquads}
+          crewRows={crewRows}
           onClose={() => setManagerOpen(false)}
           onSquadsUpdated={() => {
             if (onSquadsUpdated) onSquadsUpdated()
@@ -262,14 +263,17 @@ export function PresetSelector({
 
 function PresetSquadManagerModal({
   presetSquads,
+  crewRows,
   onClose,
   onSquadsUpdated,
 }: {
   presetSquads: PresetSquad[]
+  crewRows: CrewRow[]
   onClose: () => void
   onSquadsUpdated: () => void
 }) {
   const [squads, setSquads] = useState<PresetSquad[]>(presetSquads)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [newSquadName, setNewSquadName] = useState('')
   const [selectedTask, setSelectedTask] = useState(FIELD_TASKS[0])
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set())

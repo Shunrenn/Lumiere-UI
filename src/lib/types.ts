@@ -33,9 +33,10 @@ export type Route =
 
 // Lifecycle state of a stocked asset relative to its replenishment threshold.
 export type DeficitStatus =
-  | 'Received'
-  | 'Not Purchased'
-  | 'In Procurement'
+  | 'Critical Deficit'
+  | 'Low Stock'
+  | 'Order Placed'
+  | 'Available'
 
 export interface ProcurementItem {
   id: string
@@ -113,7 +114,7 @@ export interface Staff {
   employeeId: string
   surname: string
   firstName: string
-  middleName?: string
+  middleName: string
   email: string
   contact: string
   role: StaffRole
@@ -166,7 +167,6 @@ export type EventStatus =
   | 'On Hold'
   | 'Reserved'
   | 'Cancelled'
-  | 'Settled'
 
 export interface PortalEvent {
   id: string
@@ -201,6 +201,7 @@ export interface NewEventDraft {
   installationStart: string
   installationEnd: string
   moodPlan: string
+  status?: EventStatus
 }
 
 /* ---------- Account / User Actions ---------- */
@@ -233,49 +234,25 @@ export interface EventUpdate {
 /* ---------- Damage Validation ---------- */
 
 // Verdict state for a post-event logistics damage exception.
-// 'Pending Second Sign-off' and the two audit resolutions ('Repair' /
-// 'Write-off') only apply to exceptions that were held for audit due to
-// missing photographic evidence — resolving out of that hold requires two
-// distinct Executive sign-offs.
+// 'Escalated for Executive Review' is set by WOM when they escalate a report
+// to the Executive — the Executive then makes the final Validate/Dismiss call.
+// 'Pending Second Sign-off', 'Repair', and 'Write-off' are legacy states from
+// the old two-Executive-sign-off mechanism (superseded); they may still appear
+// on existing seed data but are no longer created by new actions.
 export type DamageVerdict =
   | 'Pending Verdict'
-  | 'Validated'
+  | 'Escalated — Round 1 Review'
   | 'Dismissed'
-  | 'Held for Audit'
-  | 'Pending Second Sign-off'
-  | 'Repair'
-  | 'Write-off'
+  | 'Pending Resolution'
+  | 'Escalated — Round 2 Review'
+  | 'Sent for Repair'
+  | 'Sent for Write-off'
 
-export type DamageCustodyMode =
-  | 'genuine-dual-custody'
-  | 'standing-self-validation'
-  | 'admin-enabled-override'
-
-export interface SubRoleEmergencyUnblockMetadata {
-  originatedFromEmergency: boolean
-  emergencyReason: string
-  unblockedByAdminEmail: string
-  unblockScope: 'instance' | 'permanent'
-  madePermanentAt?: string
-  permanentAcknowledged?: boolean
-}
-
-export interface DamageSelfValidationRecord {
-  validatedByEmail: string
-  validatedByName: string
-  womRole: string
-  pinVerified: boolean
-  justification: string
-  timestamp: string
-  custodyMode: DamageCustodyMode
-  convertedViaEmergency?: boolean
-}
-
+// A single Executive's sign-off on resolving a Held-for-Audit exception.
 export interface DamageSignOff {
-  staffEmail: string
-  staffName: string
-  womRole?: string
-  verdict: 'Repair' | 'Write-off' | 'Validated' | 'Dismissed'
+  executiveEmail: string
+  executiveName: string
+  verdict: 'Repair' | 'Write-off'
   note: string
   timestamp: string
 }
@@ -296,13 +273,29 @@ export interface DamageException {
   estimatedCost: number
   notes: string
   status: DamageVerdict
+  // Tags this exception as lacking sufficient evidence (no photo, unverified
+  // EXIF, missing/mismatched GPS, suspected tampering — see Phase 3 spec).
+  // Shared field: set by WOM's evidence-gap detection, read by Executive to
+  // render the same warning icon. Persists visibly even after resolution.
   noPhotographicEvidence?: boolean
+  // Set once a report passes Step 1 (legitimacy check) as Validated, i.e. the
+  // moment it enters 'Pending Resolution'. Drives a checkmark icon on both
+  // WOM's and Executive's rows. Persists after the report resolves to
+  // 'Sent for Repair' / 'Sent for Write-off', same as noPhotographicEvidence.
+  validated?: boolean
+  // Legacy fields from the retired two-Executive sign-off mechanism. No
+  // longer produced by new actions, but preserved for existing/historical
+  // records that already went through that flow.
   firstSignOff?: DamageSignOff
   secondSignOff?: DamageSignOff
-  custodyMode?: DamageCustodyMode
-  unblockMetadata?: SubRoleEmergencyUnblockMetadata
-  selfValidation?: DamageSelfValidationRecord
-  selfValidationRecord?: DamageSelfValidationRecord
+  // Who made the Round 1 (legitimacy) call. Set once Validate/Dismiss happens;
+  // never cleared on its own. Grants that account permanent Edit rights over
+  // Round 1 specifically, regardless of what happens in Round 2 afterward.
+  round1DecidedBy?: 'WOM' | 'Executive'
+  // Who made the Round 2 (disposition) call. Cleared automatically whenever
+  // Round 1 is edited/overridden, since a Round 1 change can invalidate
+  // whatever Round 2 decided.
+  round2DecidedBy?: 'WOM' | 'Executive'
 }
 
 /* ---------- Inventory / Asset Registry ---------- */

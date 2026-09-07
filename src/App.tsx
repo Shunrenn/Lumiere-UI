@@ -16,9 +16,10 @@ import { WarehouseHomePage } from '@/pages/WarehouseHomePage'
 import { EventDashboardPage } from '@/pages/EventDashboardPage'
 import { EventRegistryPage } from '@/pages/EventRegistryPage'
 import { ReplenishmentPage } from '@/pages/ReplenishmentPage'
-import { ActivityLogsPage } from '@/pages/ActivityLogsPage'
+import { OperationalAuditLogsPage } from '@/pages/OperationalAuditLogsPage'
 import { DamageValidationPage } from '@/pages/DamageValidationPage'
 import { InventoryStockPage } from '@/pages/InventoryStockPage'
+import { ExecutiveAssetInventoryPage } from '@/pages/ExecutiveAssetInventoryPage'
 import { WarehouseLogsPage } from '@/pages/WarehouseLogsPage'
 import { CrewRosterPage } from '@/pages/CrewRosterPage'
 import { TaskDeploymentsPage } from '@/pages/TaskDeploymentsPage'
@@ -55,7 +56,7 @@ function PortalAccessError({ portal }: { portal: 'web' | 'pwa' }) {
 
 function Router() {
   const { route } = useNav()
-  const { portal, isWarehouse, isAdmin, isProductionManager, isInventoryOfficer, hasFullWarehouseAccess } = useAuth()
+  const { portal, isWarehouse, isAdmin, isExecutive, isProductionManager, isInventoryOfficer, hasFullWarehouseAccess } = useAuth()
   // The Production Manager WOM sub-role gets its own mobile PWA page (matching
   // the Ground Crew / Warehouse Lead / Warehouse Member mobile accounts)
   // instead of the desktop sidebar shell — but only when scoped to that single
@@ -75,11 +76,11 @@ function Router() {
     case 'replenishment':
       return <ReplenishmentPage />
     case 'logs':
-      return <ActivityLogsPage />
+      return <OperationalAuditLogsPage />
     case 'damage':
       return <DamageValidationPage />
     case 'inventory':
-      return <InventoryStockPage />
+      return isExecutive ? <ExecutiveAssetInventoryPage /> : <InventoryStockPage />
     case 'warehouse-logs':
       return <WarehouseLogsPage />
     case 'crew':
@@ -153,24 +154,24 @@ function Gate() {
   const initialRoute = isManningOfficer
     ? 'manning'
     : isGroundCrew
-    ? 'field-ops'
-    : isWarehouseLead
-      ? 'warehouse-lead'
-      : isWarehouseMember
-        ? 'warehouse-member'
-        : isMobileProductionManager
-          ? 'production-manager'
-          : isMobileInventoryOfficer
-            ? 'inventory-officer'
-            : isPlanner
-            ? 'canvas'
-            : isWarehouse
-              ? 'overview'
-              : hasWorkforceHighlight
-                ? 'workforce'
-                : isExecutive
-                  ? 'dashboard'
-                  : 'overview'
+      ? 'field-ops'
+      : isWarehouseLead
+        ? 'warehouse-lead'
+        : isWarehouseMember
+          ? 'warehouse-member'
+          : isMobileProductionManager
+            ? 'production-manager'
+            : isMobileInventoryOfficer
+              ? 'inventory-officer'
+              : isPlanner
+                ? 'canvas'
+                : isWarehouse
+                  ? 'overview'
+                  : hasWorkforceHighlight
+                    ? 'workforce'
+                    : isExecutive
+                      ? 'dashboard'
+                      : 'overview'
 
   return (
     <NavProvider initialRoute={initialRoute}>

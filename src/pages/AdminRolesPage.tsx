@@ -714,24 +714,6 @@ export function AdminRolesPage() {
                     onCancelEdit={() => handleCancelEdit(sub.id)}
                     onSaveClick={() => handleSaveClick(parent.id, sub)}
                     onDeleteClick={() => requestDelete(parent.id, sub)}
-                    onToggleSelfValidation={(targetSub) => {
-                      setSubRolesByParent((prev) => ({
-                        ...prev,
-                        [parent.id]: (prev[parent.id] ?? []).map((s) =>
-                          s.id === targetSub.id ? { ...s, allowSelfValidation: !(s.allowSelfValidation !== false) } : s,
-                        ),
-                      }))
-                      showToast(`Self-validation policy updated for '${targetSub.name}'.`)
-                    }}
-                    onUpdateQuota={(targetSub, minLeads, maxLeads) => {
-                      setSubRolesByParent((prev) => ({
-                        ...prev,
-                        [parent.id]: (prev[parent.id] ?? []).map((s) =>
-                          s.id === targetSub.id ? { ...s, minTeamLeads: minLeads, maxTeamLeads: maxLeads } : s,
-                        ),
-                      }))
-                      showToast(`Team Lead quotas updated for '${targetSub.name}'.`)
-                    }}
                   />
                 ))}
 
@@ -966,8 +948,6 @@ interface SubRoleRowProps {
   onCancelEdit: () => void
   onSaveClick: () => void
   onDeleteClick: () => void
-  onToggleSelfValidation?: (sub: SubRole) => void
-  onUpdateQuota?: (sub: SubRole, minLeads?: number, maxLeads?: number) => void
 }
 
 function SubRoleRow({
@@ -985,8 +965,6 @@ function SubRoleRow({
   onCancelEdit,
   onSaveClick,
   onDeleteClick,
-  onToggleSelfValidation,
-  onUpdateQuota,
 }: SubRoleRowProps) {
   const comingSoon = !!sub.comingSoon
   const effectiveName = draftName ?? sub.name
@@ -1076,91 +1054,6 @@ function SubRoleRow({
               <Trash2 className="size-3.5" aria-hidden="true" />
               Delete sub-role
             </button>
-          </div>
-
-          {/* Self-Validation RBAC Configuration */}
-          {(() => {
-            const isSignOffCapable =
-              sub.id === 'warehouse-manager' ||
-              sub.id === 'inventory-officer' ||
-              sub.name === 'Warehouse Manager' ||
-              sub.name === 'Inventory Officer'
-            return (
-              <div className="mb-4 rounded-lg border border-border bg-background/60 p-3.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs font-semibold text-card-foreground">Self-Validation on Audit Holds</p>
-                    {!isSignOffCapable && (
-                      <span className="rounded bg-muted px-2 py-0.5 text-[0.55rem] font-medium text-muted-foreground">
-                        Not Applicable
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[0.7rem] text-muted-foreground leading-relaxed mt-0.5">
-                    {isSignOffCapable
-                      ? 'When enabled (ON), officers in this sub-role may self-validate audit holds with PIN & justification. When disabled (OFF), dual-custody is enforced.'
-                      : 'Self-validation is only applicable for damage sign-off sub-roles (Warehouse Manager, Inventory Officer).'}
-                  </p>
-                  {sub.permanentlyEnabledViaEmergency && sub.emergencyUnblockMetadata && (
-                    <span className="mt-1.5 inline-flex items-center gap-1 rounded bg-amber-500/15 px-2.5 py-0.5 text-[0.6rem] font-semibold text-amber-300">
-                      ⚠️ Permanently enabled via Emergency Unblock by {sub.emergencyUnblockMetadata.unblockedByAdminEmail}
-                    </span>
-                  )}
-                </div>
-                <div title={!isSignOffCapable ? "Self-validation is only applicable for damage sign-off sub-roles (Warehouse Manager, Inventory Officer)." : undefined}>
-                  <Toggle
-                    checked={isSignOffCapable && sub.allowSelfValidation !== false}
-                    disabled={!isSignOffCapable}
-                    onChange={() => isSignOffCapable && onToggleSelfValidation?.(sub)}
-                    label="Allow Self-Validation"
-                  />
-                </div>
-              </div>
-            )
-          })()}
-
-          {/* Team Lead Headcount Quota Configuration (Foundation F) */}
-          <div className="mb-4 rounded-lg border border-border bg-background/60 p-3.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold text-card-foreground">Team Lead Headcount Quotas</p>
-              <p className="text-[0.7rem] text-muted-foreground leading-relaxed mt-0.5">
-                Set active Team Lead limits for this sub-role. Assignment creation enforces maximum quota; assignment closing/removal enforces minimum quota.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="flex items-center gap-1.5">
-                <label className="text-[0.65rem] font-medium text-muted-foreground" htmlFor={`min-lead-${sub.id}`}>Min Leads:</label>
-                <input
-                  id={`min-lead-${sub.id}`}
-                  type="number"
-                  min="0"
-                  max="99"
-                  placeholder="None"
-                  value={sub.minTeamLeads ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value, 10) || 0)
-                    onUpdateQuota?.(sub, val, sub.maxTeamLeads)
-                  }}
-                  className="w-16 rounded border border-input bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <label className="text-[0.65rem] font-medium text-muted-foreground" htmlFor={`max-lead-${sub.id}`}>Max Leads:</label>
-                <input
-                  id={`max-lead-${sub.id}`}
-                  type="number"
-                  min="0"
-                  max="99"
-                  placeholder="None"
-                  value={sub.maxTeamLeads ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value, 10) || 0)
-                    onUpdateQuota?.(sub, sub.minTeamLeads, val)
-                  }}
-                  className="w-16 rounded border border-input bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
-                />
-              </div>
-            </div>
           </div>
 
           <p className="mb-3 text-[0.58rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">

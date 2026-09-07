@@ -1,23 +1,15 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { ChevronDown, ScrollText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePortal } from '@/lib/store'
 import { useClickFlash } from '@/lib/use-click-flash'
-import type { EventUpdateStatus } from '@/lib/types'
+import { getOperationalEvents, type OperationalEventStatus } from '@/lib/operational-events'
 
-const statusDot: Record<EventUpdateStatus, string> = {
-  Scheduled: 'bg-sky-500',
-  'Action Required': 'bg-amber-500',
-  Completed: 'bg-emerald-500',
-}
-
-const feedTimes = ['09:12 UTC', '08:47 UTC', '07:58 UTC', '07:20 UTC', '06:41 UTC', '05:15 UTC']
-
-const feedDetails: Record<string, string> = {
-  'eu-1': 'Grand Ballroom Gala setup completed ahead of schedule. All lighting rigs and staging passed safety validation.',
-  'eu-2': 'Loading dock inspection flagged 2 damaged glassware crates from transit. Routing to Damage Validation queue.',
-  'eu-3': 'Aurelio Wedding ingress logistics dispatched from main warehouse depot with 4-ton transit transport.',
-  'eu-4': 'Executive sign-off confirmed for chandelier replacement units. Inventory status restored to Available.',
+const statusDot: Record<OperationalEventStatus, string> = {
+  Success: 'bg-emerald-500',
+  Flagged: 'bg-rose-500',
+  Approved: 'bg-sky-500',
+  Pending: 'bg-amber-500',
 }
 
 interface ExecutiveLiveFeedProps {
@@ -25,9 +17,14 @@ interface ExecutiveLiveFeedProps {
 }
 
 export function ExecutiveLiveFeed({ onViewLogs }: ExecutiveLiveFeedProps) {
-  const { eventUpdates } = usePortal()
+  const { events, damageExceptions, procurement } = usePortal()
   const [expanded, setExpanded] = useState<string | null>(null)
   const { flashing, trigger } = useClickFlash(onViewLogs)
+
+  const feedEvents = useMemo(
+    () => getOperationalEvents(events, damageExceptions, procurement),
+    [events, damageExceptions, procurement],
+  )
 
   return (
     <section
@@ -50,32 +47,33 @@ export function ExecutiveLiveFeed({ onViewLogs }: ExecutiveLiveFeedProps) {
       </h2>
 
       <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
-        {eventUpdates.length === 0 ? (
+        {feedEvents.length === 0 ? (
           <p className="text-sm italic text-muted-foreground">No recent operational events.</p>
         ) : (
           <ul className="space-y-4">
-            {eventUpdates.map((update, i) => {
-              const open = expanded === update.id
-              const detail = feedDetails[update.id] || `Operational update status marked as ${update.status}. Logged to central event registry.`
+            {feedEvents.map((op) => {
+              const open = expanded === op.id
+              const dotColor = statusDot[op.status]
+
               return (
-                <li key={update.id} className="flex items-start gap-3">
+                <li key={op.id} className="flex items-start gap-3">
                   <span
-                    className={cn('mt-1.5 size-2.5 shrink-0 rounded-full', statusDot[update.status] ?? 'bg-sky-500')}
+                    className={cn('mt-1.5 size-2.5 shrink-0 rounded-full', dotColor)}
                     aria-hidden="true"
                   />
                   <div className="min-w-0 flex-1">
                     <span className="text-[0.6rem] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
-                      {feedTimes[i % feedTimes.length]}
+                      {op.timestamp}
                     </span>
                     <p className="mt-1 text-xs leading-relaxed text-card-foreground">
-                      <span className="font-medium">{update.title}</span>
-                      <span className="text-muted-foreground"> — {update.status}</span>
+                      <span className="font-medium">{op.eventType}</span>
+                      <span className="text-muted-foreground"> — {op.title}</span>
                     </p>
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
-                        setExpanded(open ? null : update.id)
+                        setExpanded(open ? null : op.id)
                       }}
                       aria-expanded={open}
                       className="mt-1.5 inline-flex items-center gap-1 text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-primary"
@@ -88,7 +86,7 @@ export function ExecutiveLiveFeed({ onViewLogs }: ExecutiveLiveFeedProps) {
                     </button>
                     {open && (
                       <p className="admin-fade mt-2 rounded-md bg-muted/60 px-3 py-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-                        {detail}
+                        {op.detail}
                       </p>
                     )}
                   </div>

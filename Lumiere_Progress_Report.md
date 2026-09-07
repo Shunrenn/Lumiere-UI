@@ -109,7 +109,7 @@ The strategic headquarters displaying key performance indicators, operational di
 * **Report Distribution Donut Chart (Reports Mode):** ✅ **Working** — Interactive donut chart grouping damage filings by verdict status (*Pending Verdict, Validated, Held for Audit, Second Sign-off, Dismissed*).
 * **Live Operations Feed:** ✅ **Working** — Positioned alongside the donut chart with real-time operational timestamps, color-coded status dots, event headlines, expandable detail panels, and an "Operational Logs" shortcut button that navigates to the audit logs.
 * **Pending Actions Panel (Bottom Left - 30%):** ✅ **Working** — Surfaces operations-specific action items (unconfirmed events, damage reports awaiting verdict, and audit exceptions requiring sign-off) with clear "Review", "Adjudicate", and "Sign off" action buttons routing to target screens.
-* **Trend Analytics Line Chart (Bottom Right - 70%):** ✅ **Working** — Smooth SVG line & gradient area chart with toggleable tabs for **Event Activity** and **Damage Adjudication**, displaying latest metrics, gridlines, and a shortcut to view portfolios.
+* **Trend Analytics Line Chart (Bottom Right - 70%):** ✅ **Working** — Smooth SVG line & gradient area chart with toggleable tabs for **Event Activity** and **Damage Settlement**, displaying latest metrics, gridlines, and a shortcut to view portfolios.
 
 ---
 
@@ -130,7 +130,7 @@ The post-event damage accountability desk where equipment loss and breakages rep
 * **Damage Exceptions Directory:** ✅ **Working** — Lists all post-event damage claims with item names, SKU numbers, reporting crew officers, bound events, and initial condition notes.
 * **Verdict Status Filtering:** ✅ **Working** — Filter claims by *Pending Verdict, Held for Audit, Second Sign-off, Validated,* or *Dismissed*.
 * **Photographic Evidence Review:** ✅ **Working** — Displays captured damage photos, timestamps, location coordinates, and estimated repair costs.
-* **Single-Executive Verdict Adjudication:** ✅ **Working** — For standard claims with complete photo evidence, the executive can immediately record a verdict (*Validated, Dismissed, Repair Required, or Write-off*).
+* **Single-Executive Verdict Settlement:** ✅ **Working** — For standard claims with complete photo evidence, the executive can immediately record a verdict (*Validated, Dismissed, Repair Required, or Write-off*).
 * **Two-Executive Sign-Off Rule (Audit Holds):** ✅ **Working** — If an item is flagged without adequate photo proof, it is automatically *Held for Audit*. The system requires two distinct Executive accounts to sign off before the item can be resolved. The system actively checks the staff directory and warns if a second executive is unavailable or suspended.
 
 ---
@@ -411,7 +411,7 @@ Ground Crew uses a mobile-optimized interface with a **Bottom Navigation Bar** c
 
 ### 2. Executive Components
 * **Routing & Shell:** `src/components/executive/ExecutiveShell.tsx`, `src/components/executive/ExecutiveRail.tsx`, `src/components/executive/ExecutiveTopBar.tsx`, `src/lib/executive-destinations.ts`
-* **Screens:** `src/pages/EventDashboardPage.tsx`, `src/pages/EventRegistryPage.tsx`, `src/pages/InventoryStockPage.tsx`, `src/pages/DamageValidationPage.tsx`, `src/pages/ActivityLogsPage.tsx`
+* **Screens:** `src/pages/EventDashboardPage.tsx`, `src/pages/EventRegistryPage.tsx`, `src/pages/InventoryStockPage.tsx`, `src/pages/DamageValidationPage.tsx`, `src/pages/OperationalAuditLogsPage.tsx`
 * **Modals & Drawers:** `src/components/DamageVerdictModal.tsx`, `src/components/RegisterEventDrawer.tsx`
 
 ### 3. Event Planner Components
