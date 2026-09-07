@@ -52,6 +52,7 @@ const emptyDraft: NewEventDraft = {
   installationStart: '',
   installationEnd: '',
   moodPlan: '',
+  status: 'Reserved',
 }
 
 const labelClass =
@@ -118,6 +119,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
         installationStart: normalizeTimeFormat(event.installationStart),
         installationEnd: normalizeTimeFormat(event.installationEnd),
         moodPlan: event.moodPlan ?? '',
+        status: event.status,
       })
     } else {
       setDraft(emptyDraft)

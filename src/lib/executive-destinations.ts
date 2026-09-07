@@ -1,8 +1,8 @@
-import { LayoutGrid, ClipboardList, ShieldAlert, ListFilter, type LucideIcon } from 'lucide-react'
+import { LayoutGrid, ClipboardList, Boxes, ShieldAlert, ListFilter, type LucideIcon } from 'lucide-react'
 
-// The four destinations pinned to the Executive icon rail — mirrors the
+// The five destinations pinned to the Executive icon rail — mirrors the
 // Admin console's ADMIN_DESTINATIONS list/rail pattern.
-export type ExecutiveDestinationId = 'dashboard' | 'registry' | 'damage' | 'logs'
+export type ExecutiveDestinationId = 'dashboard' | 'registry' | 'inventory' | 'damage' | 'logs'
 
 export interface ExecutiveDestination {
   id: ExecutiveDestinationId
@@ -13,6 +13,7 @@ export interface ExecutiveDestination {
 export const EXECUTIVE_DESTINATIONS: ExecutiveDestination[] = [
   { id: 'dashboard', label: 'Executive Dashboard', icon: LayoutGrid },
   { id: 'registry', label: 'Event Operations', icon: ClipboardList },
+  { id: 'inventory', label: 'Asset Inventory', icon: Boxes },
   { id: 'damage', label: 'Damage Validation', icon: ShieldAlert },
   { id: 'logs', label: 'Operational Audit Logs', icon: ListFilter },
 ]
@@ -20,3 +21,4 @@ export const EXECUTIVE_DESTINATIONS: ExecutiveDestination[] = [
 export function getExecutiveDestination(id: ExecutiveDestinationId) {
   return EXECUTIVE_DESTINATIONS.find((destination) => destination.id === id)
 }
+

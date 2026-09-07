@@ -86,47 +86,47 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
         </div>
         <div className="flex min-h-full items-center justify-center px-6 py-10">
           <div className="flex w-full max-w-2xl flex-col rounded-2xl bg-muted/60 px-10 py-14 lg:px-16 lg:py-16">
-          {view === 'signin' && (
-            <SignInView
-              email={email}
-              password={password}
-              showPassword={showPassword}
-              remember={remember}
-              error={error}
-              signingIn={signingIn}
-              onEmail={setEmail}
-              onPassword={setPassword}
-              onToggleShow={() => setShowPassword((s) => !s)}
-              onRemember={() => setRemember((r) => !r)}
-              onSubmit={handleSignIn}
-              onForgot={() => {
-                setRequestError('')
-                setRequestType('forgot-password')
-                setView('request')
-              }}
-              onRequest={() => {
-                setError('')
-                setRequestError('')
-                setRequestType('request-password')
-                setView('request')
-              }}
-              onCrewPortal={onCrewPortal}
-            />
-          )}
+            {view === 'signin' && (
+              <SignInView
+                email={email}
+                password={password}
+                showPassword={showPassword}
+                remember={remember}
+                error={error}
+                signingIn={signingIn}
+                onEmail={setEmail}
+                onPassword={setPassword}
+                onToggleShow={() => setShowPassword((s) => !s)}
+                onRemember={() => setRemember((r) => !r)}
+                onSubmit={handleSignIn}
+                onForgot={() => {
+                  setRequestError('')
+                  setRequestType('forgot-password')
+                  setView('request')
+                }}
+                onRequest={() => {
+                  setError('')
+                  setRequestError('')
+                  setRequestType('request-password')
+                  setView('request')
+                }}
+                onCrewPortal={onCrewPortal}
+              />
+            )}
 
-          {view === 'request' && (
-            <RequestView
-              email={requestEmail}
-              type={requestType}
-              error={requestError}
-              submitting={submittingRequest}
-              onEmail={setRequestEmail}
-              onSubmit={handleRequest}
-              onBack={() => setView('signin')}
-            />
-          )}
+            {view === 'request' && (
+              <RequestView
+                email={requestEmail}
+                type={requestType}
+                error={requestError}
+                submitting={submittingRequest}
+                onEmail={setRequestEmail}
+                onSubmit={handleRequest}
+                onBack={() => setView('signin')}
+              />
+            )}
 
-          {view === 'sent' && <SentView onReturn={() => setView('signin')} />}
+            {view === 'sent' && <SentView onReturn={() => setView('signin')} />}
           </div>
         </div>
       </div>
@@ -254,7 +254,6 @@ function SignInView(props: {
       <div className="mt-6 space-y-1 text-center text-xs text-muted-foreground/70">
         <p>Demo admin · admin@lumiere.com · lumiere2026</p>
         <p>Executive · executive@lumiere.com · lumiere2026</p>
-        <p>Executive (second sign-off) · executive2@lumiere.com · lumiere2026</p>
         <p>Event planner · planner@lumiere.com · lumiere2026</p>
         <p>Ground crew · crew@lumiere.com · lumiere2026</p>
         <p className="pt-2 font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
@@ -379,11 +378,10 @@ function ThemeToggle({ mode, onChange }: { mode: ThemeMode; onChange: (mode: The
           aria-label={label}
           title={label}
           onClick={() => onChange(optionMode)}
-          className={`flex size-8 items-center justify-center rounded-full transition-colors ${
-            mode === optionMode
+          className={`flex size-8 items-center justify-center rounded-full transition-colors ${mode === optionMode
               ? 'bg-foreground text-background'
               : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-          }`}
+            }`}
         >
           <Icon className="size-3.5" aria-hidden="true" />
         </button>

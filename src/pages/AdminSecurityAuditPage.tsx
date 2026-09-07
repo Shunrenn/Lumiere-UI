@@ -386,10 +386,10 @@ export function AdminSecurityAuditPage() {
 
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         {/* This div is the scroll container for BOTH axes (a lone `overflow-x-auto` computes
-            `overflow-y: auto` too per the CSS spec, which would silently create a second,
-            non-scrolling ancestor and break `position: sticky` on the thead below). Giving it
-            an explicit max-height makes that scroll behavior real and lets the header stick
-            to the top of this table specifically, independent of the page's own scroll. */}
+            `overflow-y: auto` too per the CSS spec, which would silently create a second,
+            non-scrolling ancestor and break `position: sticky` on the thead below). Giving it
+            an explicit max-height makes that scroll behavior real and lets the header stick
+            to the top of this table specifically, independent of the page's own scroll. */}
         <div className="max-h-[65vh] overflow-auto">
           <table className="w-full min-w-[820px] text-left">
             <thead className="sticky top-0 z-10">
