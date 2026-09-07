@@ -43,17 +43,6 @@ function formatNow(offsetMinutes: number) {
 
 /**
  * Builds the unified operational activity list from live portal data.
- *
- * 6 of the 10 event types are genuinely derived from real records below
- * (Event Registered, Damage Report Submitted/Escalated/Verdict Recorded,
- * Asset Restock Requested). The other 4 — Event Status Updated, New Venue
- * Booking Confirmed, Supplier Contract Updated, Audit Exception Flagged,
- * Vendor Selection Confirmed — have no underlying data model anywhere in
- * the app (no status-history, booking, contract, scheduled-audit, or
- * vendor-selection records exist), so they cannot be derived honestly.
- * They're intentionally left out of this generator rather than faked with
- * placeholder entries; wiring them in is future work once those data
- * models exist.
  */
 export function getOperationalEvents(
     events: PortalEvent[],
@@ -100,9 +89,13 @@ export function getOperationalEvents(
         })
     })
 
-    // 6. Damage Report Escalated — currently Escalated for Executive Review.
+    // 6. Damage Report Escalated — matches Round 1 or Round 2 escalation.
     damageExceptions
-        .filter((d) => d.status === 'Escalated for Executive Review')
+        .filter(
+            (d) =>
+                d.status === 'Escalated — Round 1 Review' ||
+                d.status === 'Escalated — Round 2 Review',
+        )
         .forEach((d) => {
             const { timestamp, date } = formatNow(nextOffset())
             result.push({
@@ -110,7 +103,7 @@ export function getOperationalEvents(
                 sourceId: d.id,
                 eventType: 'Damage Report Escalated',
                 title: d.assetName,
-                detail: `${d.logId} escalated to Executive review.`,
+                detail: `${d.logId} escalated to Executive review (${d.status}).`,
                 account: 'WOM',
                 initiatorRole: 'Warehouse Manager',
                 status: 'Flagged',
@@ -124,7 +117,9 @@ export function getOperationalEvents(
     damageExceptions
         .filter(
             (d) =>
-                d.status === 'Dismissed' || d.status === 'Sent for Repair' || d.status === 'Sent for Write-off',
+                d.status === 'Dismissed' ||
+                d.status === 'Sent for Repair' ||
+                d.status === 'Sent for Write-off',
         )
         .forEach((d) => {
             const { timestamp, date } = formatNow(nextOffset())
@@ -145,7 +140,12 @@ export function getOperationalEvents(
 
     // 9. Asset Restock Requested — items currently under threshold or on order.
     procurement
-        .filter((p) => p.status === 'Critical Deficit' || p.status === 'Low Stock' || p.status === 'Order Placed')
+        .filter(
+            (p) =>
+                p.status === 'Critical Deficit' ||
+                p.status === 'Low Stock' ||
+                p.status === 'Order Placed',
+        )
         .forEach((p) => {
             const { timestamp, date } = formatNow(nextOffset())
             result.push({
@@ -163,7 +163,5 @@ export function getOperationalEvents(
             })
         })
 
-    // Already in most-recent-first order by construction (nextOffset grows
-    // as items are pushed, and offset maps directly to "minutes ago").
     return result
 }
