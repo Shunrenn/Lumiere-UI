@@ -302,7 +302,6 @@ export interface DamageException {
   custodyMode?: DamageCustodyMode
   unblockMetadata?: SubRoleEmergencyUnblockMetadata
   selfValidation?: DamageSelfValidationRecord
-  selfValidationRecord?: DamageSelfValidationRecord
 }
 
 /* ---------- Inventory / Asset Registry ---------- */

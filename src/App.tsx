@@ -1,5 +1,6 @@
 import './App.css'
 import { useEffect, useState } from 'react'
+import type { Route } from '@/lib/types'
 import { NavProvider, useNav } from '@/lib/nav'
 import { PortalProvider } from '@/lib/store'
 import { AdminGrowthSummaryProvider } from '@/lib/admin-growth-summary'
@@ -149,8 +150,11 @@ function Gate() {
   // scoped to this one param, not a general URL-routing migration.
   const hasWorkforceHighlight =
     new URLSearchParams(window.location.search).has('highlight') || Boolean(window.history.state?.highlight)
+  const urlParamRoute = (new URLSearchParams(window.location.search).get('route') || window.location.pathname.replace('/', '')) as Route | null
+  const validRoutes = new Set(['dashboard', 'registry', 'replenishment', 'logs', 'damage', 'inventory', 'warehouse-logs', 'crew', 'deployments', 'dispatch', 'event-detail', 'canvas', 'canvas-workspace', 'field-ops', 'warehouse-lead', 'warehouse-member', 'manning', 'production-manager', 'inventory-officer', 'workforce', 'security-audit', 'rbac', 'overview'])
+  const targetUrlRoute = urlParamRoute && validRoutes.has(urlParamRoute) ? urlParamRoute : null
 
-  const initialRoute = isManningOfficer
+  const initialRoute = targetUrlRoute || (isManningOfficer
     ? 'manning'
     : isGroundCrew
     ? 'field-ops'
@@ -170,7 +174,7 @@ function Gate() {
                 ? 'workforce'
                 : isExecutive
                   ? 'dashboard'
-                  : 'overview'
+                  : 'overview')
 
   return (
     <NavProvider initialRoute={initialRoute}>

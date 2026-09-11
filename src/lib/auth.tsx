@@ -46,12 +46,70 @@ export interface PortalAccount {
   // sub-role accounts, whose access is bounded by their RBAC scope.
   fullWarehouseAccess?: boolean
   temporaryPassword: boolean
-  // Per-account 6-digit confirmation PIN gating high-stakes actions (e.g.
-  // creating/deleting an RBAC sub-role). Undefined until the account
-  // completes first-time PIN setup — every admin (including seed/mock
-  // accounts) goes through the same real setup flow, nothing is
-  // pre-seeded.
   confirmationPinHash?: string
+  token?: string
+}
+
+export function mapBackendUserToPortalAccount(data: {
+  userId: string
+  email: string
+  fullName: string
+  role: string
+  token?: string
+}): PortalAccount {
+  const rawRole = data.role.trim()
+
+  // 1. Structural WOM Parent Super-Account ("Warehouse Operations Manager")
+  if (rawRole === 'Warehouse Operations Manager') {
+    return {
+      id: data.userId,
+      email: data.email,
+      name: data.fullName,
+      role: 'Warehouse Manager',
+      fullWarehouseAccess: true,
+      subRole: undefined,
+      portal: 'web',
+      temporaryPassword: false,
+      token: data.token,
+    }
+  }
+
+  // 2. The 5 WOM Sub-Roles
+  const womSubRoles: Record<string, PortalKind> = {
+    'Manning Officer': 'pwa',
+    'Warehouse Manager': 'web',
+    'Production Manager': 'pwa',
+    'Inventory Officer': 'pwa',
+    'Purchasing Officer': 'web',
+  }
+
+  if (rawRole in womSubRoles) {
+    return {
+      id: data.userId,
+      email: data.email,
+      name: data.fullName,
+      role: 'Warehouse Manager',
+      subRole: rawRole as WomSubRole,
+      fullWarehouseAccess: false,
+      portal: womSubRoles[rawRole],
+      temporaryPassword: false,
+      token: data.token,
+    }
+  }
+
+  // 3. Structural (Admin, Executive, Event Planner) & PWA Field Roles
+  const pwaRoles = new Set(['Ground Crew', 'Warehouse Lead', 'Warehouse Member', 'Event Admin'])
+  const portal: PortalKind = pwaRoles.has(rawRole) ? 'pwa' : 'web'
+
+  return {
+    id: data.userId,
+    email: data.email,
+    name: data.fullName,
+    role: rawRole,
+    portal,
+    temporaryPassword: false,
+    token: data.token,
+  }
 }
 
 // WOM sub-role that has visibility rights to full crew detail. Everyone else
@@ -65,134 +123,7 @@ export const MANNING_OFFICER_SUBROLE: WomSubRole = 'Manning Officer'
 // a second, distinct Executive is currently available to sign off.
 export const EXECUTIVE_LOGIN_EMAILS = ['executive@lumiere.com', 'executive2@lumiere.com']
 
-// Hardcoded mock demo accounts — always available as fallback
-const MOCK_ACCOUNTS: Record<string, PortalAccount> = {
-  'admin@lumiere.com': {
-    id: 'mock-admin-001',
-    email: 'admin@lumiere.com',
-    name: 'Admin User',
-    role: 'Admin',
-    portal: 'web',
-    temporaryPassword: false,
-  },
-  'executive@lumiere.com': {
-    id: 'mock-executive-001',
-    email: 'executive@lumiere.com',
-    name: 'Adrienne Devereux',
-    role: 'Executive',
-    portal: 'web',
-    temporaryPassword: false,
-  },
-  // Second Executive account — required alongside the first to resolve a
-  // Damage Validation exception held for audit (two-sign-off rule).
-  'executive2@lumiere.com': {
-    id: 'mock-executive-002',
-    email: 'executive2@lumiere.com',
-    name: 'Marcus Whitfield',
-    role: 'Executive',
-    portal: 'web',
-    temporaryPassword: false,
-  },
-  // Warehouse Ops Manager — the full-access super-account. No subRole: it is
-  // not restricted to any one sub-role's scope and can see/do everything
-  // across all WOM modules and sub-role domains.
-  'warehouseops@lumiere.com': {
-    id: 'mock-warehouse-001',
-    email: 'warehouseops@lumiere.com',
-    name: 'Warehouse Ops Manager',
-    role: 'Warehouse Manager',
-    portal: 'web',
-    fullWarehouseAccess: true,
-    temporaryPassword: false,
-  },
-  // The five sub-role accounts — each restricted to exactly what its RBAC
-  // sub-role scope allows (see rbac.ts WOM_SUBROLES).
-  'manning@lumiere.com': {
-    id: 'mock-warehouse-002',
-    email: 'manning@lumiere.com',
-    name: 'Manning Officer',
-    role: 'Warehouse Manager',
-    portal: 'pwa',
-    subRole: 'Manning Officer',
-    temporaryPassword: false,
-  },
-  'warehouse@lumiere.com': {
-    id: 'mock-warehouse-003',
-    email: 'warehouse@lumiere.com',
-    name: 'Warehouse Manager',
-    role: 'Warehouse Manager',
-    portal: 'web',
-    subRole: 'Warehouse Manager',
-    temporaryPassword: false,
-  },
-  'production@lumiere.com': {
-    id: 'mock-warehouse-004',
-    email: 'production@lumiere.com',
-    name: 'Production Manager',
-    role: 'Warehouse Manager',
-    portal: 'pwa',
-    subRole: 'Production Manager',
-    temporaryPassword: false,
-  },
-  'inventory@lumiere.com': {
-    id: 'mock-warehouse-005',
-    email: 'inventory@lumiere.com',
-    name: 'Inventory Officer',
-    role: 'Warehouse Manager',
-    portal: 'pwa',
-    subRole: 'Inventory Officer',
-    temporaryPassword: false,
-  },
-  'purchasing@lumiere.com': {
-    id: 'mock-warehouse-006',
-    email: 'purchasing@lumiere.com',
-    name: 'Purchasing Officer',
-    role: 'Warehouse Manager',
-    portal: 'web',
-    subRole: 'Purchasing Officer',
-    temporaryPassword: false,
-  },
-  'planner@lumiere.com': {
-    id: 'mock-planner-001',
-    email: 'planner@lumiere.com',
-    name: 'Event Planner',
-    role: 'Event Planner',
-    portal: 'web',
-    temporaryPassword: false,
-  },
-  'crew@lumiere.com': {
-    id: 'mock-crew-001',
-    email: 'crew@lumiere.com',
-    name: 'Ground Crew',
-    role: 'Ground Crew',
-    portal: 'pwa',
-    temporaryPassword: false,
-  },
-  'eventadmin@lumiere.com': {
-    id: 'mock-eventadmin-001',
-    email: 'eventadmin@lumiere.com',
-    name: 'Elena Rostova (Event Admin)',
-    role: 'Event Admin',
-    portal: 'pwa',
-    temporaryPassword: false,
-  },
-  'lead@lumiere.com': {
-    id: 'mock-lead-001',
-    email: 'lead@lumiere.com',
-    name: 'Warehouse Lead',
-    role: 'Warehouse Lead',
-    portal: 'pwa',
-    temporaryPassword: false,
-  },
-  'member@lumiere.com': {
-    id: 'mock-member-001',
-    email: 'member@lumiere.com',
-    name: 'Warehouse Member',
-    role: 'Warehouse Member',
-    portal: 'pwa',
-    temporaryPassword: false,
-  },
-}
+
 
 interface AuthContextValue {
   isAuthenticated: boolean
@@ -265,47 +196,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string, portal?: PortalKind): Promise<{ ok: boolean; reason?: 'wrong-portal' | 'invalid' }> => {
     const normalizedEmail = email.trim().toLowerCase()
-    
+
     try {
-      // First, check if credentials match a hardcoded mock account (password: lumiere2026)
-      const mockAccount = MOCK_ACCOUNTS[normalizedEmail]
-      if (mockAccount && password === 'lumiere2026') {
-        if (portal && mockAccount.portal !== portal) return { ok: false, reason: 'wrong-portal' }
-        setCurrentUser(mockAccount)
-        localStorage.setItem('_lumiere_auth_user', JSON.stringify(mockAccount))
-        localStorage.setItem('_lumiere_auth_portal', mockAccount.portal)
+      const res = await fetch('http://localhost:8080/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalizedEmail, password }),
+      })
+
+      if (res.ok) {
+        const data = (await res.json()) as { token: string; fullName: string; email: string; userId: string; role: string }
+        const account = mapBackendUserToPortalAccount(data)
+
+        if (portal && account.portal !== portal) {
+          return { ok: false, reason: 'wrong-portal' }
+        }
+
+        setCurrentUser(account)
+        localStorage.setItem('_lumiere_auth_user', JSON.stringify(account))
+        localStorage.setItem('_lumiere_auth_portal', account.portal)
+        if (data.token) {
+          localStorage.setItem('_lumiere_auth_token', data.token)
+        }
         return { ok: true }
       }
 
-      // Fall back to querying Supabase database
-      const { data, error } = await supabase
-        .from('portal_accounts')
-        .select('id, email, name, role, temporary_password')
-        .eq('email', normalizedEmail)
-        .eq('password_hash', password)
-        .single()
-
-      if (error || !data) {
-        return { ok: false, reason: 'invalid' }
-      }
-
-      const inferredPortal: PortalKind = PWA_ROLES.has(data.role) ? 'pwa' : 'web'
-      if (portal && inferredPortal !== portal) return { ok: false, reason: 'wrong-portal' }
-      const user: PortalAccount = {
-        id: data.id,
-        email: data.email,
-        name: data.name,
-        role: data.role,
-        temporaryPassword: data.temporary_password,
-        portal: inferredPortal,
-      }
-
-      setCurrentUser(user)
-      localStorage.setItem('_lumiere_auth_user', JSON.stringify(user))
-      localStorage.setItem('_lumiere_auth_portal', user.portal)
-      return { ok: true }
+      return { ok: false, reason: 'invalid' }
     } catch (err) {
-      console.error('[v0] Login error:', err)
+      console.error('[Auth] Login error:', err)
       return { ok: false, reason: 'invalid' }
     }
   }, [])
@@ -353,6 +271,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentUser(null)
     localStorage.removeItem('_lumiere_auth_user')
     localStorage.removeItem('_lumiere_auth_portal')
+    localStorage.removeItem('_lumiere_auth_token')
   }, [])
 
   // Verifies the current account's login password without changing it.
@@ -364,19 +283,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (password: string) => {
       if (!currentUser) return false
       try {
-        const mockAccount = MOCK_ACCOUNTS[currentUser.email]
-        if (mockAccount) {
-          return password === 'lumiere2026'
-        }
-        const { data, error } = await supabase
-          .from('portal_accounts')
-          .select('id')
-          .eq('id', currentUser.id)
-          .eq('password_hash', password)
-          .single()
-        return !error && !!data
+        const res = await fetch('http://localhost:8080/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: currentUser.email, password }),
+        })
+        return res.ok
       } catch (err) {
-        console.error('[v0] Password verify error:', err)
+        console.error('[Auth] Password verify error:', err)
         return false
       }
     },

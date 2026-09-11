@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, CheckCircle2, XCircle, Clock3, Scale, MoreVertical, Wrench, Ban, UserCheck2 } from 'lucide-react'
+import { Search, CheckCircle2, XCircle, Clock3, Scale, MoreVertical, Wrench, Ban, UserCheck2, AlertTriangle } from 'lucide-react'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { DamageVerdictModal } from '@/components/DamageVerdictModal'
 import { CompactStatStrip } from '@/components/CompactStatStrip'
@@ -34,7 +34,7 @@ type Filter = 'All' | 'Pending' | 'Held for Audit' | 'Second Sign-off' | 'Valida
 const filters: Filter[] = ['All', 'Pending', 'Held for Audit', 'Second Sign-off', 'Validated', 'Dismissed']
 
 export function DamageValidationPage() {
-  const { damageExceptions: items, resolveDamage, staff, subRolesByParent, setSubRolesByParent } = usePortal()
+  const { damageExceptions: items, isBackendConnected, resolveDamage, staff, subRolesByParent, setSubRolesByParent } = usePortal()
   const { isExecutive, isAdmin, isWarehouse, adminRole, adminEmail, adminName, subRole: userSubRole } = useAuth()
   const { intent, clearIntent, navigate } = useNav()
   const [query, setQuery] = useState('')
@@ -163,6 +163,22 @@ export function DamageValidationPage() {
 
   return (
     <ExecutiveShell activeId="damage" onSelect={destination} stickyHeader={stickyHeader}>
+      {!isBackendConnected && (
+        <div
+          role="alert"
+          className="mt-4 flex items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-5 py-4 text-amber-800 dark:text-amber-200 shadow-sm"
+        >
+          <AlertTriangle className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.12em]">
+              ⚠ Offline Mode — Backend Unreachable
+            </p>
+            <p className="mt-0.5 text-xs opacity-90">
+              Showing local seed data (Server connection lost at http://localhost:8080). Changes will not persist to backend REST API.
+            </p>
+          </div>
+        </div>
+      )}
       {/* Filter tabs */}
       <div className="mt-6 flex flex-wrap items-center gap-1.5">
         {filters.map((f) => {

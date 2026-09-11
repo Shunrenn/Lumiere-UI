@@ -172,6 +172,7 @@ export function AdminSystemDashboardPage() {
           if (id === 'workforce') navigate('workforce')
           else if (id === 'security-audit') navigate('security-audit')
           else if (id === 'rbac') navigate('rbac')
+          else if (id === 'damage') navigate('damage')
           else setActiveId(id)
         }
       }}

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Route } from '@/lib/types'
 
 // A cross-page instruction: navigating from a dashboard "Open" button can
@@ -32,6 +32,24 @@ export function NavProvider({
 }) {
   const [route, setRoute] = useState<Route>(initialRoute)
   const [intent, setIntent] = useState<NavIntent | null>(null)
+
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const param = new URLSearchParams(window.location.search).get('route')
+      const path = window.location.pathname.replace('/', '')
+      const r = (param || path) as Route
+      const valid = ['dashboard', 'registry', 'replenishment', 'logs', 'damage', 'inventory', 'warehouse-logs', 'crew', 'deployments', 'dispatch', 'event-detail', 'canvas', 'canvas-workspace', 'field-ops', 'warehouse-lead', 'warehouse-member', 'manning', 'production-manager', 'inventory-officer', 'workforce', 'security-audit', 'rbac', 'overview']
+      if (r && valid.includes(r)) {
+        setRoute(r)
+      }
+    }
+    window.addEventListener('popstate', handleLocationChange)
+    window.addEventListener('nav-change', handleLocationChange)
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange)
+      window.removeEventListener('nav-change', handleLocationChange)
+    }
+  }, [])
 
   const navigate = useCallback((next: Route, nextIntent: NavIntent | null = null) => {
     setIntent(nextIntent)

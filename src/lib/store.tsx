@@ -1,4 +1,5 @@
 import { logAuditEvent } from '@/lib/audit-logger'
+import * as damageApi from '@/lib/damageApi'
 import {
   createContext,
   useCallback,
@@ -1454,6 +1455,7 @@ interface PortalContextValue {
   procurement: ProcurementItem[]
   vendors: Vendor[]
   damageExceptions: DamageException[]
+  isBackendConnected: boolean
   inventory: InventoryItem[]
   subRolesByParent: Record<string, SubRole[]>
   setSubRolesByParent: Dispatch<SetStateAction<Record<string, SubRole[]>>>
@@ -1560,7 +1562,34 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const [procurement, setProcurement] = useState<ProcurementItem[]>(seedProcurement)
   const [vendors] = useState<Vendor[]>(seedVendors)
   const [damageExceptions, setDamageExceptions] = useState<DamageException[]>(seedDamage)
+  const [isBackendConnected, setIsBackendConnected] = useState<boolean>(true)
   const [inventory, setInventory] = useState<InventoryItem[]>(seedInventory)
+
+  // Hydrate damage reports across active events from the REST API endpoint
+  useEffect(() => {
+    let active = true
+    const loadReports = async () => {
+      try {
+        const { reports, connected } = await damageApi.fetchDamageReportsAllEvents(events)
+        if (!active) return
+        setIsBackendConnected(connected)
+        if (connected && reports.length > 0) {
+          setDamageExceptions(reports)
+        }
+      } catch (err) {
+        console.warn('[v0] Failed to load damage reports from backend:', err)
+        if (active) setIsBackendConnected(false)
+      }
+    }
+
+    loadReports()
+    const interval = setInterval(loadReports, 3000)
+
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [events])
 
   // Live, editable copy of each parent role's sub-roles (Roles & Sub-Roles
   // screen). Lifted here — rather than kept local to AdminRolesPage — so the
@@ -2151,11 +2180,23 @@ export function PortalProvider({ children }: { children: ReactNode }) {
             custodyMode: mode,
             unblockMetadata: unblockMetadata ?? i.unblockMetadata,
             selfValidation: selfValidation ?? i.selfValidation,
-            selfValidationRecord: selfValidation ?? i.selfValidationRecord,
             notes: note ? `${i.notes}\n\nVerdict note: ${note}` : i.notes,
           }
         }),
       )
+
+      // Async Backend Integration for Damage Sign-Off / Emergency Unblock
+      if (unblockMetadata) {
+        damageApi.adminUnblock(id, { verdict, note, unblockMetadata, selfValidation }).catch((err) => {
+          console.warn('[store] Admin unblock REST API call failed:', err)
+          setIsBackendConnected(false)
+        })
+      } else {
+        damageApi.recordSignOff(id, { verdict, note, initiatorRole, staffEmail, staffName, selfValidation }).catch((err) => {
+          console.warn('[store] Sign-off REST API call failed:', err)
+          setIsBackendConnected(false)
+        })
+      }
 
       // Side Effects on Asset Registry
       if (targetItem) {
@@ -2219,6 +2260,11 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
   const completeMaintenance = useCallback(
     (assetId: string, initiatorRole = 'Warehouse Ops') => {
+      damageApi.completeMaintenanceBackend(assetId).catch((err) => {
+        console.warn('[store] Complete maintenance REST API call failed:', err)
+        setIsBackendConnected(false)
+      })
+
       setInventory((prev) =>
         prev.map((item) => {
           if (item.id !== assetId && item.assetId !== assetId) return item
@@ -2267,6 +2313,11 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      damageApi.checkSettlementBlockedBackend(eventId).catch((err) => {
+        console.warn('[store] Settlement check REST API call failed:', err)
+        setIsBackendConnected(false)
+      })
+
       setEvents((prev) =>
         prev.map((e) => (e.id === target.id ? { ...e, status: 'Settled' } : e)),
       )
@@ -2314,6 +2365,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       procurement,
       vendors,
       damageExceptions,
+      isBackendConnected,
       inventory,
       subRolesByParent,
       setSubRolesByParent,
@@ -2346,6 +2398,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       procurement,
       vendors,
       damageExceptions,
+      isBackendConnected,
       inventory,
       subRolesByParent,
       setSubRolesByParent,

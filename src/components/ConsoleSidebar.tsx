@@ -13,6 +13,7 @@ import {
   PenTool,
   Sun,
   Moon,
+  AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useNav } from '@/lib/nav'
@@ -35,6 +36,7 @@ type NavItem = { label: string; icon: typeof LayoutGrid; route: Route }
 const warehouseNavItems: NavItem[] = [
   { label: 'Overview', icon: LayoutGrid, route: 'overview' },
   { label: 'Inventory Stock', icon: Boxes, route: 'inventory' },
+  { label: 'Damage Validation', icon: AlertTriangle, route: 'damage' },
   { label: 'Replenishment', icon: PackageSearch, route: 'replenishment' },
   { label: 'Warehouse Logs', icon: Warehouse, route: 'warehouse-logs' },
   { label: 'Crew Roster', icon: Users, route: 'crew' },
