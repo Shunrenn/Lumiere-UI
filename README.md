@@ -12,6 +12,15 @@ The API lives in [Shunrenn/Lumiere](https://github.com/Shunrenn/Lumiere). This r
 
 Create Event stays in React memory (`e-${Date.now()}`). Warehouse catalog and dispatch stores are not the EF tables.
 
+## Tools
+
+Login still posts to localhost until the SPA reads `VITE_API_URL`. Agents: [AGENTS.md](AGENTS.md). Vercel how-to: [docs/howto-deploy-vercel.md](docs/howto-deploy-vercel.md).
+
+- `pnpm` install, dev, build
+- `vercel` env, deploy, logs. Only `VITE_API_URL` on Vercel. Never JWT or `BackgroundRemoval__ApiKey`.
+- `gh` pull requests
+- Vercel MCP `plugin-vercel-vercel` when authenticated. Do not print secrets.
+
 ## Docs
 
 Index: [docs/index.md](docs/index.md). Design tokens: [docs/dsd-lumiere.md](docs/dsd-lumiere.md). Catalog cutouts are an API service, not the modal chroma-key.
