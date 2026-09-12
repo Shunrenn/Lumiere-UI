@@ -5,16 +5,18 @@ You will host the Vite SPA on Vercel so browsers load it over HTTPS. This is the
 ## Prerequisites
 
 - This repository builds with `pnpm build`
+- Vercel CLI (`vercel login`, then `vercel link` in this repo) or the dashboard
 - A Railway API origin you can paste as `VITE_API_URL` (no trailing slash)
 - The API CORS list includes this Vercel hostname
 
 ## Steps
 
-1. Create a Vercel project with this repository as the root (the folder that contains `package.json`).
+1. Create a Vercel project with this repository as the root (the folder that contains `package.json`). CLI: `vercel link`.
 2. Build command `pnpm build`. Output `dist`.
-3. Set env `VITE_API_URL` to `https://<your-railway-host>`. Rebuild after the env change. Vite inlines it at build time.
-4. Do not set JWT secrets on Vercel. The SPA never signs tokens.
-5. After the SPA reads `VITE_API_URL` in code (it does not yet; `src/lib/auth.tsx` still hardcodes localhost), deploy and log in from the Vercel origin.
+3. Set env `VITE_API_URL` to `https://<your-railway-host>` (`vercel env add VITE_API_URL` or the dashboard). Rebuild after the env change. Vite inlines it at build time. Confirm with `vercel env ls`. Do not print values into docs.
+4. Do not set JWT secrets or `BackgroundRemoval__ApiKey` on Vercel. The SPA never signs tokens.
+5. After the SPA reads `VITE_API_URL` in code (it does not yet; `src/lib/auth.tsx` still hardcodes localhost), `vercel --prod` and log in from the Vercel origin.
+6. Logs: `vercel logs`. Authenticated Vercel MCP may inspect deployments the same way.
 
 ## Verification
 

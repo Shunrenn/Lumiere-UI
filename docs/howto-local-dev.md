@@ -4,8 +4,9 @@ You will have Vite on port 5173. Login still posts to `http://localhost:8080/api
 
 ## Prerequisites
 
-- pnpm
+- `pnpm`
 - A running Lumiere API on port 8080 (clone Shunrenn/Lumiere, `dotnet run --project Lumiere.API/Lumiere.API.csproj`)
+- Production env (`VITE_API_URL`) is set with Vercel CLI or the dashboard, not in this local file. Never a JWT secret in this SPA.
 
 ## Steps
 
