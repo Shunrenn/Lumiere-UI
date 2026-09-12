@@ -4,7 +4,7 @@
 **Maintained by:** Lumiere team
 **Last updated:** 2026-09-12
 
-SPA docs for this repository. Each file is usable alone. The API lives in Shunrenn/Lumiere.
+SPA docs for this repository. Each file is usable alone. The API lives in Shunrenn/Lumiere. Catalog cutouts are an API model (PRD-F14). This SPA does not hold the vendor key.
 
 ## 1. Artifact inventory
 
@@ -28,4 +28,4 @@ SPA docs for this repository. Each file is usable alone. The API lives in Shunre
 
 ## 2. Health check
 
-Login from this SPA still posts to `http://localhost:8080`. Create Event stays in React memory. Canvas does not call `/api/reservations`.
+Login from this SPA still posts to `http://localhost:8080`. Create Event stays in React memory. Canvas does not call `/api/reservations`. Catalog cutout in the modal is a chroma-key, not the API model.

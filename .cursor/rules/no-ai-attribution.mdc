@@ -1,0 +1,19 @@
+---
+description: Ban AI attribution tags on commits, PRs, and file headers. Always on.
+alwaysApply: true
+---
+
+# No AI attribution tags
+
+Do not add AI product attribution to commits, pull request bodies, or file headers.
+
+Forbidden:
+
+- `Co-authored-by: Cursor` and any Cursor co-author trailer
+- `Made-with: Cursor` and `cursor.com/open` footers
+- Generated-with / Made-with badges for Claude, Codex, Antigravity, or Copilot
+- Robot generator footers
+
+This does not ban naming Cursor as the SAD materialization platform, or CSS `cursor` properties.
+
+Commits and PRs in this repository must read as ordinary human git history.

@@ -44,3 +44,7 @@ Warehouse tables are dense. Planner is sparse and large. Do not make Ground Crew
 ## 6. Out of scope this Draft
 
 Component inventory of every modal. Screenshot goldens. Impeccable gate.
+
+## 7. Catalog photos
+
+Catalog cards show `PhotoUrl` from the API. Cutouts are produced by the API `IBackgroundRemovalService` (PRD-F14). The modal chroma-key in `AddAssetModal.tsx` is not the model and must not be shipped as one. Do not put a vision vendor key in this SPA.

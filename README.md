@@ -14,4 +14,4 @@ Create Event stays in React memory (`e-${Date.now()}`). Warehouse catalog and di
 
 ## Docs
 
-Index: [docs/index.md](docs/index.md). Design tokens: [docs/dsd-lumiere.md](docs/dsd-lumiere.md).
+Index: [docs/index.md](docs/index.md). Design tokens: [docs/dsd-lumiere.md](docs/dsd-lumiere.md). Catalog cutouts are an API service, not the modal chroma-key.
