@@ -1,0 +1,24 @@
+#!/bin/sh
+# Reject AI attribution trailers in commit messages.
+# Install with: git config core.hooksPath .githooks
+# Do not add Co-authored-by / Made-with / Generated-with tags for
+# Cursor, Claude, Codex, Antigravity, or Copilot.
+
+msgfile="$1"
+if [ -z "$msgfile" ] || [ ! -f "$msgfile" ]; then
+  exit 0
+fi
+
+if grep -Ei \
+  -e '^[[:space:]]*Co-authored-by:[[:space:]].*(Cursor|Claude|Codex|Antigravity|Copilot)' \
+  -e '^[[:space:]]*Made-with:[[:space:]].*(Cursor|Claude|Codex|Antigravity|Copilot)' \
+  -e 'cursor\.com/open' \
+  -e 'Generated with (Claude|Codex|Cursor|Antigravity|Copilot)' \
+  -e 'Made with (Claude|Codex|Cursor|Antigravity|Copilot)' \
+  "$msgfile" >/dev/null 2>&1
+then
+  echo "commit-msg: refuse AI attribution trailers (Cursor, Claude, Codex, Antigravity, Copilot)." >&2
+  exit 1
+fi
+
+exit 0
