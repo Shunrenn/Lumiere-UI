@@ -9,6 +9,7 @@ import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import type { DamageException, DamageVerdict } from '@/lib/types'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
+import { API_BASE_URL } from '@/lib/apiConfig'
 
 const statusStyles: Record<DamageVerdict, string> = {
   'Pending Verdict': 'border border-primary/40 bg-primary/10 text-primary',
@@ -174,7 +175,7 @@ export function DamageValidationPage() {
               ⚠ Offline Mode — Backend Unreachable
             </p>
             <p className="mt-0.5 text-xs opacity-90">
-              Showing local seed data (Server connection lost at http://localhost:8080). Changes will not persist to backend REST API.
+              Showing local seed data (Server connection lost at {API_BASE_URL || 'backend REST API'}). Changes will not persist to backend REST API.
             </p>
           </div>
         </div>

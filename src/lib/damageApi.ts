@@ -4,8 +4,9 @@ import type {
   SubRoleEmergencyUnblockMetadata,
   DamageVerdict,
 } from './types'
+import { API_BASE_URL } from './apiConfig'
 
-const BASE_URL = 'http://localhost:8080/api/damage-reports'
+const BASE_URL = `${API_BASE_URL}/api/damage-reports`
 
 function getHeaders(): HeadersInit {
   const token = typeof window !== 'undefined' ? localStorage.getItem('_lumiere_auth_token') : null

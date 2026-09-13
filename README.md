@@ -1,6 +1,6 @@
 # Lumiere UI
 
-Vite + React SPA for Lumiere. Paper-and-ink warehouse and event shells. Login posts to `http://localhost:8080/api/auth/login`. That origin is hardcoded in `src/lib/auth.tsx` and `src/lib/damageApi.ts`. There is no `VITE_API_URL` yet.
+Vite + React SPA for Lumiere. Paper-and-ink warehouse and event shells. API requests read `import.meta.env.VITE_API_URL` via `src/lib/apiConfig.ts` (defaulting to `http://localhost:8080` in local development mode).
 
 The API lives in [Shunrenn/Lumiere](https://github.com/Shunrenn/Lumiere). This repo's docs cover the design system, Vercel deploy, canvas, and ground crew. You can read them without cloning the API. Field pairs for Create Event and damage live in the API repo file `docs/contracts-fe-be.md`.
 
@@ -14,7 +14,7 @@ Create Event stays in React memory (`e-${Date.now()}`). Warehouse catalog and di
 
 ## Tools
 
-Login still posts to localhost until the SPA reads `VITE_API_URL`. Agents: [AGENTS.md](AGENTS.md). Vercel how-to: [docs/howto-deploy-vercel.md](docs/howto-deploy-vercel.md).
+API requests use `import.meta.env.VITE_API_URL` via `src/lib/apiConfig.ts`. Agents: [AGENTS.md](AGENTS.md). Vercel how-to: [docs/howto-deploy-vercel.md](docs/howto-deploy-vercel.md).
 
 - `pnpm` install, dev, build
 - `vercel` env, deploy, logs. Only `VITE_API_URL` on Vercel. Never JWT or `BackgroundRemoval__ApiKey`.

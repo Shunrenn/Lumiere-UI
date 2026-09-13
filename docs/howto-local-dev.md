@@ -1,6 +1,6 @@
 # How to run the SPA locally
 
-You will have Vite on port 5173. Login still posts to `http://localhost:8080/api/auth/login` until the code reads `VITE_API_URL`.
+You will have Vite on port 5173. In local development, API requests default to `http://localhost:8080` via `src/lib/apiConfig.ts` unless `VITE_API_URL` is set.
 
 ## Prerequisites
 

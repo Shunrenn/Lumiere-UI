@@ -16,7 +16,7 @@ Let Event Planners design peg layouts and lock real assets so two events cannot 
 - `DesignCanvasHubPage` is a recents/grid hub. `CanvasWorkspacePage` is a Konva infinite artboard with a logistics sidebar.
 - Allocations are local `AllocatedAsset[]`. Some page JSON sits in `localStorage` keys like `lumiere-canvas-assets-${card.id}`.
 - `ReservationController` exposes `POST /api/reservations/bulk` and `validate-canvas-state`. `ReservationService.ReserveAssetsBulkAsync` checks Active event, temporal overlap with Local 1/1 or National 3/5 day buffers, sets `AssetState = Committed`, broadcasts Supabase Realtime.
-- Canvas does not call those endpoints. Stock-zero on the board is fixture data.
+- Canvas does not call those endpoints yet, but Canvas → Reservation API wiring is now in-scope (confirmed as current-sprint priority, not deferred to a future phase). Stock-zero on the board is fixture data.
 
 ## Wire
 
@@ -24,16 +24,16 @@ Let Event Planners design peg layouts and lock real assets so two events cannot 
 |----|----|------|-----|
 | local `AllocatedAsset[]`, `localStorage` `lumiere-canvas-assets-${card.id}` | `BulkReservationRequest` (`eventId` Guid, `assetIds` Guid[], `lockStart`/`lockEnd` DateTimeOffset) | no | no |
 | planner ids `pe-*` | event Guid | no | no |
-| none in SPA | grant bypass `Supervisor` / `SystemAdmin` | n/a | those names are not seeded. Only the creator can grant. |
+| none in SPA | grant bypass `Supervisor` / `SystemAdmin` | n/a | unseeded bypass roles to be removed; replace with seeded roles (`Admin`, `Event Planner`). |
 
 Event create stores `TransitBufferDays` Local 1, National 3. Reservation overlap pads Local 1/1, National 3/5.
 
 ## Production SHALL
 
-1. Committing a design SHALL call bulk reserve against the API inside a transaction.
+1. Committing a design SHALL call bulk reserve (`POST /api/reservations/bulk`) against the API inside a transaction. This API wiring is in-scope now as a current-sprint priority, not deferred.
 2. A conflicting reservation SHALL block the commit and surface the overlapping event.
 3. Releasing a reservation SHALL return the asset to Available only if it is still Committed.
-4. Canvas access (`RequireCanvasAccess` / `event_viewers`) SHALL use seeded role names (`Admin`, `Event Planner`), not unseeded `SystemAdmin` bypass-only strings.
+4. Canvas access (`RequireCanvasAccess` / `event_viewers`) is a confirmed fix: unseeded bypass role strings (`Supervisor`, `SystemAdmin`) SHALL be removed from the codebase and replaced with only the seeded roles (`Admin`, `Event Planner`).
 
 ## Scenarios
 

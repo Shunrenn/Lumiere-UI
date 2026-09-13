@@ -13,7 +13,7 @@ Observed from the SPA. Not a new brand invention. No impeccable init this pass. 
 
 Paper and ink. Warm cream field `#f5f0e8`, walnut primary `#9b6b3f`, serif headings (Georgia), sans body (Arial). Cards class `paper-card`. Eyebrow labels in small caps. Destructive `#a84d3b`.
 
-Name in UI copy: Lumière (accent) on some screens, Lumiere in code.
+Confirmed naming standard: Lumière (with accent) for UI-facing copy and branding, Lumiere (no accent) for code, filenames, and identifiers. This split is intentional.
 
 ## 2. Color and type
 
@@ -47,4 +47,4 @@ Component inventory of every modal. Screenshot goldens. Impeccable gate.
 
 ## 7. Catalog photos
 
-Catalog cards show `PhotoUrl` from the API. Cutouts are produced by the API `IBackgroundRemovalService` (PRD-F14). The modal chroma-key in `AddAssetModal.tsx` is not the model and must not be shipped as one. Do not put a vision vendor key in this SPA.
+Catalog cards show `PhotoUrl` from the API. Cutouts are produced by the API `IBackgroundRemovalService` (PRD-F14). The modal chroma-key in `AddAssetModal.tsx` is not the model and must not be shipped as one; it is a known limitation/blocker that MUST be called out in any manuscript, defense material, or production readiness claim (not just an implementation note). Do not put a vision vendor key in this SPA.

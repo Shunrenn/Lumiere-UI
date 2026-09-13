@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { supabase } from './supabase'
 import { womModuleAccessLevel } from './rbac'
+import { API_BASE_URL } from './apiConfig'
 
 // The exactly-5 Warehouse Operations Manager (WOM) sub-roles. Typing subRole
 // as this union means an invalid value (e.g. 'Logistics Coordinator') is a
@@ -198,7 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const normalizedEmail = email.trim().toLowerCase()
 
     try {
-      const res = await fetch('http://localhost:8080/api/auth/login', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: normalizedEmail, password }),
@@ -283,7 +284,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (password: string) => {
       if (!currentUser) return false
       try {
-        const res = await fetch('http://localhost:8080/api/auth/login', {
+        const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: currentUser.email, password }),

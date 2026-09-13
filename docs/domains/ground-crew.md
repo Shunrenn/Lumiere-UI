@@ -31,7 +31,7 @@ On-site staff confirm outbound and return, run tasks, and file damage on a phone
 
 1. Field-ops SHALL load the same event GUIDs as Warehouse Home (API list).
 2. Damage SHALL hit `/api/damage-reports`. Confirm outbound/return SHALL hit dispatch or a dedicated movement command on the API.
-3. Online path (PRD-F11) SHALL ship before an installable PWA (PRD-F12).
+3. Online path (PRD-F11) SHALL ship before an installable PWA (PRD-F12). This sequencing is locked-in and not open for debate; there shall be no parallel work on the PWA replay queue until the online path is fully wired.
 4. A production PWA SHALL include a Web App Manifest, a service worker, and a replay queue that is idempotent on the API.
 
 ## Scenarios

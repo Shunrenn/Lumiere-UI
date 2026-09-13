@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { API_BASE_URL } from './apiConfig'
 
 export type DeploymentStatus = 'In Progress' | 'Awaiting Setup' | 'Completed'
 
@@ -32,7 +33,7 @@ function publish() {
 export function useDeployments() {
   if (!hydrated && typeof window !== 'undefined') {
     hydrated = true
-    fetch('/api/deployments').then((response) => response.ok ? response.json() : []).then((remote: DeploymentRecord[]) => {
+    fetch(`${API_BASE_URL}/api/deployments`).then((response) => response.ok ? response.json() : []).then((remote: DeploymentRecord[]) => {
       if (remote.length > 0) {
         records = remote
         publish()
@@ -54,7 +55,7 @@ export function addDeployment(record: DeploymentRecord) {
   records = [record, ...records.filter((existing) => existing.deploymentId !== record.deploymentId)]
   publish()
   if (typeof window !== 'undefined') {
-    fetch('/api/deployments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record) }).catch(() => undefined)
+    fetch(`${API_BASE_URL}/api/deployments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record) }).catch(() => undefined)
   }
 }
 
