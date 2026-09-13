@@ -1569,6 +1569,9 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true
     const loadReports = async () => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('_lumiere_auth_token') : null
+      if (!token) return
+
       try {
         const { reports, connected } = await damageApi.fetchDamageReportsAllEvents(events)
         if (!active) return
