@@ -5,7 +5,7 @@ import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
-import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
+import { getExecutiveRoute, type ExecutiveDestinationId } from '@/lib/executive-destinations'
 
 const roleStyles: Record<string, string> = {
   Admin: 'bg-emerald-100 text-emerald-700',
@@ -73,7 +73,7 @@ export function ActivityLogsPage() {
     URL.revokeObjectURL(url)
   }
 
-  const destination = (id: ExecutiveDestinationId) => navigate(id)
+  const destination = (id: ExecutiveDestinationId) => navigate(getExecutiveRoute(id))
 
   const stickyHeader = (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">

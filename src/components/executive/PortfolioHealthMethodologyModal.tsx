@@ -16,18 +16,18 @@ export function PortfolioHealthMethodologyModal({ open, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/60 p-3 backdrop-blur-sm sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label="Portfolio Health Methodology"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-card shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-card shadow-2xl sm:max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-border px-6 py-4">
+        <div className="flex items-start justify-between border-b border-border px-4 py-4 sm:px-6">
           <div className="flex items-start gap-3">
             <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
               <Activity className="size-4.5" aria-hidden="true" />
@@ -52,7 +52,7 @@ export function PortfolioHealthMethodologyModal({ open, onClose }: Props) {
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 text-sm leading-relaxed text-muted-foreground">
+        <div className="flex-1 overflow-y-auto px-4 py-4 text-sm leading-relaxed text-muted-foreground sm:px-6 sm:py-5">
           <p>
             The figure shown on the dashboard is a{' '}
             <span className="font-semibold text-foreground">blended, 30-day operational readiness index</span>{' '}
@@ -112,11 +112,11 @@ export function PortfolioHealthMethodologyModal({ open, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end border-t border-border px-6 py-3.5">
+        <div className="flex justify-end border-t border-border px-4 py-3.5 sm:px-6">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-border px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-card-foreground transition hover:bg-muted"
+            className="min-h-11 rounded-md border border-border px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-card-foreground transition hover:bg-muted sm:min-h-0"
           >
             Dismiss
           </button>

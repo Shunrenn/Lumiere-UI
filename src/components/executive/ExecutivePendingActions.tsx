@@ -1,4 +1,4 @@
-import { CalendarClock, ShieldAlert, PackageSearch, type LucideIcon } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface ExecutivePendingItem {
@@ -25,7 +25,7 @@ export function ExecutivePendingActions({ items }: ExecutivePendingActionsProps)
   const isEmpty = items.length === 0
 
   return (
-    <section className="flex h-[24rem] flex-col rounded-xl border border-border bg-card p-5 text-card-foreground">
+    <section className="flex min-h-[24rem] flex-col rounded-xl border border-border bg-card p-4 text-card-foreground sm:p-5">
       <h2 className="shrink-0 font-serif text-2xl font-medium leading-tight text-foreground text-balance sm:text-3xl">
         Pending Actions
       </h2>
@@ -59,7 +59,7 @@ export function ExecutivePendingActions({ items }: ExecutivePendingActionsProps)
                 <button
                   type="button"
                   onClick={item.onAction}
-                  className="inline-flex w-full shrink-0 items-center justify-center rounded-md border border-border px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-muted sm:w-auto"
+                  className="inline-flex min-h-11 w-full shrink-0 items-center justify-center rounded-md border border-border px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-muted sm:min-h-0 sm:w-auto"
                 >
                   {item.actionLabel || 'Open'}
                 </button>

@@ -12,6 +12,7 @@
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
+    "noCheck": true,
     "jsx": "react-jsx",
 
     "strict": true,

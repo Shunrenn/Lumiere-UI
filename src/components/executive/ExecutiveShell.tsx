@@ -20,20 +20,22 @@ interface ExecutiveShellProps {
 // beneath it.
 export function ExecutiveShell({ activeId, onSelect, stickyHeader, children }: ExecutiveShellProps) {
   return (
-    <div className="fixed inset-0 flex bg-background">
-      <ExecutiveRail activeId={activeId} onSelect={onSelect} />
+    <div className="fixed inset-0 flex flex-col bg-background md:flex-row">
+      <div className="order-last md:order-first">
+        <ExecutiveRail activeId={activeId} onSelect={onSelect} />
+      </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
         <ExecutiveTopBar />
 
         {/* Only this region scrolls. */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
           {stickyHeader && (
-            <div className="sticky top-0 z-20 border-b border-border bg-background/95 px-5 py-6 backdrop-blur sm:px-8">
+            <div className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-4 backdrop-blur sm:px-6 sm:py-6 lg:px-8">
               {stickyHeader}
             </div>
           )}
-          <div className="px-5 py-6 sm:px-8">{children}</div>
+          <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">{children}</div>
         </div>
       </div>
     </div>

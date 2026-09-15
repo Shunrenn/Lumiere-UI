@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { User, Lock, Eye, EyeOff, HardHat, Sun, Moon, Monitor } from 'lucide-react'
+import { User, Lock, Eye, EyeOff, Sun, Moon, Monitor } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useThemeMode, type ThemeMode } from '@/lib/theme'
@@ -7,7 +7,7 @@ import { useThemeMode, type ThemeMode } from '@/lib/theme'
 type View = 'signin' | 'request' | 'sent'
 type RequestType = 'forgot-password' | 'request-password'
 
-export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
+export function LoginPage() {
   const { login } = useAuth()
   const { mode: themeMode, setMode: setThemeMode } = useThemeMode()
   const [view, setView] = useState<View>('signin')
@@ -62,7 +62,7 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background">
+    <div className="flex min-h-screen w-screen overflow-hidden bg-background">
       {/* Left brand panel */}
       <div className="relative hidden w-[32%] shrink-0 lg:block">
         <img
@@ -80,12 +80,12 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
           account list stay reachable on short viewports. min-h-full on the
           inner wrapper keeps the card vertically centered when it fits, while
           still allowing the top to scroll into view when it doesn't. */}
-      <div className="relative flex-1 overflow-y-auto">
-        <div className="absolute right-6 top-6 z-10">
+      <div className="relative min-h-screen flex-1 overflow-y-auto">
+        <div className="absolute right-4 top-4 z-10 sm:right-6 sm:top-6">
           <ThemeToggle mode={themeMode} onChange={setThemeMode} />
         </div>
-        <div className="flex min-h-full items-center justify-center px-6 py-10">
-          <div className="flex w-full max-w-2xl flex-col rounded-2xl bg-muted/60 px-10 py-14 lg:px-16 lg:py-16">
+        <div className="flex min-h-full items-start justify-center px-4 py-20 sm:items-center sm:px-6 sm:py-10">
+          <div className="flex w-full max-w-2xl flex-col rounded-2xl bg-muted/60 px-5 py-10 sm:px-8 sm:py-12 lg:px-16 lg:py-16">
           {view === 'signin' && (
             <SignInView
               email={email}
@@ -110,7 +110,6 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
                 setRequestType('request-password')
                 setView('request')
               }}
-              onCrewPortal={onCrewPortal}
             />
           )}
 
@@ -150,18 +149,17 @@ function SignInView(props: {
   onSubmit: (e: FormEvent) => void
   onForgot: () => void
   onRequest: () => void
-  onCrewPortal: () => void
 }) {
   return (
     <form onSubmit={props.onSubmit} className="flex flex-col">
-      <h2 className="text-center font-serif text-4xl font-medium tracking-[0.25em] text-foreground">
+      <h2 className="text-center font-serif text-2xl font-medium tracking-[0.16em] text-foreground sm:text-3xl sm:tracking-[0.22em] lg:text-4xl lg:tracking-[0.25em]">
         WELCOME BACK
       </h2>
       <p className="mt-4 text-center text-base text-muted-foreground">
         Sign in to illuminate your event vision.
       </p>
 
-      <div className="mt-12 flex flex-col gap-6">
+      <div className="mt-8 flex flex-col gap-5 sm:mt-10 sm:gap-6">
         <Field label="EMAIL">
           <InputWrap>
             <User className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -171,7 +169,7 @@ function SignInView(props: {
               onChange={(e) => props.onEmail(e.target.value)}
               placeholder="Enter your credentials"
               autoComplete="email"
-              className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/70"
+              className="min-h-11 w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/70"
             />
           </InputWrap>
         </Field>
@@ -185,13 +183,13 @@ function SignInView(props: {
               onChange={(e) => props.onPassword(e.target.value)}
               placeholder="Enter your password"
               autoComplete="current-password"
-              className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/70"
+              className="min-h-11 w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/70"
             />
             <button
               type="button"
               onClick={props.onToggleShow}
               aria-label={props.showPassword ? 'Hide password' : 'Show password'}
-              className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+              className="min-h-11 min-w-11 shrink-0 text-muted-foreground transition-colors hover:text-foreground"
             >
               {props.showPassword ? (
                 <EyeOff className="size-4" aria-hidden="true" />
@@ -209,7 +207,7 @@ function SignInView(props: {
         </p>
       )}
 
-      <div className="mt-7 flex items-center justify-between text-sm">
+      <div className="mt-6 flex flex-col items-start gap-3 text-sm sm:mt-7 sm:flex-row sm:items-center sm:justify-between">
         <label className="flex cursor-pointer items-center gap-2.5 text-foreground/80">
           <input
             type="checkbox"
@@ -219,7 +217,7 @@ function SignInView(props: {
           />
           Remember me
         </label>
-        <div className="flex items-center gap-4 text-foreground/80">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-foreground/80">
           <button
             type="button"
             onClick={props.onForgot}
@@ -242,30 +240,17 @@ function SignInView(props: {
         {props.signingIn ? 'SIGNING IN...' : 'ENTER PORTAL'}
       </SubmitButton>
 
-      <button
-        type="button"
-        onClick={props.onCrewPortal}
-        className="mt-6 inline-flex items-center justify-center gap-2 self-center text-sm font-medium uppercase tracking-[0.15em] text-foreground/70 transition-colors hover:text-foreground"
-      >
-        <HardHat className="size-4" aria-hidden="true" />
-        Ground Crew? Field Login
-      </button>
-
-      <div className="mt-6 space-y-1 text-center text-xs text-muted-foreground/70">
-        <p>Demo admin · admin@lumiere.com · lumiere2026</p>
-        <p>Executive · executive@lumiere.com · lumiere2026</p>
-        <p>Executive (second sign-off) · executive2@lumiere.com · lumiere2026</p>
-        <p>Event planner · planner@lumiere.com · lumiere2026</p>
-        <p>Ground crew · crew@lumiere.com · lumiere2026</p>
-        <p className="pt-2 font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
-          Warehouse Ops
+      <div className="mt-8 border-t border-border/70 pt-6 text-center text-xs text-muted-foreground/75">
+        <p className="mb-3 font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          Demo Accounts
         </p>
-        <p>Full access · Warehouse Ops Manager · warehouseops@lumiere.com · lumiere2026 · 246810</p>
-        <p>Sub-role · Manning Officer · manning@lumiere.com · lumiere2026</p>
-        <p>Sub-role · Warehouse Manager · warehouse@lumiere.com · lumiere2026</p>
-        <p>Sub-role · Production Manager · production@lumiere.com · lumiere2026</p>
-        <p>Sub-role · Inventory Officer · inventory@lumiere.com · lumiere2026</p>
-        <p>Sub-role · Purchasing Officer · purchasing@lumiere.com · lumiere2026</p>
+        <div className="grid gap-1.5 sm:grid-cols-2 sm:text-left">
+          <p>Admin: admin@lumiere.com | lumiere2026</p>
+          <p>Executive: executive@lumiere.com | lumiere2026</p>
+          <p>Executive (Sign-off 2): executive2@lumiere.com | lumiere2026</p>
+          <p>Warehouse Operations Manager (WOP): warehouseops@lumiere.com | lumiere2026 | PIN: 246810</p>
+          <p>Purchasing Officer: purchasing@lumiere.com | lumiere2026</p>
+        </div>
       </div>
     </form>
   )
@@ -305,7 +290,7 @@ function RequestView(props: {
               onChange={(e) => props.onEmail(e.target.value)}
               placeholder="name@lumiere.com"
               autoComplete="email"
-              className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/70"
+              className="min-h-11 w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/70"
             />
           </InputWrap>
         </Field>
@@ -368,7 +353,7 @@ function ThemeToggle({ mode, onChange }: { mode: ThemeMode; onChange: (mode: The
     <div
       role="radiogroup"
       aria-label="Theme"
-      className="inline-flex items-center gap-0.5 rounded-full border border-border bg-card/80 p-1 shadow-sm backdrop-blur"
+      className="inline-flex min-h-11 items-center gap-0.5 rounded-full border border-border bg-card/80 p-1 shadow-sm backdrop-blur"
     >
       {THEME_OPTIONS.map(({ mode: optionMode, label, icon: Icon }) => (
         <button
@@ -407,7 +392,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function InputWrap({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-center gap-3 rounded-md border border-border bg-card px-5 py-4 shadow-sm focus-within:border-sidebar">
+    <div className="flex min-h-14 items-center gap-3 rounded-md border border-border bg-card px-4 py-3 shadow-sm focus-within:border-sidebar sm:px-5 sm:py-4">
       {children}
     </div>
   )

@@ -8,7 +8,7 @@ import { useAuth, EXECUTIVE_LOGIN_EMAILS } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import type { DamageException, DamageVerdict } from '@/lib/types'
-import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
+import { getExecutiveRoute, type ExecutiveDestinationId } from '@/lib/executive-destinations'
 
 const statusStyles: Record<DamageVerdict, string> = {
   'Pending Verdict': 'border border-primary/40 bg-primary/10 text-primary',
@@ -102,7 +102,7 @@ export function DamageValidationPage() {
     setActive(null)
   }
 
-  const destination = (id: ExecutiveDestinationId) => navigate(id)
+  const destination = (id: ExecutiveDestinationId) => navigate(getExecutiveRoute(id))
 
   const stickyHeader = (
     <div>

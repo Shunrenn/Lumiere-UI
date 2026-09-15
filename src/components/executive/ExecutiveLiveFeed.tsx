@@ -78,7 +78,7 @@ export function ExecutiveLiveFeed({ onViewLogs }: ExecutiveLiveFeedProps) {
                         setExpanded(open ? null : update.id)
                       }}
                       aria-expanded={open}
-                      className="mt-1.5 inline-flex items-center gap-1 text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-primary"
+                      className="mt-1 inline-flex min-h-10 items-center gap-1 text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-primary sm:min-h-0"
                     >
                       Details
                       <ChevronDown
@@ -106,7 +106,7 @@ export function ExecutiveLiveFeed({ onViewLogs }: ExecutiveLiveFeedProps) {
             e.stopPropagation()
             trigger()
           }}
-          className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.15em] text-card-foreground transition-colors hover:bg-muted"
+          className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-4 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.15em] text-card-foreground transition-colors hover:bg-muted sm:min-h-0"
         >
           <ScrollText className="size-3.5" aria-hidden="true" />
           Operational Logs
