@@ -87,12 +87,12 @@ export function ExecutiveTopBar() {
   }, [events, damageExceptions, inventory])
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-background px-5 sm:px-8">
-      <p className="text-[0.65rem] font-medium uppercase tracking-[0.12em] text-muted-foreground sm:text-xs sm:tracking-[0.15em]">
+    <header className="flex min-h-16 shrink-0 items-start justify-between gap-3 border-b border-border bg-background px-4 pb-3 pt-4 sm:items-center sm:px-8 sm:py-0">
+      <p className="max-w-[12rem] text-[0.58rem] font-medium uppercase leading-relaxed tracking-[0.08em] text-muted-foreground sm:max-w-none sm:text-xs sm:tracking-[0.15em]">
         {dateLabel} <span className="mx-1 text-border">|</span> {timeLabel}
       </p>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2 pt-0.5">
         <NotificationsBell notifications={notifications} size="md" />
 
         <div className="relative" ref={menuRef}>

@@ -13,7 +13,7 @@ import { PortfolioHealthMethodologyModal } from '@/components/executive/Portfoli
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
-import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
+import { getExecutiveRoute, type ExecutiveDestinationId } from '@/lib/executive-destinations'
 
 type DashboardMetricMode = 'events' | 'reports'
 
@@ -146,12 +146,12 @@ export function EventDashboardPage() {
     return items
   }, [events, damageExceptions, navigate])
 
-  const destination = (id: ExecutiveDestinationId) => navigate(id)
+  const destination = (id: ExecutiveDestinationId) => navigate(getExecutiveRoute(id))
 
   const isEvents = metricMode === 'events'
 
   const stickyHeader = (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h1 className="font-serif text-3xl font-medium leading-tight text-foreground sm:text-4xl">
           Executive Dashboard
@@ -162,12 +162,12 @@ export function EventDashboardPage() {
       </div>
 
       {/* Metric Mode Toggle (Events vs Reports) */}
-      <div className="inline-flex rounded-lg border border-border bg-card p-1">
+      <div className="inline-flex w-full rounded-lg border border-border bg-card p-1 sm:w-auto">
         <button
           type="button"
           onClick={() => setMetricMode('events')}
           className={cn(
-            'rounded-md px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] transition',
+            'min-h-10 flex-1 rounded-md px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.1em] transition sm:min-h-0 sm:flex-none',
             isEvents
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground',
@@ -179,7 +179,7 @@ export function EventDashboardPage() {
           type="button"
           onClick={() => setMetricMode('reports')}
           className={cn(
-            'rounded-md px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] transition',
+            'min-h-10 flex-1 rounded-md px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.1em] transition sm:min-h-0 sm:flex-none',
             !isEvents
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground',
@@ -196,9 +196,9 @@ export function EventDashboardPage() {
       <ExecutiveShell activeId="dashboard" onSelect={destination} stickyHeader={stickyHeader}>
         <div className="flex flex-col gap-4">
           {/* Row 1: 4 small stat cards (left) + Distribution Donut / Live Operations Feed (right) */}
-          <div data-testid="executive-dashboard-stats" className="grid gap-4 lg:grid-cols-2">
+          <div data-testid="executive-dashboard-stats" className="grid gap-4 md:grid-cols-2">
             {/* 4 Cards (keyed to animate on toggle) */}
-            <div key={metricMode} className="admin-fade grid grid-cols-2 gap-3">
+            <div key={metricMode} className="admin-fade grid grid-cols-2 gap-2 sm:gap-3">
               {isEvents ? (
                 <>
                   <ExecutiveStatCard
@@ -265,7 +265,7 @@ export function EventDashboardPage() {
             </div>
 
             {/* Donut Chart (left half) + Live Operations Feed (right half) */}
-            <div className="grid h-[21rem] grid-cols-2 gap-3">
+            <div className="grid min-h-[21rem] grid-cols-1 gap-3 md:grid-cols-2">
               {isEvents ? (
                 <EventDistributionCard
                   key="donut-events"
@@ -287,11 +287,11 @@ export function EventDashboardPage() {
           </div>
 
           {/* Row 2: Pending Actions (30%) + Trend Analytics (70%) */}
-          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-10">
-            <div className="lg:col-span-3">
+          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:grid-cols-10">
+            <div className="md:col-span-1 lg:col-span-3">
               <ExecutivePendingActions items={pendingActionItems} />
             </div>
-            <div className="lg:col-span-7">
+            <div className="md:col-span-1 lg:col-span-7">
               <ExecutiveTrendAnalyticsCard onViewRegistry={() => navigate('registry')} />
             </div>
           </div>

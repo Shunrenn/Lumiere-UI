@@ -8,7 +8,7 @@ import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import { CompactStatStrip } from '@/components/CompactStatStrip'
 import type { PortalEvent } from '@/lib/types'
-import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
+import { getExecutiveRoute, type ExecutiveDestinationId } from '@/lib/executive-destinations'
 
 // Deterministic dispatch progress derived from an event's lifecycle status,
 // used to render the Operational Progress bars.
@@ -101,7 +101,7 @@ export function EventRegistryPage() {
     })
   }, [events, query, statusFilter])
 
-  const destination = (id: ExecutiveDestinationId) => navigate(id)
+  const destination = (id: ExecutiveDestinationId) => navigate(getExecutiveRoute(id))
 
   const stickyHeader = (
     <div>

@@ -24,7 +24,7 @@ export function ExecutiveStatCard({
       type={onSelect ? 'button' : undefined}
       onClick={onSelect ? trigger : undefined}
       className={cn(
-        'flex flex-col rounded-xl border border-border bg-card p-4 text-left',
+        'flex min-h-[8.25rem] flex-col rounded-xl border border-border bg-card p-3.5 text-left sm:min-h-0 sm:p-4',
         onSelect && 'cursor-pointer transition hover:border-primary/40 hover:bg-muted/40',
         flashing && 'ring-2 ring-primary/60 border-primary/60',
       )}
@@ -300,7 +300,7 @@ export function ExecutiveTrendAnalyticsCard({
   const latest = data[data.length - 1]?.value ?? 0
 
   return (
-    <div className="flex h-[24rem] flex-col overflow-hidden rounded-xl border border-border bg-card p-5">
+    <div className="flex min-h-[24rem] flex-col overflow-hidden rounded-xl border border-border bg-card p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">
           Trend Analytics
@@ -314,7 +314,7 @@ export function ExecutiveTrendAnalyticsCard({
               aria-selected={mode === tab.value}
               onClick={() => setMode(tab.value)}
               className={cn(
-                'rounded px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] transition',
+                'min-h-10 rounded px-3 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.1em] transition sm:min-h-0 sm:py-1',
                 mode === tab.value
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground',
@@ -338,7 +338,7 @@ export function ExecutiveTrendAnalyticsCard({
             <button
               type="button"
               onClick={onViewRegistry}
-              className="rounded-md px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary transition hover:bg-primary/10"
+              className="min-h-10 rounded-md px-2 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary transition hover:bg-primary/10 sm:min-h-0 sm:py-1"
             >
               View Portfolios
             </button>

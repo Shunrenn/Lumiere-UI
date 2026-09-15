@@ -19,6 +19,8 @@ interface NavContextValue {
   navigate: (route: Route, intent?: NavIntent | null) => void
   intent: NavIntent | null
   clearIntent: () => void
+  sidebarExpanded: boolean
+  setSidebarExpanded: (expanded: boolean | ((current: boolean) => boolean)) => void
 }
 
 const NavContext = createContext<NavContextValue | null>(null)
@@ -32,6 +34,7 @@ export function NavProvider({
 }) {
   const [route, setRoute] = useState<Route>(initialRoute)
   const [intent, setIntent] = useState<NavIntent | null>(null)
+  const [sidebarExpanded, setSidebarExpanded] = useState(false)
 
   const navigate = useCallback((next: Route, nextIntent: NavIntent | null = null) => {
     setIntent(nextIntent)
@@ -41,8 +44,8 @@ export function NavProvider({
   const clearIntent = useCallback(() => setIntent(null), [])
 
   const value = useMemo(
-    () => ({ route, navigate, intent, clearIntent }),
-    [route, navigate, intent, clearIntent],
+    () => ({ route, navigate, intent, clearIntent, sidebarExpanded, setSidebarExpanded }),
+    [route, navigate, intent, clearIntent, sidebarExpanded],
   )
   return <NavContext.Provider value={value}>{children}</NavContext.Provider>
 }

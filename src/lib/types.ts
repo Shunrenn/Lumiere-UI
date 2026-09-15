@@ -9,6 +9,7 @@ export type Route =
   | 'security-audit'
   | 'rbac'
   | 'damage'
+  | 'asset-kiosk'
   | 'replenishment'
   // Warehouse supervisor console
   | 'inventory'
@@ -84,16 +85,10 @@ export const STAFF_ROLES = [
   'Admin',
   'Executive',
   'Warehouse Operations Manager',
-  'Warehouse Manager',
-  'Event Planner',
-  'Ground Crew',
-  'Event Admin',
-  'Warehouse Lead',
-  'Warehouse Member',
-  'Field & Production Crew',
+  'Purchasing Officer',
 ] as const
 
-export type StaffRole = (typeof STAFF_ROLES)[number]
+export type StaffRole = (typeof STAFF_ROLES)[number] | string
 
 export type SessionStatus =
   | 'Active Session'
@@ -292,6 +287,8 @@ export type StockStatus =
   | 'Order Placed'
   | 'Depleted'
   | 'In Maintenance'
+  | 'In Transit'
+  | 'Allocated'
 
 export interface InventoryItem {
   id: string
@@ -316,6 +313,8 @@ export interface InventoryItem {
   unit?: string
   cost?: number
   costPerUnit?: number
+  location?: string
+  locationType?: 'Warehouse' | 'Event Venue'
 }
 
 /* ---------- Activity Logs ---------- */

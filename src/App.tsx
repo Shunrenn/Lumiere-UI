@@ -1,5 +1,5 @@
 import './App.css'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { NavProvider, useNav } from '@/lib/nav'
 import { PortalProvider } from '@/lib/store'
 import { AdminGrowthSummaryProvider } from '@/lib/admin-growth-summary'
@@ -8,6 +8,7 @@ import { LogoutModal } from '@/components/LogoutModal'
 import { loadRosterFromDatabase } from '@/lib/roster'
 import { LoginPage } from '@/pages/LoginPage'
 import { OverviewPage } from '@/pages/OverviewPage'
+import { ExecutiveAssetKioskPage } from '@/pages/ExecutiveAssetKioskPage'
 import { AdminSystemDashboardPage } from '@/pages/AdminSystemDashboardPage'
 import { AdminWorkforcePage } from '@/pages/AdminWorkforcePage'
 import { AdminSecurityAuditPage } from '@/pages/AdminSecurityAuditPage'
@@ -27,7 +28,6 @@ import { EventDetailPage } from '@/pages/EventDetailPage'
 import { DesignCanvasHubPage } from '@/pages/DesignCanvasHubPage'
 import { CanvasWorkspacePage } from '@/pages/CanvasWorkspacePage'
 import { GroundCrewPage } from '@/pages/GroundCrewPage'
-import { GroundCrewLoginPage } from '@/pages/GroundCrewLoginPage'
 import { WarehouseLeadPage } from '@/pages/WarehouseLeadPage'
 import { WarehouseMemberPage } from '@/pages/WarehouseMemberPage'
 import { ManningPage } from '@/pages/ManningPage'
@@ -78,6 +78,8 @@ function Router() {
       return <ActivityLogsPage />
     case 'damage':
       return <DamageValidationPage />
+    case 'asset-kiosk':
+      return <ExecutiveAssetKioskPage />
     case 'inventory':
       return <InventoryStockPage />
     case 'warehouse-logs':
@@ -132,16 +134,11 @@ function Router() {
 
 function Gate() {
   const { isAuthenticated, isWarehouse, isWarehouseLead, isWarehouseMember, isPlanner, isGroundCrew, isExecutive, isProductionManager, isInventoryOfficer, isManningOfficer, hasFullWarehouseAccess } = useAuth()
-  const [portal, setPortal] = useState<'staff' | 'crew'>('staff')
   const isMobileProductionManager = isProductionManager && !hasFullWarehouseAccess
   const isMobileInventoryOfficer = isInventoryOfficer && !hasFullWarehouseAccess
 
   if (!isAuthenticated) {
-    return portal === 'crew' ? (
-      <GroundCrewLoginPage onStaffPortal={() => setPortal('staff')} />
-    ) : (
-      <LoginPage onCrewPortal={() => setPortal('crew')} />
-    )
+    return <LoginPage />
   }
 
   // A deep-linked ?highlight=<staffId> (from the User Growth Summary modal)

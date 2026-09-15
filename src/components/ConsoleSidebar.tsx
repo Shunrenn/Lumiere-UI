@@ -144,9 +144,8 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse, showBrand }: 
 
   const go = (r: Route) => {
     const isActive = route === r || routeParent[route] === r
-    if (isActive && onToggleCollapse) {
-      // Clicking the already-active item toggles the sidebar collapse/expand
-      onToggleCollapse()
+    if (isActive) {
+      onToggleCollapse?.()
     } else {
       navigate(r)
       onNavigate?.()
@@ -212,7 +211,7 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse, showBrand }: 
                 'flex items-center rounded-md text-left text-xs font-semibold uppercase tracking-[0.15em] transition-colors',
                 collapsed ? 'justify-center px-0 py-3' : 'gap-3 px-4 py-3',
                 active
-                  ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
+                  ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-[inset_3px_0_0_var(--sidebar-accent-foreground)]'
                   : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
               )}
             >
