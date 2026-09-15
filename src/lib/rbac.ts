@@ -240,6 +240,7 @@ function groundLeaf(
     name,
     summary,
     comingSoon,
+    maxTeamLeads: 1,
     children: [],
     permissions: GROUND_MODULES.map((module) => {
       if (modifyModules.includes(module)) {
