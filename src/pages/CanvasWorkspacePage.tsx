@@ -2910,6 +2910,20 @@ export function CanvasWorkspacePage() {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
   const [zoom, setZoom] = useState(77)
   const [showGrid, setShowGrid] = useState(false)
+  // History state for Undo (Ctrl+Z) and Redo (Ctrl+Y / Ctrl+Shift+Z)
+  const [pastHistory, setPastHistory] = useState<CanvasAsset[][]>([])
+  const [futureHistory, setFutureHistory] = useState<CanvasAsset[][]>([])
+
+  // Helper to update canvas assets with undo history tracking
+  function pushCanvasAssetsChange(nextAssets: CanvasAsset[] | ((prev: CanvasAsset[]) => CanvasAsset[])) {
+    setCanvasAssets((prev) => {
+      const resolved = typeof nextAssets === 'function' ? nextAssets(prev) : nextAssets
+      setPastHistory((past) => [...past.slice(-25), prev])
+      setFutureHistory([])
+      return resolved
+    })
+  }
+
   // Right-click context menu (Copy/Paste/Duplicate/Delete/Align/Comment/Lock) — shared with the keyboard shortcuts below.
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; assetId: string | null } | null>(null)
   const [clipboardAsset, setClipboardAsset] = useState<CanvasAsset | null>(null)
@@ -3073,7 +3087,7 @@ export function CanvasWorkspacePage() {
       strokeColor: preset.fill || '#0f172a',
       align: 'left',
     }
-    setCanvasAssets((prev) => [...prev, newAsset])
+    pushCanvasAssetsChange((prev) => [...prev, newAsset])
     setSelectedAssetId(newAsset.id)
     showToast(`Placed ${preset.label} on canvas`)
   }
@@ -3341,8 +3355,36 @@ export function CanvasWorkspacePage() {
     setPending((current) => [...current, { id: `pr-${Date.now()}`, name: item.name, requestedQty: 1, unit: item.unit || 'pcs', event: 'Current canvas event' }])
   }
 
+  const handleUndo = useCallback(() => {
+    setPastHistory((past) => {
+      if (past.length === 0) return past
+      const previousState = past[past.length - 1]
+      const remainingPast = past.slice(0, past.length - 1)
+      setCanvasAssets((current) => {
+        setFutureHistory((future) => [current, ...future])
+        return previousState
+      })
+      return remainingPast
+    })
+    showToast('Undo action')
+  }, [])
+
+  const handleRedo = useCallback(() => {
+    setFutureHistory((future) => {
+      if (future.length === 0) return future
+      const nextState = future[0]
+      const remainingFuture = future.slice(1)
+      setCanvasAssets((current) => {
+        setPastHistory((past) => [...past, current])
+        return nextState
+      })
+      return remainingFuture
+    })
+    showToast('Redo action')
+  }, [])
+
   function updateAsset(id: string, changes: Partial<CanvasAsset>) {
-    setCanvasAssets((prev) => prev.map((a) => a.id === id ? { ...a, ...changes } : a))
+    pushCanvasAssetsChange((prev) => prev.map((a) => a.id === id ? { ...a, ...changes } : a))
   }
   function duplicateAsset(id: string) {
     const src = canvasAssets.find((a) => a.id === id)
@@ -3355,11 +3397,11 @@ export function CanvasWorkspacePage() {
       zIndex: src.zIndex + 1,
       pageId: src.pageId || currentPage,
     }
-    setCanvasAssets((prev) => [...prev, copy])
+    pushCanvasAssetsChange((prev) => [...prev, copy])
     setSelectedAssetId(copy.id)
   }
   function deleteAsset(id: string) {
-    setCanvasAssets((prev) => prev.filter((a) => a.id !== id))
+    pushCanvasAssetsChange((prev) => prev.filter((a) => a.id !== id))
     if (selectedAssetId === id) setSelectedAssetId(null)
   }
   function copyAsset(id: string) {
@@ -3376,9 +3418,60 @@ export function CanvasWorkspacePage() {
       zIndex: canvasAssets.length + 1,
       pageId: clipboardAsset.pageId || currentPage,
     }
-    setCanvasAssets((prev) => [...prev, copy])
+    pushCanvasAssetsChange((prev) => [...prev, copy])
     setSelectedAssetId(copy.id)
   }
+
+  // Keyboard shortcut event listener (Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z, Ctrl+C, Ctrl+V, Delete, Backspace)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return
+      }
+
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey
+
+      if (isCtrlOrCmd && e.key.toLowerCase() === 'z') {
+        if (e.shiftKey) {
+          e.preventDefault()
+          handleRedo()
+        } else {
+          e.preventDefault()
+          handleUndo()
+        }
+      } else if (isCtrlOrCmd && e.key.toLowerCase() === 'y') {
+        e.preventDefault()
+        handleRedo()
+      } else if (isCtrlOrCmd && e.key.toLowerCase() === 'c') {
+        if (selectedAssetId) {
+          e.preventDefault()
+          copyAsset(selectedAssetId)
+          showToast('Copied element to clipboard')
+        }
+      } else if (isCtrlOrCmd && e.key.toLowerCase() === 'v') {
+        if (clipboardAsset) {
+          e.preventDefault()
+          pasteAsset()
+          showToast('Pasted element from clipboard')
+        }
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedAssetId) {
+          e.preventDefault()
+          deleteAsset(selectedAssetId)
+          showToast('Deleted selected element')
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedAssetId, clipboardAsset, handleUndo, handleRedo, canvasAssets])
   function alignAssetToPage(id: string, alignment: string) {
     const asset = canvasAssets.find((a) => a.id === id)
     if (!asset) return
@@ -3415,7 +3508,7 @@ export function CanvasWorkspacePage() {
       zIndex: canvasAssets.length + 1,
       pageId,
     }
-    setCanvasAssets((prev) => [...prev, newAsset])
+    pushCanvasAssetsChange((prev) => [...prev, newAsset])
     setSelectedAssetId(newAsset.id)
     setDroppedAssets((prev) => [...prev, dropped])
   }
