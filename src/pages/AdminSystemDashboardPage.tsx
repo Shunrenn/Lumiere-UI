@@ -92,6 +92,7 @@ export function AdminSystemDashboardPage() {
   const { staff, userActions, resolveUserAction, pendingSubRoleSetups } = usePortal()
   const { openGrowthSummary } = useGrowthSummary()
   const [activeId, setActiveId] = useState<AdminDestinationId>('system-dashboard')
+  const [drillDownCategory, setDrillDownCategory] = useState<string | null>(null)
   // Pending-action confirmation state. The action is applied ONLY when the
   // admin confirms — nothing mutates on the initial button click.
   const [confirmItem, setConfirmItem] = useState<UserAction | null>(null)
@@ -177,7 +178,6 @@ export function AdminSystemDashboardPage() {
           if (id === 'workforce') navigate('workforce')
           else if (id === 'security-audit') navigate('security-audit')
           else if (id === 'rbac') navigate('rbac')
-          else if (id === 'damage') navigate('damage')
           else setActiveId(id)
         }
       }}
@@ -193,24 +193,24 @@ export function AdminSystemDashboardPage() {
           <div data-testid="admin-dashboard-stats" className="grid gap-4 lg:grid-cols-2">
             <div className="grid grid-cols-2 gap-3">
               <StatCard
-                agentSelector="data-agent-system-health"
-                label="System Health"
-                value="99.9%"
-                caption="30-day rolling uptime"
-                onSelect={() => setMethodologyOpen(true)}
-              />
-              <StatCard
                 agentSelector="data-agent-total-users"
                 label="Total Users"
                 value={String(totalUsers)}
-                caption="Provisioned portal accounts"
+                caption="Registered workforce accounts"
                 onSelect={() => navigate('workforce')}
+              />
+              <StatCard
+                agentSelector="data-agent-system-health"
+                label="System Health"
+                value="99.9%"
+                caption="30-day API & gateway uptime"
+                onSelect={() => navigate('security-audit')}
               />
               <StatCard
                 agentSelector="data-agent-locked-accounts"
                 label="Locked Accounts"
                 value={String(lockedAccounts)}
-                caption="Awaiting administrator unlock"
+                caption="Auto-locked security events"
                 onSelect={() => navigate('workforce')}
               />
               <StatCard
@@ -224,7 +224,14 @@ export function AdminSystemDashboardPage() {
             {/* Fixed row height so the feed scrolls internally instead of
                 stretching the donut card with trailing blank space. */}
             <div className="grid h-[21rem] grid-cols-2 gap-3">
-              <UserDistributionCard compact counts={roleCounts} onSelect={() => navigate('workforce')} />
+              <UserDistributionCard
+                compact
+                counts={roleCounts}
+                onSelect={() => navigate('workforce')}
+                drillDownCategory={drillDownCategory}
+                onDrillDown={(cat) => setDrillDownCategory(cat)}
+                onBack={() => setDrillDownCategory(null)}
+              />
               <AdminSecurityFeed onSystemLogs={() => navigate('security-audit')} />
             </div>
           </div>
@@ -240,7 +247,12 @@ export function AdminSystemDashboardPage() {
               />
             </div>
             <div className="lg:col-span-7">
-              <TrendAnalyticsCard onOpenGrowthSummary={openGrowthSummary} />
+              <TrendAnalyticsCard
+                onOpenGrowthSummary={openGrowthSummary}
+                onOpenSecurityAudit={() => navigate('security-audit')}
+                drillDownCategory={drillDownCategory}
+                onBack={() => setDrillDownCategory(null)}
+              />
             </div>
           </div>
         </div>
