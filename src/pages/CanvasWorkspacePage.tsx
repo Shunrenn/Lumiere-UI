@@ -477,23 +477,49 @@ function ElementsTab({ onDropAsset, assets, onRouteToDeficit }: {
   )
 }
 
+const PRESET_PALETTE = [
+  { name: 'Black', hex: '#000000' },
+  { name: 'Red', hex: '#ef4444' },
+  { name: 'Orange', hex: '#f97316' },
+  { name: 'Yellow', hex: '#eab308' },
+  { name: 'Green', hex: '#22c55e' },
+  { name: 'Blue', hex: '#3b82f6' },
+  { name: 'Violet', hex: '#8b5cf6' },
+  { name: 'White', hex: '#ffffff' },
+]
+
 function TextTab({
   onPlacePresetText,
   selectedAsset,
   onUpdateFormatting,
+  onUpdateColor,
 }: {
   onPlacePresetText: (preset: { label: string; text: string; fontSize: number; fontWeight?: string; fontStyle?: string; fill?: string }) => void
   selectedAsset: CanvasAsset | null
   onUpdateFormatting: (type: 'bold' | 'italic' | 'underline' | 'align') => void
+  onUpdateColor?: (color: string) => void
 }) {
   const isTextSelected = Boolean(selectedAsset && (selectedAsset.kind === 'text' || selectedAsset.kind === 'sticky'))
+  const currentColor = selectedAsset?.fill || selectedAsset?.strokeColor || '#000000'
+  const [hexInput, setHexInput] = useState(currentColor)
+
+  useEffect(() => {
+    setHexInput(currentColor)
+  }, [currentColor])
+
+  function handleColorChange(color: string) {
+    setHexInput(color)
+    if (onUpdateColor && isTextSelected) {
+      onUpdateColor(color)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-3 p-3 overflow-y-auto flex-1">
       <p className="text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Click to add text</p>
       <button
         type="button"
-        onClick={() => onPlacePresetText({ label: 'Paragraph Text', text: 'Add a paragraph text', fontSize: 16, fill: '#0f172a' })}
+        onClick={() => onPlacePresetText({ label: 'Paragraph Text', text: 'Add a paragraph text', fontSize: 16, fill: '#000000' })}
         className="w-full rounded-xl border border-dashed border-border bg-background py-3 text-[0.65rem] font-medium text-muted-foreground transition hover:border-primary/50 hover:text-foreground cursor-pointer"
       >
         + Add a paragraph text
@@ -501,11 +527,11 @@ function TextTab({
       <p className="mt-1 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Text styles</p>
       <div className="flex flex-col gap-1.5">
         {FONT_STYLES.map((s) => {
-          let preset = { label: s.label, text: s.sample, fontSize: 14, fontWeight: 'normal', fill: '#334155' }
-          if (s.label === 'Header') preset = { label: 'Header', text: 'Add a heading', fontSize: 32, fontWeight: 'bold', fill: '#0f172a' }
-          else if (s.label === 'Subheading') preset = { label: 'Subheading', text: 'Add a subheading', fontSize: 22, fontWeight: 'bold', fill: '#1e293b' }
-          else if (s.label === 'Body') preset = { label: 'Body', text: 'Add a little bit of body text', fontSize: 14, fontWeight: 'normal', fill: '#334155' }
-          else if (s.label === 'Caption') preset = { label: 'Caption', text: 'Add a caption', fontSize: 11, fontWeight: 'normal', fill: '#64748b' }
+          let preset = { label: s.label, text: s.sample, fontSize: 14, fontWeight: 'normal', fill: '#000000' }
+          if (s.label === 'Header') preset = { label: 'Header', text: 'Add a heading', fontSize: 32, fontWeight: 'bold', fill: '#000000' }
+          else if (s.label === 'Subheading') preset = { label: 'Subheading', text: 'Add a subheading', fontSize: 22, fontWeight: 'bold', fill: '#000000' }
+          else if (s.label === 'Body') preset = { label: 'Body', text: 'Add a little bit of body text', fontSize: 14, fontWeight: 'normal', fill: '#000000' }
+          else if (s.label === 'Caption') preset = { label: 'Caption', text: 'Add a caption', fontSize: 11, fontWeight: 'normal', fill: '#000000' }
 
           return (
             <button
@@ -520,6 +546,57 @@ function TextTab({
           )
         })}
       </div>
+
+      <p className="mt-1 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Font Color</p>
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-background p-2.5">
+        {/* Color Palette Presets */}
+        <div className="grid grid-cols-4 gap-1.5">
+          {PRESET_PALETTE.map((p) => (
+            <button
+              key={p.name}
+              type="button"
+              title={p.name}
+              disabled={!isTextSelected}
+              onClick={() => handleColorChange(p.hex)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md border p-1 text-[0.55rem] font-medium transition cursor-pointer',
+                currentColor.toLowerCase() === p.hex.toLowerCase() ? 'border-primary ring-1 ring-primary' : 'border-border',
+                !isTextSelected && 'opacity-60 cursor-not-allowed',
+              )}
+            >
+              <span className="size-3.5 shrink-0 rounded-full border border-black/20" style={{ backgroundColor: p.hex }} />
+              <span className="truncate text-[0.52rem] text-foreground">{p.name}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Custom Hex input */}
+        <div className="flex items-center gap-2 pt-1 border-t border-border">
+          <input
+            type="color"
+            value={currentColor.startsWith('#') && currentColor.length === 7 ? currentColor : '#000000'}
+            disabled={!isTextSelected}
+            onChange={(e) => handleColorChange(e.target.value)}
+            className="size-7 shrink-0 rounded border border-border bg-transparent cursor-pointer disabled:cursor-not-allowed"
+          />
+          <div className="relative flex-1">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">#</span>
+            <input
+              type="text"
+              value={hexInput.replace('#', '')}
+              disabled={!isTextSelected}
+              onChange={(e) => {
+                const val = '#' + e.target.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 6)
+                setHexInput(val)
+                if (val.length === 7) handleColorChange(val)
+              }}
+              placeholder="000000"
+              className="w-full rounded-md border border-input bg-card py-1 pl-6 pr-2 font-mono text-xs text-foreground uppercase outline-none focus:border-primary"
+            />
+          </div>
+        </div>
+      </div>
+
       <p className="mt-1 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Quick formatting</p>
       <div className="grid grid-cols-4 gap-1">
         {[
@@ -1020,11 +1097,10 @@ function LeftPanel({
   assets,
   onRouteToDeficit,
   onApplyBackground,
-  activeTool,
-  onToolChange,
   onPlacePresetText,
   selectedAsset,
   onUpdateFormatting,
+  onUpdateColor,
   onInsertPage,
   onInsertAllPages,
 }: {
@@ -1038,6 +1114,7 @@ function LeftPanel({
   onPlacePresetText: (preset: { label: string; text: string; fontSize: number; fontWeight?: string; fontStyle?: string; fill?: string }) => void
   selectedAsset: CanvasAsset | null
   onUpdateFormatting: (type: 'bold' | 'italic' | 'underline' | 'align') => void
+  onUpdateColor?: (color: string) => void
   onInsertPage: (sourceProjId: string, pageTitle: string) => void
   onInsertAllPages: (sourceProjId: string) => void
 }) {
@@ -1071,7 +1148,7 @@ function LeftPanel({
           </div>
           <div className="flex flex-1 flex-col overflow-hidden">
             {activeTab === 'elements'   && <ElementsTab onDropAsset={onDropAsset} assets={assets} onRouteToDeficit={onRouteToDeficit} />}
-            {activeTab === 'text'       && <TextTab onPlacePresetText={onPlacePresetText} selectedAsset={selectedAsset} onUpdateFormatting={onUpdateFormatting} />}
+            {activeTab === 'text'       && <TextTab onPlacePresetText={onPlacePresetText} selectedAsset={selectedAsset} onUpdateFormatting={onUpdateFormatting} onUpdateColor={onUpdateColor} />}
             {activeTab === 'uploads'    && <UploadsTab onDropAsset={onDropAsset} />}
             {activeTab === 'tools'      && <ToolsTab activeTool={activeTool} onToolChange={onToolChange} />}
             {activeTab === 'projects'   && <ProjectsTab onInsertPage={onInsertPage} onInsertAllPages={onInsertAllPages} />}
@@ -3695,6 +3772,7 @@ export function CanvasWorkspacePage() {
           onPlacePresetText={handlePlacePresetText}
           selectedAsset={selectedAsset}
           onUpdateFormatting={handleUpdateFormatting}
+          onUpdateColor={(c) => selectedAssetId && updateAsset(selectedAssetId, { fill: c, strokeColor: c })}
           onInsertPage={handleInsertPage}
           onInsertAllPages={handleInsertAllPages}
         />

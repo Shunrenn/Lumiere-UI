@@ -788,7 +788,8 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
               h: 40,
               text: 'Type text here',
               fontSize: 20,
-              strokeColor: '#0f172a',
+              strokeColor: '#000000',
+              fill: '#000000',
               pageId: targetPage.id,
             })
             setEditingAssetId(id)
