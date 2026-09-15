@@ -1401,22 +1401,31 @@ function PositionPanel({
           /* Layers */
           <div className="px-4 py-3 flex flex-col gap-2">
             <p className="text-[0.55rem] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-1">Layer Stack</p>
-            {[...canvasAssets].sort((x, y) => y.zIndex - x.zIndex).map((a) => (
-              <div key={a.id} className={cn('flex items-center gap-2.5 rounded-xl border px-3 py-2 transition',
-                a.id === asset.id ? 'border-primary bg-primary/10' : 'border-border bg-background hover:border-primary/30')}>
-                <Layers className="size-3 shrink-0 text-muted-foreground" />
-                <span className="flex-1 truncate text-[0.62rem] font-semibold text-foreground">{a.label}</span>
-                <span className="text-[0.55rem] tabular-nums text-muted-foreground">z{a.zIndex}</span>
-                <div className="flex gap-1">
-                  <button type="button" aria-label="Move up" className="flex size-5 items-center justify-center rounded text-muted-foreground hover:text-foreground transition">
-                    <ChevronUp className="size-3" />
-                  </button>
-                  <button type="button" aria-label="Move down" className="flex size-5 items-center justify-center rounded text-muted-foreground hover:text-foreground transition">
-                    <ChevronDown className="size-3" />
-                  </button>
-                </div>
+            {canvasAssets.length === 0 ? (
+              <div className="py-6 px-3 text-center">
+                <p className="text-[0.65rem] font-semibold text-foreground">No elements placed</p>
+                <p className="mt-1 text-[0.58rem] text-muted-foreground leading-relaxed">
+                  Drag items from Elements panel to populate your canvas layer stack.
+                </p>
               </div>
-            ))}
+            ) : (
+              [...canvasAssets].sort((x, y) => y.zIndex - x.zIndex).map((a) => (
+                <div key={a.id} className={cn('flex items-center gap-2.5 rounded-xl border px-3 py-2 transition',
+                  a.id === asset.id ? 'border-primary bg-primary/10' : 'border-border bg-background hover:border-primary/30')}>
+                  <Layers className="size-3 shrink-0 text-muted-foreground" />
+                  <span className="flex-1 truncate text-[0.62rem] font-semibold text-foreground">{a.label}</span>
+                  <span className="text-[0.55rem] tabular-nums text-muted-foreground">z{a.zIndex}</span>
+                  <div className="flex gap-1">
+                    <button type="button" aria-label="Move up" className="flex size-5 items-center justify-center rounded text-muted-foreground hover:text-foreground transition">
+                      <ChevronUp className="size-3" />
+                    </button>
+                    <button type="button" aria-label="Move down" className="flex size-5 items-center justify-center rounded text-muted-foreground hover:text-foreground transition">
+                      <ChevronDown className="size-3" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>
