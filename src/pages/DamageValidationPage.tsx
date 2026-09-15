@@ -46,7 +46,7 @@ export function DamageValidationPage() {
   const [active, setActive] = useState<DamageException | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
-  const canEvaluate = !isExecutive && (isWarehouse || isAdmin)
+  const canEvaluate = isWarehouse && !isExecutive
 
   const currentWomSubRole = useMemo(() => {
     const womList = subRolesByParent['warehouse-ops-manager'] ?? []
