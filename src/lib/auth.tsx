@@ -64,6 +64,7 @@ export function mapBackendUserToPortalAccount(data: {
   const isTemp = Boolean(data.temporaryPassword ?? data.email?.toLowerCase().includes('temp'))
 
   // 1. Structural WOM Parent Super-Account ("Warehouse Operations Manager")
+  const storedPin = typeof window !== 'undefined' && data.email ? localStorage.getItem(`lumiere_pin_${data.email.toLowerCase()}`) : null
   if (rawRole === 'Warehouse Operations Manager') {
     return {
       id: data.userId,
@@ -74,6 +75,7 @@ export function mapBackendUserToPortalAccount(data: {
       subRole: undefined,
       portal: 'web',
       temporaryPassword: isTemp,
+      confirmationPinHash: storedPin || undefined,
       token: data.token,
     }
   }
@@ -97,6 +99,7 @@ export function mapBackendUserToPortalAccount(data: {
       fullWarehouseAccess: false,
       portal: womSubRoles[rawRole],
       temporaryPassword: isTemp,
+      confirmationPinHash: storedPin || undefined,
       token: data.token,
     }
   }
@@ -125,7 +128,7 @@ export const MANNING_OFFICER_SUBROLE: WomSubRole = 'Manning Officer'
 // audit-held exceptions checks this list (cross-referenced against each
 // account's live Workforce Management suspension state) to determine whether
 // a second, distinct Executive is currently available to sign off.
-export const EXECUTIVE_LOGIN_EMAILS = ['executive@lumiere.com', 'executive2@lumiere.com']
+export const EXECUTIVE_LOGIN_EMAILS = ['executive@lumiere.com']
 
 
 
@@ -244,7 +247,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        const normalized = { ...parsed, portal: inferPortal(parsed) }
+        const storedPin = typeof window !== 'undefined' && parsed.email ? localStorage.getItem(`lumiere_pin_${parsed.email.toLowerCase()}`) : null
+        const normalized = {
+          ...parsed,
+          confirmationPinHash: parsed.confirmationPinHash || storedPin || undefined,
+          portal: inferPortal(parsed),
+        }
         setCurrentUser(normalized)
         const storage = isSession ? sessionStorage : localStorage
         storage.setItem('_lumiere_auth_user', JSON.stringify(normalized))
@@ -374,6 +382,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!currentUser) return
       const updated = { ...currentUser, confirmationPinHash: pin }
       setCurrentUser(updated)
+      if (currentUser.email && typeof window !== 'undefined') {
+        localStorage.setItem(`lumiere_pin_${currentUser.email.toLowerCase()}`, pin)
+      }
       const { isSession } = getStoredAuth()
       const storage = isSession ? sessionStorage : localStorage
       storage.setItem('_lumiere_auth_user', JSON.stringify(updated))

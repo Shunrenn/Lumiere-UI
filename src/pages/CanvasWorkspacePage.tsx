@@ -2702,7 +2702,7 @@ function CommentsPanel({ pageId, selectedAsset, comments, onAdd, onClose }: { pa
 
 export function CanvasWorkspacePage() {
   const { navigate } = useNav()
-  const { adminName } = useAuth()
+  const { adminName, hasConfirmationPin, setConfirmationPin } = useAuth()
   const { events, selectedEventId } = usePlanner()
   // In-workspace Event Pipeline drawer (Logistical Overview / Material Requirement / Design
   // Documents / Team Assignments) — reuses the exact same panel + data source as the
@@ -3431,10 +3431,14 @@ export function CanvasWorkspacePage() {
 
   function requestModeChange(m: WorkspaceMode) {
     if (m === 'Viewing') { setMode('Viewing'); return }
-    if (LOCKED_MODES.includes(m)) { setPendingMode(m); return }
+    if (!hasConfirmationPin) { setPendingMode(m); return }
     setMode(m)
   }
-  function onPinSuccess() { if (pendingMode) setMode(pendingMode); setPendingMode(null) }
+  function onPinSuccess() {
+    setConfirmationPin('1234')
+    if (pendingMode) setMode(pendingMode)
+    setPendingMode(null)
+  }
   function commitName() {
     const nextName = nameDraft.trim() || boardName
     setBoardName(nextName)
