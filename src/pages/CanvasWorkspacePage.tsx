@@ -1097,6 +1097,8 @@ function LeftPanel({
   assets,
   onRouteToDeficit,
   onApplyBackground,
+  activeTool,
+  onToolChange,
   onPlacePresetText,
   selectedAsset,
   onUpdateFormatting,
@@ -3433,6 +3435,7 @@ export function CanvasWorkspacePage() {
   }
 
   const handleUndo = useCallback(() => {
+    if (pastHistory.length === 0) return
     setPastHistory((past) => {
       if (past.length === 0) return past
       const previousState = past[past.length - 1]
@@ -3444,9 +3447,10 @@ export function CanvasWorkspacePage() {
       return remainingPast
     })
     showToast('Undo action')
-  }, [])
+  }, [pastHistory])
 
   const handleRedo = useCallback(() => {
+    if (futureHistory.length === 0) return
     setFutureHistory((future) => {
       if (future.length === 0) return future
       const nextState = future[0]
@@ -3458,7 +3462,7 @@ export function CanvasWorkspacePage() {
       return remainingFuture
     })
     showToast('Redo action')
-  }, [])
+  }, [futureHistory])
 
   function updateAsset(id: string, changes: Partial<CanvasAsset>) {
     pushCanvasAssetsChange((prev) => prev.map((a) => a.id === id ? { ...a, ...changes } : a))

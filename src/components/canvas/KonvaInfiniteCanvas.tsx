@@ -158,7 +158,7 @@ function CanvasElement({
       transformerRef.current.nodes([nodeRef.current])
       transformerRef.current.getLayer()?.batchDraw()
     }
-  }, [selected, listening])
+  }, [selected, listening, image, asset.w, asset.h])
 
   if (asset.hidden) return null
 
