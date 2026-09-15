@@ -22,3 +22,8 @@ This tree is the Vercel SPA. API deploy is Railway in Shunrenn/Lumiere.
 - Supabase MCP is for the API/data plane. Do not treat browser Supabase as login identity.
 
 Full list: API repo `docs/build-lumiere.md` §7.
+
+## Standing Verification Rule
+
+STANDING VERIFICATION RULE: Never report a task as done, complete, verified, or working based only on a clean build (pnpm build passing) or a successful deploy. These only prove the code compiles — not that the feature works. Before claiming any task complete: (1) run a real curl/HTTP test against the live production API and show raw request/response, or a real browser test with actual screenshots — not text descriptions of what should render; (2) show the actual git diff of every changed file; (3) if a claim can't be verified this way, say so explicitly instead of guessing or fabricating plausible-sounding output. This rule applies to every task, every session, without exception.
+

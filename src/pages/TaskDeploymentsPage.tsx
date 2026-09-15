@@ -9,6 +9,7 @@ import { ErrorFallback } from '@/components/ErrorFallback'
 import { cn } from '@/lib/utils'
 import { addDeployment, updateDeployment, useDeployments } from '@/lib/deployments'
 import { usePortal } from '@/lib/store'
+import { useDispatchStore } from '@/lib/warehouse-dispatch'
 
 type DeployStatus = 'In Progress' | 'Awaiting Setup' | 'Completed'
 
@@ -38,7 +39,8 @@ type Filter = 'All Statuses' | DeployStatus
 const FILTERS: Filter[] = ['All Statuses', 'In Progress', 'Awaiting Setup', 'Completed']
 
 export function TaskDeploymentsPage() {
-  const { events: portalEvents } = usePortal()
+  const { events: portalEvents, staff, procurement } = usePortal()
+  const dispatchStore = useDispatchStore(portalEvents, staff, procurement)
   const customDeployments = useDeployments()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('All Statuses')
@@ -52,18 +54,42 @@ export function TaskDeploymentsPage() {
         ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
         : evt.targetDate
 
-      const statuses: DeployStatus[] = ['In Progress', 'Awaiting Setup', 'Completed']
-      const status: DeployStatus = (evt.status as any) === 'Completed' ? 'Completed' : statuses[idx % 3]
-      const tasks = [
-        'Scenic Backdrop Installation & Setup',
-        'Logistics & Fleet Coordination, Décor Assembly',
-        'Lighting Rig Setup & Calibration, Fine Trim',
-        'Inventory Dispatch Oversight, Reception Setup',
-        'AV Staging & Backdrop Assembly',
-      ]
-      const leads = [['Eleanor Vance'], ['Sebastian Cross'], ['Marcus Sterling'], ['Isolde Thorne']]
-      const staff = [['J. Moreau', 'R. Nakamura'], ['S. Chen'], ['J. Moreau'], ['R. Nakamura', 'S. Chen']]
-      const vehicles = ['Truck Alpha (6-Ton)', 'Van Beta (Transit)', 'Truck Gamma (4-Ton)', 'Van Delta (Transit)', 'Truck Echo (6-Ton)']
+      const batches = (dispatchStore.get(evt.id) ?? []).filter((b) => !b.isArchived)
+      const primaryBatch = batches[0]
+
+      let status: DeployStatus = 'Awaiting Setup'
+      let progress = 0
+      let crewLeads: string[] = ['Unassigned']
+      let staffMembers: string[] = []
+      let vehicle = 'No Fleet Assigned'
+      let task = 'Awaiting Dispatch Setup'
+
+      if (evt.status === 'Completed') {
+        status = 'Completed'
+        progress = 100
+        task = `${evt.title} Installation & Operations`
+      } else if (primaryBatch) {
+        if (primaryBatch.stage === 'Delivered' || primaryBatch.stage === 'Returned') {
+          status = 'Completed'
+          progress = 100
+        } else if (primaryBatch.stage === 'In Transit' || primaryBatch.stage === 'Loaded') {
+          status = 'In Progress'
+          progress = primaryBatch.stage === 'Loaded' ? 40 : 75
+        } else {
+          status = 'Awaiting Setup'
+          progress = 15
+        }
+
+        const crewNames = (primaryBatch.crew || []).map((c: any) => (typeof c === 'string' ? c : c.name))
+        if (crewNames.length > 0) {
+          crewLeads = [crewNames[0]]
+          staffMembers = crewNames.slice(1)
+        }
+        if (primaryBatch.vehicleType) {
+          vehicle = `${primaryBatch.vehicleType}${primaryBatch.plateNumber ? ` (${primaryBatch.plateNumber})` : ''}`
+        }
+        task = `${evt.title} Logistics & Site Operations`
+      }
 
       return {
         id: evt.id || `d-${idx + 1}`,
@@ -72,18 +98,18 @@ export function TaskDeploymentsPage() {
         deploymentId: `LMR-DEP-${evt.refId ? evt.refId.replace('PRT-2026-', '') : String(941 + idx)}`,
         event: evt.title,
         venue: evt.venue,
-        task: tasks[idx % tasks.length],
+        task,
         status,
-        progress: status === 'Completed' ? 100 : status === 'In Progress' ? 45 + ((idx * 17) % 45) : 0,
-        crewLeads: leads[idx % leads.length],
-        staffMembers: staff[idx % staff.length],
-        vehicle: vehicles[idx % vehicles.length],
+        progress,
+        crewLeads,
+        staffMembers,
+        vehicle,
       }
     })
 
     const customOnly = customDeployments.filter((c) => !mapped.some((m) => m.id === c.id || m.deploymentId === c.deploymentId))
     return [...mapped, ...customOnly]
-  }, [portalEvents, customDeployments])
+  }, [portalEvents, customDeployments, dispatchStore])
 
   const kpiData = useMemo(() => {
     const activeVenues = new Set(deployments.map((d) => d.venue)).size

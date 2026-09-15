@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { AlertTriangle, Check, MessageSquare, Pin, Send, ShieldAlert, UserRound, X } from 'lucide-react'
+import { logAuditEvent } from '@/lib/audit-logger'
 
 export function FeedbackForm({ onClose, onSubmitted }: { onClose: () => void; onSubmitted: (message: string) => void }) {
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); onSubmitted('Feedback sent to the operations team.'); onClose() }
@@ -7,7 +8,24 @@ export function FeedbackForm({ onClose, onSubmitted }: { onClose: () => void; on
 }
 
 export function IncidentForm({ onClose, onSubmitted }: { onClose: () => void; onSubmitted: (message: string) => void }) {
-  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); onSubmitted('Incident report submitted with an automatic timestamp.'); onClose() }
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    const description = String(data.get('description') || '')
+    const involved = String(data.get('involved') || '')
+    const recipient = String(data.get('recipient') || 'Admin')
+    void logAuditEvent({
+      actor_id: 'incident-reporter',
+      actor_name: 'PWA Operational Lead',
+      module: 'manning',
+      action_type: 'MANNING_OVERRIDE',
+      target_id: `inc-${Date.now()}`,
+      target_snapshot: { description, involved, recipient },
+      reason: `Incident report filed for ${recipient}`,
+    })
+    onSubmitted('Incident report submitted with an automatic timestamp.')
+    onClose()
+  }
   return <div className="sheet-backdrop"><form className="sheet space-y-4" onSubmit={submit}><div className="flex items-start justify-between"><div><p className="eyebrow">Personnel & welfare</p><h2 className="mt-1 font-serif text-2xl">Incident Report</h2></div><button type="button" className="icon-button" onClick={onClose} aria-label="Close"><X className="size-4" /></button></div><label className="field-label">What happened?<textarea name="description" required rows={4} className="field-input" placeholder="Describe the concern..." /></label><label className="field-label">Employee or department involved (optional)<input name="involved" className="field-input" placeholder="Name or department" /></label><label className="field-label">Send to<select name="recipient" className="field-input"><option>Admin</option><option>Manning</option><option>Both</option></select></label><p className="text-xs leading-5 text-muted-foreground">Date and time are captured automatically when you submit.</p><button className="button-primary w-full"><ShieldAlert className="size-4" /> Submit incident</button></form></div>
 }
 
@@ -22,7 +40,20 @@ function ClipboardMark() { return <MessageSquare className="size-5 text-primary"
 
 export function WarningPanel({ onNotify }: { onNotify: (message: string) => void }) {
   const [count, setCount] = useState(2)
-  const issue = (tier: string, automatic = false) => { if (automatic) setCount((value) => value + 1); onNotify(`${tier} issued${automatic ? ` · warning total ${count + 1}` : ''}.`) }
+  const issue = (tier: string, automatic = false) => {
+    const nextCount = count + (automatic ? 1 : 0)
+    if (automatic) setCount(nextCount)
+    onNotify(`${tier} issued${automatic ? ` · warning total ${nextCount}` : ''}.`)
+    void logAuditEvent({
+      actor_id: 'crew-lead',
+      actor_name: 'Field Crew Lead',
+      module: 'manning',
+      action_type: 'MANNING_OVERRIDE',
+      target_id: `warning-${Date.now()}`,
+      target_snapshot: { tier, automatic, totalWarnings: nextCount },
+      reason: `${tier} issued to field crew member`,
+    })
+  }
   return <section className="paper-card space-y-3"><div className="flex items-center gap-2"><AlertTriangle className="size-4 text-primary" /><p className="eyebrow">Warning issuance</p></div><p className="text-sm leading-6 text-muted-foreground">Standing warnings count toward the automatic Call to Office threshold of 3.</p><div className="grid grid-cols-2 gap-2"><button className="button-secondary" onClick={() => issue('Minor warning')}>Minor</button><button className="button-secondary" onClick={() => issue('Standing warning', true)}>Standing</button></div><button className="button-primary w-full" onClick={() => issue('Manual Call to Office')}>Manual Call to Office</button><p className="text-xs text-muted-foreground">Standing warnings: {count} · manual calls do not change this total.</p></section>
 }
 

@@ -25,7 +25,23 @@ export function WarehouseLeadPage() {
   const [assignItem, setAssignItem] = useState<WarehouseEvent['items'][number] | null>(null)
   const [toast, setToast] = useState('')
   const [selectedDate, setSelectedDate] = useState('2026-08-20')
-  const [notes, setNotes] = useState<Record<string, string>>({})
+  const [notes, setNotes] = useState<Record<string, string>>(() => {
+    if (typeof window === 'undefined') return { '2026-08-19': 'Confirm driver arrival time for stage gear.' }
+    try {
+      const stored = localStorage.getItem('__lumiere_lead_notes__')
+      return stored ? JSON.parse(stored) : { '2026-08-19': 'Confirm driver arrival time for stage gear.' }
+    } catch {
+      return { '2026-08-19': 'Confirm driver arrival time for stage gear.' }
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('__lumiere_lead_notes__', JSON.stringify(notes))
+    } catch {
+      // ignore
+    }
+  }, [notes])
 
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 5000) }
   const pendingCount = tasks.filter((t) => t.status === 'Submitted').length

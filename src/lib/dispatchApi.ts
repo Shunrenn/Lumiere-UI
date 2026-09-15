@@ -62,3 +62,23 @@ export async function updateAssetDispatchStatus(assetId: string, targetState: st
     return true
   }
 }
+
+/**
+ * Fetches event packing list from backend REST API.
+ * Endpoint: GET /api/dispatch/event/{eventId}/packing-list
+ */
+export async function fetchEventPackingList(eventId: string): Promise<{ eventId: string; groups: any[] } | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/dispatch/event/${encodeURIComponent(eventId)}/packing-list`, {
+      headers: getAuthHeaders(),
+    })
+    if (res.ok) {
+      return await res.json()
+    }
+    return null
+  } catch (err) {
+    console.warn('[dispatchApi] Fetch packing list skipped/fallback:', err)
+    return null
+  }
+}
+

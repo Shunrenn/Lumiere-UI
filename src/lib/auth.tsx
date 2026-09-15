@@ -10,6 +10,7 @@ import {
 import { supabase } from './supabase'
 import { womModuleAccessLevel } from './rbac'
 import { API_BASE_URL } from './apiConfig'
+import { useIdleTimeout } from './useIdleTimeout'
 
 // The exactly-5 Warehouse Operations Manager (WOM) sub-roles. Typing subRole
 // as this union means an invalid value (e.g. 'Logistics Coordinator') is a
@@ -214,6 +215,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentUser(null)
     clearStoredAuth()
   }, [])
+
+  // Auto logout user after 20 minutes of inactivity
+  useIdleTimeout(logout, Boolean(currentUser))
 
   // Listen for global HTTP 401 Unauthorized events (e.g. token expired mid-session)
   useEffect(() => {

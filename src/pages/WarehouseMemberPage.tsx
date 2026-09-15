@@ -25,7 +25,23 @@ export function WarehouseMemberPage() {
   const [selectedTask, setSelectedTask] = useState<WarehouseTask | null>(null)
   const [toast, setToast] = useState('')
   const [selectedDate, setSelectedDate] = useState('2026-08-20')
-  const [notes, setNotes] = useState<Record<string, string>>({})
+  const [notes, setNotes] = useState<Record<string, string>>(() => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const stored = localStorage.getItem('__lumiere_member_notes__')
+      return stored ? JSON.parse(stored) : {}
+    } catch {
+      return {}
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('__lumiere_member_notes__', JSON.stringify(notes))
+    } catch {
+      // ignore
+    }
+  }, [notes])
 
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 5000) }
   const myEvents = events.filter((event) => myTasks.some((t) => t.eventId === event.id))

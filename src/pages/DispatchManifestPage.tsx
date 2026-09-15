@@ -5,6 +5,7 @@ import { VerifyHandoffModal } from '@/components/VerifyHandoffModal'
 import { ManifestDetailModal } from '@/components/ManifestDetailModal'
 import { cn } from '@/lib/utils'
 import { usePortal } from '@/lib/store'
+import { useDispatchStore } from '@/lib/warehouse-dispatch'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
 
@@ -42,45 +43,65 @@ function actionsFor(status: HandshakeStatus): [string, string] {
 }
 
 export function DispatchManifestPage() {
-  const { events: portalEvents } = usePortal()
+  const { events: portalEvents, staff, procurement } = usePortal()
+  const dispatchStore = useDispatchStore(portalEvents, staff, procurement)
   const [query,        setQuery]        = useState('')
   const [filter,       setFilter]       = useState<Filter>('All Active')
 
   const defaultManifests = useMemo<Manifest[]>(() => {
     if (!portalEvents || portalEvents.length === 0) return []
 
-    const vehicles = ['Truck Alpha (6-Ton)', 'Van Beta (Transit)', 'Truck Gamma (4-Ton)', 'Van Delta (Transit)', 'Truck Echo (6-Ton)']
-    const tasks = [
-      'Scenic Backdrop & Floral Arch Setup',
-      'Logistics & Fleet Coordination',
-      'Lighting Rig Setup & Calibration',
-      'Tablescape & Candle Ambiance Setup',
-      'AV Staging & Backdrop Assembly',
-    ]
-    const handoffs = ['M. Kowalski', 'J. Santos', 'R. Nakamura', 'S. Chen']
-    const receivers = ['Eleanor Vance', 'Sebastian Cross', 'Marcus Sterling', 'J. Moreau']
-    const statuses: HandshakeStatus[] = ['Pending Verification', 'In Transit', 'Completed']
-
-    return portalEvents.map((evt, idx) => {
+    const result: Manifest[] = []
+    portalEvents.forEach((evt, idx) => {
       const dateObj = new Date(`${evt.targetDate}T12:00:00`)
       const formattedDate = !isNaN(dateObj.getTime())
         ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
         : evt.targetDate
 
-      return {
-        id: `m-${evt.id || idx + 1}`,
-        manifestId: `MNF-${9940 + idx}`,
-        vehicle: vehicles[idx % vehicles.length],
-        event: evt.title,
-        venue: evt.venue,
-        date: formattedDate,
-        fieldTask: tasks[idx % tasks.length],
-        logisticsHandoff: handoffs[idx % handoffs.length],
-        fieldReceiver: receivers[idx % receivers.length],
-        status: (evt.status as any) === 'Completed' ? 'Completed' : statuses[idx % statuses.length],
+      const batches = (dispatchStore.get(evt.id) ?? []).filter((b) => !b.isArchived)
+
+      if (batches.length > 0) {
+        batches.forEach((batch) => {
+          let status: HandshakeStatus = 'Pending Verification'
+          if (batch.stage === 'Delivered' || batch.stage === 'Returned') {
+            status = 'Completed'
+          } else if (batch.stage === 'In Transit' || batch.stage === 'Loaded') {
+            status = 'In Transit'
+          }
+
+          const crewNames = (batch.crew || []).map((c: any) => (typeof c === 'string' ? c : c.name))
+          const firstCrew = crewNames.length > 0 ? crewNames[0] : 'Field Receiver'
+
+          result.push({
+            id: `m-${evt.id}-${batch.id}`,
+            manifestId: `MNF-${batch.id.substring(0, 6).toUpperCase()}`,
+            vehicle: `${batch.vehicleType}${batch.plateNumber ? ` (${batch.plateNumber})` : ''}`,
+            event: evt.title,
+            venue: evt.venue,
+            date: formattedDate,
+            fieldTask: `${evt.title} Dispatch Handoff`,
+            logisticsHandoff: batch.driverName || 'Logistics Officer',
+            fieldReceiver: firstCrew,
+            status: evt.status === 'Completed' ? 'Completed' : status,
+          })
+        })
+      } else {
+        result.push({
+          id: `m-${evt.id || idx + 1}`,
+          manifestId: `MNF-${evt.refId ? evt.refId.replace('PRT-2026-', '') : String(9940 + idx)}`,
+          vehicle: 'Unassigned Vehicle',
+          event: evt.title,
+          venue: evt.venue,
+          date: formattedDate,
+          fieldTask: evt.status === 'Completed' ? `${evt.title} Final Handoff` : 'Awaiting Dispatch Setup',
+          logisticsHandoff: 'Unassigned',
+          fieldReceiver: 'Unassigned',
+          status: evt.status === 'Completed' ? 'Completed' : 'Pending Verification',
+        })
       }
     })
-  }, [portalEvents])
+    return result
+  }, [portalEvents, dispatchStore])
 
   const [manifests, setManifests] = useState<Manifest[]>([])
 
@@ -139,13 +160,28 @@ export function DispatchManifestPage() {
     )
   }
 
-  const [isLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [isError, setIsError] = useState(false)
+
+  const handleRefetch = async () => {
+    setIsError(false)
+    setIsLoading(true)
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('lumiere:refetch-events'))
+      }
+      await new Promise((r) => setTimeout(r, 200))
+    } catch {
+      setIsError(true)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
     <ConsoleLayout>
       {isError ? (
-        <ErrorFallback title="Dispatch Manifests Unavailable" message="Could not fetch vehicle dispatch manifests." onRetry={() => setIsError(false)} />
+        <ErrorFallback title="Dispatch Manifests Unavailable" message="Could not fetch vehicle dispatch manifests." onRetry={handleRefetch} />
       ) : isLoading ? (
         <LoadingSkeleton variant="table" />
       ) : (

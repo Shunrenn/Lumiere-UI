@@ -16,7 +16,15 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [remember, setRemember] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    const msg = sessionStorage.getItem('_lumiere_idle_expired')
+    if (msg) {
+      sessionStorage.removeItem('_lumiere_idle_expired')
+      return msg
+    }
+    return ''
+  })
 
   const [requestEmail, setRequestEmail] = useState('')
   const [requestType, setRequestType] = useState<RequestType>('request-password')

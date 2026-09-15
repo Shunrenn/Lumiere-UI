@@ -105,7 +105,23 @@ export function GroundCrewPage() {
   const [reportItem, setReportItem] = useState<EventItem['items'][number] | null>(null)
   const [toast, setToast] = useState('')
   const [selectedDate, setSelectedDate] = useState('2026-08-20')
-  const [notes, setNotes] = useState<Record<string, string>>({})
+  const [notes, setNotes] = useState<Record<string, string>>(() => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const stored = localStorage.getItem('__lumiere_crew_notes__')
+      return stored ? JSON.parse(stored) : {}
+    } catch {
+      return {}
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('__lumiere_crew_notes__', JSON.stringify(notes))
+    } catch {
+      // ignore
+    }
+  }, [notes])
   const [handoffNotes, setHandoffNotes] = useState<Record<string, string>>({})
   const [egressError, setEgressError] = useState('')
   const [requestOpen, setRequestOpen] = useState(false)

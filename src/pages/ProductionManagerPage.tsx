@@ -30,7 +30,23 @@ export function ProductionManagerPage() {
   const [openJob, setOpenJob] = useState<ProductionJob | null>(null)
   const [toast, setToast] = useState('')
   const [selectedDate, setSelectedDate] = useState('2026-08-20')
-  const [notes, setNotes] = useState<Record<string, string>>({})
+  const [notes, setNotes] = useState<Record<string, string>>(() => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const stored = localStorage.getItem('__lumiere_production_notes__')
+      return stored ? JSON.parse(stored) : {}
+    } catch {
+      return {}
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('__lumiere_production_notes__', JSON.stringify(notes))
+    } catch {
+      // ignore
+    }
+  }, [notes])
 
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 5000) }
   const pendingCount = productionJobs.filter((j) => j.stage === 'Awaiting Approval').length
@@ -147,6 +163,17 @@ function StagePath({ stage }: { stage: ProductionStage }) {
 
 function JobDetail({ job, onClose, onToggleMaterial, onNotesChange, onAdvance, onApprove, onSendBack }: { job: ProductionJob; onClose: () => void; onToggleMaterial: (materialId: string) => void; onNotesChange: (value: string) => void; onAdvance: () => void; onApprove: () => void; onSendBack: () => void }) {
   const canSubmit = job.stage === 'Unprepped' || job.stage === 'Prepping'
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => setPhotoPreview(reader.result as string)
+      reader.readAsDataURL(file)
+    }
+  }
+
   return (
     <div className="sheet-backdrop">
       <div className="sheet space-y-4">
@@ -177,7 +204,27 @@ function JobDetail({ job, onClose, onToggleMaterial, onNotesChange, onAdvance, o
         </div>
 
         <label className="field-label">Build notes<textarea value={job.notes} onChange={(e) => onNotesChange(e.target.value)} rows={3} placeholder="Describe progress made on this build..." className="field-input" /></label>
-        <button type="button" className="button-secondary w-full" onClick={() => {}}><Camera className="size-4" /> Attach photo (optional)</button>
+        
+        <input
+          type="file"
+          id="production-photo-input"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+        {photoPreview ? (
+          <div className="rounded-lg border border-border bg-muted/40 p-3">
+            <div className="mb-2 flex items-center justify-between text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="flex items-center gap-1.5"><CheckCircle2 className="size-3.5" /> Photo attached</span>
+              <button type="button" onClick={() => setPhotoPreview(null)} className="text-xs text-muted-foreground hover:text-destructive">Remove</button>
+            </div>
+            <img src={photoPreview} alt="Attached build photo" className="h-32 w-full rounded object-cover" />
+          </div>
+        ) : (
+          <button type="button" className="button-secondary w-full" onClick={() => document.getElementById('production-photo-input')?.click()}>
+            <Camera className="size-4" /> Attach photo (optional)
+          </button>
+        )}
 
         {canSubmit && <button type="button" onClick={onAdvance} disabled={job.notes.trim().length === 0} className="button-primary w-full disabled:pointer-events-none disabled:opacity-40"><Check className="size-4" /> Submit for approval</button>}
         {job.stage === 'Awaiting Approval' && (
