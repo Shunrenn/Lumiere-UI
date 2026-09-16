@@ -247,8 +247,8 @@ function makeEventAlias(title: string): string {
   return `${letters || 'EVT'}-26`
 }
 
-function mapPortalEventsToCards(evList: any[]): ProjectCard[] {
-  const designers = ['Elena Vasseur', 'Marc Delacroix', 'Sophie Laurent', 'Julien Morel', 'Isabelle Renard', 'Pierre Faure']
+function mapPortalEventsToCards(evList: any[], designerNames?: string[]): ProjectCard[] {
+  const designers = (designerNames && designerNames.length > 0) ? designerNames : DEMO_DESIGNERS
   const thumbnails = [
     '/images/decor/chateau-ballroom.png',
     '/images/decor/garden-wedding.png',
@@ -1070,7 +1070,18 @@ export function DesignCanvasHubPage() {
   const { navigate } = useNav()
   const { dark, toggle: toggleDark } = useDarkMode()
   const [profileOpen, setProfileOpen] = useState(false)
-  const { events: portalEvents } = usePortal()
+  const { events: portalEvents, staff } = usePortal()
+
+  const dbDesigners = useMemo(() => {
+    const designerStaff = (staff || []).filter((s) => {
+      const r = (s.role || '').toLowerCase()
+      return r === 'event planner' || r === 'designer' || r === 'event admin' || r.includes('planner') || r.includes('designer')
+    })
+    const names = designerStaff.map((s) => `${s.firstName || ''} ${s.surname || ''}`.trim()).filter(Boolean)
+    return names.length > 0
+      ? Array.from(new Set(names))
+      : DEMO_DESIGNERS
+  }, [staff])
   const [isLoading] = useState(false)
   const [isError, setIsError] = useState(false)
 
@@ -1177,10 +1188,10 @@ export function DesignCanvasHubPage() {
   // Combine real events as project cards with local card state
   const effectiveCards = useMemo(() => {
     const source = (portalEvents && portalEvents.length > 0) ? portalEvents : REAL_10_SEEDED_EVENTS
-    const realCards = mapPortalEventsToCards(source)
+    const realCards = mapPortalEventsToCards(source, dbDesigners)
     const userCards = cards.filter((c) => c.id.startsWith('mb-') || c.id.startsWith('pc-custom-'))
     return [...realCards, ...userCards]
-  }, [portalEvents, cards])
+  }, [portalEvents, cards, dbDesigners])
 
   const [searchQuery, setSearchQuery] = useState('')
   const [designer, setDesigner] = useState('All Designers')
@@ -1669,7 +1680,7 @@ export function DesignCanvasHubPage() {
             {/* Filters */}
             <Dropdown
               label="Designer"
-              options={['All Designers', ...DEMO_DESIGNERS]}
+              options={['All Designers', ...dbDesigners]}
               value={designer}
               onChange={setDesigner}
             />
