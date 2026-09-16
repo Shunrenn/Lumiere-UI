@@ -342,16 +342,7 @@ const DEMO_NOTIFICATIONS: DemoNotification[] = [
   { id: 'n6', kind: 'asset-collab',   text: 'Pierre Faure added you as an asset planning collaborator on "Tent Lighting Moodboard."', time: '3 days ago', unread: false },
 ]
 
-// The trigger + dropdown mechanics live in the shared NotificationsBell
-// component (reused as-is by Admin and Executive) — this page just supplies
-// its own notification entries, resolving each kind to an icon/color first.
-const PLANNER_NOTIFICATIONS: NotificationEntry[] = DEMO_NOTIFICATIONS.map((n) => ({
-  id: n.id,
-  text: n.text,
-  time: n.time,
-  unread: n.unread,
-  ...NOTIFICATION_META[n.kind],
-}))
+
 
 /* ─── Profile Settings Sidebar ─── */
 function ProfileSettingsSidebar({ onClose, adminName, onLogout }: {
@@ -1087,6 +1078,36 @@ export function DesignCanvasHubPage() {
     fetchEventsApi().catch(() => {})
   }, [])
 
+  const plannerNotifications: NotificationEntry[] = useMemo(() => {
+    const items: NotificationEntry[] = []
+
+    if (portalEvents && portalEvents.length > 0) {
+      portalEvents.slice(0, 4).forEach((ev, idx) => {
+        const eventName = (ev as any).title || (ev as any).name || 'New Event'
+        items.push({
+          id: `portal-ev-notif-${ev.id || idx}`,
+          text: `New event in pipeline: "${eventName}" (${ev.client || 'Corporate Client'}).`,
+          time: ev.targetDate || 'Recent',
+          unread: idx === 0,
+          icon: Share2,
+          color: 'text-primary',
+        })
+      })
+    }
+
+    DEMO_NOTIFICATIONS.forEach((n) => {
+      items.push({
+        id: n.id,
+        text: n.text,
+        time: n.time,
+        unread: n.unread,
+        ...NOTIFICATION_META[n.kind],
+      })
+    })
+
+    return items
+  }, [portalEvents])
+
   /* ── Calendar state ── */
   const today = new Date()
   const [calYear, setCalYear] = useState(today.getFullYear())
@@ -1102,7 +1123,7 @@ export function DesignCanvasHubPage() {
       if (!parts) return
       if (parts.year !== calYear || parts.month !== calMonth) return
 
-      const eventName = ev.title || ev.name || 'Untitled Event'
+      const eventName = (ev as any).title || (ev as any).name || 'Untitled Event'
       const alias = makeEventAlias(eventName)
       const statuses: DesignStatus[] = ['Final Draft', 'Ready to Present', 'Subject to Review', 'Initial Draft']
 
@@ -1431,7 +1452,7 @@ export function DesignCanvasHubPage() {
           </button>
 
           {/* Bell */}
-          <NotificationsBell notifications={PLANNER_NOTIFICATIONS} size="sm" />
+          <NotificationsBell notifications={plannerNotifications} size="sm" />
 
           {/* Dark mode */}
           <button

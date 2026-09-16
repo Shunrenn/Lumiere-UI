@@ -39,7 +39,7 @@ const filters: Filter[] = ['All', 'Pending', 'Held for Audit', 'Second Sign-off'
 
 export function DamageValidationPage() {
   const { damageExceptions: items, isBackendConnected, resolveDamage, staff, subRolesByParent, setSubRolesByParent } = usePortal()
-  const { isExecutive, isAdmin, isWarehouse, adminRole, adminEmail, adminName, subRole: userSubRole } = useAuth()
+  const { isExecutive, isWarehouse, adminRole, adminEmail, adminName, subRole: userSubRole } = useAuth()
   const { intent, clearIntent, navigate } = useNav()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('All')

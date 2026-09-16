@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { LogOut, Moon, Sun, User, ShieldAlert, UserPlus, Activity, KeyRound, Check, X as XIcon } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
+import { usePortal } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { useDarkMode } from '@/lib/theme'
 import { NotificationsBell, type NotificationEntry } from '@/components/NotificationsBell'
@@ -22,13 +23,15 @@ export function AdminTopBar() {
 
   const { userActions, pendingSubRoleSetups } = usePortal()
 
-  const notifications = useMemo<NotificationEntry[]>(() => {
+  const notifications = useMemo(() => {
     const list: NotificationEntry[] = []
+    const actions = (userActions as any[]) || []
+    const setups = (pendingSubRoleSetups as any[]) || []
 
     // 1. Account locked out events
-    userActions
-      .filter((a) => a.type === 'account-locked')
-      .forEach((a) => {
+    actions
+      .filter((a: any) => a.type === 'account-locked')
+      .forEach((a: any) => {
         list.push({
           id: `act-lock-${a.id}`,
           icon: ShieldAlert,
@@ -41,9 +44,9 @@ export function AdminTopBar() {
       })
 
     // 2. Forgot password & access requests
-    userActions
-      .filter((a) => a.type === 'forgot-password' || a.type === 'access-request')
-      .forEach((a) => {
+    actions
+      .filter((a: any) => a.type === 'forgot-password' || a.type === 'access-request')
+      .forEach((a: any) => {
         const isAccessReq = a.type === 'access-request'
         list.push({
           id: `act-req-${a.id}`,
@@ -59,7 +62,7 @@ export function AdminTopBar() {
       })
 
     // 3. Pending sub-role setup configuration
-    pendingSubRoleSetups.forEach((setup) => {
+    setups.forEach((setup: any) => {
       list.push({
         id: `setup-${setup.id}`,
         icon: Activity,
@@ -72,12 +75,12 @@ export function AdminTopBar() {
     })
 
     // 4. Security audit events
-    SECURITY_EVENTS.slice(0, 3).forEach((ev) => {
+    SECURITY_EVENTS.slice(0, 3).forEach((ev: SecurityEvent) => {
       list.push({
         id: `sec-ev-${ev.id}`,
         icon: Activity,
-        color: ev.severity === 'high' ? 'text-destructive' : 'text-sky-500',
-        text: `${ev.action}: ${ev.details}`,
+        color: ev.status === 'Blocked' || ev.status === 'Failed' ? 'text-destructive' : 'text-sky-500',
+        text: `${ev.action}: ${ev.note}`,
         time: ev.timestamp,
         unread: false,
         onClick: () => navigate('security-audit'),
