@@ -119,16 +119,31 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
         client: event.client,
         venue: event.venue,
         targetDate: event.targetDate,
-        installationStart: normalizeTimeFormat(event.installationStart),
-        installationEnd: normalizeTimeFormat(event.installationEnd),
+        installationStart: normalizeTimeFormat(
+          event.eventStart ||
+            (!event.installationStart.includes('-') ? event.installationStart : '18:00'),
+        ),
+        installationEnd: normalizeTimeFormat(
+          event.eventEnd ||
+            (!event.installationEnd.includes('-') ? event.installationEnd : '23:00'),
+        ),
         moodPlan: event.moodPlan ?? '',
+        geoClass: event.geoClass ?? 'Local',
+        ingressDate: event.ingressDate ?? event.targetDate,
+        ingressTime: normalizeTimeFormat(event.ingressTime || '08:00'),
+        fullStop: normalizeTimeFormat(event.fullStop || '23:30'),
       })
     } else {
       setDraft(emptyDraft)
     }
   }, [open, event])
 
-  const venues = [...baseVenues, ...customVenues]
+  const venues = useMemo(() => {
+    const list = new Set([...baseVenues, ...customVenues])
+    if (draft.venue) list.add(draft.venue)
+    if (event?.venue) list.add(event.venue)
+    return Array.from(list)
+  }, [customVenues, draft.venue, event?.venue])
 
   const set = (key: keyof NewEventDraft, value: string) => {
     if (readOnly) return
@@ -324,87 +339,109 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            {/* Client Event Hours Section */}
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3.5 space-y-3">
               <div>
-                <label className={labelClass} htmlFor="ev-start">
-                  Event Start Time
-                </label>
-                <input
-                  id="ev-start"
-                  type="time"
-                  className={inputClass}
-                  value={draft.installationStart}
-                  onChange={(e) => set('installationStart', e.target.value)}
-                />
+                <p className="text-[0.6rem] font-bold uppercase tracking-[0.14em] text-primary">
+                  1. Event Hours (Execution Window)
+                </p>
+                <p className="text-[0.65rem] text-muted-foreground">
+                  Actual hours when the client’s main program/gala runs.
+                </p>
               </div>
-              <div>
-                <label className={labelClass} htmlFor="ev-end">
-                  Event End Time
-                </label>
-                <input
-                  id="ev-end"
-                  type="time"
-                  className={inputClass}
-                  value={draft.installationEnd}
-                  onChange={(e) => set('installationEnd', e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* Geographic Classification & Logistics Ingress/Fullstop */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelClass} htmlFor="ev-geo">
-                  Geographic Scope
-                </label>
-                <select
-                  id="ev-geo"
-                  className={`${inputClass} appearance-none`}
-                  value={draft.geoClass || 'Local'}
-                  onChange={(e) => set('geoClass', e.target.value)}
-                >
-                  <option value="Local">Local (NCR / Metro)</option>
-                  <option value="National">National (Regional)</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelClass} htmlFor="ev-ingress-date">
-                  Ingress Date
-                </label>
-                <input
-                  id="ev-ingress-date"
-                  type="date"
-                  className={inputClass}
-                  value={draft.ingressDate || (draft.targetDate ? draft.targetDate : '')}
-                  onChange={(e) => set('ingressDate', e.target.value)}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass} htmlFor="ev-start">
+                    Event Start Time
+                  </label>
+                  <input
+                    id="ev-start"
+                    type="time"
+                    className={inputClass}
+                    value={draft.installationStart}
+                    onChange={(e) => set('installationStart', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="ev-end">
+                    Event End Time
+                  </label>
+                  <input
+                    id="ev-end"
+                    type="time"
+                    className={inputClass}
+                    value={draft.installationEnd}
+                    onChange={(e) => set('installationEnd', e.target.value)}
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            {/* Geographic Scope & Logistics Buffer Window */}
+            <div className="rounded-lg border border-border bg-muted/40 p-3.5 space-y-3">
               <div>
-                <label className={labelClass} htmlFor="ev-ingress-time">
-                  Ingress Time
-                </label>
-                <input
-                  id="ev-ingress-time"
-                  type="time"
-                  className={inputClass}
-                  value={draft.ingressTime || '08:00'}
-                  onChange={(e) => set('ingressTime', e.target.value)}
-                />
+                <p className="text-[0.6rem] font-bold uppercase tracking-[0.14em] text-foreground">
+                  2. Logistics Buffer Window (Load-in &amp; Tear-down)
+                </p>
+                <p className="text-[0.65rem] text-muted-foreground">
+                  Operational buffer for truck load-in (Ingress) and full venue clearance (Full Stop).
+                </p>
               </div>
-              <div>
-                <label className={labelClass} htmlFor="ev-fullstop">
-                  Full Stop Time
-                </label>
-                <input
-                  id="ev-fullstop"
-                  type="time"
-                  className={inputClass}
-                  value={draft.fullStop || '23:00'}
-                  onChange={(e) => set('fullStop', e.target.value)}
-                />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass} htmlFor="ev-geo">
+                    Geographic Scope
+                  </label>
+                  <select
+                    id="ev-geo"
+                    className={`${inputClass} appearance-none`}
+                    value={draft.geoClass || 'Local'}
+                    onChange={(e) => set('geoClass', e.target.value)}
+                  >
+                    <option value="Local">Local (NCR / Metro)</option>
+                    <option value="National">National (Regional)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="ev-ingress-date">
+                    Ingress Date
+                  </label>
+                  <input
+                    id="ev-ingress-date"
+                    type="date"
+                    className={inputClass}
+                    value={draft.ingressDate || (draft.targetDate ? draft.targetDate : '')}
+                    onChange={(e) => set('ingressDate', e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass} htmlFor="ev-ingress-time">
+                    Ingress Time (Site Load-in)
+                  </label>
+                  <input
+                    id="ev-ingress-time"
+                    type="time"
+                    className={inputClass}
+                    value={draft.ingressTime || '08:00'}
+                    onChange={(e) => set('ingressTime', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="ev-fullstop">
+                    Full Stop (Clearance Cutoff)
+                  </label>
+                  <input
+                    id="ev-fullstop"
+                    type="time"
+                    className={inputClass}
+                    value={draft.fullStop || '23:30'}
+                    onChange={(e) => set('fullStop', e.target.value)}
+                  />
+                </div>
               </div>
             </div>
 

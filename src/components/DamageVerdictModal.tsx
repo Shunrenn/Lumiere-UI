@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   X,
   MapPin,
@@ -15,6 +15,8 @@ import {
   Wrench,
   Ban,
   UserCheck2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { DamageException, DamageVerdict } from '@/lib/types'
@@ -53,7 +55,7 @@ const verdictConfig: Record<
   'Pending Second Sign-off': {
     label: 'Sign Off',
     confirmTitle: 'Confirm Sign-off',
-    confirmBody: 'This records your Executive sign-off on this audit-held exception.',
+    confirmBody: 'This records your WOM sign-off on this audit-held exception.',
     tone: 'text-amber-700',
     Icon: UserCheck2,
   },
@@ -115,6 +117,12 @@ export function DamageVerdictModal({
 
   const [note, setNote] = useState('')
   const [pendingVerdict, setPendingVerdict] = useState<ResolvableVerdict | null>(null)
+  const [currentImgIndex, setCurrentImgIndex] = useState(0)
+
+  const allImages = useMemo(() => {
+    if (exception.images && exception.images.length > 0) return exception.images
+    return [exception.imageUrl || '/placeholder.svg']
+  }, [exception])
 
   // Self-validation fields
   const [selfValJustification, setSelfValJustification] = useState('')
@@ -265,18 +273,50 @@ export function DamageVerdictModal({
             <figure className="overflow-hidden rounded-lg border border-border bg-muted/40">
               <div className="relative">
                 <img
-                  src={exception.imageUrl || '/placeholder.svg'}
+                  src={allImages[currentImgIndex] || '/placeholder.svg'}
                   alt={`Field-captured damage evidence for ${exception.assetName}`}
                   className="aspect-video w-full object-cover"
                 />
                 <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-foreground/70 px-3 py-1 text-[0.55rem] font-bold uppercase tracking-[0.1em] text-background backdrop-blur-sm">
                   <Camera className="size-3" />
-                  Field Capture
+                  Field Capture {allImages.length > 1 ? `(${currentImgIndex + 1}/${allImages.length})` : ''}
                 </span>
+
+                {allImages.length > 1 && (
+                  <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between px-2 pointer-events-none">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setCurrentImgIndex((prev) => (prev > 0 ? prev - 1 : allImages.length - 1))
+                      }}
+                      className="pointer-events-auto rounded-full bg-black/60 p-1.5 text-white transition hover:bg-black/90"
+                      aria-label="Previous image"
+                    >
+                      <ChevronLeft className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setCurrentImgIndex((prev) => (prev < allImages.length - 1 ? prev + 1 : 0))
+                      }}
+                      className="pointer-events-auto rounded-full bg-black/60 p-1.5 text-white transition hover:bg-black/90"
+                      aria-label="Next image"
+                    >
+                      <ChevronRight className="size-4" />
+                    </button>
+                  </div>
+                )}
               </div>
               <figcaption className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground">
-                <span>Uploaded by {exception.reportingOfficer} · {exception.officerRole}</span>
-                <span className="font-mono normal-case tracking-normal">{exception.capturedAt}</span>
+                <span>
+                  Uploaded by {exception.reportingOfficer} · {exception.officerRole}
+                </span>
+                <span className="font-mono normal-case tracking-normal">
+                  {allImages.length > 1 ? `Photo ${currentImgIndex + 1} of ${allImages.length} · ` : ''}
+                  {exception.capturedAt}
+                </span>
               </figcaption>
             </figure>
           )}
@@ -437,21 +477,21 @@ export function DamageVerdictModal({
             >
               {exception.status === 'Repair' && <Wrench className="size-4" />}
               {exception.status === 'Write-off' && <Ban className="size-4" />}
-              {`Audit resolved · ${exception.status} · two Executive sign-offs recorded`}
+              {`Audit resolved · ${exception.status} · two WOM sign-offs recorded`}
             </div>
           )}
 
           {isHeldForAudit && !showControls && (
             <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em] text-amber-800">
               <Scale className="size-4" />
-              On audit hold · awaiting first Executive sign-off
+              On audit hold · awaiting first WOM sign-off
             </div>
           )}
 
           {isPendingSecondSignOff && !showControls && (
             <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.1em] text-amber-800">
               <UserCheck2 className="size-4" />
-              Pending a second, different Executive sign-off
+              Pending a second, different WOM sign-off
             </div>
           )}
 

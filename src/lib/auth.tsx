@@ -12,9 +12,6 @@ import { womModuleAccessLevel } from './rbac'
 import { API_BASE_URL } from './apiConfig'
 import { useIdleTimeout } from './useIdleTimeout'
 
-// The exactly-5 Warehouse Operations Manager (WOM) sub-roles. Typing subRole
-// as this union means an invalid value (e.g. 'Logistics Coordinator') is a
-// compile-time error and can't be assigned again.
 export type WomSubRole =
   | 'Manning Officer'
   | 'Warehouse Manager'
@@ -38,17 +35,9 @@ export interface PortalAccount {
   name: string
   role: string
   portal: PortalKind
-  // Sub-role within the Warehouse Operations Manager account type. Drives
-  // finer-grained permission gates than the coarse account `role`. Optional
-  // for account types that don't distinguish sub-roles.
   subRole?: WomSubRole
-  // The Warehouse Ops Manager super-account. When true, the user has full,
-  // unrestricted access across every WOM module and sub-role domain — it is
-  // NOT scoped to a single sub-role. Left undefined/false for the five
-  // sub-role accounts, whose access is bounded by their RBAC scope.
   fullWarehouseAccess?: boolean
   temporaryPassword: boolean
-  confirmationPinHash?: string
   token?: string
 }
 
@@ -63,8 +52,6 @@ export function mapBackendUserToPortalAccount(data: {
   const rawRole = data.role.trim()
   const isTemp = Boolean(data.temporaryPassword ?? data.email?.toLowerCase().includes('temp'))
 
-  // 1. Structural WOM Parent Super-Account ("Warehouse Operations Manager")
-  const storedPin = typeof window !== 'undefined' && data.email ? localStorage.getItem(`lumiere_pin_${data.email.toLowerCase()}`) : null
   if (rawRole === 'Warehouse Operations Manager') {
     return {
       id: data.userId,
@@ -75,12 +62,10 @@ export function mapBackendUserToPortalAccount(data: {
       subRole: undefined,
       portal: 'web',
       temporaryPassword: isTemp,
-      confirmationPinHash: storedPin || undefined,
       token: data.token,
     }
   }
 
-  // 2. The 5 WOM Sub-Roles
   const womSubRoles: Record<string, PortalKind> = {
     'Manning Officer': 'pwa',
     'Warehouse Manager': 'web',
@@ -99,12 +84,10 @@ export function mapBackendUserToPortalAccount(data: {
       fullWarehouseAccess: false,
       portal: womSubRoles[rawRole],
       temporaryPassword: isTemp,
-      confirmationPinHash: storedPin || undefined,
       token: data.token,
     }
   }
 
-  // 3. Structural (Admin, Executive, Event Planner) & PWA Field Roles
   const pwaRoles = new Set(['Ground Crew', 'Warehouse Lead', 'Warehouse Member', 'Event Admin'])
   const portal: PortalKind = pwaRoles.has(rawRole) ? 'pwa' : 'web'
 
@@ -119,18 +102,8 @@ export function mapBackendUserToPortalAccount(data: {
   }
 }
 
-// WOM sub-role that has visibility rights to full crew detail. Everyone else
-// in the Warehouse Operations Manager account type gets the muted restricted
-// state in the Manning/Crew person-info modal.
 export const MANNING_OFFICER_SUBROLE: WomSubRole = 'Manning Officer'
-
-// The two Executive login accounts. Damage Validation's two-sign-off rule for
-// audit-held exceptions checks this list (cross-referenced against each
-// account's live Workforce Management suspension state) to determine whether
-// a second, distinct Executive is currently available to sign off.
 export const EXECUTIVE_LOGIN_EMAILS = ['executive@lumiere.com']
-
-
 
 export function parseJwtPayload(token: string): Record<string, any> | null {
   try {
@@ -201,38 +174,49 @@ interface AuthContextValue {
   changePassword: (current: string, next: string) => Promise<boolean>
   logout: () => void
   confirmLogout: boolean
-  setConfirmLogout: (value: boolean) => void
+  setConfirmLogout: (val: boolean) => void
   hasConfirmationPin: boolean
-  verifyConfirmationPin: (pin: string) => boolean
-  setConfirmationPin: (pin: string) => void
+  verifyConfirmationPin: (pin: string) => Promise<boolean>
+  setConfirmationPin: (pin: string) => Promise<boolean>
   verifyPassword: (password: string) => Promise<boolean>
+  refetchHasPin: () => Promise<boolean>
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null)
+const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<PortalAccount | null>(null)
   const [confirmLogout, setConfirmLogout] = useState(false)
+  const [hasConfirmationPin, setHasConfirmationPin] = useState<boolean>(false)
 
   const logout = useCallback(() => {
-    setCurrentUser(null)
     clearStoredAuth()
+    setCurrentUser(null)
+    setConfirmLogout(false)
+    setHasConfirmationPin(false)
   }, [])
 
-  // Auto logout user after 20 minutes of inactivity
   useIdleTimeout(logout, Boolean(currentUser))
 
-  // Listen for global HTTP 401 Unauthorized events (e.g. token expired mid-session)
-  useEffect(() => {
-    const handleUnauthorized = () => {
-      console.warn('[Auth] 401 Unauthorized event intercepted. Logging out.')
-      logout()
+  const checkHasPin = useCallback(async (token?: string) => {
+    const t = token || getStoredAuth().rawToken || currentUser?.token
+    if (!t) return false
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/has-pin`, {
+        headers: { Authorization: `Bearer ${t}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const has = Boolean(data.hasPin ?? data.HasPin)
+        setHasConfirmationPin(has)
+        return has
+      }
+    } catch (err) {
+      console.error('[Auth] error checking has-pin:', err)
     }
-    window.addEventListener('lumiere:unauthorized', handleUnauthorized)
-    return () => window.removeEventListener('lumiere:unauthorized', handleUnauthorized)
-  }, [logout])
+    return false
+  }, [currentUser?.token])
 
-  // On mount, check cached login from localStorage or sessionStorage with JWT expiration validation
   useEffect(() => {
     const { rawUser, rawToken, isSession } = getStoredAuth()
     if (rawUser) {
@@ -247,22 +231,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        const storedPin = typeof window !== 'undefined' && parsed.email ? localStorage.getItem(`lumiere_pin_${parsed.email.toLowerCase()}`) : null
         const normalized = {
           ...parsed,
-          confirmationPinHash: parsed.confirmationPinHash || storedPin || undefined,
           portal: inferPortal(parsed),
         }
         setCurrentUser(normalized)
         const storage = isSession ? sessionStorage : localStorage
         storage.setItem('_lumiere_auth_user', JSON.stringify(normalized))
         storage.setItem('_lumiere_auth_portal', normalized.portal)
+
+        if (token) {
+          checkHasPin(token)
+        }
       } catch {
         clearStoredAuth()
         setCurrentUser(null)
       }
     }
-  }, [])
+  }, [checkHasPin])
 
   const login = useCallback(
     async (
@@ -300,6 +286,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           storage.setItem('_lumiere_auth_portal', account.portal)
           if (data.token) {
             storage.setItem('_lumiere_auth_token', data.token)
+            await checkHasPin(data.token)
           }
           return { ok: true }
         }
@@ -310,7 +297,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { ok: false, reason: 'invalid' }
       }
     },
-    []
+    [checkHasPin]
   )
 
   const changePassword = useCallback(
@@ -349,11 +336,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [currentUser],
   )
 
-  // Verifies the current account's login password without changing it.
-  // Used as the re-authentication step for "Forgot PIN?" — deliberately has
-  // no retry lockout of its own (see AdminTopBar): the same password can
-  // already be tried at the login screen, which also has no lockout, so
-  // adding one only here would add friction without real security benefit.
   const verifyPassword = useCallback(
     async (password: string) => {
       if (!currentUser) return false
@@ -372,35 +354,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [currentUser],
   )
 
-  // Sets (or overwrites) the confirmation PIN for the current account. Used
-  // by both first-time setup and the post-"Forgot PIN?" reset. This demo
-  // stores the raw PIN under `confirmationPinHash` on the account object
-  // (mirroring how `password_hash` stores a raw demo password today) rather
-  // than a real one-way hash.
   const setConfirmationPin = useCallback(
-    (pin: string) => {
-      if (!currentUser) return
-      const updated = { ...currentUser, confirmationPinHash: pin }
-      setCurrentUser(updated)
-      if (currentUser.email && typeof window !== 'undefined') {
-        localStorage.setItem(`lumiere_pin_${currentUser.email.toLowerCase()}`, pin)
+    async (pin: string): Promise<boolean> => {
+      const token = currentUser?.token || getStoredAuth().rawToken
+      if (!token) return false
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/auth/set-pin`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ pin }),
+        })
+        if (res.ok) {
+          setHasConfirmationPin(true)
+          return true
+        }
+      } catch (err) {
+        console.error('[Auth] setConfirmationPin error:', err)
       }
-      const { isSession } = getStoredAuth()
-      const storage = isSession ? sessionStorage : localStorage
-      storage.setItem('_lumiere_auth_user', JSON.stringify(updated))
+      return false
     },
-    [currentUser],
+    [currentUser?.token],
   )
 
-  // Checks a 6-digit PIN against the current account's stored PIN. Returns
-  // false (never throws) if no PIN has been set yet — callers should gate
-  // on hasConfirmationPin first to route to setup instead of verification.
   const verifyConfirmationPin = useCallback(
-    (pin: string) => {
-      if (!currentUser?.confirmationPinHash) return false
-      return pin === currentUser.confirmationPinHash
+    async (pin: string): Promise<boolean> => {
+      const token = currentUser?.token || getStoredAuth().rawToken
+      if (!token) return false
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/auth/verify-pin`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ pin }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          return Boolean(data.valid ?? data.Valid)
+        }
+      } catch (err) {
+        console.error('[Auth] verifyConfirmationPin error:', err)
+      }
+      return false
     },
-    [currentUser],
+    [currentUser?.token],
   )
 
   const value = useMemo(
@@ -433,10 +434,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
       confirmLogout,
       setConfirmLogout,
-      hasConfirmationPin: Boolean(currentUser?.confirmationPinHash),
+      hasConfirmationPin,
       verifyConfirmationPin,
       setConfirmationPin,
       verifyPassword,
+      refetchHasPin: checkHasPin,
     }),
     [
       currentUser,
@@ -444,9 +446,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       changePassword,
       logout,
       confirmLogout,
+      hasConfirmationPin,
       verifyConfirmationPin,
       setConfirmationPin,
       verifyPassword,
+      checkHasPin,
     ],
   )
 

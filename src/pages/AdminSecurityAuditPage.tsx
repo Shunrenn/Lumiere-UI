@@ -34,18 +34,18 @@ type AccountFilter = (typeof ACCOUNT_FILTERS)[number]
 
 // Dark-mode friendly status treatments (translucent fill + readable text).
 const statusStyles: Record<AuditStatus, string> = {
-  Success: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-inset ring-emerald-500/30',
-  Failed: 'bg-amber-500/15 text-amber-400 ring-1 ring-inset ring-amber-500/30',
-  Blocked: 'bg-rose-500/15 text-rose-400 ring-1 ring-inset ring-rose-500/30',
-  Warning: 'bg-sky-500/15 text-sky-400 ring-1 ring-inset ring-sky-500/30',
+  Success: 'bg-emerald-100 text-emerald-800 ring-1 ring-inset ring-emerald-300 dark:bg-emerald-500/15 dark:text-emerald-400 dark:ring-emerald-500/30',
+  Failed: 'bg-amber-100 text-amber-800 ring-1 ring-inset ring-amber-300 dark:bg-amber-500/15 dark:text-amber-400 dark:ring-amber-500/30',
+  Blocked: 'bg-rose-100 text-rose-800 ring-1 ring-inset ring-rose-300 dark:bg-rose-500/15 dark:text-rose-400 dark:ring-rose-500/30',
+  Warning: 'bg-sky-100 text-sky-800 ring-1 ring-inset ring-sky-300 dark:bg-sky-500/15 dark:text-sky-400 dark:ring-sky-500/30',
 }
 
 const roleStyles: Record<AccountType, string> = {
-  Admin: 'bg-emerald-500/12 text-emerald-300',
-  Executive: 'bg-indigo-500/15 text-indigo-300',
-  'Event Planner': 'bg-sky-500/15 text-sky-300',
-  'Warehouse Ops': 'bg-amber-500/15 text-amber-300',
-  'Ground Crew': 'bg-rose-500/15 text-rose-300',
+  Admin: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/12 dark:text-emerald-300',
+  Executive: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/15 dark:text-indigo-300',
+  'Event Planner': 'bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300',
+  'Warehouse Ops': 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
+  'Ground Crew': 'bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300',
 }
 
 /* const LEGACY_SECURITY_AUDIT_LOG: SecurityAuditEntry[] = [

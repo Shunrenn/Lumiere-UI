@@ -576,9 +576,10 @@ export function AdminRolesPage() {
     setPinError('')
   }
 
-  const submitPin = () => {
+  const submitPin = async () => {
     if (!pinAction || isLocked || pinValue.length !== 6) return
-    if (verifyConfirmationPin(pinValue)) {
+    const isValid = await verifyConfirmationPin(pinValue)
+    if (isValid) {
       commitPinAction()
       setPinAttempts(0)
     } else {

@@ -268,9 +268,10 @@ function ChangePinModal({ onClose }: { onClose: () => void }) {
 
   const [successMessage, setSuccessMessage] = useState('')
 
-  const submitCurrent = () => {
+  const submitCurrent = async () => {
     if (currentPin.length !== 6) return
-    if (verifyConfirmationPin(currentPin)) {
+    const isValid = await verifyConfirmationPin(currentPin)
+    if (isValid) {
       setCurrentError('')
       setStep('set')
     } else {
@@ -278,14 +279,18 @@ function ChangePinModal({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const submitNewPin = () => {
+  const submitNewPin = async () => {
     if (newPin.length !== 6 || confirmPin.length !== 6) return
     if (newPin !== confirmPin) {
       setSetError('PINs do not match.')
       return
     }
-    setConfirmationPin(newPin)
-    setSuccessMessage(hasConfirmationPin ? 'Your PIN has been updated.' : 'Your confirmation PIN has been set.')
+    const success = await setConfirmationPin(newPin)
+    if (success) {
+      setSuccessMessage(hasConfirmationPin ? 'Your PIN has been updated.' : 'Your confirmation PIN has been set.')
+    } else {
+      setSetError('Failed to save PIN on server.')
+    }
   }
 
   const submitForgotPassword = async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarClock, LogOut, Moon, PackageSearch, ShieldAlert, Sun, User } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
+import { useNav } from '@/lib/nav'
 import { usePortal } from '@/lib/store'
 import { useDarkMode } from '@/lib/theme'
 import { NotificationsBell, type NotificationEntry } from '@/components/NotificationsBell'
@@ -13,6 +14,7 @@ import { NotificationsBell, type NotificationEntry } from '@/components/Notifica
 export function ExecutiveTopBar() {
   const { adminName, adminRole, setConfirmLogout } = useAuth()
   const { events, damageExceptions, inventory } = usePortal()
+  const { navigate } = useNav()
   const { dark, toggle } = useDarkMode()
   const [menuOpen, setMenuOpen] = useState(false)
   const [now, setNow] = useState(() => new Date())
@@ -56,6 +58,7 @@ export function ExecutiveTopBar() {
         text: `"${awaitingEvent.title}" is awaiting confirmation.`,
         time: 'Event Operations',
         unread: true,
+        onClick: () => navigate('registry', { kind: 'view-event', payload: { id: awaitingEvent.id } }),
       })
     }
 
@@ -68,6 +71,7 @@ export function ExecutiveTopBar() {
         text: `Damage report ${pendingDamage.logId} for ${pendingDamage.assetName} needs a verdict.`,
         time: 'Damage Validation',
         unread: true,
+        onClick: () => navigate('damage', { kind: 'review-damage', payload: { id: pendingDamage.id } }),
       })
     }
 
@@ -80,11 +84,12 @@ export function ExecutiveTopBar() {
         text: `${restock.name} (${restock.assetId}) is running low on stock.`,
         time: 'Asset Inventory',
         unread: false,
+        onClick: () => navigate('inventory', { kind: 'reorder-asset', payload: { id: restock.id } }),
       })
     }
 
     return items
-  }, [events, damageExceptions, inventory])
+  }, [events, damageExceptions, inventory, navigate])
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-background px-5 sm:px-8">

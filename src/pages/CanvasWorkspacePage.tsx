@@ -2587,7 +2587,7 @@ function ModeDropdown({ mode, onChange }: { mode: WorkspaceMode; onChange: (m: W
   )
 }
 
-function PinModal({ targetMode, onSuccess, onCancel }: { targetMode: WorkspaceMode; onSuccess: () => void; onCancel: () => void }) {
+function PinModal({ targetMode, onSuccess, onCancel }: { targetMode: WorkspaceMode; onSuccess: (pin: string) => Promise<void>; onCancel: () => void }) {
   const [digits, setDigits] = useState<string[]>(['', '', '', ''])
   const [error, setError] = useState(false)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
@@ -2601,10 +2601,10 @@ function PinModal({ targetMode, onSuccess, onCancel }: { targetMode: WorkspaceMo
   function handleKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Backspace' && !digits[index] && index > 0) inputRefs.current[index - 1]?.focus()
   }
-  function handleSubmit() {
+  async function handleSubmit() {
     const pin = digits.join('')
     if (pin.length < 4 || pin === '0000') { setError(true); return }
-    onSuccess()
+    await onSuccess(pin)
   }
 
   return (
@@ -2790,7 +2790,7 @@ function CommentsPanel({ pageId, selectedAsset, comments, onAdd, onClose }: { pa
 
 export function CanvasWorkspacePage() {
   const { navigate } = useNav()
-  const { adminName, hasConfirmationPin, setConfirmationPin } = useAuth()
+  const { adminName, hasConfirmationPin, verifyConfirmationPin } = useAuth()
   const { events, selectedEventId } = usePlanner()
   // In-workspace Event Pipeline drawer (Logistical Overview / Material Requirement / Design
   // Documents / Team Assignments) — reuses the exact same panel + data source as the
@@ -3617,8 +3617,9 @@ export function CanvasWorkspacePage() {
     if (!hasConfirmationPin) { setPendingMode(m); return }
     setMode(m)
   }
-  function onPinSuccess() {
-    setConfirmationPin('1234')
+  async function onPinSuccess(pin: string) {
+    const isValid = await verifyConfirmationPin(pin)
+    if (!isValid) return
     if (pendingMode) setMode(pendingMode)
     setPendingMode(null)
   }

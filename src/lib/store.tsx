@@ -1435,21 +1435,38 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   // Hydrate events list from backend REST API (GET /api/events)
   useEffect(() => {
     let active = true
-    import('@/lib/eventsApi').then(({ fetchEventsApi }) => {
-      fetchEventsApi().then((remoteEvents) => {
-        if (!active || !remoteEvents.length) return
-        setEvents(remoteEvents)
+
+    const loadEvents = () => {
+      import('@/lib/eventsApi').then(({ fetchEventsApi }) => {
+        fetchEventsApi().then((remoteEvents) => {
+          if (!active) return
+          setEvents(remoteEvents)
+        })
       })
-    })
+    }
+
+    loadEvents()
+
+    const onFocus = () => {
+      loadEvents()
+    }
+    window.addEventListener('focus', onFocus)
+
+    // Periodic checkpoint refresh (30s polling fallback)
+    const interval = setInterval(loadEvents, 30000)
+
     return () => {
       active = false
+      window.removeEventListener('focus', onFocus)
+      clearInterval(interval)
     }
   }, [])
 
   // Hydrate the staff directory from the database (portal_accounts is the source of truth).
   useEffect(() => {
     let active = true
-    ;(async () => {
+
+    const loadStaff = async () => {
       const { data, error } = await supabase
         .from('portal_accounts')
         .select(
@@ -1470,9 +1487,23 @@ export function PortalProvider({ children }: { children: ReactNode }) {
           return [...data.map(rowToStaff), ...records]
         })
       }
-    })()
+    }
+
+    loadStaff()
+
+    const onFocus = () => {
+      void loadStaff()
+    }
+    window.addEventListener('focus', onFocus)
+
+    const interval = setInterval(() => {
+      void loadStaff()
+    }, 30000)
+
     return () => {
       active = false
+      window.removeEventListener('focus', onFocus)
+      clearInterval(interval)
     }
   }, [])
   const [logs, setLogs] = useState<ActivityLog[]>(seedLogs)
@@ -1481,7 +1512,8 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   // Hydrate pending account requests (forgot-password / request-access) from the database.
   useEffect(() => {
     let active = true
-    ;(async () => {
+
+    const loadAccessRequests = async () => {
       const { data, error } = await supabase
         .from('access_requests')
         .select('id, email, type, status')
@@ -1501,9 +1533,23 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         }))
         setUserActions([...fromDb, ...seedUserActions])
       }
-    })()
+    }
+
+    loadAccessRequests()
+
+    const onFocus = () => {
+      void loadAccessRequests()
+    }
+    window.addEventListener('focus', onFocus)
+
+    const interval = setInterval(() => {
+      void loadAccessRequests()
+    }, 30000)
+
     return () => {
       active = false
+      window.removeEventListener('focus', onFocus)
+      clearInterval(interval)
     }
   }, [])
   const [eventUpdates] = useState<EventUpdate[]>(seedEventUpdates)

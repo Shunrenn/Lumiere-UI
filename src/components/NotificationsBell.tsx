@@ -9,6 +9,7 @@ export interface NotificationEntry {
   text: string
   time: string
   unread: boolean
+  onClick?: () => void
 }
 
 interface NotificationsBellProps {
@@ -86,11 +87,16 @@ export function NotificationsBell({ notifications, size = 'sm' }: NotificationsB
               notifications.map((n) => {
                 const Icon = n.icon
                 return (
-                  <div
+                  <button
                     key={n.id}
+                    type="button"
                     role="menuitem"
+                    onClick={() => {
+                      setOpen(false)
+                      n.onClick?.()
+                    }}
                     className={cn(
-                      'flex items-start gap-2.5 px-4 py-2.5 transition-colors hover:bg-accent',
+                      'flex w-full items-start gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-accent focus:bg-accent focus:outline-none cursor-pointer',
                       n.unread && 'bg-primary/5',
                     )}
                   >
@@ -104,7 +110,7 @@ export function NotificationsBell({ notifications, size = 'sm' }: NotificationsB
                     {n.unread && (
                       <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
                     )}
-                  </div>
+                  </button>
                 )
               })
             )}

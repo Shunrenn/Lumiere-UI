@@ -43,7 +43,7 @@ export function AdminSecurityFeed({ onSystemLogs }: AdminSecurityFeedProps) {
 
       <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
         {feedEvents.length === 0 ? (
-          <p className="text-sm italic text-sidebar-foreground/50">No recent security events.</p>
+          <p className="text-sm italic text-muted-foreground">No recent security events.</p>
         ) : (
           <ul className="space-y-4">
             {feedEvents.map((event) => {
@@ -55,10 +55,10 @@ export function AdminSecurityFeed({ onSystemLogs }: AdminSecurityFeedProps) {
                     aria-hidden="true"
                   />
                   <div className="min-w-0 flex-1">
-                    <span className="text-[0.6rem] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/45">
+                    <span className="text-[0.6rem] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
                       {event.time}
                     </span>
-                    <p className="mt-1 text-xs leading-relaxed text-sidebar-foreground/75">
+                    <p className="mt-1 text-xs leading-relaxed text-card-foreground">
                       {event.headline}
                     </p>
                     <button
@@ -68,7 +68,7 @@ export function AdminSecurityFeed({ onSystemLogs }: AdminSecurityFeedProps) {
                         setExpanded(open ? null : event.id)
                       }}
                       aria-expanded={open}
-                      className="mt-1.5 inline-flex items-center gap-1 text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/50 transition-colors hover:text-sidebar-primary"
+                      className="mt-1.5 inline-flex items-center gap-1 text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-primary"
                     >
                       Details
                       <ChevronDown
@@ -77,7 +77,7 @@ export function AdminSecurityFeed({ onSystemLogs }: AdminSecurityFeedProps) {
                       />
                     </button>
                     {open && (
-                      <p className="admin-fade mt-2 rounded-md bg-sidebar-accent/60 px-3 py-2 text-[0.7rem] leading-relaxed text-sidebar-foreground/70">
+                      <p className="admin-fade mt-2 rounded-md bg-muted px-3 py-2 text-[0.7rem] leading-relaxed text-muted-foreground">
                         {event.details}
                       </p>
                     )}
@@ -89,14 +89,14 @@ export function AdminSecurityFeed({ onSystemLogs }: AdminSecurityFeedProps) {
         )}
       </div>
 
-      <div className="mt-4 shrink-0 border-t border-sidebar-border/50 pt-4">
+      <div className="mt-4 shrink-0 border-t border-border pt-4">
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation()
             trigger()
           }}
-          className="inline-flex items-center gap-2 rounded-md border border-sidebar-border px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.15em] text-sidebar-primary transition-colors hover:bg-sidebar-accent"
+          className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.15em] text-primary transition-colors hover:bg-muted"
         >
           <ScrollText className="size-3.5" aria-hidden="true" />
           View Full Security Log

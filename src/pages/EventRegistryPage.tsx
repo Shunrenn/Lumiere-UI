@@ -35,6 +35,20 @@ const statusStyles: Record<string, string> = {
   Cancelled: 'text-muted-foreground line-through',
 }
 
+function formatDisplayTime(timeOrDate?: string, defaultTime = '06:00 PM'): string {
+  if (!timeOrDate) return defaultTime
+  if (/^\d{4}-\d{2}-\d{2}$/.test(timeOrDate)) return defaultTime
+  const match = timeOrDate.match(/(\d{1,2}):(\d{2})/)
+  if (match) {
+    let hours = parseInt(match[1], 10)
+    const minutes = match[2]
+    const ampm = hours >= 12 ? 'PM' : 'AM'
+    hours = hours % 12 || 12
+    return `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`
+  }
+  return timeOrDate
+}
+
 export function EventRegistryPage() {
   const { events } = usePortal()
   // Admin has read-only oversight; Executives manage the operations registry.
@@ -165,199 +179,199 @@ export function EventRegistryPage() {
         <LoadingSkeleton variant="table" />
       ) : (
         <>
-          {/* Operational Progress — dispatch readiness per active event */}
-      <div className="mt-7 rounded-xl border border-border bg-card p-5">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">
-          Operational Progress
-        </h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Asset dispatch readiness across active event portfolios.
-        </p>
-        <div className="mt-4 space-y-4">
-          {events.filter((e) => e.status !== 'Cancelled').length === 0 ? (
-            <p className="text-xs text-muted-foreground">No active events to track.</p>
-          ) : (
-            events
-              .filter((e) => e.status !== 'Cancelled')
-              .map((e) => {
-                const pct = dispatchProgress[e.status] ?? 0
+          {/* Filter bar */}
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {/* Status filter pills */}
+              {statuses.map((status) => {
+                const count = status === 'All' 
+                  ? events.length 
+                  : events.filter((e) => e.status === status).length
                 return (
-                  <div key={e.id}>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="truncate text-xs font-medium text-card-foreground">
-                        {e.title}
-                      </span>
-                      <span className="shrink-0 text-[0.65rem] font-semibold text-muted-foreground">
-                        {pct}%
-                      </span>
-                    </div>
-                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted">
-                      <div
-                        className={cn(
-                          'h-full rounded-full transition-all',
-                          pct === 100 ? 'bg-emerald-500' : pct >= 50 ? 'bg-sky-500' : 'bg-amber-500',
-                        )}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setStatusFilter(status)}
+                    className={cn(
+                      'rounded-full px-3 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.12em] transition',
+                      statusFilter === status
+                        ? 'bg-neutral-900 text-white'
+                        : 'border border-border bg-card text-muted-foreground hover:bg-muted',
+                    )}
+                  >
+                    {status} ({count})
+                  </button>
                 )
-              })
-          )}
-        </div>
-      </div>
-
-      {/* Filter bar */}
-      <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2">
-          {/* Status filter pills */}
-          {statuses.map((status) => {
-            const count = status === 'All' 
-              ? events.length 
-              : events.filter((e) => e.status === status).length
-            return (
+              })}
+            </div>
+            {!readOnly && (
               <button
-                key={status}
                 type="button"
-                onClick={() => setStatusFilter(status)}
-                className={cn(
-                  'rounded-full px-3 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.12em] transition',
-                  statusFilter === status
-                    ? 'bg-neutral-900 text-white'
-                    : 'border border-border bg-card text-muted-foreground hover:bg-muted',
-                )}
+                onClick={openCreate}
+                className="rounded-md bg-neutral-900 px-5 py-2.5 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-neutral-800"
               >
-                {status} ({count})
+                Register New Event
               </button>
-            )
-          })}
-        </div>
-        {!readOnly && (
-          <button
-            type="button"
-            onClick={openCreate}
-            className="rounded-md bg-neutral-900 px-5 py-2.5 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-neutral-800"
-          >
-            Register New Event
-          </button>
-        )}
-      </div>
+            )}
+          </div>
 
-      {/* Table */}
-      <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card">
-        <CompactStatStrip
-          stats={[
-            { label: 'Total Events', value: metrics.total },
-            { label: 'Total Executed', value: metrics.executed },
-            { label: 'Total Reserved', value: metrics.reserved },
-            { label: 'Total Cancelled', value: metrics.cancelled },
-          ]}
-        />
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] text-left">
-          <thead>
-            <tr className="bg-muted/50">
-              {[
-                'REFERENCE ID',
-                'EVENT TITLE',
-                'CLIENT NAME',
-                'EVENT VENUE',
-                'EVENT DATE',
-                'START TIME',
-                'END TIME',
-                'STATUS',
-                'ACTION',
-              ].map((h) => (
-                <th
-                  key={h}
-                  className="px-4 py-3 text-[0.58rem] font-bold uppercase tracking-[0.12em] text-muted-foreground"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="py-8">
-                  <EmptyState
-                    title="No events found"
-                    message="No registered events match your search query or status filters."
-                  />
-                </td>
-              </tr>
-            ) : (
-              filtered.map((e) => (
-                <tr key={e.id} className="border-t border-border/60">
-                  <td className="px-4 py-4 text-xs font-medium text-card-foreground">
-                    {e.refId}
-                  </td>
-                  <td className="px-4 py-4 text-xs text-card-foreground">{e.title}</td>
-                  <td className="px-4 py-4 text-xs text-muted-foreground">{e.client}</td>
-                  <td className="px-4 py-4 text-xs text-muted-foreground">{e.venue || '—'}</td>
-                  <td className="px-4 py-4 text-xs text-muted-foreground">
-                    {e.targetDate || '—'}
-                  </td>
-                  <td className="px-4 py-4 text-xs text-muted-foreground">
-                    {e.installationStart || '—'}
-                  </td>
-                  <td className="px-4 py-4 text-xs text-muted-foreground">
-                    {e.installationEnd || '—'}
-                  </td>
-                  <td className="px-4 py-4">
-                    <span
-                      className={cn(
-                        'text-[0.6rem] font-bold uppercase tracking-[0.12em]',
-                        statusStyles[e.status],
-                      )}
+          {/* Table */}
+          <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card">
+            <CompactStatStrip
+              stats={[
+                { label: 'Total Events', value: metrics.total },
+                { label: 'Total Executed', value: metrics.executed },
+                { label: 'Total Reserved', value: metrics.reserved },
+                { label: 'Total Cancelled', value: metrics.cancelled },
+              ]}
+            />
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[920px] text-left">
+              <thead>
+                <tr className="bg-muted/50">
+                  {[
+                    'REFERENCE ID',
+                    'EVENT TITLE',
+                    'CLIENT NAME',
+                    'EVENT VENUE',
+                    'EVENT DATE',
+                    'START TIME',
+                    'END TIME',
+                    'STATUS',
+                    'ACTION',
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="px-4 py-3 text-[0.58rem] font-bold uppercase tracking-[0.12em] text-muted-foreground"
                     >
-                      {e.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => openView(e)}
-                        className="text-[0.6rem] font-bold uppercase tracking-[0.12em] text-primary underline-offset-4 transition hover:underline"
-                      >
-                        View Event
-                      </button>
-                      {!readOnly && (
-                        <div className="relative">
-                          <button
-                            type="button"
-                            onClick={() => setOpenMenuId(openMenuId === e.id ? null : e.id)}
-                            className="rounded p-1 text-muted-foreground hover:bg-muted"
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-8">
+                      <EmptyState
+                        title="No events found"
+                        message="No registered events match your search query or status filters."
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((e) => (
+                    <tr key={e.id} className="border-t border-border/60">
+                      <td className="px-4 py-4 text-xs font-medium text-card-foreground">
+                        {e.refId}
+                      </td>
+                      <td className="px-4 py-4 text-xs text-card-foreground">{e.title}</td>
+                      <td className="px-4 py-4 text-xs text-muted-foreground">{e.client}</td>
+                      <td className="px-4 py-4 text-xs text-muted-foreground">{e.venue || '—'}</td>
+                      <td className="px-4 py-4 text-xs text-muted-foreground">
+                        {e.targetDate || '—'}
+                      </td>
+                      <td className="px-4 py-4 text-xs font-mono text-muted-foreground">
+                        {formatDisplayTime(e.eventStart || e.installationStart, '06:00 PM')}
+                      </td>
+                      <td className="px-4 py-4 text-xs font-mono text-muted-foreground">
+                        {formatDisplayTime(e.eventEnd || e.installationEnd, '11:00 PM')}
+                      </td>
+                      <td className="px-4 py-4">
+                        <span
+                          className={cn(
+                            'text-[0.6rem] font-bold uppercase tracking-[0.12em]',
+                            statusStyles[e.status],
+                          )}
+                        >
+                          {e.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => openView(e)}
+                            className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary underline-offset-4 transition hover:underline"
                           >
-                            <MoreVertical className="size-4" />
+                            View Event
                           </button>
-                          {openMenuId === e.id && (
-                            <div className="absolute right-0 z-10 rounded-md border border-border bg-card shadow-lg">
+                          {!readOnly && (
+                            <div className="relative">
                               <button
                                 type="button"
-                                onClick={() => {
-                                  openEdit(e)
-                                  setOpenMenuId(null)
-                                }}
-                                className="block w-full px-4 py-2 text-left text-[0.6rem] font-bold uppercase tracking-[0.12em] text-card-foreground hover:bg-muted first:rounded-t last:rounded-b"
+                                onClick={() => setOpenMenuId(openMenuId === e.id ? null : e.id)}
+                                className="rounded p-1 text-muted-foreground hover:bg-muted"
                               >
-                                Edit
+                                <MoreVertical className="size-4" />
                               </button>
+                              {openMenuId === e.id && (
+                                <div className="absolute right-0 z-10 rounded-md border border-border bg-card shadow-lg">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      openEdit(e)
+                                      setOpenMenuId(null)
+                                    }}
+                                    className="block w-full px-4 py-2 text-left text-[0.6rem] font-bold uppercase tracking-[0.12em] text-card-foreground hover:bg-muted first:rounded-t last:rounded-b"
+                                  >
+                                    Edit
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-        </div>
-      </div>
-      </>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+            </div>
+          </div>
+
+          {/* Operational Progress — dispatch readiness per active event */}
+          <div className="mt-7 rounded-xl border border-border bg-card p-5">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">
+              Operational Progress
+            </h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Asset dispatch readiness across active event portfolios.
+            </p>
+            <div className="mt-4 space-y-4">
+              {events.filter((e) => e.status !== 'Cancelled').length === 0 ? (
+                <p className="text-xs text-muted-foreground">No active events to track.</p>
+              ) : (
+                events
+                  .filter((e) => e.status !== 'Cancelled')
+                  .map((e) => {
+                    const pct = dispatchProgress[e.status] ?? 0
+                    return (
+                      <div key={e.id}>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="truncate text-xs font-medium text-card-foreground">
+                            {e.title}
+                          </span>
+                          <span className="shrink-0 text-[0.65rem] font-semibold text-muted-foreground">
+                            {pct}%
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={cn(
+                              'h-full rounded-full transition-all',
+                              pct === 100 ? 'bg-emerald-500' : pct >= 50 ? 'bg-sky-500' : 'bg-amber-500',
+                            )}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       <RegisterEventDrawer

@@ -13,7 +13,7 @@ export function PinSetupScreen() {
   const isMatch = newPin.length === 6 && confirmPin.length === 6 && newPin === confirmPin
   const isMismatch = confirmPin.length === 6 && newPin.length === 6 && newPin !== confirmPin
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (newPin.length !== 6) {
       setError('PIN must be exactly 6 numeric digits.')
@@ -23,7 +23,10 @@ export function PinSetupScreen() {
       setError('PINs do not match. Please re-enter.')
       return
     }
-    setConfirmationPin(newPin)
+    const ok = await setConfirmationPin(newPin)
+    if (!ok) {
+      setError('Failed to set PIN on server. Please try again.')
+    }
   }
 
   return (
