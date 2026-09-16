@@ -1,28 +1,91 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { LogOut, Moon, Sun, User, ShieldAlert, UserPlus, Activity, KeyRound, Check, X as XIcon } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
+import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import { useDarkMode } from '@/lib/theme'
 import { NotificationsBell, type NotificationEntry } from '@/components/NotificationsBell'
 import { SECURITY_EVENTS, type SecurityEvent } from '@/lib/security-events'
 import { MaskedPinInput } from '@/components/admin/MaskedPinInput'
 
-const ADMIN_NOTIFICATIONS: NotificationEntry[] = [
-  { id: 'admin-1', icon: ShieldAlert, color: 'text-destructive', text: 'A privileged account was locked after repeated sign-in failures.', time: '12 minutes ago', unread: true },
-  { id: 'admin-2', icon: UserPlus, color: 'text-primary', text: 'A new workforce account is waiting for activation.', time: '1 hour ago', unread: true },
-  { id: 'admin-3', icon: Activity, color: 'text-muted-foreground', text: 'System health review completed successfully.', time: 'Yesterday', unread: false },
-]
-
 // Constant top bar for the Admin console: live date/time, notification bell,
 // and a profile menu. Sits alongside the rail outside the scroll container so
 // it never scrolls with page content.
 export function AdminTopBar() {
   const { adminName, adminRole, setConfirmLogout, hasConfirmationPin } = useAuth()
+  const { navigate } = useNav()
   const { dark, toggle } = useDarkMode()
   const [menuOpen, setMenuOpen] = useState(false)
   const [now, setNow] = useState(() => new Date())
   const [pinModalOpen, setPinModalOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  const { userActions, pendingSubRoleSetups } = usePortal()
+
+  const notifications = useMemo<NotificationEntry[]>(() => {
+    const list: NotificationEntry[] = []
+
+    // 1. Account locked out events
+    userActions
+      .filter((a) => a.type === 'account-locked')
+      .forEach((a) => {
+        list.push({
+          id: `act-lock-${a.id}`,
+          icon: ShieldAlert,
+          color: 'text-destructive',
+          text: `Account locked: ${a.name} (${a.email})`,
+          time: a.status === 'pending' ? 'Action required' : 'Resolved',
+          unread: a.status === 'pending',
+          onClick: () => navigate('workforce', { kind: 'unlock-user', payload: { email: a.email } }),
+        })
+      })
+
+    // 2. Forgot password & access requests
+    userActions
+      .filter((a) => a.type === 'forgot-password' || a.type === 'access-request')
+      .forEach((a) => {
+        const isAccessReq = a.type === 'access-request'
+        list.push({
+          id: `act-req-${a.id}`,
+          icon: isAccessReq ? UserPlus : KeyRound,
+          color: isAccessReq ? 'text-primary' : 'text-rose-500',
+          text: isAccessReq
+            ? `New access request: ${a.email}`
+            : `Forgot password request: ${a.email}`,
+          time: a.status === 'pending' ? 'Pending' : 'Resolved',
+          unread: a.status === 'pending',
+          onClick: () => navigate('workforce', { kind: 'unlock-user', payload: { email: a.email } }),
+        })
+      })
+
+    // 3. Pending sub-role setup configuration
+    pendingSubRoleSetups.forEach((setup) => {
+      list.push({
+        id: `setup-${setup.id}`,
+        icon: Activity,
+        color: 'text-amber-500',
+        text: `Sub-role "${setup.name}" needs permission configuration (${setup.parentName})`,
+        time: 'Needs setup',
+        unread: true,
+        onClick: () => navigate('rbac', { kind: 'configure-subrole', payload: { subRoleId: setup.subRoleId } }),
+      })
+    })
+
+    // 4. Security audit events
+    SECURITY_EVENTS.slice(0, 3).forEach((ev) => {
+      list.push({
+        id: `sec-ev-${ev.id}`,
+        icon: Activity,
+        color: ev.severity === 'high' ? 'text-destructive' : 'text-sky-500',
+        text: `${ev.action}: ${ev.details}`,
+        time: ev.timestamp,
+        unread: false,
+        onClick: () => navigate('security-audit'),
+      })
+    })
+
+    return list
+  }, [userActions, pendingSubRoleSetups, navigate])
 
   // Tick the clock every minute so the top-bar time stays live.
   useEffect(() => {
@@ -56,7 +119,7 @@ export function AdminTopBar() {
       </p>
 
       <div className="flex items-center gap-2">
-        <NotificationsBell notifications={ADMIN_NOTIFICATIONS} size="md" />
+        <NotificationsBell notifications={notifications} size="md" />
 
         <div className="relative" ref={menuRef}>
           <button
