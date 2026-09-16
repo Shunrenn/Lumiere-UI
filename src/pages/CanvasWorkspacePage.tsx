@@ -17,6 +17,7 @@ import {
   MoveHorizontal, MoveVertical, ArrowUp, ArrowDown,
   MessageCircle, EyeOff, MoreHorizontal, ChevronUp,
   GalleryVerticalEnd, GalleryVertical, Grid2X2, FolderSearch, PackageSearch, ImageOff,
+  Undo2, Redo2,
 } from 'lucide-react'
 import { useNav } from '@/lib/nav'
   import { cn } from '@/lib/utils'
@@ -3692,6 +3693,8 @@ export function CanvasWorkspacePage() {
           )}
           <SettingsDropdown />
           <div className="hidden items-center gap-0.5 xl:flex shrink-0">
+            <button type="button" onClick={handleUndo} disabled={pastHistory.length === 0} aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)" className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-30"><Undo2 className="size-3.5" /></button>
+            <button type="button" onClick={handleRedo} disabled={futureHistory.length === 0} aria-label="Redo (Ctrl+Y)" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-30"><Redo2 className="size-3.5" /></button>
             <button type="button" aria-label="Cloud saved" className="flex size-7 items-center justify-center rounded-md text-emerald-400 transition hover:bg-accent"><Cloud className="size-3.5" /></button>
             <button type="button" aria-label="Offline mode" className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"><CloudOff className="size-3.5" /></button>
             <button type="button" onClick={() => setStarred((s) => !s)} aria-label={starred ? 'Unstar' : 'Star'}
@@ -3824,6 +3827,8 @@ export function CanvasWorkspacePage() {
             onContextMenu={(x, y, assetId) => setCtxMenu({ x, y, assetId })}
             onCopy={copyAsset}
             onPaste={pasteAsset}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
             onComment={commentOnAsset}
             onRenamePage={handleRenamePage}
             onMovePage={handleMovePage}

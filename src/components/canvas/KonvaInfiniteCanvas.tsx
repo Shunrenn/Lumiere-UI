@@ -83,6 +83,8 @@ type Props = {
   onContextMenu: (clientX: number, clientY: number, assetId: string | null) => void
   onCopy: (id: string) => void
   onPaste: () => void
+  onUndo?: () => void
+  onRedo?: () => void
   onComment: (id: string) => void
   // Page actions for external header bars
   onRenamePage?: (id: string, title: string) => void
@@ -307,6 +309,8 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
     onContextMenu,
     onCopy,
     onPaste,
+    onUndo,
+    onRedo,
     onComment,
     onRenamePage,
     onMovePage,
@@ -472,7 +476,17 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
 
       if (event.key === 'Escape') { onDeselect() }
       const mod = event.metaKey || event.ctrlKey
-      if (mod && event.altKey && event.key.toLowerCase() === 'n' && selectedId) { event.preventDefault(); onComment(selectedId) }
+      if (mod && event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        if (event.shiftKey) {
+          onRedo?.()
+        } else {
+          onUndo?.()
+        }
+      } else if (mod && event.key.toLowerCase() === 'y') {
+        event.preventDefault()
+        onRedo?.()
+      } else if (mod && event.altKey && event.key.toLowerCase() === 'n' && selectedId) { event.preventDefault(); onComment(selectedId) }
       else if (mod && event.key.toLowerCase() === 'd' && selectedId) { event.preventDefault(); onDuplicate(selectedId) }
       else if (mod && event.key.toLowerCase() === 'c' && selectedId) { event.preventDefault(); onCopy(selectedId) }
       else if (mod && event.key.toLowerCase() === 'v') { event.preventDefault(); onPaste() }
@@ -480,7 +494,7 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selectedId, onDeselect, onDuplicate, onDelete, onCopy, onPaste, onComment])
+  }, [selectedId, onDeselect, onDuplicate, onDelete, onCopy, onPaste, onUndo, onRedo, onComment])
 
   const toCanvasPoint = (event: React.DragEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
