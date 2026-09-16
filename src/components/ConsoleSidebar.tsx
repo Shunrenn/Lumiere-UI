@@ -15,6 +15,8 @@ import {
   AlertTriangle,
   PanelLeft,
   ChevronRight,
+  ShieldCheck,
+  ScrollText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useNav } from '@/lib/nav'
@@ -30,6 +32,13 @@ type NavItem = {
   route: Route
   moduleId?: WarehouseModuleId
 }
+
+const adminNavItems: NavItem[] = [
+  { label: 'System Dashboard', blurb: 'Overall system performance & metrics', icon: LayoutGrid, route: 'overview' },
+  { label: 'Workforce Management', blurb: 'Manage users, roles & accounts', icon: Users, route: 'workforce' },
+  { label: 'Roles & Sub-Roles', blurb: 'Configure access permissions & sub-roles', icon: ShieldCheck, route: 'rbac' },
+  { label: 'Security Audit Logs', blurb: 'Review security events & system audit trail', icon: ScrollText, route: 'security-audit' },
+]
 
 const warehouseNavItems: NavItem[] = [
   { label: 'Overview', blurb: 'Operations metrics & activity dashboard', icon: LayoutGrid, route: 'overview' },
@@ -66,11 +75,11 @@ export function ConsoleSidebar({
   onCloseMobile,
 }: ConsoleSidebarProps) {
   const { route, navigate } = useNav()
-  const { adminName, adminRole, isWarehouse, isPlanner, setConfirmLogout } = useAuth()
+  const { adminName, adminRole, isWarehouse, isPlanner, isAdmin, setConfirmLogout } = useAuth()
   const { dark, toggle } = useDarkMode()
   const [companionOpen, setCompanionOpen] = useState(false)
 
-  const navItems = isPlanner ? plannerNavItems : isWarehouse ? warehouseNavItems : warehouseNavItems
+  const navItems = isAdmin ? adminNavItems : isPlanner ? plannerNavItems : isWarehouse ? warehouseNavItems : warehouseNavItems
 
   const activeItem = navItems.find((item) => route === item.route || routeParent[route] === item.route) ?? navItems[0]
 

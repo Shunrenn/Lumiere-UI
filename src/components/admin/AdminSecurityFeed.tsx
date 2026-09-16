@@ -58,7 +58,7 @@ export function AdminSecurityFeed({ onSystemLogs }: AdminSecurityFeedProps) {
                     <span className="text-[0.6rem] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
                       {event.time}
                     </span>
-                    <p className="mt-1 text-xs leading-relaxed text-card-foreground">
+                    <p className="mt-1 text-xs font-medium leading-relaxed text-foreground">
                       {event.headline}
                     </p>
                     <button
@@ -77,7 +77,7 @@ export function AdminSecurityFeed({ onSystemLogs }: AdminSecurityFeedProps) {
                       />
                     </button>
                     {open && (
-                      <p className="admin-fade mt-2 rounded-md bg-muted px-3 py-2 text-[0.7rem] leading-relaxed text-muted-foreground">
+                      <p className="admin-fade mt-2 rounded-md bg-muted/80 border border-border px-3 py-2 text-[0.7rem] leading-relaxed text-foreground/90">
                         {event.details}
                       </p>
                     )}

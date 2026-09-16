@@ -33,7 +33,7 @@ export function AdminPendingActions({
 }: AdminPendingActionsProps) {
   const isEmpty = items.length === 0 && subRoleSetups.length === 0
   return (
-    <section className="flex h-[24rem] flex-col rounded-xl border border-border bg-card p-5 text-card-foreground">
+    <section className="flex h-[24rem] flex-col rounded-xl border border-border bg-card p-5 text-foreground shadow-sm">
       <h2 className="shrink-0 font-serif text-2xl font-medium leading-tight text-foreground text-balance sm:text-3xl">
         Pending Actions
       </h2>
@@ -43,7 +43,7 @@ export function AdminPendingActions({
           No pending actions — all clear.
         </p>
       ) : (
-        <ul className="mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <ul className="mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
           {subRoleSetups.map((setup) => (
             <li
               key={setup.id}
@@ -56,14 +56,14 @@ export function AdminPendingActions({
                 />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <p className="text-xs font-semibold text-card-foreground">
+                    <p className="text-xs font-semibold text-foreground">
                       Sub-role &quot;{setup.name}&quot; needs permission configuration
                     </p>
-                    <span className="inline-flex items-center rounded-full border border-border bg-muted px-1.5 py-0.5 text-[0.55rem] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+                    <span className="inline-flex items-center rounded-full border border-border bg-muted/80 px-1.5 py-0.5 text-[0.55rem] font-semibold uppercase tracking-[0.09em] text-foreground/80">
                       {setup.parentName}
                     </span>
                   </div>
-                  <p className="mt-0.5 truncate text-[0.65rem] text-muted-foreground">
+                  <p className="mt-0.5 truncate text-[0.65rem] text-foreground/70 font-medium">
                     No permission levels have been saved yet
                   </p>
                 </div>
@@ -72,7 +72,7 @@ export function AdminPendingActions({
               <button
                 type="button"
                 onClick={() => onConfigureSubRole?.(setup)}
-                className="inline-flex w-full items-center justify-center rounded-md border border-border px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary transition-colors hover:bg-muted sm:w-auto"
+                className="inline-flex w-full items-center justify-center rounded-md border border-primary/40 bg-primary/10 px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary transition-colors hover:bg-primary hover:text-primary-foreground sm:w-auto shrink-0"
               >
                 Configure
               </button>
@@ -84,7 +84,7 @@ export function AdminPendingActions({
             const completed = item.status === 'completed'
             const Icon = isAccessReq ? UserPlus : isForgot ? KeyRound : Lock
             const title = isAccessReq ? 'New Access Request' : isForgot ? 'Forgot Password Request' : 'Account Locked Out'
-            const actionLabel = isAccessReq ? 'Review & Create Account' : isForgot ? 'Generate Temp Password' : 'Unlock & Send Temp'
+            const actionLabel = isAccessReq ? 'Review & Create' : isForgot ? 'Generate Temp Password' : 'Unlock & Send Temp'
             return (
               <li
                 key={item.id}
@@ -100,28 +100,28 @@ export function AdminPendingActions({
                   />
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <p className="text-xs font-semibold text-card-foreground">{title}</p>
+                      <p className="text-xs font-semibold text-foreground">{title}</p>
                       {item.accountType && (
-                        <span className="inline-flex items-center rounded-full border border-border bg-muted px-1.5 py-0.5 text-[0.55rem] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+                        <span className="inline-flex items-center rounded-full border border-border bg-muted/80 px-1.5 py-0.5 text-[0.55rem] font-semibold uppercase tracking-[0.09em] text-foreground/80">
                           {item.accountType}
                         </span>
                       )}
                     </div>
-                    <p className="mt-0.5 truncate text-[0.65rem] text-muted-foreground">
+                    <p className="mt-0.5 truncate text-[0.65rem] text-foreground/70 font-medium">
                       {item.user}
                     </p>
                   </div>
                 </div>
 
                 {completed ? (
-                  <span className="inline-flex items-center gap-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground sm:justify-end">
+                  <span className="inline-flex items-center gap-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-emerald-600 dark:text-emerald-400 sm:justify-end shrink-0">
                     <span aria-hidden="true">✓</span> Completed
                   </span>
                 ) : (
                   <button
                     type="button"
                     onClick={() => onResolve(item)}
-                    className="inline-flex w-full items-center justify-center rounded-md border border-border px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary transition-colors hover:bg-muted sm:w-auto"
+                    className="inline-flex w-full items-center justify-center rounded-md border border-primary/40 bg-primary/10 px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary transition-colors hover:bg-primary hover:text-primary-foreground sm:w-auto shrink-0"
                   >
                     {actionLabel}
                   </button>

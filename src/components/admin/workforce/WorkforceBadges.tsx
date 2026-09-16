@@ -3,19 +3,19 @@ import type { AccountStatus, StaffRole } from '@/lib/types'
 // Categorical role encoding. Subtle tints keep the warm-neutral console intact
 // while still making each role scannable at a glance.
 const ROLE_STYLES: Record<string, string> = {
-  Admin: 'bg-primary/15 text-primary border-primary/25',
-  Executive: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-400/15 dark:text-amber-300 dark:border-amber-400/30',
-  'Warehouse Manager': 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-400/15 dark:text-sky-300 dark:border-sky-400/30',
-  'Event Planner': 'bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-400/15 dark:text-violet-300 dark:border-violet-400/30',
-  'Ground Crew': 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-400/15 dark:text-emerald-300 dark:border-emerald-400/30',
-  'Field & Production Crew': 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-400/15 dark:text-emerald-300 dark:border-emerald-400/30',
+  Admin: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-400/30',
+  Executive: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-400/15 dark:text-amber-300 dark:border-amber-400/30',
+  'Warehouse Manager': 'bg-sky-100 text-sky-900 border-sky-300 dark:bg-sky-400/15 dark:text-sky-300 dark:border-sky-400/30',
+  'Event Planner': 'bg-violet-100 text-violet-900 border-violet-300 dark:bg-violet-400/15 dark:text-violet-300 dark:border-violet-400/30',
+  'Ground Crew': 'bg-teal-100 text-teal-900 border-teal-300 dark:bg-teal-400/15 dark:text-teal-300 dark:border-teal-400/30',
+  'Field & Production Crew': 'bg-teal-100 text-teal-900 border-teal-300 dark:bg-teal-400/15 dark:text-teal-300 dark:border-teal-400/30',
 }
 
 export function RoleBadge({ role }: { role: StaffRole }) {
-  const style = ROLE_STYLES[role] ?? 'bg-muted text-muted-foreground border-border'
+  const style = ROLE_STYLES[role] ?? 'bg-muted/80 text-foreground border-border'
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[0.65rem] font-semibold ${style}`}
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[0.65rem] font-bold ${style}`}
     >
       {role}
     </span>
