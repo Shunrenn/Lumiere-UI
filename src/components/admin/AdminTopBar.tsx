@@ -32,14 +32,15 @@ export function AdminTopBar() {
     actions
       .filter((a: any) => a.type === 'account-locked')
       .forEach((a: any) => {
+        const userEmail = a.email || a.user
         list.push({
           id: `act-lock-${a.id}`,
           icon: ShieldAlert,
           color: 'text-destructive',
-          text: `Account locked: ${a.name} (${a.email})`,
+          text: `Account locked: ${a.name || userEmail}`,
           time: a.status === 'pending' ? 'Action required' : 'Resolved',
           unread: a.status === 'pending',
-          onClick: () => navigate('workforce', { kind: 'unlock-user', payload: { email: a.email } }),
+          onClick: () => navigate('workforce', { kind: 'unlock-user', payload: { email: userEmail } }),
         })
       })
 
@@ -48,16 +49,17 @@ export function AdminTopBar() {
       .filter((a: any) => a.type === 'forgot-password' || a.type === 'access-request')
       .forEach((a: any) => {
         const isAccessReq = a.type === 'access-request'
+        const userEmail = a.email || a.user
         list.push({
           id: `act-req-${a.id}`,
           icon: isAccessReq ? UserPlus : KeyRound,
           color: isAccessReq ? 'text-primary' : 'text-rose-500',
           text: isAccessReq
-            ? `New access request: ${a.email}`
-            : `Forgot password request: ${a.email}`,
+            ? `New access request: ${userEmail}`
+            : `Forgot password request: ${userEmail}`,
           time: a.status === 'pending' ? 'Pending' : 'Resolved',
           unread: a.status === 'pending',
-          onClick: () => navigate('workforce', { kind: 'unlock-user', payload: { email: a.email } }),
+          onClick: () => navigate('workforce', { kind: 'unlock-user', payload: { email: userEmail } }),
         })
       })
 

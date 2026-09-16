@@ -44,49 +44,54 @@ export function ExecutiveTopBar() {
   })
   const timeLabel = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 
-  // Same operational signals surfaced as "pending actions" on the Executive
-  // Dashboard, reframed as notification entries for the shared bell.
+  // Operational signals surfaced as notification entries for the shared bell.
   const notifications = useMemo<NotificationEntry[]>(() => {
     const items: NotificationEntry[] = []
 
-    const awaitingEvent = events.find((e) => e.status === 'Initialized' || e.status === 'On Hold')
-    if (awaitingEvent) {
-      items.push({
-        id: `ev-${awaitingEvent.id}`,
-        icon: CalendarClock,
-        color: 'text-sky-500',
-        text: `"${awaitingEvent.title}" is awaiting confirmation.`,
-        time: 'Event Operations',
-        unread: true,
-        onClick: () => navigate('registry', { kind: 'view-event', payload: { id: awaitingEvent.id } }),
+    events
+      .filter((e) => e.status === 'Initialized' || e.status === 'On Hold')
+      .slice(0, 5)
+      .forEach((e) => {
+        items.push({
+          id: `ev-${e.id}`,
+          icon: CalendarClock,
+          color: 'text-sky-500',
+          text: `"${e.title}" is awaiting confirmation.`,
+          time: 'Event Operations',
+          unread: true,
+          onClick: () => navigate('registry', { kind: 'view-event', payload: { id: e.id } }),
+        })
       })
-    }
 
-    const pendingDamage = damageExceptions.find((d) => d.status === 'Pending Verdict')
-    if (pendingDamage) {
-      items.push({
-        id: `dm-${pendingDamage.id}`,
-        icon: ShieldAlert,
-        color: 'text-rose-500',
-        text: `Damage report ${pendingDamage.logId} for ${pendingDamage.assetName} needs a verdict.`,
-        time: 'Damage Validation',
-        unread: true,
-        onClick: () => navigate('damage', { kind: 'review-damage', payload: { id: pendingDamage.id } }),
+    damageExceptions
+      .filter((d) => d.status === 'Pending Verdict' || d.status === 'Held for Audit' || d.status === 'Pending Second Sign-off')
+      .slice(0, 5)
+      .forEach((d) => {
+        items.push({
+          id: `dm-${d.id}`,
+          icon: ShieldAlert,
+          color: 'text-rose-500',
+          text: `Damage report ${d.logId || d.id.slice(0, 8)} for ${d.assetName} needs a verdict.`,
+          time: 'Damage Validation',
+          unread: true,
+          onClick: () => navigate('damage', { kind: 'review-damage', payload: { id: d.id } }),
+        })
       })
-    }
 
-    const restock = inventory.find((i) => i.status === 'Critical Deficit' || i.status === 'Low Stock')
-    if (restock) {
-      items.push({
-        id: `rs-${restock.id}`,
-        icon: PackageSearch,
-        color: 'text-amber-500',
-        text: `${restock.name} (${restock.assetId}) is running low on stock.`,
-        time: 'Asset Inventory',
-        unread: false,
-        onClick: () => navigate('inventory', { kind: 'reorder-asset', payload: { id: restock.id } }),
+    inventory
+      .filter((i) => i.status === 'Critical Deficit' || i.status === 'Low Stock')
+      .slice(0, 5)
+      .forEach((i) => {
+        items.push({
+          id: `rs-${i.id}`,
+          icon: PackageSearch,
+          color: 'text-amber-500',
+          text: `${i.name} (${i.assetId || i.id}) is running low on stock.`,
+          time: 'Asset Inventory',
+          unread: false,
+          onClick: () => navigate('inventory', { kind: 'reorder-asset', payload: { id: i.id } }),
+        })
       })
-    }
 
     return items
   }, [events, damageExceptions, inventory, navigate])
