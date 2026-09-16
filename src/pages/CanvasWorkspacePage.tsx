@@ -44,7 +44,7 @@ interface WorkspaceCard {
 type WorkspaceMode = 'Viewing' | 'Commenting' | 'Planning' | 'Designing' | 'Asset Planning'
 type PanelTab = 'elements' | 'text' | 'uploads' | 'tools' | 'projects' | 'background'
 type RightPanelTab = 'allocated' | 'pending'
-type EditToolbar = 'adjust' | 'crop' | 'flip' | 'transparency' | 'position' | null
+type EditToolbar = 'adjust' | 'crop' | 'flip' | 'transparency' | 'position' | 'color' | null
 type PositionTab = 'arrange' | 'layers'
 
 // Per PDF: Commenting does NOT require PIN — only Planning, Designing, Asset Planning do
@@ -1304,6 +1304,88 @@ function TransparencyPanel({ opacity, onChange, onClose }: { opacity: number; on
   )
 }
 
+function ColorPickerPanel({
+  color,
+  onChange,
+  onClose,
+}: {
+  color: string
+  onChange: (color: string) => void
+  onClose: () => void
+}) {
+  const [hexInput, setHexInput] = useState(color)
+  const ref = useRef<HTMLDivElement>(null)
+  useOutsideClick(ref, onClose)
+
+  useEffect(() => {
+    setHexInput(color)
+  }, [color])
+
+  function handleColorChange(c: string) {
+    setHexInput(c)
+    onChange(c)
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-start justify-center pt-14 pointer-events-none">
+      <div ref={ref} className="pointer-events-auto w-64 rounded-2xl border border-border bg-card shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+          <span className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-foreground flex items-center gap-1.5">
+            <Palette className="size-3.5 text-primary" />Color Picker
+          </span>
+          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="size-3.5" />
+          </button>
+        </div>
+        <div className="p-4 flex flex-col gap-3">
+          <p className="text-[0.55rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Preset Palette</p>
+          <div className="grid grid-cols-4 gap-1.5">
+            {PRESET_PALETTE.map((p) => (
+              <button
+                key={p.name}
+                type="button"
+                title={p.name}
+                onClick={() => handleColorChange(p.hex)}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md border p-1 text-[0.55rem] font-medium transition cursor-pointer',
+                  color.toLowerCase() === p.hex.toLowerCase() ? 'border-primary ring-1 ring-primary' : 'border-border',
+                )}
+              >
+                <span className="size-3.5 shrink-0 rounded-full border border-black/20" style={{ backgroundColor: p.hex }} />
+                <span className="truncate text-[0.52rem] text-foreground">{p.name}</span>
+              </button>
+            ))}
+          </div>
+
+          <p className="text-[0.55rem] font-bold uppercase tracking-[0.14em] text-muted-foreground mt-1">Hex Input</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={color.startsWith('#') && color.length === 7 ? color : '#000000'}
+              onChange={(e) => handleColorChange(e.target.value)}
+              className="size-8 shrink-0 rounded border border-border bg-transparent cursor-pointer"
+            />
+            <div className="relative flex-1">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">#</span>
+              <input
+                type="text"
+                value={hexInput.replace('#', '')}
+                onChange={(e) => {
+                  const val = '#' + e.target.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 6)
+                  setHexInput(val)
+                  if (val.length === 7) handleColorChange(val)
+                }}
+                placeholder="000000"
+                className="w-full rounded-md border border-input bg-card py-1 pl-6 pr-2 font-mono text-xs text-foreground uppercase outline-none focus:border-primary"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PositionPanel({
   asset, onClose, onUpdate, canvasAssets,
 }: {
@@ -1453,6 +1535,7 @@ function ContextualBar({
   function toggle(t: EditToolbar) { setOpenPanel((p) => (p === t ? null : t)) }
 
   const TOOLS: { id: EditToolbar; label: string; icon: React.ElementType }[] = [
+    { id: 'color',        label: 'Color',          icon: Palette },
     { id: 'adjust',       label: 'Edit / Adjust', icon: Sliders },
     { id: 'crop',         label: 'Crop',           icon: Crop },
     { id: 'flip',         label: 'Flip',           icon: FlipHorizontal },
@@ -1477,6 +1560,7 @@ function ContextualBar({
           <X className="size-3" />Deselect
         </button>
       </div>
+      {openPanel === 'color'        && <ColorPickerPanel color={asset.fill || asset.strokeColor || '#000000'} onChange={(c) => onUpdate(asset.id, { fill: c, strokeColor: c })} onClose={() => setOpenPanel(null)} />}
       {openPanel === 'adjust'       && <AdjustPanel onClose={() => setOpenPanel(null)} />}
       {openPanel === 'crop'         && <CropPanel onClose={() => setOpenPanel(null)} />}
       {openPanel === 'flip'         && <FlipPanel onClose={() => setOpenPanel(null)} />}
