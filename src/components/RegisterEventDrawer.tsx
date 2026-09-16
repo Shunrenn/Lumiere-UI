@@ -303,6 +303,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                   id="ev-venue"
                   className={`${inputClass} appearance-none`}
                   value={draft.venue}
+                  disabled={readOnly}
                   onChange={(e) => {
                     if (e.target.value === ADD_VENUE) {
                       setAddingVenue(true)
@@ -317,7 +318,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                       {v}
                     </option>
                   ))}
-                  <option value={ADD_VENUE}>+ Add New Venue</option>
+                  {!readOnly && <option value={ADD_VENUE}>+ Add New Venue</option>}
                 </select>
               )}
             </div>
@@ -329,7 +330,8 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
               <button
                 id="ev-date"
                 type="button"
-                onClick={() => setShowCalendar((v) => !v)}
+                disabled={readOnly}
+                onClick={() => !readOnly && setShowCalendar((v) => !v)}
                 className={`${inputClass} flex items-center justify-between text-left`}
               >
                 <span className={draft.targetDate ? 'text-foreground' : 'text-muted-foreground/60'}>
@@ -343,10 +345,10 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-3.5 space-y-3">
               <div>
                 <p className="text-[0.6rem] font-bold uppercase tracking-[0.14em] text-primary">
-                  1. Event Hours (Execution Window)
+                  1. Client Event Hours (Program Execution Window)
                 </p>
-                <p className="text-[0.65rem] text-muted-foreground">
-                  Actual hours when the client’s main program/gala runs.
+                <p className="text-[0.65rem] text-muted-foreground font-medium">
+                  Actual time when the client’s main program/gala begins and ends (separate from logistics load-in/out).
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -357,6 +359,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                   <input
                     id="ev-start"
                     type="time"
+                    disabled={readOnly}
                     className={inputClass}
                     value={draft.installationStart}
                     onChange={(e) => set('installationStart', e.target.value)}
@@ -369,6 +372,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                   <input
                     id="ev-end"
                     type="time"
+                    disabled={readOnly}
                     className={inputClass}
                     value={draft.installationEnd}
                     onChange={(e) => set('installationEnd', e.target.value)}
@@ -381,10 +385,10 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
             <div className="rounded-lg border border-border bg-muted/40 p-3.5 space-y-3">
               <div>
                 <p className="text-[0.6rem] font-bold uppercase tracking-[0.14em] text-foreground">
-                  2. Logistics Buffer Window (Load-in &amp; Tear-down)
+                  2. Logistics Buffer Window (Site Load-In &amp; Venue Clearance)
                 </p>
-                <p className="text-[0.65rem] text-muted-foreground">
-                  Operational buffer for truck load-in (Ingress) and full venue clearance (Full Stop).
+                <p className="text-[0.65rem] text-muted-foreground font-medium">
+                  Operational buffer for truck ingress, stage setup, teardown, and final site clearance cutoff (Full Stop).
                 </p>
               </div>
 
@@ -395,6 +399,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                   </label>
                   <select
                     id="ev-geo"
+                    disabled={readOnly}
                     className={`${inputClass} appearance-none`}
                     value={draft.geoClass || 'Local'}
                     onChange={(e) => set('geoClass', e.target.value)}
@@ -410,6 +415,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                   <input
                     id="ev-ingress-date"
                     type="date"
+                    disabled={readOnly}
                     className={inputClass}
                     value={draft.ingressDate || (draft.targetDate ? draft.targetDate : '')}
                     onChange={(e) => set('ingressDate', e.target.value)}
@@ -420,11 +426,12 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass} htmlFor="ev-ingress-time">
-                    Ingress Time (Site Load-in)
+                    Ingress Time (Site Load-In)
                   </label>
                   <input
                     id="ev-ingress-time"
                     type="time"
+                    disabled={readOnly}
                     className={inputClass}
                     value={draft.ingressTime || '08:00'}
                     onChange={(e) => set('ingressTime', e.target.value)}
@@ -437,6 +444,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                   <input
                     id="ev-fullstop"
                     type="time"
+                    disabled={readOnly}
                     className={inputClass}
                     value={draft.fullStop || '23:30'}
                     onChange={(e) => set('fullStop', e.target.value)}

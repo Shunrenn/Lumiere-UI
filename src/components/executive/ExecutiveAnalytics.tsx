@@ -427,10 +427,10 @@ export function ExecutiveTrendAnalyticsCard({
 
   const geometry = useMemo(() => {
     const w = 640
-    const h = 260
+    const h = 210
     const padX = 40
-    const padTop = 20
-    const padBottom = 36
+    const padTop = 16
+    const padBottom = 28
     const max = Math.max(...data.map((d) => d.value), 1)
     const range = max || 1
     const stepX = (w - padX * 2) / Math.max(data.length - 1, 1)
@@ -446,8 +446,8 @@ export function ExecutiveTrendAnalyticsCard({
       .join(' ')
     const areaPath = `${linePath} L ${points[points.length - 1].x.toFixed(1)} ${h - padBottom} L ${points[0].x.toFixed(1)} ${h - padBottom} Z`
 
-    const grid = Array.from({ length: 5 }, (_, i) => {
-      const t = i / 4
+    const grid = Array.from({ length: 4 }, (_, i) => {
+      const t = i / 3
       const y = padTop + (h - padTop - padBottom) * t
       const value = Math.round(max - range * t)
       return { y, value }
@@ -460,8 +460,8 @@ export function ExecutiveTrendAnalyticsCard({
 
   return (
     <>
-      <div className="flex min-h-[24rem] h-full flex-col rounded-xl border border-border bg-card p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex h-[24rem] flex-col rounded-xl border border-border bg-card p-5 overflow-hidden">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shrink-0">
           <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">
             Trend Analytics
           </h3>
@@ -489,10 +489,10 @@ export function ExecutiveTrendAnalyticsCard({
           </div>
         </div>
 
-        <div key={mode} className="admin-fade flex flex-col flex-1">
-          <div className="mt-4 flex items-center justify-between gap-2">
+        <div key={mode} className="admin-fade flex flex-col flex-1 min-h-0">
+          <div className="mt-3 flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-baseline gap-2">
-              <span className="font-sans text-2xl font-bold text-card-foreground">{latest}</span>
+              <span className="font-sans text-2xl font-bold text-foreground">{latest}</span>
               <span className="text-[0.6rem] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
                 {title} · Latest
               </span>
@@ -500,122 +500,125 @@ export function ExecutiveTrendAnalyticsCard({
             <button
               type="button"
               onClick={() => setSummaryOpen(true)}
-              className="rounded-md px-2.5 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary transition hover:bg-primary/10 cursor-pointer"
+              className="rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary transition hover:bg-primary hover:text-primary-foreground cursor-pointer shadow-xs"
             >
               View Summary
             </button>
           </div>
 
-          <svg
-            viewBox={`0 0 ${geometry.w} ${geometry.h}`}
-            className="mt-3 w-full flex-1"
-            role="img"
-            aria-label={`${title} trend chart`}
-            style={{ minHeight: '210px' }}
-          >
-            <defs>
-              <linearGradient id="exec-trend-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.22" />
-                <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0" />
-              </linearGradient>
-            </defs>
+          <div className="mt-2 flex-1 min-h-0 w-full flex items-center justify-center">
+            <svg
+              viewBox={`0 0 ${geometry.w} ${geometry.h}`}
+              className="w-full h-full max-h-[195px]"
+              role="img"
+              aria-label={`${title} trend chart`}
+            >
+              <defs>
+                <linearGradient id="exec-trend-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.22" />
+                  <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
 
-            {geometry.grid.map((g, i) => (
-              <g key={i}>
-                <line
-                  x1={geometry.padX}
-                  x2={geometry.w - geometry.padX}
-                  y1={g.y}
-                  y2={g.y}
-                  stroke="var(--color-border)"
-                  strokeWidth="1"
-                  strokeDasharray="3 4"
-                />
-                <text
-                  x={geometry.padX - 8}
-                  y={g.y + 3}
-                  textAnchor="end"
-                  className="fill-muted-foreground"
-                  style={{ fontSize: '10px' }}
-                >
-                  {g.value}
-                </text>
-              </g>
-            ))}
-
-            <path d={geometry.areaPath} fill="url(#exec-trend-fill)" />
-
-            <path
-              d={geometry.linePath}
-              fill="none"
-              stroke="var(--color-primary)"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-
-            {geometry.points.map((p, i) => {
-              const isHovered = hoveredPoint?.label === p.label
-              return (
-                <g key={i} className="group">
-                  {/* Transparent hit target for hover */}
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r="16"
-                    fill="transparent"
-                    className="cursor-pointer"
-                    onMouseEnter={() => setHoveredPoint(p)}
-                    onMouseLeave={() => setHoveredPoint(null)}
+              {geometry.grid.map((g, i) => (
+                <g key={i}>
+                  <line
+                    x1={geometry.padX}
+                    x2={geometry.w - geometry.padX}
+                    y1={g.y}
+                    y2={g.y}
+                    stroke="var(--color-border)"
+                    strokeWidth="1"
+                    strokeDasharray="3 4"
                   />
-                  {/* Circle node */}
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={isHovered ? 6 : 3.5}
-                    fill="var(--color-card)"
-                    stroke="var(--color-primary)"
-                    strokeWidth={isHovered ? 3 : 2}
-                    className="transition-all duration-150 pointer-events-none"
-                  />
-                  {/* Month label */}
                   <text
-                    x={p.x}
-                    y={geometry.h - 10}
-                    textAnchor="middle"
-                    className={cn(
-                      'transition-colors text-[10px]',
-                      isHovered ? 'fill-primary font-bold' : 'fill-muted-foreground',
-                    )}
+                    x={geometry.padX - 8}
+                    y={g.y + 3}
+                    textAnchor="end"
+                    className="fill-muted-foreground"
+                    style={{ fontSize: '10px' }}
                   >
-                    {p.label}
+                    {g.value}
                   </text>
                 </g>
-              )
-            })}
+              ))}
 
-            {/* Hover Tooltip Popup */}
-            {hoveredPoint && (
-              <g className="pointer-events-none admin-fade" transform={`translate(${hoveredPoint.x}, ${hoveredPoint.y - 12})`}>
-                <rect
-                  x="-45"
-                  y="-26"
-                  width="90"
-                  height="22"
-                  rx="5"
-                  className="fill-popover stroke-border shadow-xl"
-                />
-                <text
-                  x="0"
-                  y="-11"
-                  textAnchor="middle"
-                  className="fill-popover-foreground text-[10px] font-semibold"
+              <path d={geometry.areaPath} fill="url(#exec-trend-fill)" />
+
+              <path
+                d={geometry.linePath}
+                fill="none"
+                stroke="var(--color-primary)"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+
+              {geometry.points.map((p, i) => {
+                const isHovered = hoveredPoint?.label === p.label
+                return (
+                  <g key={i} className="group cursor-pointer">
+                    {/* Transparent hit target for hover */}
+                    <circle
+                      cx={p.x}
+                      cy={p.y}
+                      r="16"
+                      fill="transparent"
+                      onMouseEnter={() => setHoveredPoint(p)}
+                      onMouseLeave={() => setHoveredPoint(null)}
+                    />
+                    {/* Circle node */}
+                    <circle
+                      cx={p.x}
+                      cy={p.y}
+                      r={isHovered ? 6 : 3.5}
+                      fill="var(--color-card)"
+                      stroke="var(--color-primary)"
+                      strokeWidth={isHovered ? 3 : 2}
+                      className="transition-all duration-150 pointer-events-none"
+                    />
+                    {/* Month label */}
+                    <text
+                      x={p.x}
+                      y={geometry.h - 8}
+                      textAnchor="middle"
+                      className={cn(
+                        'transition-colors text-[10px]',
+                        isHovered ? 'fill-primary font-bold' : 'fill-muted-foreground',
+                      )}
+                    >
+                      {p.label}
+                    </text>
+                  </g>
+                )
+              })}
+
+              {/* Hover Tooltip Popup */}
+              {hoveredPoint && (
+                <g
+                  className="pointer-events-none admin-fade"
+                  transform={`translate(${hoveredPoint.x}, ${hoveredPoint.y})`}
                 >
-                  {hoveredPoint.label}: {hoveredPoint.value} {mode === 'events' ? 'events' : 'claims'}
-                </text>
-              </g>
-            )}
-          </svg>
+                  <rect
+                    x="-45"
+                    y={hoveredPoint.y < 45 ? '10' : '-28'}
+                    width="90"
+                    height="22"
+                    rx="5"
+                    className="fill-popover stroke-border shadow-xl"
+                  />
+                  <text
+                    x="0"
+                    y={hoveredPoint.y < 45 ? '25' : '-13'}
+                    textAnchor="middle"
+                    className="fill-popover-foreground text-[10px] font-semibold"
+                  >
+                    {hoveredPoint.label}: {hoveredPoint.value} {mode === 'events' ? 'events' : 'claims'}
+                  </text>
+                </g>
+              )}
+            </svg>
+          </div>
         </div>
       </div>
 
