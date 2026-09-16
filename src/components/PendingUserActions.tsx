@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react'
+import { CheckCircle2, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type PendingActionTone = 'rose' | 'amber' | 'emerald' | 'sky'
@@ -48,14 +48,20 @@ export function PendingUserActions({ variant = 'dark', items, onOpen }: Props) {
       </h2>
 
       {items.length === 0 ? (
-        <p
+        <div
           className={cn(
-            'mt-5 text-sm italic',
-            dark ? 'text-sidebar-foreground/50' : 'text-muted-foreground',
+            'mt-5 flex flex-col items-center justify-center rounded-xl border border-dashed py-8 px-4 text-center',
+            dark ? 'border-sidebar-border/40 bg-sidebar-accent/10' : 'border-border/60 bg-muted/20',
           )}
         >
-          All actions completed — no pending requests.
-        </p>
+          <CheckCircle2 className="size-6 text-emerald-500 mb-2" />
+          <p className={cn('text-sm font-semibold', dark ? 'text-sidebar-primary' : 'text-foreground')}>
+            All actions completed
+          </p>
+          <p className={cn('mt-1 text-xs max-w-xs', dark ? 'text-sidebar-foreground/60' : 'text-muted-foreground')}>
+            No pending user requests or privileged account lockouts require attention.
+          </p>
+        </div>
       ) : (
         <ul className="mt-5 flex flex-col">
           {items.map((item) => {

@@ -46,6 +46,7 @@ import { NotificationsBell, type NotificationEntry } from '@/components/Notifica
 import { useDarkMode, useThemeMode } from '@/lib/theme'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
+import { EmptyState } from '@/components/EmptyState'
 
 
 /* ─── Calendar helpers ─── */
@@ -1728,21 +1729,17 @@ export function DesignCanvasHubPage() {
           {view === 'grid' && (
             filteredCards.length === 0
               ? (
-                <div className="py-16 text-center">
-                  <p className="text-sm font-serif font-medium text-foreground">No matching projects found</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {searchQuery ? `No designs or mood boards match "${searchQuery}".` : 'No projects match the selected filters.'}
-                  </p>
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchQuery('')}
-                      className="mt-3 rounded-lg border border-border bg-card px-3 py-1.5 text-[0.65rem] font-bold uppercase tracking-[0.1em] text-primary transition hover:bg-accent cursor-pointer"
-                    >
-                      Clear search
-                    </button>
-                  )}
-                </div>
+                <EmptyState
+                  title={searchQuery ? 'No matching designs or mood boards' : 'No design projects found'}
+                  message={searchQuery ? `No items match "${searchQuery}". Try a different search term or clear your filter.` : 'Create your first design project or mood board to get started.'}
+                  icon={PackageSearch}
+                  actionLabel={searchQuery ? 'Clear Search' : '+ Create Mood Board'}
+                  onAction={() => {
+                    if (searchQuery) setSearchQuery('')
+                    else handleCreateMoodBoard()
+                  }}
+                  className="my-6 rounded-2xl border border-dashed border-border bg-card/40 py-12"
+                />
               )
               : <div className="max-h-[46rem] overflow-y-auto pr-1">
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
@@ -1767,21 +1764,17 @@ export function DesignCanvasHubPage() {
           {view === 'row' && (
             filteredCards.length === 0
               ? (
-                <div className="py-16 text-center">
-                  <p className="text-sm font-serif font-medium text-foreground">No matching projects found</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {searchQuery ? `No designs or mood boards match "${searchQuery}".` : 'No projects match the selected filters.'}
-                  </p>
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchQuery('')}
-                      className="mt-3 rounded-lg border border-border bg-card px-3 py-1.5 text-[0.65rem] font-bold uppercase tracking-[0.1em] text-primary transition hover:bg-accent cursor-pointer"
-                    >
-                      Clear search
-                    </button>
-                  )}
-                </div>
+                <EmptyState
+                  title={searchQuery ? 'No matching designs or mood boards' : 'No design projects found'}
+                  message={searchQuery ? `No items match "${searchQuery}". Try a different search term or clear your filter.` : 'Create your first design project or mood board to get started.'}
+                  icon={PackageSearch}
+                  actionLabel={searchQuery ? 'Clear Search' : '+ Create Mood Board'}
+                  onAction={() => {
+                    if (searchQuery) setSearchQuery('')
+                    else handleCreateMoodBoard()
+                  }}
+                  className="my-6 rounded-2xl border border-dashed border-border bg-card/40 py-12"
+                />
               )
               : <div className="max-h-40 overflow-y-auto pr-1">
                   <div className="flex flex-col gap-2">
