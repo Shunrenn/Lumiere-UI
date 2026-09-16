@@ -213,10 +213,6 @@ const seedStaffRaw: Staff[] = [
     lastAccess: 'May 28, 2026 · 12:45',
     dateAdded: 'May 12, 2026',
   },
-  // These two staff records mirror the two Executive login accounts
-  // (executive@lumiere.com / executive2@lumiere.com) so Admin's Workforce
-  // suspend toggle can simulate "only one Executive active" for the
-  // two-sign-off Damage Validation flow.
   {
     id: 's-11',
     employeeId: 'LM-0011',
@@ -229,19 +225,6 @@ const seedStaffRaw: Staff[] = [
     sessionStatus: 'Active Session',
     lastAccess: 'May 30, 2026 · 09:10',
     dateAdded: 'Jun 02, 2026',
-  },
-  {
-    id: 's-12',
-    employeeId: 'LM-0012',
-    surname: 'Whitfield',
-    firstName: 'Marcus',
-    middleName: '',
-    email: 'executive2@lumiere.com',
-    contact: '09822334455',
-    role: 'Executive',
-    sessionStatus: 'Active Session',
-    lastAccess: 'May 30, 2026 · 09:12',
-    dateAdded: 'Jun 20, 2026',
   },
   {
     id: 's-13',
@@ -529,6 +512,10 @@ const seedEvents: PortalEvent[] = [
     targetDate: '2026-09-20',
     installationStart: '2026-09-19',
     installationEnd: '2026-09-20',
+    eventStart: '18:00',
+    eventEnd: '23:00',
+    ingressTime: '08:00',
+    fullStop: '23:30',
     budget: 3400000,
     status: 'In Production',
     moodPlan: 'Crystal sconces and emerald velvet draping.',
@@ -543,6 +530,10 @@ const seedEvents: PortalEvent[] = [
     targetDate: '2026-09-28',
     installationStart: '2026-09-27',
     installationEnd: '2026-09-28',
+    eventStart: '09:00',
+    eventEnd: '17:00',
+    ingressTime: '06:00',
+    fullStop: '19:00',
     budget: 1950000,
     status: 'In Production',
     moodPlan: 'Modern minimalist LED panels and obsidian podiums.',
@@ -557,6 +548,10 @@ const seedEvents: PortalEvent[] = [
     targetDate: '2026-10-08',
     installationStart: '2026-10-07',
     installationEnd: '2026-10-08',
+    eventStart: '16:00',
+    eventEnd: '22:00',
+    ingressTime: '07:00',
+    fullStop: '23:00',
     budget: 5200000,
     status: 'In Production',
     moodPlan: 'White silk canopy, gold candelabras, floral arbors.',
@@ -571,6 +566,10 @@ const seedEvents: PortalEvent[] = [
     targetDate: '2026-09-16',
     installationStart: '2026-09-15',
     installationEnd: '2026-09-16',
+    eventStart: '19:00',
+    eventEnd: '22:30',
+    ingressTime: '10:00',
+    fullStop: '23:59',
     budget: 2800000,
     status: 'In Production',
     moodPlan: 'Sleek brushed aluminum stages and laser lighting.',
@@ -585,6 +584,10 @@ const seedEvents: PortalEvent[] = [
     targetDate: '2026-09-24',
     installationStart: '2026-09-23',
     installationEnd: '2026-09-24',
+    eventStart: '08:30',
+    eventEnd: '16:30',
+    ingressTime: '05:30',
+    fullStop: '18:00',
     budget: 3900000,
     status: 'In Production',
     moodPlan: 'Mahogany banquet tables with refined brass table lamps.',
@@ -599,6 +602,10 @@ const seedEvents: PortalEvent[] = [
     targetDate: '2026-10-03',
     installationStart: '2026-10-02',
     installationEnd: '2026-10-03',
+    eventStart: '20:00',
+    eventEnd: '23:00',
+    ingressTime: '09:00',
+    fullStop: '01:00',
     budget: 4850000,
     status: 'Initialized',
     moodPlan: 'Mirror catwalk with rose gold accents and velvet seating.',
@@ -613,6 +620,10 @@ const seedEvents: PortalEvent[] = [
     targetDate: '2026-10-14',
     installationStart: '2026-10-13',
     installationEnd: '2026-10-14',
+    eventStart: '17:00',
+    eventEnd: '21:30',
+    ingressTime: '08:00',
+    fullStop: '23:00',
     budget: 2300000,
     status: 'In Production',
     moodPlan: 'Living green walls and recycled timber centerpieces.',
@@ -627,6 +638,10 @@ const seedEvents: PortalEvent[] = [
     targetDate: '2026-10-20',
     installationStart: '2026-10-18',
     installationEnd: '2026-10-20',
+    eventStart: '13:00',
+    eventEnd: '21:00',
+    ingressTime: '06:00',
+    fullStop: '23:00',
     budget: 6500000,
     status: 'In Production',
     moodPlan: 'Neon blue trusses and immersive arena seating layout.',
@@ -641,6 +656,10 @@ const seedEvents: PortalEvent[] = [
     targetDate: '2026-10-25',
     installationStart: '2026-10-24',
     installationEnd: '2026-10-25',
+    eventStart: '18:30',
+    eventEnd: '22:00',
+    ingressTime: '10:00',
+    fullStop: '23:30',
     budget: 7120000,
     status: 'In Production',
     moodPlan: 'Bulletproof glass pedestals with pinpoint spotlighting.',
@@ -655,6 +674,10 @@ const seedEvents: PortalEvent[] = [
     targetDate: '2026-10-29',
     installationStart: '2026-10-27',
     installationEnd: '2026-10-29',
+    eventStart: '09:00',
+    eventEnd: '18:00',
+    ingressTime: '06:00',
+    fullStop: '20:00',
     budget: 3100000,
     status: 'Completed',
     moodPlan: 'High-tech modular displays and aviation-grade flooring.',
@@ -1384,6 +1407,7 @@ interface PortalContextValue {
   addEvent: (draft: NewEventDraft, initiatorRole?: string) => void
   updateEvent: (id: string, draft: Partial<PortalEvent>, initiatorRole?: string) => void
   resolveUserAction: (id: string) => void
+  addUserAction: (action: Omit<UserAction, 'id'>) => void
   routeReorder: (draft: ReorderDraft) => void
   updateThreshold: (id: string, threshold: number) => void
   resolveDamage: (
@@ -1957,13 +1981,17 @@ export function PortalProvider({ children }: { children: ReactNode }) {
             account: a.user,
             initiatorRole: 'Admin',
             action:
-              a.type === 'forgot-password'
-                ? 'Temporary Password Generated'
-                : 'Account Unlocked & Temp Password Sent',
+              a.type === 'access-request'
+                ? 'Access Request Approved & Account Created'
+                : a.type === 'forgot-password'
+                  ? 'Temporary Password Generated'
+                  : 'Account Unlocked & Temp Password Sent',
             detail:
-              a.type === 'forgot-password'
-                ? `Temporary password generated and dispatched to ${a.user}. User must reset on next login.`
-                : `Account ${a.user} unlocked. Temporary password issued pending reset.`,
+              a.type === 'access-request'
+                ? `Access request approved for ${a.user}. Account created.`
+                : a.type === 'forgot-password'
+                  ? `Temporary password generated and dispatched to ${a.user}. User must reset on next login.`
+                  : `Account ${a.user} unlocked. Temporary password issued pending reset.`,
             ip: randomIp(),
             status: 'Success',
           })
@@ -1981,6 +2009,14 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     },
     [pushLog],
   )
+
+  const addUserAction = useCallback((action: Omit<UserAction, 'id'>) => {
+    const newAction: UserAction = {
+      id: `ua-req-${Date.now()}`,
+      ...action,
+    }
+    setUserActions((prev) => [newAction, ...prev])
+  }, [])
 
   const routeReorder = useCallback(
     (draft: ReorderDraft) => {
@@ -2357,6 +2393,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       addEvent,
       updateEvent,
       resolveUserAction,
+      addUserAction,
       routeReorder,
       updateThreshold,
       resolveDamage,
@@ -2390,6 +2427,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       addEvent,
       updateEvent,
       resolveUserAction,
+      addUserAction,
       routeReorder,
       updateThreshold,
       resolveDamage,

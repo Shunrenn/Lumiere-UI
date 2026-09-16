@@ -35,7 +35,7 @@ function parseDateAdded(value: string | undefined): number {
 }
 
 export function AdminWorkforcePage() {
-  const { navigate } = useNav()
+  const { navigate, intent, clearIntent } = useNav()
   const { staff, userActions, addEmployeeRecord, toggleSuspend, forceLogout, updateStaff } = usePortal()
   const { openGrowthSummary } = useGrowthSummary()
   const [query, setQuery] = useState('')
@@ -49,6 +49,29 @@ export function AdminWorkforcePage() {
   const [editMode, setEditMode] = useState(false)
   const [tempPassword, setTempPassword] = useState('')
   const addMenuRef = useRef<HTMLDivElement | null>(null)
+
+  const lockedIds = useMemo(() => new Set(userActions.filter((a) => a.type === 'account-locked' && a.status === 'pending').map((a) => a.user)), [userActions])
+
+  const [prefillEmail, setPrefillEmail] = useState('')
+  const [prefillActionId, setPrefillActionId] = useState('')
+
+  useEffect(() => {
+    if (intent?.kind === 'unlock-user') {
+      const targetEmail = intent.payload?.email
+      const target = staff.find((s) => s.email === targetEmail) || staff.find((s) => lockedIds.has(s.email))
+      if (target) {
+        setSelected(target)
+        setEditMode(false)
+        setTempPassword(target.tempPassword ?? '')
+      }
+      clearIntent()
+    } else if (intent?.kind === 'add-user') {
+      if (intent.payload?.email) setPrefillEmail(intent.payload.email)
+      if (intent.payload?.actionId) setPrefillActionId(intent.payload.actionId)
+      setCreateAccountOpen(true)
+      clearIntent()
+    }
+  }, [intent, staff, lockedIds, clearIntent])
 
   // Deep-linkable highlight, scoped to this feature only: read directly off
   // the URL (not through useNav) so refresh/back/forward restore it without
@@ -99,7 +122,6 @@ export function AdminWorkforcePage() {
     return () => document.removeEventListener('mousedown', onDoc)
   }, [addMenuOpen])
 
-  const lockedIds = useMemo(() => new Set(userActions.filter((a) => a.type === 'account-locked' && a.status === 'pending').map((a) => a.user)), [userActions])
   const rows = useMemo(() => {
     const filtered = staff.filter((s) => {
       const text = `${s.firstName} ${s.surname} ${s.employeeId} ${s.email}`.toLowerCase()
@@ -199,7 +221,12 @@ export function AdminWorkforcePage() {
         <WorkforceTable rows={rows} resolveStatus={(s) => statusFor(s, lockedIds)} onRowClick={(s) => { setSelected(s); setEditMode(false); setTempPassword(s.tempPassword ?? '') }} onSuspend={(s) => void toggleSuspend(s.id)} onForceLogout={(s) => forceLogout(s.id)} onEdit={(s) => { setSelected(s); setEditMode(true); setTempPassword(s.tempPassword ?? '') }} highlightId={highlightId} stats={tableStats} />
       </div>
       )}
-      <EmployeeModal open={createAccountOpen} onClose={() => setCreateAccountOpen(false)} />
+      <EmployeeModal 
+        open={createAccountOpen} 
+        onClose={() => { setCreateAccountOpen(false); setPrefillEmail(''); setPrefillActionId(''); }} 
+        prefillEmail={prefillEmail}
+        actionId={prefillActionId}
+      />
       <EmployeeRecordModal open={createRecordOpen} onClose={() => setCreateRecordOpen(false)} onCreate={addEmployeeRecord} />
       <ViewAccountModal open={!!selected} staff={selected} tempPassword={tempPassword} onTempPasswordChange={setTempPassword} onClose={() => setSelected(null)} editable={editMode} onSave={(s) => { updateStaff({ ...s, tempPassword }); setSelected(null) }} />
     </AdminShell>

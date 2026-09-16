@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X, Eye, EyeOff } from 'lucide-react'
 import { STAFF_ROLES, type NewStaffDraft, type StaffRole } from '@/lib/types'
 import { usePortal } from '@/lib/store'
@@ -6,6 +6,8 @@ import { usePortal } from '@/lib/store'
 interface Props {
   open: boolean
   onClose: () => void
+  prefillEmail?: string
+  actionId?: string
 }
 
 const emptyDraft: NewStaffDraft = {
@@ -27,11 +29,20 @@ const labelClass =
 const inputClass =
   'mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-ring/30'
 
-export function EmployeeModal({ open, onClose }: Props) {
-  const { addStaff, staff } = usePortal()
+export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) {
+  const { addStaff, staff, resolveUserAction, userActions } = usePortal()
   const [step, setStep] = useState<'form' | 'verify'>('form')
   const [draft, setDraft] = useState<NewStaffDraft>(emptyDraft)
   const [showPwd, setShowPwd] = useState(false)
+
+  useEffect(() => {
+    if (open && prefillEmail && !draft.email) {
+      setDraft((prev) => ({
+        ...prev,
+        email: prefillEmail,
+      }))
+    }
+  }, [open, prefillEmail, draft.email])
 
   if (!open) return null
 
@@ -76,6 +87,14 @@ export function EmployeeModal({ open, onClose }: Props) {
 
   const commit = async () => {
     await addStaff(draft)
+    if (actionId) {
+      resolveUserAction(actionId)
+    } else if (draft.email) {
+      const match = (userActions || []).find(
+        (a: any) => (a.email === draft.email || a.user === draft.email) && a.status === 'pending'
+      )
+      if (match) resolveUserAction(match.id)
+    }
     close()
   }
 

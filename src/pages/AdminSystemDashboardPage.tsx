@@ -130,6 +130,13 @@ export function AdminSystemDashboardPage() {
   }, [userActions])
 
   const handleResolve = (item: UserAction) => {
+    if (item.type === 'access-request') {
+      navigate('workforce', {
+        kind: 'add-user',
+        payload: { email: item.email || item.user, actionId: item.id },
+      })
+      return
+    }
     // Open a confirmation dialog in-place (icon-rail shell). The action is not
     // performed until the admin confirms — this gates the mutation properly.
     setTempPassword('lumierepassword123')

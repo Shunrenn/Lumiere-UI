@@ -3,12 +3,14 @@ import { User, Lock, Eye, EyeOff, HardHat, Sun, Moon, Monitor } from 'lucide-rea
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useThemeMode, type ThemeMode } from '@/lib/theme'
+import { usePortal } from '@/lib/store'
 
 type View = 'signin' | 'request' | 'sent'
 type RequestType = 'forgot-password' | 'request-password'
 
 export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
   const { login } = useAuth()
+  const { staff: portalStaff, addUserAction } = usePortal()
   const { mode: themeMode, setMode: setThemeMode } = useThemeMode()
   const [view, setView] = useState<View>('signin')
 
@@ -52,16 +54,31 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
       setRequestError('Access is restricted to @lumiere.com email addresses.')
       return
     }
+
+    // Case-insensitive email collision check against existing staff directory
+    const existingStaff = (portalStaff || []).some(
+      (s: any) => s.email && s.email.trim().toLowerCase() === normalized
+    )
+
+    if (existingStaff) {
+      // Redirect existing user to Forgot Password flow
+      setRequestType('forgot-password')
+      setRequestError('An account already exists for this email address. Redirected to Password Recovery mode.')
+      return
+    }
+
     setSubmittingRequest(true)
     try {
-      const { error: insertError } = await supabase
+      void supabase
         .from('access_requests')
         .insert({ email: normalized, type: requestType, status: 'pending' })
-      if (insertError) {
-        console.error('[v0] Failed to submit access request:', insertError)
-        setRequestError('Could not submit your request. Please try again.')
-        return
-      }
+      
+      addUserAction({
+        type: 'access-request',
+        user: normalized,
+        email: normalized,
+        status: 'pending',
+      })
       setRequestEmail('')
       setView('sent')
     } finally {
@@ -261,9 +278,7 @@ function SignInView(props: {
 
       <div className="mt-6 space-y-1 text-center text-xs text-muted-foreground/70">
         <p>Demo admin · admin@lumiere.com · lumiere2026</p>
-        <p>Temp password account · tempadmin@lumiere.com · lumiere2026</p>
         <p>Executive · executive@lumiere.com · lumiere2026</p>
-        <p>Executive (second sign-off) · executive2@lumiere.com · lumiere2026</p>
         <p>Event planner · planner@lumiere.com · lumiere2026</p>
         <p>Ground crew · crew@lumiere.com · lumiere2026</p>
         <p className="pt-2 font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">

@@ -178,6 +178,12 @@ export interface PortalEvent {
   targetDate: string
   installationStart: string
   installationEnd: string
+  eventStart?: string
+  eventEnd?: string
+  ingressDate?: string
+  ingressTime?: string
+  fullStop?: string
+  geoClass?: string
   budget: number
   status: EventStatus
   moodPlan: string
@@ -210,7 +216,7 @@ export interface NewEventDraft {
 /* ---------- Account / User Actions ---------- */
 
 // Pending account requests surfaced on the Overview and in Access Control.
-export type UserActionType = 'forgot-password' | 'request-password' | 'account-locked'
+export type UserActionType = 'forgot-password' | 'request-password' | 'account-locked' | 'access-request'
 
 export type UserActionStatus = 'pending' | 'completed'
 
@@ -218,9 +224,8 @@ export interface UserAction {
   id: string
   type: UserActionType
   user: string
+  email?: string
   status: UserActionStatus
-  // Account type of the roster member this request belongs to. Rendered as a
-  // visible tag so the Admin can verify the queue spans every account type.
   accountType?: StaffRole
 }
 
@@ -294,6 +299,7 @@ export interface DamageException {
   assetSku: string
   damageType: string
   imageUrl: string
+  images?: string[]
   gps: string
   capturedAt: string
   exifVerified: boolean

@@ -7,6 +7,7 @@ import type { Route } from '@/lib/types'
 export interface NavIntent {
   kind:
     | 'unlock-user'
+    | 'add-user'
     | 'view-event'
     | 'review-damage'
     | 'reorder-asset'
