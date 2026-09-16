@@ -327,8 +327,10 @@ function Home({
   onOpen: (event: EventItem) => void
   approachingSummary?: { totalApproaching: number; eventsCount: number } | null
 }) {
-  const notificationsList =
-    approachingSummary && approachingSummary.totalApproaching > 0
+  const [activeNotif, setActiveNotif] = useState<{ id: string; label: string; detail: string; category?: string; date?: string; venue?: string } | null>(null)
+
+  const notificationsList = [
+    ...(approachingSummary && approachingSummary.totalApproaching > 0
       ? [
           {
             id: 'rem-sla',
@@ -338,26 +340,95 @@ function Home({
             } approaching the 48-hour deadline across ${approachingSummary.eventsCount} event${
               approachingSummary.eventsCount > 1 ? 's' : ''
             }. Review in Tasks tab.`,
+            category: 'SLA Escalation',
+            venue: 'All Active Venues',
           },
-          ...NOTIFICATIONS,
         ]
-      : NOTIFICATIONS
+      : []),
+    ...NOTIFICATIONS.map((n) => ({
+      ...n,
+      category: 'Company Broadcast',
+      venue: n.id === 'n2' ? 'The Peninsula Manila' : 'Central Warehouse Base',
+    })),
+  ]
 
   return (
     <div className="space-y-6">
       <section className="paper-card">
-        <div className="flex items-center gap-2">
-          <Bell className="size-4 text-primary" />
-          <p className="eyebrow">Notifications</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bell className="size-4 text-primary" />
+            <p className="eyebrow">Notifications &amp; Field Announcements</p>
+          </div>
+          <span className="text-xs font-semibold text-primary">Click notification for details →</span>
         </div>
-        <div className="mt-3 space-y-3 text-sm">
+        <div className="mt-3 space-y-2 text-sm">
           {notificationsList.map((item) => (
-            <p key={item.id}>
-              <strong>{item.label}:</strong> {item.detail}
-            </p>
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setActiveNotif(item)}
+              className="flex w-full items-center justify-between p-2 rounded-lg text-left transition-colors hover:bg-secondary/60 cursor-pointer"
+            >
+              <div>
+                <strong className="text-foreground">{item.label}:</strong> <span className="text-muted-foreground">{item.detail}</span>
+              </div>
+              <span className="text-xs font-medium text-primary shrink-0 ml-2">Open →</span>
+            </button>
           ))}
         </div>
       </section>
+
+      {activeNotif && (
+        <div className="sheet-backdrop" onClick={() => setActiveNotif(null)}>
+          <div className="sheet space-y-4 max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between border-b border-border pb-3">
+              <div>
+                <p className="eyebrow text-primary">Ground Crew Field Briefing</p>
+                <h2 className="mt-1 font-serif text-2xl">{activeNotif.label}</h2>
+              </div>
+              <button type="button" onClick={() => setActiveNotif(null)} className="icon-button" aria-label="Close modal">
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <div className="paper-card space-y-3 bg-secondary/30">
+              <p className="text-sm font-medium">{activeNotif.detail}</p>
+              <div className="grid grid-cols-2 gap-2 text-xs border-t border-border pt-3">
+                <div>
+                  <p className="text-muted-foreground">Source Type</p>
+                  <p className="font-semibold mt-0.5">{activeNotif.category || 'Field Dispatch'}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Location / Venue</p>
+                  <p className="font-semibold mt-0.5">{activeNotif.venue || 'Assigned Event'}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Assigned Shift</p>
+                  <p className="font-semibold mt-0.5">Ground Crew Tier A</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Required Gear</p>
+                  <p className="font-semibold mt-0.5 text-primary">Handset &amp; Vest</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border p-3 text-xs space-y-1">
+              <p className="font-bold uppercase tracking-wider text-muted-foreground">Broadcast Details</p>
+              <p>• Verification timestamp logged with Dispatch Store.</p>
+              <p>• Mandatory safety protocol applies to all field members.</p>
+              <p>• Contact Manning Officer if shift conflicts occur.</p>
+            </div>
+
+            <div className="pt-2 border-t border-border flex justify-end gap-2">
+              <button type="button" onClick={() => setActiveNotif(null)} className="button-secondary text-xs">
+                Acknowledge &amp; Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <header>
         <p className="eyebrow">Assigned events</p>
         <h1 className="mt-2 text-3xl font-serif">Your event list</h1>
@@ -557,7 +628,7 @@ function CameraCapture({ onClose, onCapture }: { onClose: () => void; onCapture:
 function DamageForm({ item, event, phase, onClose, onSubmit }: { item: EventItem['items'][number]; event: string; phase: Phase; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   const [condition, setCondition] = useState<'Damaged' | 'Missing'>('Damaged')
   const [cameraOpen, setCameraOpen] = useState(false)
-  const [captured, setCaptured] = useState(false)
+  const [photoCount, setPhotoCount] = useState<number>(0)
   const photoRequired = condition === 'Damaged'
   return (
     <div className="sheet-backdrop">
@@ -567,32 +638,32 @@ function DamageForm({ item, event, phase, onClose, onSubmit }: { item: EventItem
           <button type="button" onClick={onClose} className="icon-button" aria-label="Close"><X className="size-4" /></button>
         </div>
         <label className="field-label">Condition
-          <select name="condition" value={condition} onChange={(e) => { setCondition(e.target.value as 'Damaged' | 'Missing'); setCaptured(false) }} className="field-input">
+          <select name="condition" value={condition} onChange={(e) => { setCondition(e.target.value as 'Damaged' | 'Missing'); setPhotoCount(0) }} className="field-input">
             <option>Damaged</option>
             <option>Missing</option>
           </select>
         </label>
-        <input type="hidden" name="photoCaptured" value={captured ? '1' : ''} />
+        <input type="hidden" name="photoCaptured" value={photoCount > 0 ? '1' : ''} />
         <div className="field-label">
-          <span>{photoRequired ? 'Photo required for damaged items' : 'Photo (not required for missing items)'}</span>
-          {captured ? (
+          <span>{photoRequired ? 'Photos required for damaged items (multiple allowed)' : 'Photos (optional for missing items)'}</span>
+          {photoCount > 0 ? (
             <div className="mt-1 flex items-center justify-between gap-3 rounded-md border border-border bg-secondary/40 p-3">
-              <div className="flex items-center gap-2 text-sm"><span className="flex size-9 items-center justify-center rounded bg-foreground text-background"><Camera className="size-4" /></span> Photo captured</div>
-              <button type="button" onClick={() => setCameraOpen(true)} className="text-xs font-medium text-primary underline-offset-2 hover:underline">Retake</button>
+              <div className="flex items-center gap-2 text-sm"><span className="flex size-9 items-center justify-center rounded bg-foreground text-background font-bold text-xs">{photoCount}</span> {photoCount === 1 ? '1 Photo attached' : `${photoCount} Photos attached`}</div>
+              <button type="button" onClick={() => setCameraOpen(true)} className="text-xs font-semibold text-primary underline-offset-2 hover:underline">+ Add another photo</button>
             </div>
           ) : (
-            <button type="button" onClick={() => setCameraOpen(true)} className="button-secondary mt-1 w-full"><Camera className="size-4" /> Open camera</button>
+            <button type="button" onClick={() => setCameraOpen(true)} className="button-secondary mt-1 w-full"><Camera className="size-4" /> Open camera to capture photo</button>
           )}
         </div>
-        {photoRequired && !captured && (
-          <p className="-mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Camera className="size-3.5" /> Use the built-in camera to capture proof of the damage.</p>
+        {photoRequired && photoCount === 0 && (
+          <p className="-mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Camera className="size-3.5" /> Use the built-in camera to capture photo evidence of the damage.</p>
         )}
         <label className="field-label">Number affected<input name="quantity" type="number" min="1" defaultValue="1" className="field-input" /></label>
         <label className="field-label">Damage or description<textarea name="description" required rows={3} placeholder="Describe the damage, missing count, or notes..." className="field-input" /></label>
         <div className="rounded border border-border bg-secondary/40 p-3 text-xs leading-5 text-muted-foreground"><MapPin className="mr-1 inline size-3" /> Timestamp and GPS location are captured automatically when you submit.</div>
         <button className="button-primary w-full" type="submit"><Send className="size-4" /> Submit validation</button>
       </form>
-      {cameraOpen && <CameraCapture onClose={() => setCameraOpen(false)} onCapture={() => { setCaptured(true); setCameraOpen(false) }} />}
+      {cameraOpen && <CameraCapture onClose={() => setCameraOpen(false)} onCapture={() => { setPhotoCount((prev) => prev + 1); setCameraOpen(false) }} />}
     </div>
   )
 }
