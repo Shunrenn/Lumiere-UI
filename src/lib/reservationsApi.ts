@@ -58,12 +58,8 @@ export async function bulkReserveAssets(request: BulkReservationRequest): Promis
       committedCount: data.committedCount || request.assetIds.length,
     }
   } catch (err: any) {
-    console.warn('[reservationsApi] Failed to post bulk reservation, returning fallback state in dev:', err)
-    // Return dev fallback if API is unreachable
-    if (import.meta.env.DEV) {
-      return { success: true, committedCount: request.assetIds.length }
-    }
-    return { success: false, error: err?.message || 'Network error while contacting reservation API.' }
+    console.warn('[reservationsApi] Failed to post bulk reservation:', err)
+    return { success: false, error: err?.message || 'Could not verify reservation — please retry' }
   }
 }
 
@@ -84,6 +80,6 @@ export async function validateCanvasState(eventId: string, assetIds: string[]): 
     const data = await response.json()
     return { valid: data.valid !== false, reason: data.reason }
   } catch (err: any) {
-    return { valid: true } // Graceful fallback in local dev
+    return { valid: false, reason: err?.message || 'Could not verify reservation — please retry' }
   }
 }
