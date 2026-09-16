@@ -180,12 +180,20 @@ export function ManningPage() {
 
 function Home({ onNotify, overdue, fallbackDeclarations, approachingSummary, onOverrideTask, onOverrideDeclaration, onInbox, unlocked, incidentStates, setIncidentStates }: { onNotify: (message:string)=>void; overdue: { id: string; title: string; lead: string; due: string }[]; fallbackDeclarations: GroundCrewDeclaration[]; approachingSummary: { totalApproaching: number; eventsCount: number }; onOverrideTask: (id: string, title: string) => void; onOverrideDeclaration: (id: string, decision: 'Confirmed' | 'Rejected') => void; onInbox:()=>void; unlocked:boolean; incidentStates:Record<string,string>; setIncidentStates: Dispatch<SetStateAction<Record<string,string>>> }) {
   const totalBreaches = overdue.length + fallbackDeclarations.length
+  const [notifModalOpen, setNotifModalOpen] = useState(false)
+
   return (
     <div className="space-y-5">
-      <section className="paper-card">
-        <div className="flex items-center gap-2">
-          <Bell className="size-4 text-primary" />
-          <p className="eyebrow">Notifications &amp; Escalations</p>
+      <section 
+        className="paper-card cursor-pointer transition-colors hover:border-primary/50"
+        onClick={() => setNotifModalOpen(true)}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bell className="size-4 text-primary" />
+            <p className="eyebrow">Notifications &amp; Escalations</p>
+          </div>
+          <span className="text-xs font-semibold text-primary">Click for details →</span>
         </div>
         <div className="mt-3 space-y-2 text-sm">
           {totalBreaches > 0 && (
@@ -203,6 +211,95 @@ function Home({ onNotify, overdue, fallbackDeclarations, approachingSummary, onO
           )}
         </div>
       </section>
+
+      {notifModalOpen && (
+        <div className="sheet-backdrop" onClick={() => setNotifModalOpen(false)}>
+          <div className="sheet space-y-5 max-w-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between border-b border-border pb-3">
+              <div>
+                <p className="eyebrow text-primary">Manning Control · Real-time Feed</p>
+                <h2 className="mt-1 font-serif text-2xl">Notifications &amp; SLA Breaches</h2>
+              </div>
+              <button type="button" onClick={() => setNotifModalOpen(false)} className="icon-button" aria-label="Close modal">
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+              <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs">
+                <p className="font-bold text-rose-600 dark:text-rose-400">48-Hour SLA Warning Policy Active</p>
+                <p className="mt-1 text-muted-foreground">All field lead confirmations and ground crew declarations must be reviewed within 48 hours to preserve shift allocation guarantees.</p>
+              </div>
+
+              {overdue.map((item) => (
+                <div key={item.id} className="paper-card space-y-2 border-l-4 border-l-rose-500">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="status status-submitted">Overdue SLA</span>
+                      <p className="font-medium text-base mt-1">{item.title}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground">Due: {item.due}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Assigned Lead: <strong>{item.lead}</strong></p>
+                  <div className="flex gap-2 pt-2 border-t border-border">
+                    <button 
+                      type="button"
+                      onClick={() => { onOverrideTask(item.id, item.title); setNotifModalOpen(false); }}
+                      className="button-primary text-xs py-1 px-3"
+                    >
+                      Override &amp; Confirm
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {fallbackDeclarations.map((decl) => (
+                <div key={decl.id} className="paper-card space-y-2 border-l-4 border-l-amber-500">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="status status-in-progress">Escalated Field Declaration</span>
+                      <p className="font-medium text-base mt-1">{decl.eventName}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Declared by <strong>{decl.submittedBy}</strong> ({decl.submittedRole})</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Item: <strong>{decl.item}</strong> ({decl.quantity} {decl.condition})</p>
+                  <p className="text-xs text-muted-foreground bg-secondary/50 p-2 rounded">"{decl.description || 'No additional description provided.'}"</p>
+                  <div className="flex gap-2 pt-2 border-t border-border">
+                    <button 
+                      type="button"
+                      onClick={() => { onOverrideDeclaration(decl.id, 'Confirmed'); setNotifModalOpen(false); }}
+                      className="button-primary text-xs py-1 px-3"
+                    >
+                      Approve Declaration
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => { onOverrideDeclaration(decl.id, 'Rejected'); setNotifModalOpen(false); }}
+                      className="button-secondary text-xs py-1 px-3 text-destructive"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {totalBreaches === 0 && (
+                <div className="paper-card text-center py-6 text-muted-foreground">
+                  <Bell className="size-8 mx-auto text-muted-foreground/40 mb-2" />
+                  <p className="font-medium text-foreground">All notifications cleared</p>
+                  <p className="text-xs mt-1">No pending 48-hour breaches or escalation warnings requiring Manning action.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-border flex justify-end">
+              <button type="button" onClick={() => setNotifModalOpen(false)} className="button-secondary text-xs">
+                Close Panel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <header>
         <p className="eyebrow">Manning control</p>

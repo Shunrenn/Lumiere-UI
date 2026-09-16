@@ -113,8 +113,82 @@ export function ProductionManagerPage() {
 
 function Home({ events, jobs, pendingCount, onOpen }: { events: WarehouseEvent[]; jobs: ProductionJob[]; pendingCount: number; onOpen: (event: WarehouseEvent) => void }) {
   const eventsWithJobs = events.filter((event) => jobs.some((job) => job.eventId === event.id))
+  const [activeNotif, setActiveNotif] = useState<typeof PRODUCTION_NOTIFICATIONS[number] | null>(null)
+
   return <div className="space-y-6">
-    <section className="paper-card"><div className="flex items-center gap-2"><Bell className="size-4 text-primary" /><p className="eyebrow">Notifications</p></div><div className="mt-3 space-y-3 text-sm">{PRODUCTION_NOTIFICATIONS.map((item) => <p key={item.id}><strong>{item.label}:</strong> {item.detail}</p>)}</div></section>
+    <section className="paper-card">
+      <div className="flex items-center gap-2">
+        <Bell className="size-4 text-primary" />
+        <p className="eyebrow">Notifications &amp; Prep Stage Feed</p>
+      </div>
+      <div className="mt-3 space-y-2 text-sm">
+        {PRODUCTION_NOTIFICATIONS.map((item) => (
+          <button 
+            key={item.id} 
+            type="button"
+            onClick={() => setActiveNotif(item)}
+            className="flex w-full items-center justify-between p-2 rounded-lg text-left transition-colors hover:bg-secondary/60 cursor-pointer"
+          >
+            <div>
+              <strong className="text-foreground">{item.label}:</strong> <span className="text-muted-foreground">{item.detail}</span>
+            </div>
+            <span className="text-xs font-medium text-primary shrink-0 ml-2">Inspect →</span>
+          </button>
+        ))}
+      </div>
+    </section>
+
+    {activeNotif && (
+      <div className="sheet-backdrop" onClick={() => setActiveNotif(null)}>
+        <div className="sheet space-y-4 max-w-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-start justify-between border-b border-border pb-3">
+            <div>
+              <p className="eyebrow text-primary">Fabrication &amp; Prep Detail</p>
+              <h2 className="mt-1 font-serif text-2xl">{activeNotif.label}</h2>
+            </div>
+            <button type="button" onClick={() => setActiveNotif(null)} className="icon-button" aria-label="Close modal">
+              <X className="size-5" />
+            </button>
+          </div>
+
+          <div className="paper-card space-y-3 bg-secondary/30">
+            <p className="text-sm font-medium">{activeNotif.detail}</p>
+            <div className="grid grid-cols-2 gap-2 text-xs border-t border-border pt-3">
+              <div>
+                <p className="text-muted-foreground">Assigned Team</p>
+                <p className="font-semibold mt-0.5">Production Crew A</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Fabrication Lead</p>
+                <p className="font-semibold mt-0.5">Marcus Vance</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Target Venue</p>
+                <p className="font-semibold mt-0.5">Grand Ballroom</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">QA Stage</p>
+                <p className="font-semibold mt-0.5 text-primary">In Preparation</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border p-3 text-xs space-y-1">
+            <p className="font-bold uppercase tracking-wider text-muted-foreground">Stage Checklist &amp; Notes</p>
+            <p>• Structural integrity check complete.</p>
+            <p>• Custom paint finish applied &amp; drying.</p>
+            <p>• Final dimensional audit scheduled before dispatch.</p>
+          </div>
+
+          <div className="pt-2 border-t border-border flex justify-end gap-2">
+            <button type="button" onClick={() => setActiveNotif(null)} className="button-secondary text-xs">
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     <header><p className="eyebrow">Fabrication queue</p><h1 className="mt-2 text-3xl font-serif">Your event list</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Open an event to track builds, check materials, and submit for approval.</p></header>
     {pendingCount > 0 && <div className="paper-card flex items-center gap-3 border-primary/50 bg-secondary/40"><CheckCircle2 className="size-4 shrink-0 text-primary" /><p className="text-sm">{pendingCount} build{pendingCount > 1 ? 's' : ''} awaiting approval.</p></div>}
     <div className="space-y-3">{eventsWithJobs.map((event) => { const eventJobs = jobs.filter((j) => j.eventId === event.id); const readyCount = eventJobs.filter((j) => j.stage === 'Ready').length; return <button key={event.id} onClick={() => onOpen(event)} className="paper-card w-full text-left transition-transform active:scale-[.99]"><div className="flex items-start justify-between gap-3"><div><p className="eyebrow">{dateLabel(event.date)}</p><h2 className="mt-2 font-serif text-xl">{event.name}</h2><p className="mt-1 text-sm text-muted-foreground">{event.venue}</p></div><span className={`status ${event.status === 'In Prep' ? 'status-in-progress' : event.status === 'Completed' ? 'status-approved' : ''}`}>{event.status}</span></div><div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground"><span>{eventJobs.length} build{eventJobs.length > 1 ? 's' : ''} · {readyCount} ready</span><span className="font-semibold text-primary">Open workspace →</span></div></button> })}</div>

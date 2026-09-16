@@ -70,9 +70,103 @@ export function InventoryOfficerPage() {
 }
 
 function Home({ ops, onNavigate, onEvent }: { ops: ReturnType<typeof useInventoryOps>; onNavigate: (tab: Tab) => void; onEvent: () => void }) {
-  const low = ops.inventory.filter((item) => item.status === 'Low Stock').length
-  const inTransit = ops.batches.filter((batch) => batch.status === 'In Transit').length
-  return <div className="space-y-5"><section className="paper-card"><div className="flex items-center gap-2"><Bell className="size-4 text-primary" /><p className="eyebrow">Operations alerts</p></div><div className="mt-3 space-y-2 text-sm"><p><strong>{low} low-stock items</strong> need review before the next event.</p><p><strong>{inTransit} truck batch</strong> currently in transit.</p></div></section><header><p className="eyebrow">Warehouse control</p><h1 className="mt-2 text-3xl font-serif">Inventory overview</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Counts, ordering, warehouse checks, and event dispatch in one place.</p></header><div className="grid grid-cols-2 gap-3">{[['Available', ops.inventory.filter((i) => i.status === 'Available').length], ['Low stock', low], ['Open orders', ops.orders.filter((o) => o.status !== 'Received').length], ['In transit', inTransit]].map(([label, value]) => <div key={label} className="paper-card"><p className="eyebrow">{label}</p><p className="mt-2 font-serif text-2xl">{value}</p></div>)}</div><section className="space-y-3"><div className="section-heading"><h2>Upcoming attention</h2><CalendarDays className="size-5 text-primary" /></div>{ops.orders.slice(0, 2).map((order) => <button key={order.id} onClick={() => onNavigate('orders')} className="paper-card flex w-full items-center justify-between text-left"><div><p className="font-medium">{order.itemName}</p><p className="mt-1 text-xs text-muted-foreground">Delivery {dateLabel(order.deliveryDate)} · {order.vendor}</p></div><span className="status status-submitted">{order.status}</span></button>)}<button onClick={onEvent} className="paper-card flex w-full items-center gap-3 text-left"><Truck className="size-5 text-primary" /><div><p className="font-medium">Founders Dinner dispatch</p><p className="mt-1 text-xs text-muted-foreground">Track allocated items and batch assignment.</p></div></button></section></div>
+  const lowItems = ops.inventory.filter((item) => item.status === 'Low Stock')
+  const inTransitBatches = ops.batches.filter((batch) => batch.status === 'In Transit')
+  const low = lowItems.length
+  const inTransit = inTransitBatches.length
+  const [modalOpen, setModalOpen] = useState(false)
+
+  return (
+    <div className="space-y-5">
+      <section 
+        className="paper-card cursor-pointer transition-colors hover:border-primary/50"
+        onClick={() => setModalOpen(true)}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bell className="size-4 text-primary" />
+            <p className="eyebrow">Operations alerts</p>
+          </div>
+          <span className="text-xs font-semibold text-primary">View alert details →</span>
+        </div>
+        <div className="mt-3 space-y-2 text-sm">
+          <p><strong>{low} low-stock item{low === 1 ? '' : 's'}</strong> need review before the next event.</p>
+          <p><strong>{inTransit} truck batch{inTransit === 1 ? '' : 'es'}</strong> currently in transit.</p>
+        </div>
+      </section>
+
+      {modalOpen && (
+        <div className="sheet-backdrop" onClick={() => setModalOpen(false)}>
+          <div className="sheet space-y-5 max-w-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between border-b border-border pb-3">
+              <div>
+                <p className="eyebrow text-primary">Warehouse Operations Alert Feed</p>
+                <h2 className="mt-1 font-serif text-2xl">Inventory &amp; Dispatch Alerts</h2>
+              </div>
+              <button type="button" onClick={() => setModalOpen(false)} className="icon-button" aria-label="Close modal">
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+              {/* Low Stock Section */}
+              <div className="space-y-2">
+                <h3 className="font-serif text-base font-bold text-amber-700 dark:text-amber-400">Low Stock Review ({lowItems.length})</h3>
+                {lowItems.map((item) => (
+                  <div key={item.id} className="paper-card flex items-center justify-between gap-3 border-l-4 border-l-amber-500">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">SKU: {item.sku} · Category: {item.category}</p>
+                      <p className="mt-1 text-xs">Total: {item.total} {item.unit} | Reserved: {item.reserved} | <strong>Free: {item.total - item.reserved}</strong></p>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => { onNavigate('inventory'); setModalOpen(false); }}
+                      className="button-primary shrink-0 text-xs py-1 px-3"
+                    >
+                      Reorder
+                    </button>
+                  </div>
+                ))}
+                {lowItems.length === 0 && <p className="text-xs text-muted-foreground italic">No items currently below safety threshold.</p>}
+              </div>
+
+              {/* In-Transit Batches Section */}
+              <div className="space-y-2 pt-2 border-t border-border">
+                <h3 className="font-serif text-base font-bold text-sky-600 dark:text-sky-400">In-Transit Dispatch Batches ({inTransitBatches.length})</h3>
+                {inTransitBatches.map((batch) => (
+                  <div key={batch.id} className="paper-card flex items-center justify-between gap-3 border-l-4 border-l-sky-500">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Truck className="size-4 text-sky-500" />
+                        <p className="font-medium text-sm">{batch.truck}</p>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">Event: <strong>{batch.eventName}</strong> · Driver: {batch.driver}</p>
+                      <p className="text-xs text-muted-foreground">{batch.itemCount} items allocated · Target Date: {batch.scheduledDate}</p>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => { onNavigate('tracking'); setModalOpen(false); }}
+                      className="button-secondary shrink-0 text-xs py-1 px-3"
+                    >
+                      Track Fleet
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-border flex justify-end">
+              <button type="button" onClick={() => setModalOpen(false)} className="button-secondary text-xs">
+                Close Alert Feed
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <header><p className="eyebrow">Warehouse control</p><h1 className="mt-2 text-3xl font-serif">Inventory overview</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Counts, ordering, warehouse checks, and event dispatch in one place.</p></header><div className="grid grid-cols-2 gap-3">{[['Available', ops.inventory.filter((i) => i.status === 'Available').length], ['Low stock', low], ['Open orders', ops.orders.filter((o) => o.status !== 'Received').length], ['In transit', inTransit]].map(([label, value]) => <div key={label} className="paper-card"><p className="eyebrow">{label}</p><p className="mt-2 font-serif text-2xl">{value}</p></div>)}</div><section className="space-y-3"><div className="section-heading"><h2>Upcoming attention</h2><CalendarDays className="size-5 text-primary" /></div>{ops.orders.slice(0, 2).map((order) => <button key={order.id} onClick={() => onNavigate('orders')} className="paper-card flex w-full items-center justify-between text-left"><div><p className="font-medium">{order.itemName}</p><p className="mt-1 text-xs text-muted-foreground">Delivery {dateLabel(order.deliveryDate)} · {order.vendor}</p></div><span className="status status-submitted">{order.status}</span></button>)}<button onClick={onEvent} className="paper-card flex w-full items-center gap-3 text-left"><Truck className="size-5 text-primary" /><div><p className="font-medium">Founders Dinner dispatch</p><p className="mt-1 text-xs text-muted-foreground">Track allocated items and batch assignment.</p></div></button></section></div>
+  )
 }
 
 function Inventory({ items, search, setSearch, onOpen }: { items: OpsInventoryItem[]; search: string; setSearch: (value: string) => void; onOpen: (item: OpsInventoryItem) => void }) { const filtered = items.filter((item) => `${item.name} ${item.sku} ${item.category}`.toLowerCase().includes(search.toLowerCase())); return <div className="space-y-5"><header><p className="eyebrow">Catalog & counts</p><h1 className="mt-2 text-3xl font-serif">Inventory</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Image-rich stock records shared with Event Planner.</p></header><label className="relative block"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search items or SKU" className="field-input pl-10" /></label><div className="space-y-3">{filtered.map((item) => <button key={item.id} onClick={() => onOpen(item)} className="paper-card flex w-full gap-3 text-left"><div className="size-16 shrink-0 overflow-hidden rounded-md bg-secondary">{item.imageUrl ? <img src={item.imageUrl} alt={item.name} className="size-full object-cover" /> : <Package className="m-5 size-6 text-muted-foreground" />}</div><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><p className="font-medium">{item.name}</p><span className={`status shrink-0 ${item.status === 'Available' ? 'status-approved' : 'status-submitted'}`}>{item.status}</span></div><p className="mt-1 text-xs text-muted-foreground">{item.sku} · {item.category}</p><p className="mt-2 text-xs">Available <strong>{item.total - item.reserved} {item.unit}</strong> · Reserved {item.reserved}</p></div></button>)}</div></div> }
