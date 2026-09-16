@@ -526,8 +526,8 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                 <button
                   type="button"
                   disabled={blockingDamageItems.length > 0}
-                  onClick={() => {
-                    const res = settleEvent(event.id)
+                  onClick={async () => {
+                    const res = await settleEvent(event.id)
                     if (res.success) close()
                   }}
                   className="w-full rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40 transition"

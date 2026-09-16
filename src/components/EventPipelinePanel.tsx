@@ -261,9 +261,9 @@ export function EventPipelinePanel({
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     const targetId = portalMatch?.id || event.id || event.title
-                    const res = settleEvent(targetId)
+                    const res = await settleEvent(targetId)
                     if (!res.success) {
                       console.warn(`[EventPipelinePanel] Settle Event failed for "${event.title}": ${res.reason}`)
                     }

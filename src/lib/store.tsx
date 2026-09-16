@@ -1421,7 +1421,7 @@ interface PortalContextValue {
     selfValidation?: DamageSelfValidationRecord,
   ) => void
   completeMaintenance: (assetId: string, initiatorRole?: string) => void
-  settleEvent: (eventId: string, initiatorRole?: string) => { success: boolean; reason?: string }
+  settleEvent: (eventId: string, initiatorRole?: string) => Promise<{ success: boolean; reason?: string }>
   addInventoryItem: (item: InventoryItem) => void
   updateInventoryItem: (item: InventoryItem) => void
 }
@@ -2348,7 +2348,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   )
 
   const settleEvent = useCallback(
-    (eventId: string, initiatorRole = 'Warehouse Ops') => {
+    async (eventId: string, initiatorRole = 'Warehouse Ops') => {
       const target = events.find(
         (e) => e.id === eventId || e.title === eventId || e.refId === eventId,
       )
@@ -2371,10 +2371,22 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      damageApi.checkSettlementBlockedBackend(eventId).catch((err) => {
+      try {
+        const check = await damageApi.checkSettlementBlockedBackend(eventId)
+        if (check.blocked) {
+          return {
+            success: false,
+            reason: `Backend settlement blocked: ${check.blockingItemsCount} blocking damage item(s) active on server`,
+          }
+        }
+      } catch (err) {
         console.warn('[store] Settlement check REST API call failed:', err)
         setIsBackendConnected(false)
-      })
+        return {
+          success: false,
+          reason: 'Could not verify settlement status with backend — please retry when connected',
+        }
+      }
 
       setEvents((prev) =>
         prev.map((e) => (e.id === target.id ? { ...e, status: 'Settled' } : e)),
