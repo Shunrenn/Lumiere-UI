@@ -159,8 +159,15 @@ function CanvasElement({
     if (selected && listening && nodeRef.current && transformerRef.current) {
       transformerRef.current.nodes([nodeRef.current])
       transformerRef.current.getLayer()?.batchDraw()
+      const raf = requestAnimationFrame(() => {
+        if (transformerRef.current && nodeRef.current) {
+          transformerRef.current.nodes([nodeRef.current])
+          transformerRef.current.getLayer()?.batchDraw()
+        }
+      })
+      return () => cancelAnimationFrame(raf)
     }
-  }, [selected, listening, image, asset.w, asset.h])
+  }, [selected, listening, image, asset.w, asset.h, asset.id])
 
   if (asset.hidden) return null
 

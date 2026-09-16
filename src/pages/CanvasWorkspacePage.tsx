@@ -3668,6 +3668,9 @@ export function CanvasWorkspacePage() {
 
   function placeAssetOnCanvas(dropped: DroppedAsset, x?: number, y?: number, targetPageId?: string) {
     const pageId = targetPageId || currentPage || pages[0]?.id || 'pg1'
+    if (currentPage !== pageId) {
+      setCurrentPage(pageId)
+    }
     const newAsset: CanvasAsset = {
       id: `asset-${Date.now()}`,
       label: dropped.name,
