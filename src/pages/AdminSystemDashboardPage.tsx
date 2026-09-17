@@ -121,7 +121,7 @@ export function AdminSystemDashboardPage() {
   // recently completed so the "✓ Completed" state is visible on the glance screen.
   const pendingItems: UserAction[] = useMemo(() => {
     const relevant = userActions.filter(
-      (a) => a.type === 'forgot-password' || a.type === 'account-locked',
+      (a) => a.type === 'forgot-password' || a.type === 'account-locked' || a.type === 'access-request',
     )
     return [...relevant].sort((a, b) => {
       if (a.status === b.status) return 0

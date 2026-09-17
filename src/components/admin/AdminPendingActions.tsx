@@ -84,7 +84,7 @@ export function AdminPendingActions({
             const completed = item.status === 'completed'
             const Icon = isAccessReq ? UserPlus : isForgot ? KeyRound : Lock
             const title = isAccessReq ? 'New Access Request' : isForgot ? 'Forgot Password Request' : 'Account Locked Out'
-            const actionLabel = isAccessReq ? 'Review & Create' : isForgot ? 'Generate Temp Password' : 'Unlock & Send Temp'
+            const actionLabel = isAccessReq ? 'Review & Create Account' : isForgot ? 'Generate Temp Password' : 'Unlock & Send Temp'
             return (
               <li
                 key={item.id}
