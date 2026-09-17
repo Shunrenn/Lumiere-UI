@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
-import { X, Users, Calendar, AlertTriangle, ShieldCheck, ChevronRight } from 'lucide-react'
+import { X, Users, Calendar, AlertTriangle, ShieldCheck } from 'lucide-react'
 import { usePortal } from '@/lib/store'
-import { cn } from '@/lib/utils'
 
 interface AnalyticsDetailModalProps {
   open: boolean
@@ -44,7 +43,7 @@ export function AnalyticsDetailModal({
   const eventItems = useMemo(() => {
     if (category !== 'events') return []
     return events.filter((e) => {
-      const dateStr = e.targetDate || e.dateOfEvent || e.date
+      const dateStr = e.targetDate
       if (!dateStr) return true
       const date = new Date(dateStr)
       const m = date.toLocaleString('en-US', { month: 'short' })
@@ -55,7 +54,7 @@ export function AnalyticsDetailModal({
   const damageItems = useMemo(() => {
     if (category !== 'damage') return []
     return damageExceptions.filter((d) => {
-      const dateStr = d.capturedAt || d.submittedAt
+      const dateStr = d.capturedAt
       if (!dateStr) return true
       const date = new Date(dateStr)
       const m = date.toLocaleString('en-US', { month: 'short' })
@@ -119,10 +118,10 @@ export function AnalyticsDetailModal({
               userItems.map((u) => (
                 <div key={u.id} className="flex items-center justify-between rounded-lg border border-border/80 bg-background/60 p-3">
                   <div>
-                    <p className="text-xs font-semibold text-foreground">{u.name}</p>
+                    <p className="text-xs font-semibold text-foreground">{u.firstName} {u.surname}</p>
                     <p className="text-[0.65rem] text-muted-foreground">{u.role} · {u.email}</p>
                   </div>
-                  <span className="text-[0.6rem] font-semibold text-primary">{u.status || 'Active'}</span>
+                  <span className="text-[0.6rem] font-semibold text-primary">{u.accountStatus || 'Active'}</span>
                 </div>
               ))
             ) : (
@@ -137,11 +136,11 @@ export function AnalyticsDetailModal({
               eventItems.map((e) => (
                 <div key={e.id} className="flex items-center justify-between rounded-lg border border-border/80 bg-background/60 p-3">
                   <div>
-                    <p className="text-xs font-semibold text-foreground">{e.name}</p>
-                    <p className="text-[0.65rem] text-muted-foreground">{e.venue || e.location} · {e.client}</p>
+                    <p className="text-xs font-semibold text-foreground">{e.title}</p>
+                    <p className="text-[0.65rem] text-muted-foreground">{e.venue} · {e.client}</p>
                   </div>
                   <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[0.6rem] font-bold text-sky-600">
-                    {e.status || e.stage}
+                    {e.status}
                   </span>
                 </div>
               ))
@@ -158,10 +157,10 @@ export function AnalyticsDetailModal({
                 <div key={d.id} className="flex items-center justify-between rounded-lg border border-border/80 bg-background/60 p-3">
                   <div>
                     <p className="text-xs font-semibold text-foreground">{d.assetName}</p>
-                    <p className="text-[0.65rem] text-muted-foreground">{d.eventName} · {d.issueDescription}</p>
+                    <p className="text-[0.65rem] text-muted-foreground">{d.boundEvent} · {d.damageType}</p>
                   </div>
                   <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[0.6rem] font-bold text-rose-600">
-                    {d.verdict || 'Pending'}
+                    {d.status || 'Pending Verdict'}
                   </span>
                 </div>
               ))

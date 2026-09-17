@@ -1,21 +1,14 @@
 import { useMemo, useState } from 'react'
 import {
-  CalendarDays,
-  FileCheck2,
-  PackageCheck,
-  Building2,
-  Sparkles,
-  Search,
-  ExternalLink,
-  ChevronRight,
   TrendingUp,
-  AlertCircle,
   X,
-  Plus,
+  ShieldAlert,
+  CheckCircle2,
 } from 'lucide-react'
 import { usePortal } from '@/lib/store'
-import { useClickFlash } from '@/lib/useClickFlash'
+import { useClickFlash } from '@/lib/use-click-flash'
 import { cn } from '@/lib/utils'
+import { aggregateEventActivity, aggregateDamageOversight } from '@/lib/trend-aggregator'
 import { AnalyticsDetailModal } from '@/components/AnalyticsDetailModal'
 
 /* ----------------------------- Stat Card ----------------------------- */

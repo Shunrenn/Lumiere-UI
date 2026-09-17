@@ -214,33 +214,6 @@ export function UserDistributionCard({
 
 type TrendMode = 'growth' | 'audit'
 
-const userGrowthData = [
-  { label: 'Jan', value: 8 },
-  { label: 'Feb', value: 14 },
-  { label: 'Mar', value: 20 },
-  { label: 'Apr', value: 18 },
-  { label: 'May', value: 26 },
-  { label: 'Jun', value: 32 },
-]
-
-const womGrowthData = [
-  { label: 'Jan', value: 2 },
-  { label: 'Feb', value: 4 },
-  { label: 'Mar', value: 6 },
-  { label: 'Apr', value: 8 },
-  { label: 'May', value: 10 },
-  { label: 'Jun', value: 12 },
-]
-
-const groundCrewGrowthData = [
-  { label: 'Jan', value: 3 },
-  { label: 'Feb', value: 6 },
-  { label: 'Mar', value: 9 },
-  { label: 'Apr', value: 11 },
-  { label: 'May', value: 13 },
-  { label: 'Jun', value: 15 },
-]
-
 const securityAuditData = [
   { label: 'Jan', value: 12 },
   { label: 'Feb', value: 9 },

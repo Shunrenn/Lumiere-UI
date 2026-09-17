@@ -546,15 +546,15 @@ export function InventoryStockPage() {
 
   if (isAdmin) {
     return (
-      <AdminShell activeId="dashboard" onSelect={(id) => navigate(id as any)}>
+      <AdminShell activeId="system-dashboard" onSelect={(id) => navigate(id === 'system-dashboard' ? 'overview' : (id as any))}>
         <div className="mb-4">
           <button
             type="button"
-            onClick={() => navigate('admin')}
+            onClick={() => navigate('overview')}
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="size-3.5" />
-            Back to Admin Dashboard
+            Back to Admin System Dashboard
           </button>
         </div>
         {headerBlock}
