@@ -12,18 +12,17 @@ import { decideGroundCrewDeclaration, getApproachingDeclarationsSummary, getDecl
 
 type Tab = 'home' | 'tasks' | 'calendar' | 'activity' | 'account'
 type AccessLevel = 'Ground Crew / Member' | 'Team Lead / Field Lead' | 'Receiver' | 'Event Admin'
-type Phase = 'Egress' | 'On Venue' | 'Ingress'
+export type CheckpointPhase = 'Dispatch Loading' | 'Venue Arrival' | 'Pre-Event Setup' | 'Post-Event Egress'
 type EventStatus = 'Current' | 'Upcoming' | 'Completed'
 type RequestStatus = 'Pending' | 'Approved' | 'Denied'
 
-interface EventItem { id: string; name: string; date: string; venue: string; status: EventStatus; editable: boolean; phase: Phase; items: { id: string; name: string; sku: string; qty: number; color: string }[] }
-interface DamageReport { id: string; event: string; item: string; phase: Phase; quantity: number; description: string; photo: string; capturedAt: string; location: string }
+interface EventItem { id: string; name: string; date: string; venue: string; status: EventStatus; editable: boolean; phase: CheckpointPhase; items: { id: string; name: string; sku: string; qty: number; color: string }[] }
+interface DamageReport { id: string; event: string; item: string; phase: CheckpointPhase; quantity: number; description: string; photo: string; photoHash?: string; capturedAt: string; location: string }
 interface CrewRequest { id: string; type: string; date: string; note: string; status: RequestStatus }
 
-// Event phase is driven by warehouse confirmation, not by the ground crew —
-// Solstice Motors Reveal already cleared egress, so it opens on the
-// active "On Venue" reporting checkpoint.
-const SEED_REPORTS: DamageReport[] = [{ id: 'r1', event: 'Solstice Motors Electric SUV Reveal', item: 'Gold Chiavari Chairs', phase: 'On Venue', quantity: 2, description: 'Light scratches on back rail', photo: '', capturedAt: 'Sep 16, 2026 · 09:42', location: 'The Peninsula Manila' }]
+// Event phase is driven by checkpoint progression in order:
+// Dispatch Loading -> Venue Arrival -> Pre-Event Setup -> Post-Event Egress
+const SEED_REPORTS: DamageReport[] = [{ id: 'r1', event: 'Solstice Motors Electric SUV Reveal', item: 'Gold Chiavari Chairs', phase: 'Pre-Event Setup', quantity: 2, description: 'Light scratches on back rail', photo: '', capturedAt: 'Sep 16, 2026 · 09:42', location: 'The Peninsula Manila' }]
 const SEED_REQUESTS: CrewRequest[] = [{ id: 'q1', type: 'Personal leave', date: '2026-09-22', note: 'Family commitment', status: 'Approved' }, { id: 'q2', type: 'Schedule request', date: '2026-09-28', note: 'Request earlier call time', status: 'Pending' }]
 
 function dateLabel(date: string) { return new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) }
@@ -55,7 +54,7 @@ export function GroundCrewPage() {
       venue: evt.venue,
       status: idx === 0 ? 'Current' : 'Upcoming',
       editable: idx === 0,
-      phase: idx === 0 ? 'On Venue' : 'Egress',
+      phase: idx === 0 ? 'Pre-Event Setup' : 'Dispatch Loading',
       items: [
         { id: `i-${idx}-1`, name: 'Premium Crystal Candelabra', sku: 'LM-0012', qty: 24, color: 'Clear / Gold' },
         { id: `i-${idx}-2`, name: 'Gold Chiavari Chairs', sku: 'LM-0048', qty: 200, color: 'Antique Gold' },
@@ -464,15 +463,15 @@ function Home({
 
 // Non-interactive progress map — the phase order is set by the warehouse's
 // egress confirmation, never by tapping here.
-function PhaseMap({ phase }: { phase: Phase }) {
-  const order: Phase[] = ['Egress', 'On Venue', 'Ingress']
+function PhaseMap({ phase }: { phase: CheckpointPhase }) {
+  const order: CheckpointPhase[] = ['Dispatch Loading', 'Venue Arrival', 'Pre-Event Setup', 'Post-Event Egress']
   const activeIndex = order.indexOf(phase)
   return (
-    <div className="grid grid-cols-3 gap-2" role="img" aria-label={`Event progress: ${phase} is the active checkpoint`}>
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="img" aria-label={`Event progress: ${phase} is the active checkpoint`}>
       {order.map((item, index) => {
         const state = index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'pending'
         return (
-          <div key={item} className={`rounded border px-2 py-3 text-center text-xs font-bold uppercase tracking-wide ${state === 'active' ? 'border-primary bg-primary text-primary-foreground' : state === 'done' ? 'border-primary/40 bg-secondary/60 text-foreground' : 'border-border bg-card text-muted-foreground'}`}>
+          <div key={item} className={`rounded border px-2 py-2.5 text-center text-[0.65rem] font-bold uppercase tracking-wide ${state === 'active' ? 'border-primary bg-primary text-primary-foreground shadow-sm' : state === 'done' ? 'border-primary/40 bg-secondary/60 text-foreground' : 'border-border bg-card text-muted-foreground'}`}>
             <div className="flex items-center justify-center gap-1">
               {state === 'done' && <Check className="size-3" />}
               {state === 'pending' && <Lock className="size-3" />}
@@ -499,34 +498,42 @@ function EventDetail({ event, batches, handoffNote, onHandoffNoteChange, egressE
         {batches.length === 0 ? <p className="text-sm text-muted-foreground">No dispatch batch is assigned to this event yet.</p> : batches.map((batch) => <StallControl key={batch.id} batch={batch} onStall={onStall} onResume={onResume} />)}
       </section>
 
-      {phase === 'Egress' && (
+      {phase === 'Dispatch Loading' && (
         <section className="paper-card space-y-4">
-          <div><p className="eyebrow">Egress checklist</p><h2 className="mt-1 font-serif text-xl">Item validation</h2></div>
+          <div><p className="eyebrow">Checkpoint 1 of 4</p><h2 className="mt-1 font-serif text-xl">Dispatch Loading Handoff</h2></div>
+          <p className="flex items-start gap-2 text-sm leading-6 text-muted-foreground"><PackageCheck className="mt-0.5 size-4 shrink-0 text-primary" /> Confirm warehouse dispatch manifest loading and vehicle clearance.</p>
+          <div className="space-y-2">{event.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><span className="status status-submitted shrink-0">Manifest Verified</span></div>)}</div>
+        </section>
+      )}
+
+      {phase === 'Venue Arrival' && (
+        <section className="paper-card space-y-4">
+          <div><p className="eyebrow">Checkpoint 2 of 4</p><h2 className="mt-1 font-serif text-xl">Venue Arrival Verification</h2></div>
+          <p className="text-sm leading-6 text-muted-foreground">Verify vehicle arrival and transit condition before unloading.</p>
+          <div className="space-y-2">{event.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><button onClick={() => onReport(item)} className="button-secondary shrink-0"><Camera className="size-4" /> Condition Check</button></div>)}</div>
+        </section>
+      )}
+
+      {phase === 'Pre-Event Setup' && (
+        <section className="paper-card space-y-4">
+          <div><p className="eyebrow">Checkpoint 3 of 4</p><h2 className="mt-1 font-serif text-xl">Pre-Event Setup Validation</h2></div>
+          <p className="text-sm leading-6 text-muted-foreground">Review each item group. Report damage or missing quantities before event activation.</p>
+          <div className="space-y-2">{event.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><button onClick={() => onReport(item)} className="button-secondary shrink-0"><Camera className="size-4" /> Report</button></div>)}</div>
+        </section>
+      )}
+
+      {phase === 'Post-Event Egress' && (
+        <section className="paper-card space-y-4">
+          <div><p className="eyebrow">Checkpoint 4 of 4</p><h2 className="mt-1 font-serif text-xl">Post-Event Egress Checklist</h2></div>
           <p className="flex items-start gap-2 text-sm leading-6 text-muted-foreground"><PackageCheck className="mt-0.5 size-4 shrink-0 text-primary" /> The warehouse crew confirms every item is packed and truck-ready.</p>
-          <div className="space-y-2">{event.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><span className="status status-submitted shrink-0">Awaiting warehouse</span></div>)}</div>
+          <div className="space-y-2">{event.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><span className="status status-submitted shrink-0">Egress Ready</span></div>)}</div>
           <div className="border-t border-border pt-4">
             <label className="field-label" htmlFor={`handoff-${event.id}`}>Field Lead handoff note<span className="text-destructive"> *</span>
               <textarea id={`handoff-${event.id}`} value={handoffNote} onChange={(e) => onHandoffNoteChange(e.target.value)} rows={3} placeholder="Where are damaged items placed? (prevents duplicate reporting on arrival)" className="field-input" />
             </label>
             {egressError && <p className="mt-1 text-sm text-destructive">{egressError}</p>}
-            <button type="button" onClick={onStartEgress} className="button-primary mt-3 w-full"><ChevronRight className="size-4" /> Start Egress</button>
+            <button type="button" onClick={onStartEgress} className="button-primary mt-3 w-full"><ChevronRight className="size-4" /> Complete Post-Event Egress</button>
           </div>
-        </section>
-      )}
-
-      {phase === 'On Venue' && (
-        <section className="paper-card">
-          <div><p className="eyebrow">On venue checklist</p><h2 className="mt-1 font-serif text-xl">Item validation</h2></div>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">Review each item group. Report damage or missing quantities before closing the checkpoint.</p>
-          <div className="mt-4 space-y-2">{event.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><button onClick={() => onReport(item)} className="button-secondary shrink-0"><Camera className="size-4" /> Report</button></div>)}</div>
-        </section>
-      )}
-
-      {phase === 'Ingress' && (
-        <section className="paper-card">
-          <div><p className="eyebrow">Ingress checklist</p><h2 className="mt-1 font-serif text-xl">Item validation</h2></div>
-          <p className="mt-3 flex items-start gap-2 text-sm leading-6 text-muted-foreground"><Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" /> This checkpoint opens once the on-venue validation closes.</p>
-          <div className="mt-4 space-y-2 opacity-60">{event.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><span className="status">Locked</span></div>)}</div>
         </section>
       )}
     </div>
