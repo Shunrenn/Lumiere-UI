@@ -21,6 +21,8 @@ export interface KonvaCanvasPage {
   id: string
   title: string
   hidden?: boolean
+  bgColor?: string
+  bgPhotoDataUrl?: string
 }
 
 export interface KonvaInfiniteCanvasHandle {
@@ -963,7 +965,7 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                   y={pageY}
                   width={ARTBOARD_W}
                   height={ARTBOARD_H}
-                  fill={artboardBgImage ? '#ffffff' : artboardBg}
+                  fill={page.bgColor ? page.bgColor : (artboardBgImage ? '#ffffff' : artboardBg)}
                   stroke={page.id === currentPage ? '#c4b59d' : '#d8d1c4'}
                   strokeWidth={page.id === currentPage ? 1.5 : 1}
                   cornerRadius={4}

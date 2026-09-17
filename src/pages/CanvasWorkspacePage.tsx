@@ -934,18 +934,19 @@ function ProjectsTab({
   )
 }
 
-function BackgroundTab({ onApply }: { onApply: (color: string | null, photoDataUrl: string | null) => void }) {
+function BackgroundTab({ onApply }: { onApply: (color: string | null, photoDataUrl: string | null, scope: 'current' | 'all') => void }) {
   const [activeColor, setActiveColor] = useState<string | null>(null)
   const [bgMode, setBgMode] = useState<'color' | 'photo'>('color')
+  const [scope, setScope] = useState<'current' | 'all'>('all')
   const fileRef = useRef<HTMLInputElement>(null)
   const [bgPhoto, setBgPhoto] = useState<string | null>(null)
   const [applied, setApplied] = useState(false)
 
   function apply() {
     if (bgMode === 'color' && activeColor) {
-      onApply(activeColor, null)
+      onApply(activeColor, null, scope)
     } else if (bgMode === 'photo' && bgPhoto) {
-      onApply(null, bgPhoto)
+      onApply(null, bgPhoto, scope)
     }
     setApplied(true)
     setTimeout(() => setApplied(false), 1500)
@@ -1005,15 +1006,38 @@ function BackgroundTab({ onApply }: { onApply: (color: string | null, photoDataU
           )}
         </>
       )}
-      <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-        <p className="text-[0.58rem] text-amber-400/80 leading-relaxed">
-          Background applies to <span className="font-bold text-amber-400">all pages</span> by default.
-        </p>
+
+      {/* Target Page Scope Toggle */}
+      <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-background p-2.5">
+        <p className="text-[0.55rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">Target scope</p>
+        <div className="grid grid-cols-2 gap-1">
+          <button
+            type="button"
+            onClick={() => setScope('current')}
+            className={cn(
+              'rounded-lg border py-1.5 text-[0.58rem] font-bold uppercase tracking-[0.08em] transition',
+              scope === 'current' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground',
+            )}
+          >
+            Current Page
+          </button>
+          <button
+            type="button"
+            onClick={() => setScope('all')}
+            className={cn(
+              'rounded-lg border py-1.5 text-[0.58rem] font-bold uppercase tracking-[0.08em] transition',
+              scope === 'all' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground',
+            )}
+          >
+            All Pages
+          </button>
+        </div>
       </div>
+
       <button type="button" onClick={apply} disabled={bgMode === 'color' ? !activeColor : !bgPhoto}
         className={cn('w-full rounded-xl py-2.5 text-[0.65rem] font-bold uppercase tracking-[0.12em] transition',
           applied ? 'bg-emerald-600 text-white' : 'bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed')}>
-        {applied ? 'Applied to all pages!' : 'Apply background'}
+        {applied ? `Applied (${scope === 'current' ? 'Current Page' : 'All Pages'})!` : `Apply background (${scope === 'current' ? 'Current Page' : 'All Pages'})`}
       </button>
     </div>
   )
@@ -3444,21 +3468,29 @@ export function CanvasWorkspacePage() {
     img.src = artboardBgPhotoDataUrl
   }, [artboardBgPhotoDataUrl])
 
-  function handleApplyBackground(color: string | null, photoDataUrl: string | null) {
-    if (color) {
-      setArtboardBgColor(color)
-      setArtboardBgPhotoDataUrl(null)
-      if (card?.id) {
-        localStorage.setItem(`lumiere-bg-color-${card.id}`, color)
-        localStorage.removeItem(`lumiere-bg-photo-${card.id}`)
+  function handleApplyBackground(color: string | null, photoDataUrl: string | null, scope: 'current' | 'all' = 'all') {
+    if (scope === 'current') {
+      setPages((prev) => prev.map((p) => (p.id === currentPage ? { ...p, bgColor: color ?? undefined, bgPhotoDataUrl: photoDataUrl ?? undefined } : p)))
+      showToast('Background applied to current page!')
+    } else {
+      if (color) {
+        setArtboardBgColor(color)
+        setArtboardBgPhotoDataUrl(null)
+        setPages((prev) => prev.map((p) => ({ ...p, bgColor: undefined, bgPhotoDataUrl: undefined })))
+        if (card?.id) {
+          localStorage.setItem(`lumiere-bg-color-${card.id}`, color)
+          localStorage.removeItem(`lumiere-bg-photo-${card.id}`)
+        }
+      } else if (photoDataUrl) {
+        setArtboardBgPhotoDataUrl(photoDataUrl)
+        setPages((prev) => prev.map((p) => ({ ...p, bgColor: undefined, bgPhotoDataUrl: undefined })))
+        if (card?.id) {
+          try {
+            localStorage.setItem(`lumiere-bg-photo-${card.id}`, photoDataUrl)
+          } catch { /* quota — silently skip photo persistence */ }
+        }
       }
-    } else if (photoDataUrl) {
-      setArtboardBgPhotoDataUrl(photoDataUrl)
-      if (card?.id) {
-        try {
-          localStorage.setItem(`lumiere-bg-photo-${card.id}`, photoDataUrl)
-        } catch { /* quota — silently skip photo persistence */ }
-      }
+      showToast('Background applied to all pages!')
     }
   }
 
