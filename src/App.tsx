@@ -1,5 +1,5 @@
 import './App.css'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import type { Route } from '@/lib/types'
 import { NavProvider, useNav } from '@/lib/nav'
 import { PortalProvider } from '@/lib/store'
@@ -8,38 +8,41 @@ import { AuthProvider, useAuth } from '@/lib/auth'
 import { LogoutModal } from '@/components/LogoutModal'
 import { OfflineBanner } from '@/components/OfflineBanner'
 import { WelcomeModal } from '@/components/WelcomeModal'
+import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { loadRosterFromDatabase } from '@/lib/roster'
-import { LoginPage } from '@/pages/LoginPage'
-import { OverviewPage } from '@/pages/OverviewPage'
-import { AdminSystemDashboardPage } from '@/pages/AdminSystemDashboardPage'
-import { AdminWorkforcePage } from '@/pages/AdminWorkforcePage'
-import { AdminSecurityAuditPage } from '@/pages/AdminSecurityAuditPage'
-import { AdminRolesPage } from '@/pages/AdminRolesPage'
-import { WarehouseHomePage } from '@/pages/WarehouseHomePage'
-import { EventDashboardPage } from '@/pages/EventDashboardPage'
-import { EventRegistryPage } from '@/pages/EventRegistryPage'
-import { ReplenishmentPage } from '@/pages/ReplenishmentPage'
-import { ActivityLogsPage } from '@/pages/ActivityLogsPage'
-import { DamageValidationPage } from '@/pages/DamageValidationPage'
-import { InventoryStockPage } from '@/pages/InventoryStockPage'
-import { WarehouseLogsPage } from '@/pages/WarehouseLogsPage'
-import { CrewRosterPage } from '@/pages/CrewRosterPage'
-import { TaskDeploymentsPage } from '@/pages/TaskDeploymentsPage'
-import { DispatchManifestPage } from '@/pages/DispatchManifestPage'
-import { EventDetailPage } from '@/pages/EventDetailPage'
-import { DesignCanvasHubPage } from '@/pages/DesignCanvasHubPage'
-import { CanvasWorkspacePage } from '@/pages/CanvasWorkspacePage'
-import { GroundCrewPage } from '@/pages/GroundCrewPage'
-import { GroundCrewLoginPage } from '@/pages/GroundCrewLoginPage'
-import { WarehouseLeadPage } from '@/pages/WarehouseLeadPage'
-import { WarehouseMemberPage } from '@/pages/WarehouseMemberPage'
-import { ManningPage } from '@/pages/ManningPage'
-import { ProductionManagerPage } from '@/pages/ProductionManagerPage'
-import { InventoryOfficerPage } from '@/pages/InventoryOfficerPage'
-import { PinSetupScreen } from '@/pages/PinSetupScreen'
-import { TempPasswordResetScreen } from '@/pages/TempPasswordResetScreen'
 import { PlannerProvider } from '@/lib/planner'
 import { WarehouseProvider } from '@/lib/warehouse'
+
+// Code-split page components for minimal initial bundle latency
+const LoginPage = lazy(() => import('@/pages/LoginPage').then((m) => ({ default: m.LoginPage })))
+const OverviewPage = lazy(() => import('@/pages/OverviewPage').then((m) => ({ default: m.OverviewPage })))
+const AdminSystemDashboardPage = lazy(() => import('@/pages/AdminSystemDashboardPage').then((m) => ({ default: m.AdminSystemDashboardPage })))
+const AdminWorkforcePage = lazy(() => import('@/pages/AdminWorkforcePage').then((m) => ({ default: m.AdminWorkforcePage })))
+const AdminSecurityAuditPage = lazy(() => import('@/pages/AdminSecurityAuditPage').then((m) => ({ default: m.AdminSecurityAuditPage })))
+const AdminRolesPage = lazy(() => import('@/pages/AdminRolesPage').then((m) => ({ default: m.AdminRolesPage })))
+const WarehouseHomePage = lazy(() => import('@/pages/WarehouseHomePage').then((m) => ({ default: m.WarehouseHomePage })))
+const EventDashboardPage = lazy(() => import('@/pages/EventDashboardPage').then((m) => ({ default: m.EventDashboardPage })))
+const EventRegistryPage = lazy(() => import('@/pages/EventRegistryPage').then((m) => ({ default: m.EventRegistryPage })))
+const ReplenishmentPage = lazy(() => import('@/pages/ReplenishmentPage').then((m) => ({ default: m.ReplenishmentPage })))
+const ActivityLogsPage = lazy(() => import('@/pages/ActivityLogsPage').then((m) => ({ default: m.ActivityLogsPage })))
+const DamageValidationPage = lazy(() => import('@/pages/DamageValidationPage').then((m) => ({ default: m.DamageValidationPage })))
+const InventoryStockPage = lazy(() => import('@/pages/InventoryStockPage').then((m) => ({ default: m.InventoryStockPage })))
+const WarehouseLogsPage = lazy(() => import('@/pages/WarehouseLogsPage').then((m) => ({ default: m.WarehouseLogsPage })))
+const CrewRosterPage = lazy(() => import('@/pages/CrewRosterPage').then((m) => ({ default: m.CrewRosterPage })))
+const TaskDeploymentsPage = lazy(() => import('@/pages/TaskDeploymentsPage').then((m) => ({ default: m.TaskDeploymentsPage })))
+const DispatchManifestPage = lazy(() => import('@/pages/DispatchManifestPage').then((m) => ({ default: m.DispatchManifestPage })))
+const EventDetailPage = lazy(() => import('@/pages/EventDetailPage').then((m) => ({ default: m.EventDetailPage })))
+const DesignCanvasHubPage = lazy(() => import('@/pages/DesignCanvasHubPage').then((m) => ({ default: m.DesignCanvasHubPage })))
+const CanvasWorkspacePage = lazy(() => import('@/pages/CanvasWorkspacePage').then((m) => ({ default: m.CanvasWorkspacePage })))
+const GroundCrewPage = lazy(() => import('@/pages/GroundCrewPage').then((m) => ({ default: m.GroundCrewPage })))
+const GroundCrewLoginPage = lazy(() => import('@/pages/GroundCrewLoginPage').then((m) => ({ default: m.GroundCrewLoginPage })))
+const WarehouseLeadPage = lazy(() => import('@/pages/WarehouseLeadPage').then((m) => ({ default: m.WarehouseLeadPage })))
+const WarehouseMemberPage = lazy(() => import('@/pages/WarehouseMemberPage').then((m) => ({ default: m.WarehouseMemberPage })))
+const ManningPage = lazy(() => import('@/pages/ManningPage').then((m) => ({ default: m.ManningPage })))
+const ProductionManagerPage = lazy(() => import('@/pages/ProductionManagerPage').then((m) => ({ default: m.ProductionManagerPage })))
+const InventoryOfficerPage = lazy(() => import('@/pages/InventoryOfficerPage').then((m) => ({ default: m.InventoryOfficerPage })))
+const PinSetupScreen = lazy(() => import('@/pages/PinSetupScreen').then((m) => ({ default: m.PinSetupScreen })))
+const TempPasswordResetScreen = lazy(() => import('@/pages/TempPasswordResetScreen').then((m) => ({ default: m.TempPasswordResetScreen })))
 
 function PortalAccessError({ portal }: { portal: 'web' | 'pwa' }) {
   const { logout } = useAuth()
@@ -191,7 +194,9 @@ function Gate() {
   return (
     <NavProvider initialRoute={initialRoute}>
       <AdminGrowthSummaryProvider>
-        <Router />
+        <Suspense fallback={<LoadingSkeleton variant="page" />}>
+          <Router />
+        </Suspense>
         <WelcomeModal />
       </AdminGrowthSummaryProvider>
     </NavProvider>
