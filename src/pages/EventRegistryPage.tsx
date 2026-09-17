@@ -10,20 +10,9 @@ import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import { CompactStatStrip } from '@/components/CompactStatStrip'
+import { ExecutiveSegmentedProgress } from '@/components/executive/ExecutiveSegmentedProgress'
 import type { PortalEvent } from '@/lib/types'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
-
-// Deterministic dispatch progress derived from an event's lifecycle status,
-// used to render the Operational Progress bars.
-const dispatchProgress: Record<string, number> = {
-  Settled: 100,
-  Completed: 100,
-  'In Production': 65,
-  'On Hold': 40,
-  Reserved: 25,
-  Initialized: 15,
-  Cancelled: 0,
-}
 
 const statusStyles: Record<string, string> = {
   Initialized: 'text-amber-700',
@@ -62,6 +51,7 @@ export function EventRegistryPage() {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [showSegmentedTracks, setShowSegmentedTracks] = useState(false)
 
   const openCreate = () => {
     setActiveEvent(null)
@@ -166,6 +156,14 @@ export function EventRegistryPage() {
   useEffect(() => {
     handleRefetch()
   }, [])
+
+  if (showSegmentedTracks) {
+    return (
+      <ExecutiveShell activeId="registry" onSelect={destination}>
+        <ExecutiveSegmentedProgress onBack={() => setShowSegmentedTracks(false)} />
+      </ExecutiveShell>
+    )
+  }
 
   return (
     <ExecutiveShell activeId="registry" onSelect={destination} stickyHeader={stickyHeader}>
@@ -330,40 +328,67 @@ export function EventRegistryPage() {
             </div>
           </div>
 
-          {/* Operational Progress — dispatch readiness per active event */}
+          {/* Segmented Operational Progress — chunked 4-stage milestones */}
           <div className="mt-7 rounded-xl border border-border bg-card p-5">
-            <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">
-              Operational Progress
-            </h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Asset dispatch readiness across active event portfolios.
-            </p>
-            <div className="mt-4 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">
+                  Segmented Operational Progress
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Chunked milestone progress: Rose Red (Init) → Amber (Prod) → Emerald (Install) → Cyan (Settled).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSegmentedTracks(true)}
+                className="button-primary text-xs shrink-0 whitespace-nowrap"
+              >
+                Open Full Operational Tracks
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
               {events.filter((e) => e.status !== 'Cancelled').length === 0 ? (
                 <p className="text-xs text-muted-foreground">No active events to track.</p>
               ) : (
                 events
                   .filter((e) => e.status !== 'Cancelled')
                   .map((e) => {
-                    const pct = dispatchProgress[e.status] ?? 0
+                    const getStageLevel = (status: string) => {
+                      switch (status) {
+                        case 'Initialized': return 0
+                        case 'In Production': case 'Reserved': return 1
+                        case 'On Hold': return 2
+                        case 'Completed': case 'Settled': return 3
+                        default: return 0
+                      }
+                    }
+                    const level = getStageLevel(e.status)
+                    const stageColors = ['bg-rose-500', 'bg-amber-500', 'bg-emerald-500', 'bg-cyan-500']
+                    const stageLabels = ['Initialization', 'Production', 'Installation', 'Egress & Check-In']
+
                     return (
-                      <div key={e.id}>
+                      <div key={e.id} className="space-y-1.5">
                         <div className="flex items-center justify-between gap-3">
                           <span className="truncate text-xs font-medium text-card-foreground">
                             {e.title}
                           </span>
-                          <span className="shrink-0 text-[0.65rem] font-semibold text-muted-foreground">
-                            {pct}%
+                          <span className="shrink-0 text-[0.65rem] font-bold text-primary">
+                            {stageLabels[level]}
                           </span>
                         </div>
-                        <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted">
-                          <div
-                            className={cn(
-                              'h-full rounded-full transition-all',
-                              pct === 100 ? 'bg-emerald-500' : pct >= 50 ? 'bg-sky-500' : 'bg-amber-500',
-                            )}
-                            style={{ width: `${pct}%` }}
-                          />
+                        {/* Chunked 4-segment bar — no numerical percentages */}
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {stageColors.map((color, idx) => (
+                            <div
+                              key={idx}
+                              className={cn(
+                                'h-2 rounded-full transition-all',
+                                idx <= level ? color : 'bg-muted/50',
+                              )}
+                            />
+                          ))}
                         </div>
                       </div>
                     )
