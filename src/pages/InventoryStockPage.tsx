@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Plus, ChevronDown, Grid2X2, List, PackageSearch } from 'lucide-react'
+import { Search, Plus, ChevronDown, Grid2X2, List, PackageSearch, ArrowLeft } from 'lucide-react'
 import { ConsoleLayout } from '@/components/ConsoleLayout'
+import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
+import { AdminShell } from '@/components/admin/AdminShell'
 import { AddNewAssetModal } from '@/components/AddNewAssetModal'
 import { AssetInformationModal } from '@/components/AssetInformationModal'
 import { ReorderRequisitionModal } from '@/components/ReorderRequisitionModal'
@@ -520,6 +522,46 @@ export function InventoryStockPage() {
       />
     </>
   )
+
+  const { navigate } = useNav()
+
+  if (isExecutive) {
+    return (
+      <ExecutiveShell activeId="dashboard" onSelect={(id) => navigate(id)}>
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => navigate('dashboard')}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="size-3.5" />
+            Back to Executive Dashboard
+          </button>
+        </div>
+        {headerBlock}
+        {bodyContent}
+      </ExecutiveShell>
+    )
+  }
+
+  if (isAdmin) {
+    return (
+      <AdminShell activeId="dashboard" onSelect={(id) => navigate(id as any)}>
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => navigate('admin')}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="size-3.5" />
+            Back to Admin Dashboard
+          </button>
+        </div>
+        {headerBlock}
+        {bodyContent}
+      </AdminShell>
+    )
+  }
 
   return (
     <ConsoleLayout>

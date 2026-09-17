@@ -18,98 +18,22 @@ const roleStyles: Record<string, string> = {
   'Ground Crew': 'bg-rose-100 text-rose-700',
 }
 
-const OPERATIONAL_SEED_LOGS: ActivityLog[] = [
-  {
-    id: 'op-1',
-    timestamp: '11:20:05',
-    date: 'Sep 16, 2026',
-    logId: 'OP-LOG-99301',
-    account: 'LM-0001',
-    initiatorRole: 'Event Planner',
-    action: 'Registered New Event Portfolio',
-    detail: 'Initialized concept "La Nuit Dorée 2026" (PRT-2026-0155) for client Lumière Board.',
-    ip: '192.168.4.21',
-    status: 'Success',
-  },
-  {
-    id: 'op-2',
-    timestamp: '09:42:18',
-    date: 'Sep 16, 2026',
-    logId: 'OP-LOG-99298',
-    account: 'LM-0004',
-    initiatorRole: 'Field & Production Crew',
-    action: 'Damage Exception Report Filed',
-    detail: '2 Gold Chiavari Chairs captured with back rail structural damage on venue at Peninsula Manila.',
-    ip: '192.168.4.88',
-    status: 'Warning',
-  },
-  {
-    id: 'op-3',
-    timestamp: '08:15:30',
-    date: 'Sep 15, 2026',
-    logId: 'OP-LOG-99285',
-    account: 'LM-0007',
-    initiatorRole: 'Warehouse Manager',
-    action: 'Loss-Maker Deficit Acknowledged',
-    detail: 'Solstice Motors Reveal: 4 Velvet Panels flagged with unmitigated damage during depot inspection.',
-    ip: '192.168.4.15',
-    status: 'Warning',
-  },
-  {
-    id: 'op-4',
-    timestamp: '16:05:44',
-    date: 'Sep 14, 2026',
-    logId: 'OP-LOG-99270',
-    account: 'LM-0001',
-    initiatorRole: 'Event Planner',
-    action: 'Design Canvas 3D Layout Approved',
-    detail: 'Celestial Horizon wedding canvas cleared for warehouse dispatch assembly.',
-    ip: '192.168.4.21',
-    status: 'Success',
-  },
-  {
-    id: 'op-5',
-    timestamp: '14:22:09',
-    date: 'Sep 12, 2026',
-    logId: 'OP-LOG-99254',
-    account: 'LM-0007',
-    initiatorRole: 'Warehouse Manager',
-    action: 'Damage Exception Validated',
-    detail: 'Validated claim LOG-99281 (₱14,500 estimated liability) against event portfolio.',
-    ip: '192.168.4.15',
-    status: 'Success',
-  },
-  {
-    id: 'op-6',
-    timestamp: '10:00:00',
-    date: 'Sep 10, 2026',
-    logId: 'OP-LOG-99230',
-    account: 'LM-0011',
-    initiatorRole: 'Executive',
-    action: 'Event Financial Settlement Cleared',
-    detail: 'AeroSpace Defense Systems Expo 2026 closed with zero pending damage exceptions.',
-    ip: '192.168.4.02',
-    status: 'Success',
-  },
-]
-
 export function ActivityLogsPage() {
   const { logs: storeLogs } = usePortal()
   const { navigate } = useNav()
   const [query, setQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('All')
+  const [statusFilter, setStatusFilter] = useState('All')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
 
   // Filter out system security check logs for Executive operational view
   const logs = useMemo(() => {
-    const operationalStore = storeLogs.filter(
+    return storeLogs.filter(
       (l) =>
         !l.action.includes('Authentication') &&
         !l.action.includes('Checksum') &&
         !l.action.includes('Session Authenticated'),
     )
-    return [...OPERATIONAL_SEED_LOGS, ...operationalStore]
   }, [storeLogs])
 
   const statusOptions = useMemo(() => {
