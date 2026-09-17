@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, FileText, Building2, Palette, CalendarDays, Plus } from 'lucide-react'
-import { usePortal } from '@/lib/store'
+import { X, FileText, Building2, Palette, CalendarDays, Plus, AlertTriangle } from 'lucide-react'
+import { usePortal, checkEventConflicts } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
@@ -159,15 +159,34 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
     onClose()
   }
 
+  const conflicts = useMemo(
+    () => checkEventConflicts(draft, events, mode === 'edit' ? event?.id : null),
+    [draft, events, mode, event?.id],
+  )
+  const hasConflicts = conflicts.length > 0
+
+  // Flag a date conflict when the chosen target date matches an existing event
+  const dateConflict = draft.targetDate
+    ? events.some((ev) => {
+        const a = new Date(ev.targetDate).getTime()
+        const b = new Date(draft.targetDate).getTime()
+        return !Number.isNaN(a) && !Number.isNaN(b) && a === b
+      })
+    : false
+
   const submit = () => {
     // Client is now optional — only the title is required.
-    if (!draft.title) return
-    if (mode === 'edit' && event) {
-      updateEvent(event.id, draft, adminRole || 'Executive')
-    } else {
-      addEvent(draft, adminRole || 'Executive')
+    if (!draft.title || hasConflicts) return
+    try {
+      if (mode === 'edit' && event) {
+        updateEvent(event.id, draft, adminRole || 'Executive')
+      } else {
+        addEvent(draft, adminRole || 'Executive')
+      }
+      close()
+    } catch (err: any) {
+      console.error('[RegisterEventDrawer] Failed to save event:', err)
     }
-    close()
   }
 
   const commitNewVenue = () => {
@@ -181,15 +200,6 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
     setNewVenue('')
     setAddingVenue(false)
   }
-
-  // Flag a date conflict when the chosen target date matches an existing event
-  const dateConflict = draft.targetDate
-    ? events.some((ev) => {
-        const a = new Date(ev.targetDate).getTime()
-        const b = new Date(draft.targetDate).getTime()
-        return !Number.isNaN(a) && !Number.isNaN(b) && a === b
-      })
-    : false
 
   if (!open) return null
 
@@ -242,6 +252,26 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
           className="space-y-7 overflow-y-auto px-6 py-6 disabled:opacity-90"
           style={{ maxHeight: 'calc(90vh - 200px)' }}
         >
+          {/* Conflict Banner */}
+          {hasConflicts && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-xs">
+              <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-destructive">
+                <AlertTriangle className="size-4 shrink-0" />
+                <span>Event Conflict Detected — Creation Blocked</span>
+              </div>
+              <p className="mt-1 text-[0.7rem] text-muted-foreground">
+                The proposed event details conflict with existing active portfolios in the registry:
+              </p>
+              <ul className="mt-2.5 space-y-1.5 pl-4 list-disc text-card-foreground">
+                {conflicts.map((c, i) => (
+                  <li key={i} className="leading-tight">
+                    <span className="font-semibold text-destructive">{c.eventTitle} ({c.eventRefId})</span>: {c.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Core */}
           <div className="space-y-4">
             <SectionHeading icon={FileText}>Core Portfolio Characteristics</SectionHeading>
@@ -558,11 +588,15 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
             <button
               type="button"
               onClick={() => setConfirmOpen(true)}
-              disabled={!draft.title}
+              disabled={!draft.title || hasConflicts}
               className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-6 py-3 text-xs font-bold uppercase tracking-[0.15em] text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Plus className="size-3.5" />
-              {mode === 'edit' ? 'Save Changes' : 'Initialize Event Registry'}
+              {hasConflicts
+                ? 'Blocked by Event Conflict'
+                : mode === 'edit'
+                  ? 'Save Changes'
+                  : 'Initialize Event Registry'}
             </button>
           )}
         </div>

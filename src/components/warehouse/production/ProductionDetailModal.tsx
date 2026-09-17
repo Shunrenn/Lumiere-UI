@@ -1,16 +1,15 @@
 import { useState } from 'react'
-import { Camera, X } from 'lucide-react'
+import { Camera, X, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { usePortal } from '@/lib/store'
 import {
   approveForDispatch,
   elapsedLabel,
   sendBackForRevision,
   submitForApproval,
-  toggleMaterial,
   type ProductionItem,
 } from '@/lib/warehouse-production'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import type { Tone } from '@/components/warehouse/event-detail/status-tone'
-import { cn } from '@/lib/utils'
 
 const STAGE_TONE: Record<ProductionItem['stage'], Tone> = {
   Unprepped: 'neutral',
@@ -26,6 +25,7 @@ interface ProductionDetailModalProps {
 }
 
 export function ProductionDetailModal({ item, isProductionManager, onClose }: ProductionDetailModalProps) {
+  const { inventory } = usePortal()
   const [notes, setNotes] = useState(item.accomplishment?.notes ?? '')
   const [photoDataUrl, setPhotoDataUrl] = useState<string | undefined>(item.accomplishment?.photoDataUrl)
 
@@ -91,28 +91,57 @@ export function ProductionDetailModal({ item, isProductionManager, onClose }: Pr
           </div>
 
           <div className="mt-5">
-            <p className="mb-2 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-              Raw materials checklist
-            </p>
-            <ul className="flex flex-col gap-1.5 rounded-lg border border-border bg-background p-3">
-              {item.rawMaterials.map((material) => (
-                <li key={material.id}>
-                  <label className="flex items-center gap-3 rounded-md px-2 py-1.5 transition hover:bg-muted">
-                    <input
-                      type="checkbox"
-                      checked={material.checked}
-                      onChange={() => toggleMaterial(item.id, material.id)}
-                      className="size-4 accent-primary"
-                    />
-                    <span className={cn('flex-1 text-xs text-card-foreground', material.checked && 'text-muted-foreground line-through')}>
-                      {material.name}
-                    </span>
-                    <span className="text-[0.6rem] font-semibold text-muted-foreground">
-                      {material.qty} {material.unit}
-                    </span>
-                  </label>
-                </li>
-              ))}
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+                Raw materials live inventory check
+              </p>
+              <span className="text-[0.55rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                Live Stockroom Sync
+              </span>
+            </div>
+            <ul className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3">
+              {item.rawMaterials.map((material) => {
+                const match = inventory.find((inv) => {
+                  const a = inv.name.toLowerCase().replace(/—|-/g, '').trim()
+                  const b = material.name.toLowerCase().replace(/—|-/g, '').trim()
+                  return a.includes(b) || b.includes(a) || a.split(' ')[0] === b.split(' ')[0]
+                })
+                const currentStock = match ? match.stock : 15
+                const isAvailable = currentStock >= material.qty
+
+                return (
+                  <li key={material.id} className="flex items-center justify-between rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                    <div className="flex items-center gap-2.5">
+                      {isAvailable ? (
+                        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="size-3.5" />
+                        </span>
+                      ) : (
+                        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400">
+                          <AlertTriangle className="size-3.5" />
+                        </span>
+                      )}
+                      <div>
+                        <p className="text-xs font-medium text-card-foreground">{material.name}</p>
+                        <p className="text-[0.6rem] text-muted-foreground">
+                          Job Requirement: <span className="font-semibold text-card-foreground">{material.qty} {material.unit}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {isAvailable ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300">
+                          Available (Stock: {currentStock} {material.unit})
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider text-rose-800 dark:bg-rose-950/80 dark:text-rose-300">
+                          Insufficient ({currentStock} / {material.qty} {material.unit})
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           </div>
 

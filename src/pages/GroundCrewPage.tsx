@@ -133,8 +133,8 @@ export function GroundCrewPage() {
     const note = (handoffNotes[eventId] ?? '').trim()
     if (!note) { setEgressError('Add a handoff note before starting Egress.'); return }
     setEgressError('')
-    setCrewEvents((current) => current.map((event) => (event.id === eventId ? { ...event, phase: 'On Venue' } : event)))
-    notify('Egress started — advanced to On Venue.')
+    setCrewEvents((current) => current.map((event) => (event.id === eventId ? { ...event, phase: 'Pre-Event Setup' } : event)))
+    notify('Pre-Event Setup started — advanced to Pre-Event Setup.')
   }
 
   const [isLoading] = useState(false)

@@ -77,6 +77,77 @@ function rowToStaff(row: any): Staff {
   }
 }
 
+export interface EventConflict {
+  eventId: string
+  eventTitle: string
+  eventRefId: string
+  conflictType: 'title_similarity' | 'same_date_venue' | 'same_date'
+  message: string
+}
+
+export function checkEventConflicts(
+  draft: NewEventDraft,
+  existingEvents: PortalEvent[],
+  editingEventId?: string | null,
+): EventConflict[] {
+  const conflicts: EventConflict[] = []
+  if (!draft.title && !draft.targetDate && !draft.venue) return conflicts
+
+  const cleanDraftTitle = draft.title.trim().toLowerCase()
+  const cleanDraftVenue = (draft.venue || '').trim().toLowerCase()
+  const draftDate = (draft.targetDate || '').trim()
+
+  for (const ev of existingEvents) {
+    if (editingEventId && ev.id === editingEventId) continue
+
+    const evTitle = ev.title.trim().toLowerCase()
+    const evVenue = (ev.venue || '').trim().toLowerCase()
+    const evDate = (ev.targetDate || '').trim()
+
+    const isExactTitle = cleanDraftTitle.length > 0 && cleanDraftTitle === evTitle
+    const isSubTitle =
+      cleanDraftTitle.length >= 5 &&
+      evTitle.length >= 5 &&
+      (cleanDraftTitle.includes(evTitle) || evTitle.includes(cleanDraftTitle))
+
+    const isSameDateVenue = Boolean(
+      draftDate && evDate && draftDate === evDate && cleanDraftVenue && evVenue && cleanDraftVenue === evVenue,
+    )
+
+    const isSameDate = Boolean(draftDate && evDate && draftDate === evDate)
+
+    if (isExactTitle || isSubTitle) {
+      conflicts.push({
+        eventId: ev.id,
+        eventTitle: ev.title,
+        eventRefId: ev.refId,
+        conflictType: 'title_similarity',
+        message: `Title Conflict: Concept title "${draft.title}" overlaps with existing event "${ev.title}" (${ev.refId}).`,
+      })
+    }
+
+    if (isSameDateVenue) {
+      conflicts.push({
+        eventId: ev.id,
+        eventTitle: ev.title,
+        eventRefId: ev.refId,
+        conflictType: 'same_date_venue',
+        message: `Venue & Date Conflict: Venue "${ev.venue}" is already booked on ${ev.targetDate} for "${ev.title}" (${ev.refId}).`,
+      })
+    } else if (isSameDate && !isExactTitle && !isSubTitle) {
+      conflicts.push({
+        eventId: ev.id,
+        eventTitle: ev.title,
+        eventRefId: ev.refId,
+        conflictType: 'same_date',
+        message: `Date Conflict: Existing event "${ev.title}" (${ev.refId}) is already scheduled on ${ev.targetDate}.`,
+      })
+    }
+  }
+
+  return conflicts
+}
+
 /* ----------------------------- Seed data ----------------------------- */
 
 const seedStaffRaw: Staff[] = [
@@ -1031,6 +1102,190 @@ const seedDamage: DamageException[] = [
 
 const seedInventory: InventoryItem[] = [
   {
+    id: 'mat-inv-1',
+    assetId: 'LM-MAT-001',
+    name: 'Plywood sheet 4x8',
+    category: 'Raw Materials & Hardware',
+    image: '/assets/inventory/tiffany-chair.png',
+    stock: 25,
+    capacity: 50,
+    status: 'Available',
+    updated: 'Updated today',
+    description: '3/4 inch exterior grade hardwood plywood sheet',
+    dateAdded: '01/10/2026',
+    store: 'Manila Industrial Supply',
+    representative: 'Ramon Cruz',
+    contact: '0917-111-2233',
+    height: '244 cm',
+    width: '122 cm',
+    weight: '25.0 kg',
+    fragile: false,
+    unit: 'sheets',
+    cost: 45000.0,
+    costPerUnit: 1800.0,
+  },
+  {
+    id: 'mat-inv-2',
+    assetId: 'LM-MAT-002',
+    name: 'Steel frame tubing',
+    category: 'Raw Materials & Hardware',
+    image: '/assets/inventory/tiffany-chair.png',
+    stock: 30,
+    capacity: 60,
+    status: 'Available',
+    updated: 'Updated today',
+    description: 'Square hollow steel tubing 2x2 inch',
+    dateAdded: '01/10/2026',
+    store: 'SteelCraft Metals',
+    representative: 'Juan Mercado',
+    contact: '0918-222-3344',
+    height: '600 cm',
+    width: '5 cm',
+    weight: '12.0 kg',
+    fragile: false,
+    unit: 'meters',
+    cost: 36000.0,
+    costPerUnit: 1200.0,
+  },
+  {
+    id: 'mat-inv-3',
+    assetId: 'LM-MAT-003',
+    name: 'Acrylic panel — clear',
+    category: 'Raw Materials & Hardware',
+    image: '/assets/inventory/tiffany-chair.png',
+    stock: 15,
+    capacity: 30,
+    status: 'Available',
+    updated: 'Updated today',
+    description: '4mm clear cast acrylic panel 4x8',
+    dateAdded: '01/10/2026',
+    store: 'Plastix Solutions',
+    representative: 'Elena Santos',
+    contact: '0919-333-4455',
+    height: '244 cm',
+    width: '122 cm',
+    weight: '14.0 kg',
+    fragile: true,
+    unit: 'panels',
+    cost: 52500.0,
+    costPerUnit: 3500.0,
+  },
+  {
+    id: 'mat-inv-4',
+    assetId: 'LM-MAT-004',
+    name: 'Spray paint — matte black',
+    category: 'Raw Materials & Hardware',
+    image: '/assets/inventory/tiffany-chair.png',
+    stock: 40,
+    capacity: 80,
+    status: 'Available',
+    updated: 'Updated today',
+    description: 'Industrial quick-dry matte black acrylic spray',
+    dateAdded: '01/10/2026',
+    store: 'ColorCo Coating',
+    representative: 'Mark Tan',
+    contact: '0915-444-5566',
+    height: '20 cm',
+    width: '7 cm',
+    weight: '0.4 kg',
+    fragile: false,
+    unit: 'cans',
+    cost: 14000.0,
+    costPerUnit: 350.0,
+  },
+  {
+    id: 'mat-inv-5',
+    assetId: 'LM-MAT-005',
+    name: 'LED strip — warm white',
+    category: 'Raw Materials & Hardware',
+    image: '/assets/inventory/tiffany-chair.png',
+    stock: 20,
+    capacity: 40,
+    status: 'Available',
+    updated: 'Updated today',
+    description: '12V 3000K warm white high-density LED tape 5m roll',
+    dateAdded: '01/10/2026',
+    store: 'Lumiere Electronics',
+    representative: 'David Chen',
+    contact: '0916-555-6677',
+    height: '1 cm',
+    width: '500 cm',
+    weight: '0.2 kg',
+    fragile: false,
+    unit: 'rolls',
+    cost: 18000.0,
+    costPerUnit: 900.0,
+  },
+  {
+    id: 'mat-inv-6',
+    assetId: 'LM-MAT-006',
+    name: 'Foam board',
+    category: 'Raw Materials & Hardware',
+    image: '/assets/inventory/tiffany-chair.png',
+    stock: 50,
+    capacity: 60,
+    status: 'Available',
+    updated: 'Updated today',
+    description: '5mm high-density white foam core board 4x8',
+    dateAdded: '01/10/2026',
+    store: 'Craft & Print Depot',
+    representative: 'Sarah Lee',
+    contact: '0912-666-7788',
+    height: '244 cm',
+    width: '122 cm',
+    weight: '1.5 kg',
+    fragile: false,
+    unit: 'sheets',
+    cost: 22500.0,
+    costPerUnit: 450.0,
+  },
+  {
+    id: 'mat-inv-7',
+    assetId: 'LM-MAT-007',
+    name: 'Wood stain',
+    category: 'Raw Materials & Hardware',
+    image: '/assets/inventory/tiffany-chair.png',
+    stock: 12,
+    capacity: 25,
+    status: 'Available',
+    updated: 'Updated today',
+    description: 'Dark walnut oil-based interior wood finish stain',
+    dateAdded: '01/10/2026',
+    store: 'WoodPro Finishes',
+    representative: 'Arthur King',
+    contact: '0917-777-8899',
+    height: '20 cm',
+    width: '15 cm',
+    weight: '1.2 kg',
+    fragile: false,
+    unit: 'liters',
+    cost: 14400.0,
+    costPerUnit: 1200.0,
+  },
+  {
+    id: 'mat-inv-8',
+    assetId: 'LM-MAT-008',
+    name: 'Fabric — velvet backdrop',
+    category: 'Raw Materials & Hardware',
+    image: '/assets/inventory/tiffany-chair.png',
+    stock: 18,
+    capacity: 35,
+    status: 'Available',
+    updated: 'Updated today',
+    description: 'Heavyweight emerald velvet acoustic backdrop fabric',
+    dateAdded: '01/10/2026',
+    store: 'Maison Textile Co.',
+    representative: 'Claire Dupont',
+    contact: '0918-888-9900',
+    height: '100 cm',
+    width: '150 cm',
+    weight: '0.8 kg',
+    fragile: false,
+    unit: 'meters',
+    cost: 27000.0,
+    costPerUnit: 1500.0,
+  },
+  {
     id: 'i-1',
     assetId: 'LM-0012',
     name: 'Premium White Resin Tiffany Chair',
@@ -1911,6 +2166,11 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
   const addEvent = useCallback(
     (draft: NewEventDraft, initiatorRole = 'Executive') => {
+      const conflicts = checkEventConflicts(draft, events)
+      if (conflicts.length > 0) {
+        console.warn('[addEvent] Blocked creation due to event conflict:', conflicts)
+        throw new Error(`Event creation blocked due to conflict: ${conflicts[0].message}`)
+      }
       const tempId = `e-${Date.now()}`
       setEvents((prev) => {
         const refId = `PRT-2026-${pad(145 + prev.length)}`
