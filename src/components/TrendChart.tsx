@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { usePortal } from '@/lib/store'
 import { aggregateUserGrowth } from '@/lib/trend-aggregator'
+import { AnalyticsDetailModal } from '@/components/AnalyticsDetailModal'
 
 interface ToggleOption {
   value: string
@@ -69,6 +70,8 @@ export function TrendChart({ mode, onModeChange, options }: Props) {
   }, [data])
 
   const latest = data[data.length - 1]?.value ?? 0
+
+  const [selectedPoint, setSelectedPoint] = useState<{ label: string; value: number } | null>(null)
 
   return (
     <div className="w-full rounded-xl border border-border bg-card p-5">
@@ -164,20 +167,31 @@ export function TrendChart({ mode, onModeChange, options }: Props) {
 
         {/* Points and labels */}
         {geometry.points.map((p, i) => (
-          <g key={i}>
+          <g
+            key={i}
+            className="cursor-pointer group"
+            onClick={() => setSelectedPoint({ label: p.label, value: p.value })}
+          >
             <circle
               cx={p.x}
               cy={p.y}
-              r="3.5"
+              r="6"
+              fill="transparent"
+            />
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r="4"
               fill="var(--color-card)"
               stroke="var(--color-primary)"
               strokeWidth="2"
+              className="transition-transform group-hover:scale-150"
             />
             <text
               x={p.x}
               y={geometry.h - 6}
               textAnchor="middle"
-              className="fill-muted-foreground"
+              className="fill-muted-foreground group-hover:fill-primary group-hover:font-bold transition-colors"
               style={{ fontSize: '10px' }}
             >
               {p.label}
@@ -185,6 +199,15 @@ export function TrendChart({ mode, onModeChange, options }: Props) {
           </g>
         ))}
       </svg>
+
+      <AnalyticsDetailModal
+        open={Boolean(selectedPoint)}
+        onClose={() => setSelectedPoint(null)}
+        title={title}
+        monthLabel={selectedPoint?.label ?? ''}
+        totalCount={selectedPoint?.value ?? 0}
+        category={isPrimary ? 'users' : 'security'}
+      />
     </div>
   )
 }

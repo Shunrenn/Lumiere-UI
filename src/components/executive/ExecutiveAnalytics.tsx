@@ -1,9 +1,22 @@
 import { useMemo, useState } from 'react'
-import { cn } from '@/lib/utils'
-import { useClickFlash } from '@/lib/use-click-flash'
-import { X, TrendingUp, ShieldAlert, CheckCircle2 } from 'lucide-react'
+import {
+  CalendarDays,
+  FileCheck2,
+  PackageCheck,
+  Building2,
+  Sparkles,
+  Search,
+  ExternalLink,
+  ChevronRight,
+  TrendingUp,
+  AlertCircle,
+  X,
+  Plus,
+} from 'lucide-react'
 import { usePortal } from '@/lib/store'
-import { aggregateEventActivity, aggregateDamageOversight } from '@/lib/trend-aggregator'
+import { useClickFlash } from '@/lib/useClickFlash'
+import { cn } from '@/lib/utils'
+import { AnalyticsDetailModal } from '@/components/AnalyticsDetailModal'
 
 /* ----------------------------- Stat Card ----------------------------- */
 
@@ -411,6 +424,7 @@ export function ExecutiveTrendAnalyticsCard({
   const [mode, setMode] = useState<TrendMode>('events')
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; label: string; value: number } | null>(null)
+  const [selectedDetailPoint, setSelectedDetailPoint] = useState<{ label: string; value: number } | null>(null)
 
   const eventActivityData = useMemo(() => aggregateEventActivity(events), [events])
   const damageOversightData = useMemo(() => aggregateDamageOversight(damageExceptions), [damageExceptions])
@@ -550,7 +564,11 @@ export function ExecutiveTrendAnalyticsCard({
               {geometry.points.map((p, i) => {
                 const isHovered = hoveredPoint?.label === p.label
                 return (
-                  <g key={i} className="group cursor-pointer">
+                  <g
+                    key={i}
+                    className="group cursor-pointer"
+                    onClick={() => setSelectedDetailPoint({ label: p.label, value: p.value })}
+                  >
                     {/* Transparent hit target for hover */}
                     <circle
                       cx={p.x}
@@ -614,6 +632,15 @@ export function ExecutiveTrendAnalyticsCard({
           </div>
         </div>
       </div>
+
+      <AnalyticsDetailModal
+        open={Boolean(selectedDetailPoint)}
+        onClose={() => setSelectedDetailPoint(null)}
+        title={title}
+        monthLabel={selectedDetailPoint?.label ?? ''}
+        totalCount={selectedDetailPoint?.value ?? 0}
+        category={mode === 'events' ? 'events' : 'damage'}
+      />
 
       <ExecutivePortfolioSummaryModal
         open={summaryOpen}
