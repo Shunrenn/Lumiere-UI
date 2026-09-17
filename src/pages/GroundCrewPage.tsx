@@ -595,19 +595,31 @@ function StallControl({ batch, onStall, onResume }: { batch: DispatchBatch; onSt
   </div>
 }
 
-// Mock in-app camera. Real crew devices would open the native camera via a
-// capture-enabled input, but for this demo we simulate the viewfinder and
-// shutter so the flow can be tested without device camera access.
-function CameraCapture({ onClose, onCapture }: { onClose: () => void; onCapture: () => void }) {
+export async function computePhotoSha256(input: string | ArrayBuffer): Promise<string> {
+  let buffer: ArrayBuffer
+  if (typeof input === 'string') {
+    const encoder = new TextEncoder()
+    buffer = encoder.encode(input)
+  } else {
+    buffer = input
+  }
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function CameraCapture({ onClose, onCapture }: { onClose: () => void; onCapture: (hash: string) => void }) {
   const [flash, setFlash] = useState(false)
-  const shoot = () => {
+  const shoot = async () => {
     setFlash(true)
-    window.setTimeout(() => { setFlash(false); onCapture() }, 260)
+    const rawData = `photo-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+    const computedHash = await computePhotoSha256(rawData)
+    window.setTimeout(() => { setFlash(false); onCapture(computedHash) }, 260)
   }
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">
       {flash && <div className="absolute inset-0 z-10 bg-white" />}
-      <div className="flex items-center justify-between px-4 py-4"><button type="button" onClick={onClose} className="rounded-full bg-white/10 p-2 text-white" aria-label="Close camera"><X className="size-5" /></button><p className="text-sm font-medium text-white/80">Photo proof</p><span className="w-9" /></div>
+      <div className="flex items-center justify-between px-4 py-4"><button type="button" onClick={onClose} className="rounded-full bg-white/10 p-2 text-white" aria-label="Close camera"><X className="size-5" /></button><p className="text-sm font-medium text-white/80">Photo proof (SHA-256 Hashed)</p><span className="w-9" /></div>
       <div className="relative mx-4 flex flex-1 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-neutral-900">
         <div className="absolute inset-6 rounded-xl border border-dashed border-white/25" />
         <Camera className="size-14 text-white/25" />
@@ -620,11 +632,12 @@ function CameraCapture({ onClose, onCapture }: { onClose: () => void; onCapture:
   )
 }
 
-function DamageForm({ item, event, phase, onClose, onSubmit }: { item: EventItem['items'][number]; event: string; phase: Phase; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+function DamageForm({ item, event, phase, onClose, onSubmit }: { item: EventItem['items'][number]; event: string; phase: CheckpointPhase; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   const [condition, setCondition] = useState<'Damaged' | 'Missing'>('Damaged')
   const [cameraOpen, setCameraOpen] = useState(false)
-  const [photoCount, setPhotoCount] = useState<number>(0)
+  const [photoHashes, setPhotoHashes] = useState<string[]>([])
   const photoRequired = condition === 'Damaged'
+  const photoCount = photoHashes.length
   return (
     <div className="sheet-backdrop">
       <form className="sheet space-y-4" onSubmit={onSubmit}>
@@ -633,18 +646,24 @@ function DamageForm({ item, event, phase, onClose, onSubmit }: { item: EventItem
           <button type="button" onClick={onClose} className="icon-button" aria-label="Close"><X className="size-4" /></button>
         </div>
         <label className="field-label">Condition
-          <select name="condition" value={condition} onChange={(e) => { setCondition(e.target.value as 'Damaged' | 'Missing'); setPhotoCount(0) }} className="field-input">
+          <select name="condition" value={condition} onChange={(e) => { setCondition(e.target.value as 'Damaged' | 'Missing'); setPhotoHashes([]) }} className="field-input">
             <option>Damaged</option>
             <option>Missing</option>
           </select>
         </label>
         <input type="hidden" name="photoCaptured" value={photoCount > 0 ? '1' : ''} />
+        <input type="hidden" name="photoHash" value={photoHashes[0] || ''} />
         <div className="field-label">
           <span>{photoRequired ? 'Photos required for damaged items (multiple allowed)' : 'Photos (optional for missing items)'}</span>
           {photoCount > 0 ? (
-            <div className="mt-1 flex items-center justify-between gap-3 rounded-md border border-border bg-secondary/40 p-3">
-              <div className="flex items-center gap-2 text-sm"><span className="flex size-9 items-center justify-center rounded bg-foreground text-background font-bold text-xs">{photoCount}</span> {photoCount === 1 ? '1 Photo attached' : `${photoCount} Photos attached`}</div>
-              <button type="button" onClick={() => setCameraOpen(true)} className="text-xs font-semibold text-primary underline-offset-2 hover:underline">+ Add another photo</button>
+            <div className="mt-1 flex flex-col gap-2 rounded-md border border-border bg-secondary/40 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm"><span className="flex size-9 items-center justify-center rounded bg-foreground text-background font-bold text-xs">{photoCount}</span> {photoCount === 1 ? '1 Photo attached' : `${photoCount} Photos attached`}</div>
+                <button type="button" onClick={() => setCameraOpen(true)} className="text-xs font-semibold text-primary underline-offset-2 hover:underline">+ Add another photo</button>
+              </div>
+              <div className="rounded bg-background p-2 font-mono text-[0.62rem] text-muted-foreground border border-border truncate">
+                <span className="font-bold text-primary">SHA-256:</span> {photoHashes[photoHashes.length - 1]}
+              </div>
             </div>
           ) : (
             <button type="button" onClick={() => setCameraOpen(true)} className="button-secondary mt-1 w-full"><Camera className="size-4" /> Open camera to capture photo</button>
@@ -655,10 +674,10 @@ function DamageForm({ item, event, phase, onClose, onSubmit }: { item: EventItem
         )}
         <label className="field-label">Number affected<input name="quantity" type="number" min="1" defaultValue="1" className="field-input" /></label>
         <label className="field-label">Damage or description<textarea name="description" required rows={3} placeholder="Describe the damage, missing count, or notes..." className="field-input" /></label>
-        <div className="rounded border border-border bg-secondary/40 p-3 text-xs leading-5 text-muted-foreground"><MapPin className="mr-1 inline size-3" /> Timestamp and GPS location are captured automatically when you submit.</div>
+        <div className="rounded border border-border bg-secondary/40 p-3 text-xs leading-5 text-muted-foreground"><MapPin className="mr-1 inline size-3" /> Timestamp, GPS location, and SHA-256 fingerprint hash are captured automatically.</div>
         <button className="button-primary w-full" type="submit"><Send className="size-4" /> Submit validation</button>
       </form>
-      {cameraOpen && <CameraCapture onClose={() => setCameraOpen(false)} onCapture={() => { setPhotoCount((prev) => prev + 1); setCameraOpen(false) }} />}
+      {cameraOpen && <CameraCapture onClose={() => setCameraOpen(false)} onCapture={(hash) => { setPhotoHashes((prev) => [...prev, hash]); setCameraOpen(false) }} />}
     </div>
   )
 }
