@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useClickFlash } from '@/lib/use-click-flash'
 import { X, TrendingUp, ShieldAlert, CheckCircle2 } from 'lucide-react'
+import { usePortal } from '@/lib/store'
+import { aggregateEventActivity, aggregateDamageOversight } from '@/lib/trend-aggregator'
 
 /* ----------------------------- Stat Card ----------------------------- */
 
@@ -236,24 +238,6 @@ export function ReportDistributionCard({
 
 type TrendMode = 'events' | 'damage'
 
-const eventActivityData = [
-  { label: 'Jan', value: 6 },
-  { label: 'Feb', value: 11 },
-  { label: 'Mar', value: 18 },
-  { label: 'Apr', value: 15 },
-  { label: 'May', value: 24 },
-  { label: 'Jun', value: 29 },
-]
-
-const damageOversightData = [
-  { label: 'Jan', value: 14 },
-  { label: 'Feb', value: 19 },
-  { label: 'Mar', value: 12 },
-  { label: 'Apr', value: 8 },
-  { label: 'May', value: 15 },
-  { label: 'Jun', value: 6 },
-]
-
 const TREND_TABS: { value: TrendMode; label: string }[] = [
   { value: 'events', label: 'Event Activity' },
   { value: 'damage', label: 'Damage Oversight' },
@@ -270,6 +254,10 @@ function ExecutivePortfolioSummaryModal({
   mode: TrendMode
   onClose: () => void
 }) {
+  const { events, damageExceptions } = usePortal()
+  const eventActivityData = useMemo(() => aggregateEventActivity(events), [events])
+  const damageOversightData = useMemo(() => aggregateDamageOversight(damageExceptions), [damageExceptions])
+
   if (!open) return null
 
   const isEvents = mode === 'events'
@@ -419,9 +407,14 @@ export function ExecutiveTrendAnalyticsCard({
 }: {
   onViewRegistry?: () => void
 } = {}) {
+  const { events, damageExceptions } = usePortal()
   const [mode, setMode] = useState<TrendMode>('events')
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; label: string; value: number } | null>(null)
+
+  const eventActivityData = useMemo(() => aggregateEventActivity(events), [events])
+  const damageOversightData = useMemo(() => aggregateDamageOversight(damageExceptions), [damageExceptions])
+
   const data = mode === 'events' ? eventActivityData : damageOversightData
   const title = mode === 'events' ? 'Event Activity' : 'Damage Oversight'
 
