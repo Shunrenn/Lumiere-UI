@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useClickFlash } from '@/lib/use-click-flash'
+import { usePortal } from '@/lib/store'
+import { aggregateUserGrowth } from '@/lib/trend-aggregator'
 
 /* ----------------------------- User Distribution donut ----------------------------- */
 
@@ -264,16 +266,13 @@ export function TrendAnalyticsCard({
   drillDownCategory?: string | null
   onBack?: () => void
 }) {
+  const { staff } = usePortal()
   const [mode, setMode] = useState<TrendMode>('growth')
   const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; label: string; value: number } | null>(null)
 
   const activeGrowthData = useMemo(() => {
-    if (drillDownCategory === 'Warehouse Ops Manager') return womGrowthData
-    if (drillDownCategory === 'Field & Production Crew' || drillDownCategory === 'Ground Crew') {
-      return groundCrewGrowthData
-    }
-    return userGrowthData
-  }, [drillDownCategory])
+    return aggregateUserGrowth(staff, drillDownCategory)
+  }, [staff, drillDownCategory])
 
   const data = mode === 'growth' ? activeGrowthData : securityAuditData
   const title = drillDownCategory && mode === 'growth'
@@ -364,6 +363,11 @@ export function TrendAnalyticsCard({
             <span className="text-[0.6rem] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
               {title} · Latest
             </span>
+            {mode === 'audit' && (
+              <span className="ml-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[0.55rem] font-semibold text-amber-600 dark:text-amber-400">
+                Illustrative Sample Data · Audit API Pending
+              </span>
+            )}
           </div>
           {(onOpenGrowthSummary || onOpenSecurityAudit) && (
             <button

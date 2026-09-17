@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
+import { usePortal } from '@/lib/store'
+import { aggregateUserGrowth } from '@/lib/trend-aggregator'
 
 interface ToggleOption {
   value: string
@@ -12,16 +14,6 @@ interface Props {
   options: [ToggleOption, ToggleOption]
 }
 
-// Mock trend data for the executive dashboard chart
-const userGrowthData = [
-  { label: 'Jan', value: 8 },
-  { label: 'Feb', value: 14 },
-  { label: 'Mar', value: 20 },
-  { label: 'Apr', value: 18 },
-  { label: 'May', value: 26 },
-  { label: 'Jun', value: 32 },
-]
-
 const securityAuditData = [
   { label: 'Jan', value: 12 },
   { label: 'Feb', value: 9 },
@@ -33,9 +25,13 @@ const securityAuditData = [
 
 // Lightweight SVG line/area chart with proper responsive sizing
 export function TrendChart({ mode, onModeChange, options }: Props) {
-  // The first toggle option maps to the "growth" data set, the second to the
-  // "audit"/secondary data set — keeps the chart generic across dashboards.
+  const { staff } = usePortal()
   const isPrimary = mode === options[0].value
+
+  const userGrowthData = useMemo(() => {
+    return aggregateUserGrowth(staff)
+  }, [staff])
+
   const data = isPrimary ? userGrowthData : securityAuditData
   const title = isPrimary ? options[0].label : options[1].label
   const unit = ''
@@ -100,7 +96,7 @@ export function TrendChart({ mode, onModeChange, options }: Props) {
         </div>
       </div>
 
-      <div className="mt-4 flex items-baseline gap-2">
+      <div className="mt-4 flex flex-wrap items-baseline gap-2">
         <span className="font-sans text-2xl font-bold text-card-foreground">
           {latest}
           {unit}
@@ -108,6 +104,11 @@ export function TrendChart({ mode, onModeChange, options }: Props) {
         <span className="text-[0.6rem] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
           {title} · Latest
         </span>
+        {!isPrimary && (
+          <span className="ml-auto rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[0.55rem] font-semibold text-amber-600 dark:text-amber-400">
+            Illustrative Sample Data · Audit API Pending
+          </span>
+        )}
       </div>
 
       <svg
