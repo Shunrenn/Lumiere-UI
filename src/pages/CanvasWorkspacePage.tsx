@@ -3225,6 +3225,26 @@ export function CanvasWorkspacePage() {
     }
   }, [pipelineEvent?.id, card?.id])
 
+  // Part 3 — Debounced toDataURL() thumbnail capture (1000ms interval chosen to eliminate UI lag during active editing)
+  useEffect(() => {
+    if (!card?.id) return
+    const timer = setTimeout(() => {
+      const dataUrl = canvasHandleRef.current?.exportPNG()
+      if (!dataUrl) return
+      try {
+        const savedCardsRaw = localStorage.getItem('lumiere-recents-cards')
+        if (savedCardsRaw) {
+          const cards = JSON.parse(savedCardsRaw)
+          const updated = cards.map((c: any) => (c.id === card.id ? { ...c, thumbnail: dataUrl } : c))
+          localStorage.setItem('lumiere-recents-cards', JSON.stringify(updated))
+        }
+        sessionStorage.setItem('lumiere-workspace-card', JSON.stringify({ ...card, thumbnail: dataUrl }))
+      } catch { /* ignore quota errors */ }
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [canvasAssets, pages, card?.id])
+
   useEffect(() => {
     if (card?.id) {
       localStorage.setItem(`lumiere-allocated-assets-${card.id}`, JSON.stringify(assets))
