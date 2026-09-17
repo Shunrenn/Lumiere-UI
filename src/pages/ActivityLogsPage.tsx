@@ -7,7 +7,6 @@ import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
-import type { ActivityLog } from '@/lib/types'
 
 const roleStyles: Record<string, string> = {
   Admin: 'bg-emerald-100 text-emerald-700',

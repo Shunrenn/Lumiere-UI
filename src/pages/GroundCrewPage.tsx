@@ -19,32 +19,10 @@ type RequestStatus = 'Pending' | 'Approved' | 'Denied'
 interface EventItem { id: string; name: string; date: string; venue: string; status: EventStatus; editable: boolean; phase: Phase; items: { id: string; name: string; sku: string; qty: number; color: string }[] }
 interface DamageReport { id: string; event: string; item: string; phase: Phase; quantity: number; description: string; photo: string; capturedAt: string; location: string }
 interface CrewRequest { id: string; type: string; date: string; note: string; status: RequestStatus }
-interface CallSheetEntry { eventId: string; arrival: string; setup: string; standby: string }
 
 // Event phase is driven by warehouse confirmation, not by the ground crew —
 // Solstice Motors Reveal already cleared egress, so it opens on the
 // active "On Venue" reporting checkpoint.
-const SCHEDULE = [
-  { date: '2026-09-16', time: '05:30', title: 'Warehouse muster & loading', venue: 'Lumière Depot' },
-  { date: '2026-09-16', time: '09:00', title: 'Venue arrival and unload', venue: 'The Peninsula Manila' },
-  { date: '2026-09-16', time: '10:00', title: 'Setup window', venue: 'Grand Ballroom' },
-  { date: '2026-09-20', time: '08:00', title: 'Aura Luxe load-in', venue: 'The Peninsula Manila' },
-  { date: '2026-09-20', time: '13:00', title: 'Crew briefing', venue: 'The Peninsula Manila' },
-  { date: '2026-09-24', time: '14:00', title: 'Safety meeting', venue: 'Shangri-La Fort' },
-]
-
-const CALL_SHEETS: CallSheetEntry[] = [
-  { eventId: 'e-1', arrival: '09:00', setup: '10:00', standby: '17:00' },
-  { eventId: 'e-2', arrival: '08:00', setup: '09:30', standby: '16:00' },
-  { eventId: 'e-3', arrival: '15:00', setup: '16:30', standby: '22:00' },
-]
-
-const NOTIFICATIONS = [
-  { id: 'n1', label: 'Meeting', detail: 'Safety meeting · Sep 24, 14:00' },
-  { id: 'n2', label: 'Assignment', detail: 'You are assigned to Solstice Motors Electric SUV Reveal setup.' },
-  { id: 'n3', label: 'Reminder', detail: 'Bring radio handset and safety vest.' },
-]
-
 const SEED_REPORTS: DamageReport[] = [{ id: 'r1', event: 'Solstice Motors Electric SUV Reveal', item: 'Gold Chiavari Chairs', phase: 'On Venue', quantity: 2, description: 'Light scratches on back rail', photo: '', capturedAt: 'Sep 16, 2026 · 09:42', location: 'The Peninsula Manila' }]
 const SEED_REQUESTS: CrewRequest[] = [{ id: 'q1', type: 'Personal leave', date: '2026-09-22', note: 'Family commitment', status: 'Approved' }, { id: 'q2', type: 'Schedule request', date: '2026-09-28', note: 'Request earlier call time', status: 'Pending' }]
 
@@ -329,28 +307,34 @@ function Home({
 }) {
   const [activeNotif, setActiveNotif] = useState<{ id: string; label: string; detail: string; category?: string; date?: string; venue?: string } | null>(null)
 
-  const notificationsList = [
-    ...(approachingSummary && approachingSummary.totalApproaching > 0
-      ? [
-          {
-            id: 'rem-sla',
-            label: 'Escalation Alert',
-            detail: `${approachingSummary.totalApproaching} pending declaration${
-              approachingSummary.totalApproaching > 1 ? 's are' : ' is'
-            } approaching the 48-hour deadline across ${approachingSummary.eventsCount} event${
-              approachingSummary.eventsCount > 1 ? 's' : ''
-            }. Review in Tasks tab.`,
-            category: 'SLA Escalation',
-            venue: 'All Active Venues',
-          },
-        ]
-      : []),
-    ...NOTIFICATIONS.map((n) => ({
-      ...n,
-      category: 'Company Broadcast',
-      venue: n.id === 'n2' ? 'The Peninsula Manila' : 'Central Warehouse Base',
-    })),
-  ]
+  const notificationsList = useMemo(() => {
+    const list = []
+    if (approachingSummary && approachingSummary.totalApproaching > 0) {
+      list.push({
+        id: 'rem-sla',
+        label: 'Escalation Alert',
+        detail: `${approachingSummary.totalApproaching} pending declaration${
+          approachingSummary.totalApproaching > 1 ? 's are' : ' is'
+        } approaching the 48-hour deadline across ${approachingSummary.eventsCount} event${
+          approachingSummary.eventsCount > 1 ? 's' : ''
+        }. Review in Tasks tab.`,
+        category: 'SLA Escalation',
+        venue: 'All Active Venues',
+      })
+    }
+    if (events && events.length > 0) {
+      events.slice(0, 3).forEach((ev, i) => {
+        list.push({
+          id: `ev-notif-${ev.id || i}`,
+          label: 'Assignment',
+          detail: `Assigned to ${ev.name} (${ev.venue || 'Depot'}) · Target Date: ${ev.date}`,
+          category: 'Event Dispatch',
+          venue: ev.venue || 'Depot',
+        })
+      })
+    }
+    return list
+  }, [events, approachingSummary])
 
   return (
     <div className="space-y-6">
@@ -360,22 +344,26 @@ function Home({
             <Bell className="size-4 text-primary" />
             <p className="eyebrow">Notifications &amp; Field Announcements</p>
           </div>
-          <span className="text-xs font-semibold text-primary">Click notification for details →</span>
+          {notificationsList.length > 0 && <span className="text-xs font-semibold text-primary">Click notification for details →</span>}
         </div>
         <div className="mt-3 space-y-2 text-sm">
-          {notificationsList.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setActiveNotif(item)}
-              className="flex w-full items-center justify-between p-2 rounded-lg text-left transition-colors hover:bg-secondary/60 cursor-pointer"
-            >
-              <div>
-                <strong className="text-foreground">{item.label}:</strong> <span className="text-muted-foreground">{item.detail}</span>
-              </div>
-              <span className="text-xs font-medium text-primary shrink-0 ml-2">Open →</span>
-            </button>
-          ))}
+          {notificationsList.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-2 italic">No shift briefings assigned.</p>
+          ) : (
+            notificationsList.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveNotif(item)}
+                className="flex w-full items-center justify-between p-2 rounded-lg text-left transition-colors hover:bg-secondary/60 cursor-pointer"
+              >
+                <div>
+                  <strong className="text-foreground">{item.label}:</strong> <span className="text-muted-foreground">{item.detail}</span>
+                </div>
+                <span className="text-xs font-medium text-primary shrink-0 ml-2">Open →</span>
+              </button>
+            ))
+          )}
         </div>
       </section>
 
@@ -683,32 +671,19 @@ function DayDots({ hasSchedule, hasNote }: { hasSchedule: boolean; hasNote: bool
 
 function CalendarView({ selectedDate, setSelectedDate, notes, setNotes, onSave, events }: { selectedDate: string; setSelectedDate: (date: string) => void; notes: Record<string, string>; setNotes: (updater: (current: Record<string, string>) => Record<string, string>) => void; onSave: () => void; events: EventItem[] }) {
   const days = Array.from({ length: 31 }, (_, i) => i + 1)
-  const entries = SCHEDULE.filter((item) => item.date === selectedDate)
-  const dayEvent = events.find((event) => event.date === selectedDate)
-  const callSheet = dayEvent ? CALL_SHEETS.find((sheet) => sheet.eventId === dayEvent.id) : undefined
+  const entries = events.filter((item) => item.date === selectedDate)
   const noteValue = notes[selectedDate] ?? ''
   return (
     <div className="space-y-5">
       <header><p className="eyebrow">Schedule & personal notes</p><h1 className="mt-2 text-3xl font-serif">Calendar</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Tap a day to see call sheets, meetings, and event assignments.</p></header>
       <section className="paper-card">
         <div className="flex items-center justify-between"><button className="icon-button" onClick={() => setSelectedDate('2026-08-01')} aria-label="Previous month"><ChevronLeft className="size-4" /></button><h2 className="font-serif text-xl">August 2026</h2><button className="icon-button" onClick={() => setSelectedDate('2026-08-31')} aria-label="Next month"><ChevronRight className="size-4" /></button></div>
-        <div className="mt-4 grid grid-cols-7 gap-1 text-center text-xs"><div className="col-span-7 grid grid-cols-7 text-muted-foreground">{['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <span key={`${d}-${i}`}>{d}</span>)}</div><span /><span /><span /><span /><span /><span /><span />{days.map((day) => { const date = `2026-08-${String(day).padStart(2, '0')}`; const hasSchedule = SCHEDULE.some((item) => item.date === date); const hasNote = Boolean(notes[date]); return <button key={date} onClick={() => setSelectedDate(date)} className={`min-h-[44px] min-w-[44px] flex flex-col items-center justify-center rounded p-1 ${date === selectedDate ? 'bg-primary text-primary-foreground' : hasSchedule ? 'font-bold text-primary' : ''}`}><span className="block text-xs">{day}</span><DayDots hasSchedule={hasSchedule} hasNote={hasNote} /></button> })}</div>
+        <div className="mt-4 grid grid-cols-7 gap-1 text-center text-xs"><div className="col-span-7 grid grid-cols-7 text-muted-foreground">{['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <span key={`${d}-${i}`}>{d}</span>)}</div><span /><span /><span /><span /><span /><span /><span />{days.map((day) => { const date = `2026-08-${String(day).padStart(2, '0')}`; const hasSchedule = events.some((item) => item.date === date); const hasNote = Boolean(notes[date]); return <button key={date} onClick={() => setSelectedDate(date)} className={`min-h-[44px] min-w-[44px] flex flex-col items-center justify-center rounded p-1 ${date === selectedDate ? 'bg-primary text-primary-foreground' : hasSchedule ? 'font-bold text-primary' : ''}`}><span className="block text-xs">{day}</span><DayDots hasSchedule={hasSchedule} hasNote={hasNote} /></button> })}</div>
       </section>
-
-      {callSheet && dayEvent && (
-        <section className="paper-card">
-          <div className="flex items-center gap-2"><FileText className="size-4 text-primary" /><p className="eyebrow">Call sheet · {dayEvent.name}</p></div>
-          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-            <div className="rounded border border-border bg-secondary/40 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Arrival</p><p className="mt-1 font-serif text-lg">{callSheet.arrival}</p></div>
-            <div className="rounded border border-border bg-secondary/40 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Setup</p><p className="mt-1 font-serif text-lg">{callSheet.setup}</p></div>
-            <div className="rounded border border-border bg-secondary/40 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Standby</p><p className="mt-1 font-serif text-lg">{callSheet.standby}</p></div>
-          </div>
-        </section>
-      )}
 
       <section className="space-y-3">
         <div className="section-heading"><h2>Schedule for {dateLabel(selectedDate)}</h2><CalendarDays className="size-5 text-primary" /></div>
-        {entries.length ? entries.map((entry) => <div key={`${entry.date}-${entry.time}`} className="paper-card"><p className="eyebrow">{entry.time}</p><p className="mt-1 font-medium">{entry.title}</p><p className="mt-1 text-sm text-muted-foreground">{entry.venue}</p></div>) : <div className="paper-card text-sm text-muted-foreground">No assigned events on this date.</div>}
+        {entries.length ? entries.map((entry) => <div key={entry.id} className="paper-card"><p className="eyebrow">{entry.phase}</p><p className="mt-1 font-medium">{entry.name}</p><p className="mt-1 text-sm text-muted-foreground">{entry.venue}</p></div>) : <div className="paper-card text-sm text-muted-foreground">No shift briefings assigned.</div>}
         <div className="paper-card">
           <label className="field-label mt-0">Personal note for {dateLabel(selectedDate)}<textarea value={noteValue} onChange={(event) => setNotes((current) => ({ ...current, [selectedDate]: event.target.value }))} rows={3} placeholder="Add a reminder for yourself..." className="field-input" /></label>
           <button onClick={onSave} className="button-primary mt-4"><MessageSquare className="size-4" /> Save note</button>

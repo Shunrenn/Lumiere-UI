@@ -7,17 +7,13 @@ import { EmptyState } from '@/components/EmptyState'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import type { AdminDestinationId } from '@/lib/admin-destinations'
-import { SECURITY_EVENTS } from '@/lib/security-events'
+import { usePortal } from '@/lib/store'
+import type { SecurityEvent } from '@/lib/security-events'
 
 /* ----------------------------- Domain ----------------------------- */
 
-// Security/access events only: logins, lockouts, permission requests, password
-// resets. A cross-account view — every entry carries the account type so the
-// Admin can slice the trail by role alongside the status pills.
 type AuditStatus = 'Success' | 'Failed' | 'Blocked' | 'Warning'
 type AccountType = 'Admin' | 'Executive' | 'Event Planner' | 'Warehouse Ops' | 'Ground Crew'
-
-
 
 const STATUS_FILTERS = ['All', 'Success', 'Failed', 'Blocked', 'Warning'] as const
 type StatusFilter = (typeof STATUS_FILTERS)[number]
@@ -32,7 +28,6 @@ const ACCOUNT_FILTERS = [
 ] as const
 type AccountFilter = (typeof ACCOUNT_FILTERS)[number]
 
-// Dark-mode friendly status treatments (translucent fill + readable text).
 const statusStyles: Record<AuditStatus, string> = {
   Success: 'bg-emerald-100 text-emerald-800 ring-1 ring-inset ring-emerald-300 dark:bg-emerald-500/15 dark:text-emerald-400 dark:ring-emerald-500/30',
   Failed: 'bg-amber-100 text-amber-800 ring-1 ring-inset ring-amber-300 dark:bg-amber-500/15 dark:text-amber-400 dark:ring-amber-500/30',
@@ -48,155 +43,9 @@ const roleStyles: Record<AccountType, string> = {
   'Ground Crew': 'bg-purple-100 text-purple-900 border border-purple-300 dark:border-transparent dark:bg-purple-500/15 dark:text-purple-300',
 }
 
-/* const LEGACY_SECURITY_AUDIT_LOG: SecurityAuditEntry[] = [
-  {
-    id: 'sa-1',
-    timestamp: '08:42:11',
-    date: 'May 14, 2026',
-    logId: 'SEC-99281',
-    employeeId: 'LM-0001',
-    role: 'Event Planner',
-    action: 'Portal session authenticated',
-    status: 'Success',
-    ip: '192.168.4.21',
-    terminal: 'T-02',
-    token: 'UID-4471',
-    note: 'Successful login from a registered terminal within approved access scope.',
-  },
-  {
-    id: 'sa-2',
-    timestamp: '08:41:03',
-    date: 'May 14, 2026',
-    logId: 'SEC-99280',
-    employeeId: 'LM-0006',
-    role: 'Executive',
-    action: '9 failed login attempts — account auto-locked',
-    status: 'Blocked',
-    ip: '192.168.4.88',
-    terminal: 'T-04',
-    token: 'UID-5510',
-    note: '9 consecutive failed authentication attempts tripped the lockout threshold; the account was locked as a precaution.',
-  },
-  {
-    id: 'sa-3',
-    timestamp: '08:12:57',
-    date: 'May 14, 2026',
-    logId: 'SEC-99276',
-    employeeId: 'LM-0009',
-    role: 'Warehouse Ops',
-    action: 'Elevated permission requested beyond role',
-    status: 'Blocked',
-    ip: '10.0.2.37',
-    terminal: 'T-11',
-    token: 'UID-5592',
-    note: 'Requested root-level database export privileges outside approved scope. Auto-denied and routed for review.',
-  },
-  {
-    id: 'sa-4',
-    timestamp: '07:55:19',
-    date: 'May 14, 2026',
-    logId: 'SEC-99275',
-    employeeId: 'LM-0013',
-    role: 'Ground Crew',
-    action: 'Password reset completed',
-    status: 'Success',
-    ip: '172.16.8.5',
-    terminal: 'MOBILE-APP',
-    token: 'UID-6120',
-    note: 'Temporary credential redeemed and replaced with a permanent password on first login.',
-  },
-  {
-    id: 'sa-5',
-    timestamp: '07:31:44',
-    date: 'May 14, 2026',
-    logId: 'SEC-99271',
-    employeeId: 'LM-0004',
-    role: 'Event Planner',
-    action: 'Failed login — invalid credentials',
-    status: 'Failed',
-    ip: '192.168.4.60',
-    terminal: 'T-07',
-    token: 'UID-4802',
-    note: 'Single failed authentication attempt; below the lockout threshold. No action taken.',
-  },
-  {
-    id: 'sa-6',
-    timestamp: '07:15:48',
-    date: 'May 14, 2026',
-    logId: 'SEC-99268',
-    employeeId: 'SYS-ROOT',
-    role: 'Admin',
-    action: 'Audit log integrity check',
-    status: 'Success',
-    ip: '10.0.0.1',
-    terminal: 'CONSOLE',
-    token: 'SYS-KEY',
-    note: 'Scheduled checksum verification completed across 14 audit nodes. Zero tamper indicators recorded.',
-  },
-  {
-    id: 'sa-7',
-    timestamp: '06:58:02',
-    date: 'May 14, 2026',
-    logId: 'SEC-99263',
-    employeeId: 'LM-0006',
-    role: 'Executive',
-    action: 'Password reset requested',
-    status: 'Warning',
-    ip: '192.168.4.88',
-    terminal: 'T-04',
-    token: 'UID-5510',
-    note: 'Self-service reset requested shortly before the lockout event. Flagged for correlation review.',
-  },
-  {
-    id: 'sa-8',
-    timestamp: '06:22:35',
-    date: 'May 14, 2026',
-    logId: 'SEC-99257',
-    employeeId: 'LM-0009',
-    role: 'Warehouse Ops',
-    action: 'Portal session authenticated',
-    status: 'Success',
-    ip: '10.0.2.37',
-    terminal: 'T-11',
-    token: 'UID-5592',
-    note: 'Successful login from a registered terminal within approved access scope.',
-  },
-  {
-    id: 'sa-9',
-    timestamp: '05:47:10',
-    date: 'May 14, 2026',
-    logId: 'SEC-99249',
-    employeeId: 'LM-0013',
-    role: 'Ground Crew',
-    action: 'Failed login — unrecognized device',
-    status: 'Warning',
-    ip: '172.16.8.42',
-    terminal: 'UNKNOWN',
-    token: 'UID-6120',
-    note: 'Authentication attempted from an unrecognized device fingerprint. Step-up verification enforced.',
-  },
-  {
-    id: 'sa-10',
-    timestamp: '05:03:26',
-    date: 'May 14, 2026',
-    logId: 'SEC-99241',
-    employeeId: 'LM-0002',
-    role: 'Admin',
-    action: 'Permission grant approved for Event Planner',
-    status: 'Success',
-    ip: '10.0.0.1',
-    terminal: 'CONSOLE',
-    token: 'SYS-KEY',
-    note: 'Scoped read access to the asset registry granted following a reviewed request. Change recorded to the RBAC ledger.',
-  },
-] */
-
-const SECURITY_AUDIT_LOG = SECURITY_EVENTS
-
-/* ----------------------------- Page ----------------------------- */
-
 export function AdminSecurityAuditPage() {
   const { navigate } = useNav()
+  const { logs: storeLogs } = usePortal()
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<StatusFilter>('All')
   const [account, setAccount] = useState<AccountFilter>('All')
@@ -204,9 +53,36 @@ export function AdminSecurityAuditPage() {
   const [toDate, setToDate] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
 
+  const securityLogs: SecurityEvent[] = useMemo(() => {
+    return storeLogs.map((l) => {
+      let role: AccountType = 'Admin'
+      const init = (l.initiatorRole || '').toLowerCase()
+      if (init.includes('executive')) role = 'Executive'
+      else if (init.includes('planner') || init.includes('designer')) role = 'Event Planner'
+      else if (init.includes('warehouse')) role = 'Warehouse Ops'
+      else if (init.includes('ground') || init.includes('crew')) role = 'Ground Crew'
+
+      return {
+        id: l.id,
+        timestamp: l.timestamp,
+        date: l.date,
+        logId: l.logId,
+        employeeId: l.account || 'SYS-ROOT',
+        role,
+        action: l.action,
+        status: (l.status as AuditStatus) || 'Success',
+        ip: l.ip,
+        terminal: 'T-01',
+        token: `UID-${l.id.slice(-4)}`,
+        note: l.detail,
+        dotColor: l.status === 'Success' ? 'bg-emerald-400' : l.status === 'Blocked' ? 'bg-rose-400' : 'bg-amber-400',
+      }
+    })
+  }, [storeLogs])
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return SECURITY_AUDIT_LOG.filter((entry) => {
+    return securityLogs.filter((entry) => {
       const matchesStatus = status === 'All' || entry.status === status
       const matchesAccount = account === 'All' || entry.role === account
       const matchesQuery =
@@ -217,7 +93,7 @@ export function AdminSecurityAuditPage() {
         entry.role.toLowerCase().includes(q)
       return matchesStatus && matchesAccount && matchesQuery
     })
-  }, [query, status, account])
+  }, [securityLogs, query, status, account])
 
   const exportCsv = () => {
     let exportRows = rows
@@ -412,7 +288,7 @@ export function AdminSecurityAuditPage() {
       </div>
 
       <p className="mb-4 text-xs text-muted-foreground">
-        Showing {rows.length} of {SECURITY_AUDIT_LOG.length} security events. Click a row to reveal
+        Showing {rows.length} of {securityLogs.length} security events. Click a row to reveal
         raw IP, terminal, and token metadata.
       </p>
 

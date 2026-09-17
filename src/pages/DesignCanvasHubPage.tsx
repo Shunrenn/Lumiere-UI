@@ -8,6 +8,7 @@ import {
   List,
   ChevronDown,
   Star,
+  Sparkles,
   MoreHorizontal,
   ExternalLink,
   Info,
@@ -504,6 +505,19 @@ const DEMO_DESIGNERS = ['Elena Vasseur', 'Marc Delacroix', 'Sophie Laurent', 'Ju
 
 const DEMO_CARDS: ProjectCard[] = mapPortalEventsToCards(REAL_10_SEEDED_EVENTS)
 
+const SEED_MOOD_BOARD_CARD: ProjectCard = {
+  id: 'mb-seed-concept-01',
+  title: 'Maison Lumine Aesthetic Conceptualization',
+  type: 'Mood Board',
+  designer: 'Elena Vasseur',
+  collaborators: [],
+  eventAlias: '',
+  eventDate: 'Sep 18, 2026',
+  lastEdited: '3 hours ago',
+  thumbnail: '/images/decor/garden-wedding.png',
+  starred: true,
+}
+
 type CardAccess = 'designer' | 'collaborator' | 'none'
 
 function ProjectDetailsModal({ card, onClose }: { card: ProjectCard; onClose: () => void }) {
@@ -872,7 +886,7 @@ function ProjectCardItem({
         )}
       </div>
 
-      <div className="aspect-[3/2] w-full overflow-hidden rounded-t-lg bg-muted flex items-center justify-center">
+      <div className="relative aspect-[3/2] w-full overflow-hidden rounded-t-lg bg-muted flex items-center justify-center">
         {card.thumbnail ? (
           <img
             src={card.thumbnail}
@@ -885,6 +899,17 @@ function ProjectCardItem({
             <span className="text-[0.52rem] font-bold uppercase tracking-[0.1em] opacity-50">Mood Board</span>
           </div>
         )}
+        <div className="absolute bottom-2 left-2 z-10">
+          {card.type === 'Mood Board' ? (
+            <span className="rounded-full bg-purple-950/80 text-purple-300 border border-purple-500/40 px-2 py-0.5 text-[0.52rem] font-bold uppercase tracking-wider backdrop-blur-md">
+              MOOD BOARD
+            </span>
+          ) : (
+            <span className="rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 text-[0.52rem] font-bold uppercase tracking-wider backdrop-blur-md">
+              DESIGN PROJECT
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col gap-1 px-3 py-2.5">
@@ -972,7 +997,18 @@ function ProjectRowItem({
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <p className="truncate font-serif text-base font-semibold text-card-foreground">{card.title}</p>
+        <div className="flex items-center gap-2">
+          <p className="truncate font-serif text-base font-semibold text-card-foreground">{card.title}</p>
+          {card.type === 'Mood Board' ? (
+            <span className="shrink-0 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 px-2 py-0.5 text-[0.52rem] font-bold uppercase tracking-wider">
+              MOOD BOARD
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 text-[0.52rem] font-bold uppercase tracking-wider">
+              DESIGN PROJECT
+            </span>
+          )}
+        </div>
         <p className="text-[0.58rem] uppercase tracking-[0.1em] text-muted-foreground">
           {card.eventAlias ? `${card.eventAlias} · ` : ''}{card.designer}{noAccess ? ' · No Access' : ''}
         </p>
@@ -1079,9 +1115,7 @@ export function DesignCanvasHubPage() {
       return r === 'event planner' || r === 'designer' || r === 'event admin' || r.includes('planner') || r.includes('designer')
     })
     const names = designerStaff.map((s) => `${s.firstName || ''} ${s.surname || ''}`.trim()).filter(Boolean)
-    return names.length > 0
-      ? Array.from(new Set(names))
-      : DEMO_DESIGNERS
+    return Array.from(new Set(names))
   }, [staff])
   const [isLoading] = useState(false)
   const [isError, setIsError] = useState(false)
@@ -1186,12 +1220,42 @@ export function DesignCanvasHubPage() {
     return DEMO_CARDS
   })
 
+  // Checkpoint refetch tracking for new events (window focus + 30s polling)
+  const [newEventBannerEvent, setNewEventBannerEvent] = useState<any | null>(null)
+  const knownEventIdsRef = useRef<Set<string> | null>(null)
+
+  useEffect(() => {
+    if (!portalEvents || portalEvents.length === 0) return
+
+    const currentIds = new Set(portalEvents.map((e) => e.id))
+
+    if (knownEventIdsRef.current === null) {
+      knownEventIdsRef.current = currentIds
+    } else {
+      let newlyAddedEvent: any = null
+      for (const ev of portalEvents) {
+        if (!knownEventIdsRef.current.has(ev.id)) {
+          newlyAddedEvent = ev
+          break
+        }
+      }
+
+      if (newlyAddedEvent) {
+        setNewEventBannerEvent(newlyAddedEvent)
+      }
+
+      knownEventIdsRef.current = currentIds
+    }
+  }, [portalEvents])
+
   // Combine real events as project cards with local card state
   const effectiveCards = useMemo(() => {
     const source = (portalEvents && portalEvents.length > 0) ? portalEvents : REAL_10_SEEDED_EVENTS
     const realCards = mapPortalEventsToCards(source, dbDesigners)
     const userCards = cards.filter((c) => c.id.startsWith('mb-') || c.id.startsWith('pc-custom-'))
-    return [...realCards, ...userCards]
+    const hasSeedMb = userCards.some((c) => c.id === SEED_MOOD_BOARD_CARD.id)
+    const mbSeeds = hasSeedMb ? [] : [SEED_MOOD_BOARD_CARD]
+    return [...mbSeeds, ...realCards, ...userCards]
   }, [portalEvents, cards, dbDesigners])
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -1820,6 +1884,67 @@ export function DesignCanvasHubPage() {
           onClose={() => setRenameCard(null)}
           onSave={handleSaveRename}
         />
+      )}
+
+      {/* Floating Cross-Role New Event Checkpoint Banner */}
+      {newEventBannerEvent && (
+        <div
+          role="alert"
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-3.5 rounded-2xl border border-primary/40 bg-card/95 p-4 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-5 max-w-md"
+        >
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+            <Sparkles className="size-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-bold text-foreground">A new event was created. Check it out!</p>
+            </div>
+            <p className="text-[0.68rem] text-muted-foreground mt-0.5 truncate">
+              {newEventBannerEvent.title || newEventBannerEvent.name || 'New Event'} ·{' '}
+              <span className="text-primary font-medium">Reflecting the latest checkpoint state.</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const targetEv = newEventBannerEvent
+                setNewEventBannerEvent(null)
+                const matchingCard = effectiveCards.find((c) => c.id.includes(targetEv.id) || (targetEv.title && c.title.includes(targetEv.title)))
+                if (matchingCard) {
+                  handleOpenCard(matchingCard)
+                } else {
+                  const eventName = targetEv.title || targetEv.name || 'New Event'
+                  sessionStorage.setItem(
+                    'lumiere-workspace-card',
+                    JSON.stringify({
+                      id: `pc-event-${targetEv.id}`,
+                      title: `${eventName} — Main Layout`,
+                      type: 'Design',
+                      designer: adminName || 'Executive Team',
+                      collaborators: [],
+                      eventAlias: makeEventAlias(eventName),
+                      eventDate: targetEv.targetDate || 'Upcoming',
+                      lastEdited: 'Synced from API checkpoint',
+                      thumbnail: '/images/decor/chateau-ballroom.png',
+                      starred: false,
+                    })
+                  )
+                  navigate('canvas-workspace')
+                }
+              }}
+              className="mt-1.5 inline-flex items-center gap-1 text-[0.7rem] font-bold text-primary hover:underline cursor-pointer"
+            >
+              View in Dashboard &rarr;
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setNewEventBannerEvent(null)}
+            aria-label="Dismiss banner"
+            className="size-6 text-muted-foreground hover:text-foreground shrink-0 flex items-center justify-center rounded-lg hover:bg-accent cursor-pointer"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
       )}
 
       {trashUndo && (
