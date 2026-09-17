@@ -1,7 +1,7 @@
 "use client"
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import { Image as KonvaImage, Layer, Line, Rect, Stage, Transformer, Group, Text as KonvaText } from 'react-konva'
+import { Image as KonvaImage, Layer, Line, Rect, Circle, Stage, Transformer, Group, Text as KonvaText } from 'react-konva'
 import Konva from 'konva'
 import { MoveUp, MoveDown, Eye, EyeOff, Copy, Trash2, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -28,6 +28,8 @@ export interface KonvaInfiniteCanvasHandle {
   fitToScreen: () => void
   /** Smoothly scrolls the continuous viewport to center the target page. */
   scrollToPage: (pageId: string) => void
+  /** Exports canvas stage as high-resolution PNG data URL. */
+  exportPNG: () => string | null
 }
 
 export interface KonvaCanvasAsset {
@@ -44,7 +46,7 @@ export interface KonvaCanvasAsset {
   hidden: boolean
   zIndex: number
   pageId?: string
-  kind?: 'image' | 'rect' | 'line' | 'sticky' | 'text'
+  kind?: 'image' | 'rect' | 'circle' | 'line' | 'sticky' | 'text'
   points?: number[]
   text?: string
   fill?: string
@@ -248,6 +250,9 @@ function CanvasElement({
     nodeEl = <KonvaImage {...commonProps} image={image} width={asset.w} height={asset.h} filters={filters} />
   } else if (kind === 'rect') {
     nodeEl = <Rect {...commonProps} width={asset.w} height={asset.h} fill={asset.fill || '#3b82f6'} stroke="#1d4ed8" strokeWidth={1} cornerRadius={4} />
+  } else if (kind === 'circle') {
+    const r = Math.min(asset.w, asset.h) / 2
+    nodeEl = <Circle {...commonProps} x={commonProps.x + r} y={commonProps.y + r} radius={r} fill={asset.fill || '#ec4899'} stroke="#db2777" strokeWidth={1} />
   } else if (kind === 'line') {
     nodeEl = <Line {...commonProps} points={asset.points || [0, 0, asset.w, asset.h]} stroke={asset.strokeColor || '#1e293b'} strokeWidth={asset.strokeWidth || 3} tension={0.2} lineCap="round" lineJoin="round" />
   } else if (kind === 'sticky') {
@@ -470,6 +475,10 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
         } else {
           setManualOffset((prev) => ({ ...prev, y: 0 }))
         }
+      },
+      exportPNG() {
+        if (!stageRef.current) return null
+        return stageRef.current.toDataURL({ pixelRatio: 2 })
       },
     }),
     [containerSize, onZoomChange, currentPageIdx, effectivePages, scale, basePan.y, pageNavMode],

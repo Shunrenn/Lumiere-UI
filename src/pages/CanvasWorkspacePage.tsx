@@ -3759,6 +3759,15 @@ export function CanvasWorkspacePage() {
               <Pencil className="size-2.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
             </button>
           )}
+          {isMoodBoard ? (
+            <span className="rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider shrink-0">
+              MOOD BOARD
+            </span>
+          ) : (
+            <span className="rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider shrink-0">
+              DESIGN PROJECT
+            </span>
+          )}
           {/* Alias/date/last-edited meta only applies to a linked/existing project */}
           {card && (
             <div className="hidden items-center gap-2 lg:flex shrink-0">
@@ -3789,7 +3798,39 @@ export function CanvasWorkspacePage() {
               <Star className={cn('size-3.5', starred && 'fill-primary text-primary')} />
             </button>
             <button type="button" aria-label="Copy" className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"><Copy className="size-3.5" /></button>
-            <button type="button" aria-label="Download" className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"><Download className="size-3.5" /></button>
+            <button
+              type="button"
+              aria-label="Download"
+              title="Export Canvas as PNG & update thumbnail"
+              onClick={() => {
+                const dataUrl = canvasHandleRef.current?.exportPNG()
+                if (!dataUrl) {
+                  showToast('Failed to export canvas image')
+                  return
+                }
+                const link = document.createElement('a')
+                link.download = `${boardName.toLowerCase().replace(/\s+/g, '-')}-canvas.png`
+                link.href = dataUrl
+                link.click()
+
+                if (card?.id) {
+                  try {
+                    const savedCardsRaw = localStorage.getItem('lumiere-recents-cards')
+                    if (savedCardsRaw) {
+                      const cards = JSON.parse(savedCardsRaw)
+                      const updated = cards.map((c: any) => (c.id === card.id ? { ...c, thumbnail: dataUrl } : c))
+                      localStorage.setItem('lumiere-recents-cards', JSON.stringify(updated))
+                    }
+                    sessionStorage.setItem('lumiere-workspace-card', JSON.stringify({ ...card, thumbnail: dataUrl }))
+                  } catch { /* ignore */ }
+                }
+
+                showToast('Canvas exported as PNG & thumbnail updated!')
+              }}
+              className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground cursor-pointer"
+            >
+              <Download className="size-3.5" />
+            </button>
             <button type="button" aria-label="Move to trash" className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-destructive"><Trash2 className="size-3.5" /></button>
           </div>
           {/* Page Layout Mode Segmented Toggle Control (Vertical/Flowy vs Horizontal/Thumbnail) */}
@@ -3838,12 +3879,14 @@ export function CanvasWorkspacePage() {
             <MessageSquare className="size-3.5" />
           </button>
           <PresentDropdown />
-          <button type="button" onClick={() => setPipelineDrawerOpen((o) => !o)} aria-label="Toggle Event Pipeline panel" aria-pressed={pipelineDrawerOpen}
-            title="Event Pipeline"
-            className={cn('flex size-7 items-center justify-center rounded-md border transition',
-              pipelineDrawerOpen ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}>
-            <GalleryVerticalEnd className="size-3.5" />
-          </button>
+          {!isMoodBoard && (
+            <button type="button" onClick={() => setPipelineDrawerOpen((o) => !o)} aria-label="Toggle Event Pipeline panel" aria-pressed={pipelineDrawerOpen}
+              title="Event Pipeline"
+              className={cn('flex size-7 items-center justify-center rounded-md border transition',
+                pipelineDrawerOpen ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}>
+              <GalleryVerticalEnd className="size-3.5" />
+            </button>
+          )}
           <button type="button" onClick={() => setShowShare(true)}
             className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90">
             <Share2 className="size-3" />Share
@@ -3967,9 +4010,8 @@ export function CanvasWorkspacePage() {
         {/* Comments panel */}
         {commentsOpen && <CommentsPanel pageId={currentPage} selectedAsset={selectedAsset} comments={comments} onAdd={addComment} onClose={() => setCommentsOpen(false)} />}
 
-        {/* Event Pipeline drawer — collapsible, in-workspace. Same panel/data source as the
-            standalone pipeline route; opening/closing it never navigates away from the canvas. */}
-        {pipelineDrawerOpen && pipelineEvent && (
+        {/* Event Pipeline drawer — collapsible, in-workspace. Disabled/hidden in Mood Board mode */}
+        {!isMoodBoard && pipelineDrawerOpen && pipelineEvent && (
           <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-card">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="flex items-center gap-2 min-w-0">
@@ -3987,17 +4029,19 @@ export function CanvasWorkspacePage() {
           </aside>
         )}
 
-        {/* Right logistics panel */}
-        <RightPanel
-          expanded={rightExpanded}
-          onToggleExpand={() => setRightExpanded((v) => !v)}
-          droppedAssets={droppedAssets}
-          onRemoveDropped={handleRemoveDropped}
-          assets={assets}
-          setAssets={setAssets}
-          pending={pending}
-          setPending={setPending}
-        />
+        {/* Right logistics & resource panel — hidden for Mood Boards (pure drag-and-drop conceptualization) */}
+        {!isMoodBoard && (
+          <RightPanel
+            expanded={rightExpanded}
+            onToggleExpand={() => setRightExpanded((v) => !v)}
+            droppedAssets={droppedAssets}
+            onRemoveDropped={handleRemoveDropped}
+            assets={assets}
+            setAssets={setAssets}
+            pending={pending}
+            setPending={setPending}
+          />
+        )}
       </div>
 
       {/* PIN Modal */}
