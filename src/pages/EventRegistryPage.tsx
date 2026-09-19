@@ -11,6 +11,7 @@ import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { ExecutiveSegmentedProgress } from '@/components/executive/ExecutiveSegmentedProgress'
+import { ProjectValuationPanel } from '@/components/executive/ProjectValuationPanel'
 import type { PortalEvent } from '@/lib/types'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 
@@ -52,6 +53,8 @@ export function EventRegistryPage() {
   const [statusFilter, setStatusFilter] = useState('All')
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [showSegmentedTracks, setShowSegmentedTracks] = useState(false)
+  // Tracks which event the Project Valuation Panel should show budget for
+  const [budgetEvent, setBudgetEvent] = useState<PortalEvent | null>(null)
 
   const openCreate = () => {
     setActiveEvent(null)
@@ -62,6 +65,8 @@ export function EventRegistryPage() {
     setActiveEvent(e)
     setDrawerMode('view')
     setDrawerOpen(true)
+    // Pin the budget panel to this event when Executive opens its detail
+    setBudgetEvent(e)
   }
   const openEdit = (e: PortalEvent) => {
     setActiveEvent(e)
@@ -396,6 +401,56 @@ export function EventRegistryPage() {
               )}
             </div>
           </div>
+          {/* Project Valuation Panel — R14: per-event budget breakdown */}
+          {events.filter((e) => e.status !== 'Cancelled').length > 0 && (
+            <div className="mt-7">
+              {/* Event selector for budget panel when no event is pinned */}
+              {!budgetEvent && (
+                <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-5 py-4">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">
+                      Project Valuation
+                    </p>
+                    <p className="mt-0.5 text-[0.7rem] text-muted-foreground">
+                      Select an event to view its real-time budget breakdown.
+                    </p>
+                  </div>
+                  <select
+                    className="rounded-md border border-input bg-card py-2 pl-3 pr-8 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    defaultValue=""
+                    onChange={(ev) => {
+                      const found = events.find((e) => e.id === ev.target.value)
+                      if (found) setBudgetEvent(found)
+                    }}
+                  >
+                    <option value="" disabled>Choose event…</option>
+                    {events
+                      .filter((e) => e.status !== 'Cancelled')
+                      .map((e) => (
+                        <option key={e.id} value={e.id}>{e.title}</option>
+                      ))}
+                  </select>
+                </div>
+              )}
+              {budgetEvent && (
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-[0.65rem] text-muted-foreground">
+                      Showing valuation for: <strong className="text-foreground">{budgetEvent.title}</strong>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setBudgetEvent(null)}
+                      className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary hover:underline"
+                    >
+                      Switch event
+                    </button>
+                  </div>
+                  <ProjectValuationPanel event={budgetEvent} />
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
