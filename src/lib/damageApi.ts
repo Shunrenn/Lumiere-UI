@@ -30,6 +30,12 @@ function resolveGuid(id: string): string {
 
 function mapBackendDtoToDamageException(dto: any): DamageException {
   const shortId = dto.id ? dto.id.slice(0, 4).toUpperCase() : '800'
+  // Use real GPS from backend if present; fall back to a label indicating it's unavailable
+  const gpsDisplay = dto.gpsCoordinates
+    ? dto.gpsCoordinates
+    : dto.noPhotographicEvidence
+    ? 'No photo — GPS not captured'
+    : 'GPS not captured'
   return {
     id: dto.id,
     logId: `EXC-2026-${shortId}`,
@@ -44,7 +50,7 @@ function mapBackendDtoToDamageException(dto: any): DamageException {
     assetSku: dto.id === '33333333-3333-3333-3333-333333333333' ? 'SKU: LMR-LGT-S60C' : 'SKU: LMR-FURN-CH08',
     damageType: dto.severity || 'Critical',
     imageUrl: dto.photoUrl || 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04',
-    gps: 'GPS: 14.5492° N, 121.019° E',
+    gps: gpsDisplay,
     capturedAt: dto.submittedAt ? new Date(dto.submittedAt).toLocaleDateString() : '12 Dec 2025 · 22:40',
     exifVerified: !dto.noPhotographicEvidence,
     estimatedCost: dto.repairCostEstimate ?? 150,
@@ -56,6 +62,8 @@ function mapBackendDtoToDamageException(dto: any): DamageException {
     custodyMode: dto.custodyMode,
     unblockMetadata: dto.emergencyUnblockMetadata || dto.unblockMetadata,
     selfValidation: dto.selfValidation,
+    sha256Hash: dto.sha256Hash || undefined,
+    exifMetadata: dto.exifMetadata || undefined,
   }
 }
 

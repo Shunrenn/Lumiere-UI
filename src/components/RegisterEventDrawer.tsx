@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, FileText, Building2, Palette, CalendarDays, Plus, AlertTriangle } from 'lucide-react'
-import { usePortal, checkEventConflicts } from '@/lib/store'
+import { X, FileText, Building2, Palette, CalendarDays, Plus, AlertTriangle, Info } from 'lucide-react'
+import { usePortal, checkEventConflicts, checkDateAdvisory } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
@@ -91,6 +91,8 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
   const [customVenues, setCustomVenues] = useState<string[]>([])
   const [addingVenue, setAddingVenue] = useState(false)
   const [newVenue, setNewVenue] = useState('')
+  const [showValidation, setShowValidation] = useState(false)
+  const [serverConflict, setServerConflict] = useState<{ message: string; conflictingEvents: any[] } | null>(null)
 
   const readOnly = mode === 'view'
 
@@ -156,6 +158,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
     setConfirmOpen(false)
     setAddingVenue(false)
     setNewVenue('')
+    setShowValidation(false)
     onClose()
   }
 
@@ -165,28 +168,42 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
   )
   const hasConflicts = conflicts.length > 0
 
-  // Flag a date conflict when the chosen target date matches an existing event
-  const dateConflict = draft.targetDate
-    ? events.some((ev) => {
-        const a = new Date(ev.targetDate).getTime()
-        const b = new Date(draft.targetDate).getTime()
-        return !Number.isNaN(a) && !Number.isNaN(b) && a === b
-      })
-    : false
+  // Advisory date warnings (same day, different venue) — do NOT block, shown in confirm dialog
+  const dateAdvisories = useMemo(
+    () => checkDateAdvisory(draft, events, mode === 'edit' ? event?.id : null),
+    [draft, events, mode, event?.id],
+  )
 
-  const submit = () => {
-    // Client is now optional — only the title is required.
-    if (!draft.title || hasConflicts) return
+
+  const submit = async (allowOverride = false) => {
+    if (!draft.title.trim()) return
     try {
       if (mode === 'edit' && event) {
         updateEvent(event.id, draft, adminRole || 'Executive')
+        close()
       } else {
-        addEvent(draft, adminRole || 'Executive')
+        const res = await addEvent(draft, adminRole || 'Executive', allowOverride)
+        if (res.conflict) {
+          setServerConflict({
+            message: res.message || 'Venue scheduling conflict detected.',
+            conflictingEvents: res.conflictingEvents || [],
+          })
+        } else if (res.success) {
+          setServerConflict(null)
+          close()
+        } else {
+          console.error('[RegisterEventDrawer] Failed to save event:', res.message)
+        }
       }
-      close()
     } catch (err: any) {
       console.error('[RegisterEventDrawer] Failed to save event:', err)
     }
+  }
+
+  const handleRequestOpen = () => {
+    setShowValidation(true)
+    if (!draft.title.trim()) return  // don't open confirm if required fields missing
+    setConfirmOpen(true)
   }
 
   const commitNewVenue = () => {
@@ -278,14 +295,23 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
             <div>
               <label className={labelClass} htmlFor="ev-title">
                 Event Concept / Title
+                <span className="ml-1 text-destructive">*</span>
               </label>
               <input
                 id="ev-title"
-                className={inputClass}
+                className={cn(
+                  inputClass,
+                  showValidation && !draft.title.trim() && 'border-destructive ring-2 ring-destructive/30',
+                )}
                 placeholder="e.g. La Nuit Dorée..."
                 value={draft.title}
-                onChange={(e) => set('title', e.target.value)}
+                onChange={(e) => { set('title', e.target.value); }}
               />
+              {showValidation && !draft.title.trim() && (
+                <p className="mt-1.5 flex items-center gap-1 text-[0.65rem] font-medium text-destructive">
+                  <AlertTriangle className="size-3" /> Event title is required.
+                </p>
+              )}
             </div>
             <div>
               <label className={labelClass} htmlFor="ev-client">
@@ -587,16 +613,11 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
           ) : (
             <button
               type="button"
-              onClick={() => setConfirmOpen(true)}
-              disabled={!draft.title || hasConflicts}
+              onClick={handleRequestOpen}
               className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-6 py-3 text-xs font-bold uppercase tracking-[0.15em] text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Plus className="size-3.5" />
-              {hasConflicts
-                ? 'Blocked by Event Conflict'
-                : mode === 'edit'
-                  ? 'Save Changes'
-                  : 'Initialize Event Registry'}
+              {mode === 'edit' ? 'Save Changes' : 'Initialize Event Registry'}
             </button>
           )}
         </div>
@@ -606,12 +627,12 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
         open={confirmOpen}
         eyebrow={mode === 'edit' ? 'Registry Update' : 'Registry Initialization'}
         title={mode === 'edit' ? 'Confirm Event Changes' : 'Confirm New Event'}
-        tone={dateConflict ? 'destructive' : 'default'}
+        tone={dateAdvisories.length > 0 ? 'destructive' : 'default'}
         confirmLabel={mode === 'edit' ? 'Save Changes' : 'Initialize Registry'}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => {
           setConfirmOpen(false)
-          submit()
+          submit(false)
         }}
         description={
           <div className="space-y-4">
@@ -620,17 +641,100 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                 {draft.title || 'Untitled Event'}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {draft.client || 'No client'} · {draft.targetDate || 'No date set'}
+                {draft.client || 'No client'} · {draft.targetDate || 'No date set'} · {draft.venue || 'No venue'}
               </p>
             </div>
-            <p>
-              {dateConflict
-                ? 'Warning: the selected date already has a booked event. Are you sure you want to register this event on the same day?'
-                : 'This will register the new event in the portfolio registry. Proceed?'}
-            </p>
+            {dateAdvisories.length > 0 ? (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+                <div className="flex items-center gap-1.5 text-[0.65rem] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                  <Info className="size-3.5" /> Date Advisory
+                </div>
+                <ul className="mt-1.5 space-y-1 text-[0.7rem] text-muted-foreground">
+                  {dateAdvisories.map((a, i) => <li key={i}>{a.message}</li>)}
+                </ul>
+                <p className="mt-2 text-[0.65rem] text-muted-foreground">You can still proceed — this is not a booking conflict.</p>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">This will register the new event in the portfolio registry. Proceed?</p>
+            )}
           </div>
         }
       />
+
+      {serverConflict && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-xl border border-rose-500/30 bg-card p-6 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-rose-500/10 p-2 text-rose-500 shrink-0">
+                <AlertTriangle className="size-6" />
+              </div>
+              <div>
+                <h3 className="font-serif text-lg font-bold text-card-foreground">
+                  Venue Schedule Conflict Warning
+                </h3>
+                <p className="text-[0.7rem] text-rose-600 dark:text-rose-400 font-semibold uppercase tracking-wider mt-0.5">
+                  HTTP 409 Conflict — Duplicate / Overlapping Event
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {serverConflict.message}
+            </p>
+
+            <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2 max-h-48 overflow-y-auto">
+              <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">
+                Conflicting Active Event(s):
+              </p>
+              {serverConflict.conflictingEvents.length > 0 ? (
+                serverConflict.conflictingEvents.map((ce: any, idx: number) => (
+                  <div key={ce.id || idx} className="rounded border border-border/80 bg-background p-2.5 text-xs space-y-1">
+                    <div className="flex items-center justify-between font-semibold text-foreground">
+                      <span>{ce.name || ce.title || 'Conflicting Event'}</span>
+                      <span className="text-[0.6rem] font-mono uppercase bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 px-1.5 py-0.5 rounded">
+                        {ce.status || 'Active'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[0.7rem] text-muted-foreground">
+                      <div><span className="font-medium text-foreground">Venue:</span> {ce.venue || ce.eventVenue}</div>
+                      <div><span className="font-medium text-foreground">Date:</span> {ce.dateOfEvent ? ce.dateOfEvent.split('T')[0] : 'N/A'}</div>
+                      <div className="col-span-2">
+                        <span className="font-medium text-foreground">Schedule Window:</span> {ce.ingressDate ? ce.ingressDate.split('T')[0] : 'N/A'} to {ce.returnDate ? ce.returnDate.split('T')[0] : 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground italic">Overlapping venue schedule detected on server.</p>
+              )}
+            </div>
+
+            <div className="rounded border border-amber-500/20 bg-amber-500/10 p-2 text-[0.7rem] text-amber-800 dark:text-amber-300 flex items-center gap-2">
+              <Info className="size-4 shrink-0" />
+              <span>
+                Proceeding will log a <code className="font-mono text-[0.65rem]">VENUE_CONFLICT_OVERRIDE</code> audit log entry.
+              </span>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setServerConflict(null)}
+                className="rounded-md border border-border px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted transition"
+              >
+                Modify Venue / Dates
+              </button>
+              <button
+                type="button"
+                onClick={() => submit(true)}
+                className="rounded-md bg-rose-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-rose-700 transition"
+              >
+                Proceed with Override
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

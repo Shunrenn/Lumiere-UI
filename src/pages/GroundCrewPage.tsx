@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { AlertTriangle, Bell, CalendarDays, Camera, Check, ChevronLeft, ChevronRight, ClipboardList, FileText, Lock, MapPin, MessageSquare, PackageCheck, Send, ShieldCheck, UserCircle2, X } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
@@ -9,6 +9,7 @@ import { IncidentForm } from '@/components/PwaWorkflows'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
 import { decideGroundCrewDeclaration, getApproachingDeclarationsSummary, getDeclarationAging, submitGroundCrewDeclaration, useGroundCrewDeclarations, type GroundCrewDeclaration } from '@/lib/ground-crew-declarations'
+import { computePhotoSha256, extractPhotoMetadata, type HavaPhotoMetadata } from '@/lib/hava'
 
 type Tab = 'home' | 'tasks' | 'calendar' | 'activity' | 'account'
 type AccessLevel = 'Ground Crew / Member' | 'Team Lead / Field Lead' | 'Receiver' | 'Event Admin'
@@ -17,7 +18,7 @@ type EventStatus = 'Current' | 'Upcoming' | 'Completed'
 type RequestStatus = 'Pending' | 'Approved' | 'Denied'
 
 interface EventItem { id: string; name: string; date: string; venue: string; status: EventStatus; editable: boolean; phase: CheckpointPhase; items: { id: string; name: string; sku: string; qty: number; color: string }[] }
-interface DamageReport { id: string; event: string; item: string; phase: CheckpointPhase; quantity: number; description: string; photo: string; photoHash?: string; capturedAt: string; location: string }
+interface DamageReport { id: string; event: string; item: string; phase: CheckpointPhase; quantity: number; description: string; photo: string; photoHash?: string; capturedAt: string; location: string; sha256Hash?: string; gpsCoordinates?: string }
 interface CrewRequest { id: string; type: string; date: string; note: string; status: RequestStatus }
 
 // Event phase is driven by checkpoint progression in order:
@@ -54,7 +55,8 @@ export function GroundCrewPage() {
       venue: evt.venue,
       status: idx === 0 ? 'Current' : 'Upcoming',
       editable: idx === 0,
-      phase: idx === 0 ? 'Pre-Event Setup' : 'Dispatch Loading',
+      // All events start at Dispatch Loading — crew must advance through each stage
+      phase: 'Dispatch Loading' as CheckpointPhase,
       items: [
         { id: `i-${idx}-1`, name: 'Premium Crystal Candelabra', sku: 'LM-0012', qty: 24, color: 'Clear / Gold' },
         { id: `i-${idx}-2`, name: 'Gold Chiavari Chairs', sku: 'LM-0048', qty: 200, color: 'Antique Gold' },
@@ -108,7 +110,7 @@ export function GroundCrewPage() {
 
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 5000) }
   const openReport = (item: EventItem['items'][number]) => { setReportItem(item); setShowReport(true) }
-  const submitReport = (event: FormEvent<HTMLFormElement>) => {
+  const submitReport = async (event: FormEvent<HTMLFormElement>, hava?: { sha256Hash: string; meta: HavaPhotoMetadata; photoDataUrl: string }) => {
     event.preventDefault()
     if (!reportItem || !selectedEvent) return
     const data = new FormData(event.currentTarget)
@@ -117,24 +119,67 @@ export function GroundCrewPage() {
     const quantity = Number(data.get('quantity'))
     if (!quantity || quantity < 1) return notify('Enter the affected quantity.')
     if (condition === 'Damaged' && !photoCaptured) return notify('A photo is required for damaged items.')
-    const save = (location: string) => {
-      const description = String(data.get('description') || '')
-      submitGroundCrewDeclaration({ eventId: selectedEvent.id, eventName: selectedEvent.name, item: reportItem.name, condition: condition as 'Damaged' | 'Missing', quantity, description, submittedBy: adminName || 'Ground Crew Member', submittedRole: accessLevel === 'Event Admin' ? 'Field Lead' : accessLevel === 'Ground Crew / Member' ? 'Member' : 'Team Lead', submittedAt: new Date().toISOString(), demoLabel: undefined })
-      setReports((current) => [{ id: `r-${Date.now()}`, event: selectedEvent.name, item: reportItem.name, phase: selectedEvent.phase, quantity, description, photo: photoCaptured ? 'photo-capture.jpg' : '', capturedAt: new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }), location }, ...current])
-      setShowReport(false)
-      notify(typeof navigator !== 'undefined' && navigator.onLine ? 'Validation report submitted for Event Admin confirmation.' : 'Offline mode: Report saved locally. Will sync when back online.')
-    }
-    if (navigator.geolocation) navigator.geolocation.getCurrentPosition((position) => save(`${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`), () => save('GPS unavailable'))
-    else save('GPS unavailable')
+    const description = String(data.get('description') || '')
+    const gpsForLegacy = hava?.meta.gpsCoordinates ?? 'GPS unavailable'
+    submitGroundCrewDeclaration({
+      eventId: selectedEvent.id,
+      eventName: selectedEvent.name,
+      item: reportItem.name,
+      condition: condition as 'Damaged' | 'Missing',
+      quantity,
+      description,
+      submittedBy: adminName || 'Ground Crew Member',
+      submittedRole: accessLevel === 'Event Admin' ? 'Field Lead' : accessLevel === 'Ground Crew / Member' ? 'Member' : 'Team Lead',
+      submittedAt: hava?.meta.capturedAt ?? new Date().toISOString(),
+      demoLabel: undefined,
+      sha256Hash: hava?.sha256Hash,
+      exifMetadata: hava?.meta.exifJson ?? undefined,
+      gpsCoordinates: hava?.meta.gpsCoordinates,
+    })
+    setReports((current) => [{
+      id: `r-${Date.now()}`,
+      event: selectedEvent.name,
+      item: reportItem.name,
+      phase: selectedEvent.phase,
+      quantity,
+      description,
+      photo: hava?.photoDataUrl ?? (photoCaptured ? 'photo-capture.jpg' : ''),
+      capturedAt: hava?.meta.capturedAt
+        ? new Date(hava.meta.capturedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+        : new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
+      location: gpsForLegacy,
+      sha256Hash: hava?.sha256Hash,
+      gpsCoordinates: hava?.meta.gpsCoordinates,
+    }, ...current])
+    setShowReport(false)
+    notify(typeof navigator !== 'undefined' && navigator.onLine ? 'Validation report submitted for Event Admin confirmation.' : 'Offline mode: Report saved locally. Will sync when back online.')
   }
   const submitRequest = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); setRequests((current) => [{ id: `q-${Date.now()}`, type: requestType, date: requestDate, note: requestNote, status: 'Pending' }, ...current]); setRequestOpen(false); setRequestNote(''); notify('Request sent to admin for review.') }
   const setHandoffNote = (eventId: string, value: string) => { setHandoffNotes((current) => ({ ...current, [eventId]: value })); if (egressError) setEgressError('') }
+  const PHASE_ORDER: CheckpointPhase[] = ['Dispatch Loading', 'Venue Arrival', 'Pre-Event Setup', 'Post-Event Egress']
+
+  const advancePhase = (eventId: string) => {
+    setCrewEvents((current) =>
+      current.map((ev) => {
+        if (ev.id !== eventId) return ev
+        const idx = PHASE_ORDER.indexOf(ev.phase)
+        if (idx < 0 || idx >= PHASE_ORDER.length - 1) return ev
+        return { ...ev, phase: PHASE_ORDER[idx + 1] }
+      }),
+    )
+  }
+
   const startEgress = (eventId: string) => {
     const note = (handoffNotes[eventId] ?? '').trim()
-    if (!note) { setEgressError('Add a handoff note before starting Egress.'); return }
+    if (!note) { setEgressError('Add a handoff note before completing egress.'); return }
     setEgressError('')
-    setCrewEvents((current) => current.map((event) => (event.id === eventId ? { ...event, phase: 'Pre-Event Setup' } : event)))
-    notify('Pre-Event Setup started — advanced to Pre-Event Setup.')
+    // Egress is triggered from Post-Event Egress stage — mark the event complete
+    setCrewEvents((current) =>
+      current.map((ev) =>
+        ev.id === eventId ? { ...ev, status: 'Completed' as EventStatus } : ev,
+      ),
+    )
+    notify('Post-Event Egress completed — event marked as Completed.')
   }
 
   const [isLoading] = useState(false)
@@ -158,7 +203,7 @@ export function GroundCrewPage() {
       ) : (
         <>
           {tab === 'tasks' && <DecisionMode declarations={declarations} accessLevel={accessLevel} adminEventId={adminEventId} events={crewEvents} onEventChange={setAdminEventId} onDecision={(id, decision) => { decideGroundCrewDeclaration(id, decision, adminName || 'Event Admin'); notify(`Declaration ${decision.toLowerCase()}.`) }} />}
-          {tab === 'home' && (selectedEvent ? <EventDetail event={selectedEvent} batches={dispatchStore.get(selectedEvent.id) ?? []} handoffNote={handoffNotes[selectedEvent.id] ?? ''} onHandoffNoteChange={(value) => setHandoffNote(selectedEvent.id, value)} egressError={egressError} onStartEgress={() => startEgress(selectedEvent.id)} onBack={() => { setSelectedEventId(null); setEgressError('') }} onReport={openReport} onStall={(batchId, reason) => { markBatchStalled(selectedEvent.id, batchId, reason); notify('Batch marked Stalled In Transit.') }} onResume={(batchId) => { resolveBatchStall(selectedEvent.id, batchId); notify('Transit resumed.') }} /> : <Home events={crewEvents} onOpen={(event) => setSelectedEventId(event.id)} approachingSummary={accessLevel === 'Event Admin' ? getApproachingDeclarationsSummary() : null} />)}
+      {tab === 'home' && (selectedEvent ? <EventDetail event={selectedEvent} batches={dispatchStore.get(selectedEvent.id) ?? []} handoffNote={handoffNotes[selectedEvent.id] ?? ''} onHandoffNoteChange={(value) => setHandoffNote(selectedEvent.id, value)} egressError={egressError} onAdvancePhase={() => advancePhase(selectedEvent.id)} onStartEgress={() => startEgress(selectedEvent.id)} onBack={() => { setSelectedEventId(null); setEgressError('') }} onReport={openReport} onStall={(batchId, reason) => { markBatchStalled(selectedEvent.id, batchId, reason); notify('Batch marked Stalled In Transit.') }} onResume={(batchId) => { resolveBatchStall(selectedEvent.id, batchId); notify('Transit resumed.') }} /> : <Home events={crewEvents} onOpen={(event) => setSelectedEventId(event.id)} approachingSummary={accessLevel === 'Event Admin' ? getApproachingDeclarationsSummary() : null} />)}
           {tab === 'calendar' && <CalendarView selectedDate={selectedDate} setSelectedDate={setSelectedDate} notes={notes} setNotes={setNotes} onSave={() => notify('Personal note saved.')} events={crewEvents} />}
           {tab === 'activity' && <Activity reports={reports} requests={requests} events={crewEvents} />}
           {tab === 'account' && <Account name={adminName || 'Ground Crew'} email={adminEmail || 'crew@lumiere.com'} requests={requests} onRequest={() => setRequestOpen(true)} onLogout={logout} />}
@@ -484,7 +529,7 @@ function PhaseMap({ phase }: { phase: CheckpointPhase }) {
   )
 }
 
-function EventDetail({ event, batches, handoffNote, onHandoffNoteChange, egressError, onStartEgress, onBack, onReport, onStall, onResume }: { event: EventItem; batches: DispatchBatch[]; handoffNote: string; onHandoffNoteChange: (value: string) => void; egressError: string; onStartEgress: () => void; onBack: () => void; onReport: (item: EventItem['items'][number]) => void; onStall: (batchId: string, reason: string) => void; onResume: (batchId: string) => void }) {
+function EventDetail({ event, batches, handoffNote, onHandoffNoteChange, egressError, onAdvancePhase, onStartEgress, onBack, onReport, onStall, onResume }: { event: EventItem; batches: DispatchBatch[]; handoffNote: string; onHandoffNoteChange: (value: string) => void; egressError: string; onAdvancePhase: () => void; onStartEgress: () => void; onBack: () => void; onReport: (item: EventItem['items'][number]) => void; onStall: (batchId: string, reason: string) => void; onResume: (batchId: string) => void }) {
   const { phase } = event
   return (
     <div className="space-y-5">
@@ -503,6 +548,9 @@ function EventDetail({ event, batches, handoffNote, onHandoffNoteChange, egressE
           <div><p className="eyebrow">Checkpoint 1 of 4</p><h2 className="mt-1 font-serif text-xl">Dispatch Loading Handoff</h2></div>
           <p className="flex items-start gap-2 text-sm leading-6 text-muted-foreground"><PackageCheck className="mt-0.5 size-4 shrink-0 text-primary" /> Confirm warehouse dispatch manifest loading and vehicle clearance.</p>
           <div className="space-y-2">{event.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><span className="status status-submitted shrink-0">Manifest Verified</span></div>)}</div>
+          <button type="button" onClick={onAdvancePhase} className="button-primary w-full mt-2">
+            <ChevronRight className="size-4" /> Confirm Loading — Advance to Venue Arrival
+          </button>
         </section>
       )}
 
@@ -511,6 +559,9 @@ function EventDetail({ event, batches, handoffNote, onHandoffNoteChange, egressE
           <div><p className="eyebrow">Checkpoint 2 of 4</p><h2 className="mt-1 font-serif text-xl">Venue Arrival Verification</h2></div>
           <p className="text-sm leading-6 text-muted-foreground">Verify vehicle arrival and transit condition before unloading.</p>
           <div className="space-y-2">{event.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><button onClick={() => onReport(item)} className="button-secondary shrink-0"><Camera className="size-4" /> Condition Check</button></div>)}</div>
+          <button type="button" onClick={onAdvancePhase} className="button-primary w-full mt-2">
+            <ChevronRight className="size-4" /> Confirm Arrival — Advance to Pre-Event Setup
+          </button>
         </section>
       )}
 
@@ -519,6 +570,9 @@ function EventDetail({ event, batches, handoffNote, onHandoffNoteChange, egressE
           <div><p className="eyebrow">Checkpoint 3 of 4</p><h2 className="mt-1 font-serif text-xl">Pre-Event Setup Validation</h2></div>
           <p className="text-sm leading-6 text-muted-foreground">Review each item group. Report damage or missing quantities before event activation.</p>
           <div className="space-y-2">{event.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><button onClick={() => onReport(item)} className="button-secondary shrink-0"><Camera className="size-4" /> Report</button></div>)}</div>
+          <button type="button" onClick={onAdvancePhase} className="button-primary w-full mt-2">
+            <ChevronRight className="size-4" /> Confirm Setup — Advance to Post-Event Egress
+          </button>
         </section>
       )}
 
@@ -595,89 +649,192 @@ function StallControl({ batch, onStall, onResume }: { batch: DispatchBatch; onSt
   </div>
 }
 
-export async function computePhotoSha256(input: string | ArrayBuffer): Promise<string> {
-  let buffer: ArrayBuffer
-  if (typeof input === 'string') {
-    const encoder = new TextEncoder()
-    buffer = encoder.encode(input)
-  } else {
-    buffer = input
-  }
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+// CameraCapture replaced with real file-input capture — see HavaCapture below
+
+interface HavaCaptureResult {
+  sha256Hash: string
+  meta: HavaPhotoMetadata
+  photoDataUrl: string
 }
 
-function CameraCapture({ onClose, onCapture }: { onClose: () => void; onCapture: (hash: string) => void }) {
-  const [flash, setFlash] = useState(false)
-  const shoot = async () => {
-    setFlash(true)
-    const rawData = `photo-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-    const computedHash = await computePhotoSha256(rawData)
-    window.setTimeout(() => { setFlash(false); onCapture(computedHash) }, 260)
-  }
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black">
-      {flash && <div className="absolute inset-0 z-10 bg-white" />}
-      <div className="flex items-center justify-between px-4 py-4"><button type="button" onClick={onClose} className="rounded-full bg-white/10 p-2 text-white" aria-label="Close camera"><X className="size-5" /></button><p className="text-sm font-medium text-white/80">Photo proof (SHA-256 Hashed)</p><span className="w-9" /></div>
-      <div className="relative mx-4 flex flex-1 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-neutral-900">
-        <div className="absolute inset-6 rounded-xl border border-dashed border-white/25" />
-        <Camera className="size-14 text-white/25" />
-        <p className="absolute bottom-5 text-xs text-white/40">Point at the item and tap the shutter</p>
-      </div>
-      <div className="flex items-center justify-center py-8">
-        <button type="button" onClick={shoot} aria-label="Capture photo" className="flex size-20 items-center justify-center rounded-full border-4 border-white/70 p-1"><span className="size-full rounded-full bg-white" /></button>
-      </div>
-    </div>
-  )
-}
-
-function DamageForm({ item, event, phase, onClose, onSubmit }: { item: EventItem['items'][number]; event: string; phase: CheckpointPhase; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+function DamageForm({
+  item,
+  event,
+  phase,
+  onClose,
+  onSubmit,
+}: {
+  item: EventItem['items'][number]
+  event: string
+  phase: CheckpointPhase
+  onClose: () => void
+  onSubmit: (e: FormEvent<HTMLFormElement>, hava?: HavaCaptureResult) => void
+}) {
   const [condition, setCondition] = useState<'Damaged' | 'Missing'>('Damaged')
-  const [cameraOpen, setCameraOpen] = useState(false)
-  const [photoHashes, setPhotoHashes] = useState<string[]>([])
+  const [captures, setCaptures] = useState<HavaCaptureResult[]>([])
+  const [isProcessing, setIsProcessing] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const photoRequired = condition === 'Damaged'
-  const photoCount = photoHashes.length
+  const photoCount = captures.length
+  const latestCapture = captures[captures.length - 1]
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsProcessing(true)
+    try {
+      const buffer = await file.arrayBuffer()
+      const [sha256Hash, meta] = await Promise.all([
+        computePhotoSha256(buffer),
+        extractPhotoMetadata(file),
+      ])
+      // Thumbnail data URL for preview
+      const photoDataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onload = (ev) => resolve(ev.target?.result as string)
+        reader.readAsDataURL(file)
+      })
+      setCaptures((prev) => [...prev, { sha256Hash, meta, photoDataUrl }])
+    } catch (err) {
+      console.warn('[HAVA] Failed to process photo:', err)
+    } finally {
+      setIsProcessing(false)
+      // Reset so same file can be re-selected if needed
+      e.target.value = ''
+    }
+  }
+
   return (
     <div className="sheet-backdrop">
-      <form className="sheet space-y-4" onSubmit={onSubmit}>
+      {/* Hidden real file input with camera capture */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="sr-only"
+        aria-hidden
+        onChange={handleFileSelect}
+      />
+      <form
+        className="sheet space-y-4"
+        onSubmit={(e) => onSubmit(e, latestCapture)}
+      >
         <div className="flex items-start justify-between">
-          <div><p className="eyebrow">{phase} validation</p><h2 className="mt-1 font-serif text-2xl">Report an issue</h2><p className="mt-1 text-sm text-muted-foreground">{item.name} · {event}</p></div>
+          <div>
+            <p className="eyebrow">{phase} validation</p>
+            <h2 className="mt-1 font-serif text-2xl">Report an issue</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{item.name} · {event}</p>
+          </div>
           <button type="button" onClick={onClose} className="icon-button" aria-label="Close"><X className="size-4" /></button>
         </div>
+
         <label className="field-label">Condition
-          <select name="condition" value={condition} onChange={(e) => { setCondition(e.target.value as 'Damaged' | 'Missing'); setPhotoHashes([]) }} className="field-input">
+          <select
+            name="condition"
+            value={condition}
+            onChange={(e) => { setCondition(e.target.value as 'Damaged' | 'Missing'); setCaptures([]) }}
+            className="field-input"
+          >
             <option>Damaged</option>
             <option>Missing</option>
           </select>
         </label>
+
         <input type="hidden" name="photoCaptured" value={photoCount > 0 ? '1' : ''} />
-        <input type="hidden" name="photoHash" value={photoHashes[0] || ''} />
+
         <div className="field-label">
-          <span>{photoRequired ? 'Photos required for damaged items (multiple allowed)' : 'Photos (optional for missing items)'}</span>
+          <span>{photoRequired ? 'Photos required — SHA-256 fingerprinted' : 'Photos (optional for missing items)'}</span>
+
           {photoCount > 0 ? (
-            <div className="mt-1 flex flex-col gap-2 rounded-md border border-border bg-secondary/40 p-3">
+            <div className="mt-1 flex flex-col gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
+              {/* Thumbnail */}
+              {latestCapture?.photoDataUrl && (
+                <img
+                  src={latestCapture.photoDataUrl}
+                  alt="Damage photo"
+                  className="h-28 w-full rounded object-cover border border-border"
+                />
+              )}
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-sm"><span className="flex size-9 items-center justify-center rounded bg-foreground text-background font-bold text-xs">{photoCount}</span> {photoCount === 1 ? '1 Photo attached' : `${photoCount} Photos attached`}</div>
-                <button type="button" onClick={() => setCameraOpen(true)} className="text-xs font-semibold text-primary underline-offset-2 hover:underline">+ Add another photo</button>
+                <span className="flex size-7 items-center justify-center rounded bg-emerald-600 text-white font-bold text-xs">{photoCount}</span>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isProcessing}
+                  className="text-xs font-semibold text-primary underline-offset-2 hover:underline"
+                >
+                  + Add another photo
+                </button>
               </div>
-              <div className="rounded bg-background p-2 font-mono text-[0.62rem] text-muted-foreground border border-border truncate">
-                <span className="font-bold text-primary">SHA-256:</span> {photoHashes[photoHashes.length - 1]}
+
+              {/* SHA-256 fingerprint */}
+              <div className="rounded bg-background p-2 font-mono text-[0.62rem] text-muted-foreground border border-border break-all">
+                <span className="font-bold text-emerald-600">SHA-256: </span>
+                {latestCapture?.sha256Hash}
+              </div>
+
+              {/* GPS + timestamp */}
+              <div className="grid grid-cols-2 gap-1.5 text-[0.68rem] text-muted-foreground">
+                <div className="flex items-start gap-1">
+                  <MapPin className="mt-0.5 size-3 shrink-0 text-primary" />
+                  <span>
+                    {latestCapture?.meta.gpsCoordinates ?? 'GPS unavailable'}
+                    {latestCapture?.meta.gpsSource === 'exif' && (
+                      <span className="ml-1 text-[0.6rem] font-bold uppercase text-emerald-600">[EXIF]</span>
+                    )}
+                    {latestCapture?.meta.gpsSource === 'geolocation' && (
+                      <span className="ml-1 text-[0.6rem] font-bold uppercase text-amber-600">[Device GPS]</span>
+                    )}
+                  </span>
+                </div>
+                <div className="flex items-start gap-1">
+                  <Camera className="mt-0.5 size-3 shrink-0 text-primary" />
+                  <span>{latestCapture?.meta.capturedAt
+                    ? new Date(latestCapture.meta.capturedAt).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })
+                    : '—'}
+                  </span>
+                </div>
               </div>
             </div>
           ) : (
-            <button type="button" onClick={() => setCameraOpen(true)} className="button-secondary mt-1 w-full"><Camera className="size-4" /> Open camera to capture photo</button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isProcessing}
+              className="button-secondary mt-1 w-full"
+            >
+              {isProcessing ? (
+                <><span className="animate-spin inline-block size-4 border-2 border-current border-t-transparent rounded-full" /> Processing…</>
+              ) : (
+                <><Camera className="size-4" /> Capture photo (auto-fingerprinted)</>
+              )}
+            </button>
           )}
         </div>
+
         {photoRequired && photoCount === 0 && (
-          <p className="-mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Camera className="size-3.5" /> Use the built-in camera to capture photo evidence of the damage.</p>
+          <p className="-mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Camera className="size-3.5" /> Photo evidence required. Timestamp, GPS, and SHA-256 fingerprint are extracted automatically.
+          </p>
         )}
-        <label className="field-label">Number affected<input name="quantity" type="number" min="1" defaultValue="1" className="field-input" /></label>
-        <label className="field-label">Damage or description<textarea name="description" required rows={3} placeholder="Describe the damage, missing count, or notes..." className="field-input" /></label>
-        <div className="rounded border border-border bg-secondary/40 p-3 text-xs leading-5 text-muted-foreground"><MapPin className="mr-1 inline size-3" /> Timestamp, GPS location, and SHA-256 fingerprint hash are captured automatically.</div>
-        <button className="button-primary w-full" type="submit"><Send className="size-4" /> Submit validation</button>
+
+        <label className="field-label">Number affected
+          <input name="quantity" type="number" min="1" defaultValue="1" className="field-input" />
+        </label>
+        <label className="field-label">Damage description
+          <textarea name="description" required rows={3} placeholder="Describe the damage, missing count, or notes..." className="field-input" />
+        </label>
+
+        <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs leading-5 text-muted-foreground">
+          <MapPin className="mr-1 inline size-3 text-emerald-600" />
+          <strong className="text-foreground">HAVA Active</strong> — Photo is SHA-256 fingerprinted, EXIF timestamp extracted, and GPS captured automatically at time of photo.
+        </div>
+
+        <button className="button-primary w-full" type="submit" disabled={isProcessing}>
+          <Send className="size-4" /> Submit validation
+        </button>
       </form>
-      {cameraOpen && <CameraCapture onClose={() => setCameraOpen(false)} onCapture={(hash) => { setPhotoHashes((prev) => [...prev, hash]); setCameraOpen(false) }} />}
     </div>
   )
 }

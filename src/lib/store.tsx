@@ -81,17 +81,35 @@ export interface EventConflict {
   eventId: string
   eventTitle: string
   eventRefId: string
+  /** hard-block types: title_similarity, same_date_venue. advisory: same_date */
   conflictType: 'title_similarity' | 'same_date_venue' | 'same_date'
   message: string
 }
 
+/**
+ * Word-overlap ratio between two title strings (0–1).
+ * "La Nuit Dorée" vs "La Nuit" → 2/3 ≈ 0.67
+ */
+function titleOverlapRatio(a: string, b: string): number {
+  const wa = new Set(a.split(/\s+/).filter(Boolean))
+  const wb = new Set(b.split(/\s+/).filter(Boolean))
+  if (wa.size === 0 || wb.size === 0) return 0
+  let shared = 0
+  wa.forEach((w) => { if (wb.has(w)) shared++ })
+  return shared / Math.max(wa.size, wb.size)
+}
+
+/**
+ * Returns HARD-BLOCKING conflicts only (title_similarity | same_date_venue).
+ * Advisory same-date-only conflicts are returned by checkDateAdvisory.
+ */
 export function checkEventConflicts(
   draft: NewEventDraft,
   existingEvents: PortalEvent[],
   editingEventId?: string | null,
 ): EventConflict[] {
   const conflicts: EventConflict[] = []
-  if (!draft.title && !draft.targetDate && !draft.venue) return conflicts
+  if (!draft.title.trim() && !draft.targetDate && !draft.venue) return conflicts
 
   const cleanDraftTitle = draft.title.trim().toLowerCase()
   const cleanDraftVenue = (draft.venue || '').trim().toLowerCase()
@@ -104,25 +122,28 @@ export function checkEventConflicts(
     const evVenue = (ev.venue || '').trim().toLowerCase()
     const evDate = (ev.targetDate || '').trim()
 
+    // Exact title match — always a hard block
     const isExactTitle = cleanDraftTitle.length > 0 && cleanDraftTitle === evTitle
-    const isSubTitle =
-      cleanDraftTitle.length >= 5 &&
-      evTitle.length >= 5 &&
-      (cleanDraftTitle.includes(evTitle) || evTitle.includes(cleanDraftTitle))
 
+    // High word-overlap (≥ 75%) only — prevents short prefix false-positives
+    const overlap = cleanDraftTitle.length >= 6 && evTitle.length >= 6
+      ? titleOverlapRatio(cleanDraftTitle, evTitle)
+      : 0
+    const isHighOverlapTitle = overlap >= 0.75
+
+    // Same date + same venue — actual double-booking (hard block)
     const isSameDateVenue = Boolean(
-      draftDate && evDate && draftDate === evDate && cleanDraftVenue && evVenue && cleanDraftVenue === evVenue,
+      draftDate && evDate && draftDate === evDate &&
+      cleanDraftVenue && evVenue && cleanDraftVenue === evVenue,
     )
 
-    const isSameDate = Boolean(draftDate && evDate && draftDate === evDate)
-
-    if (isExactTitle || isSubTitle) {
+    if (isExactTitle || isHighOverlapTitle) {
       conflicts.push({
         eventId: ev.id,
         eventTitle: ev.title,
         eventRefId: ev.refId,
         conflictType: 'title_similarity',
-        message: `Title Conflict: Concept title "${draft.title}" overlaps with existing event "${ev.title}" (${ev.refId}).`,
+        message: `Title conflict: "${draft.title}" closely matches existing event "${ev.title}" (${ev.refId}).`,
       })
     }
 
@@ -132,20 +153,44 @@ export function checkEventConflicts(
         eventTitle: ev.title,
         eventRefId: ev.refId,
         conflictType: 'same_date_venue',
-        message: `Venue & Date Conflict: Venue "${ev.venue}" is already booked on ${ev.targetDate} for "${ev.title}" (${ev.refId}).`,
-      })
-    } else if (isSameDate && !isExactTitle && !isSubTitle) {
-      conflicts.push({
-        eventId: ev.id,
-        eventTitle: ev.title,
-        eventRefId: ev.refId,
-        conflictType: 'same_date',
-        message: `Date Conflict: Existing event "${ev.title}" (${ev.refId}) is already scheduled on ${ev.targetDate}.`,
+        message: `Double-booking: Venue "${ev.venue}" is already reserved on ${ev.targetDate} for "${ev.title}" (${ev.refId}).`,
       })
     }
   }
 
   return conflicts
+}
+
+/**
+ * Advisory-only: returns same-date conflicts where the venue differs (or is unset).
+ * These are warnings shown in the confirm dialog but do NOT block submission.
+ */
+export function checkDateAdvisory(
+  draft: NewEventDraft,
+  existingEvents: PortalEvent[],
+  editingEventId?: string | null,
+): EventConflict[] {
+  const advisories: EventConflict[] = []
+  const draftDate = (draft.targetDate || '').trim()
+  if (!draftDate) return advisories
+  const cleanDraftVenue = (draft.venue || '').trim().toLowerCase()
+
+  for (const ev of existingEvents) {
+    if (editingEventId && ev.id === editingEventId) continue
+    const evDate = (ev.targetDate || '').trim()
+    const evVenue = (ev.venue || '').trim().toLowerCase()
+    if (evDate && evDate === draftDate && cleanDraftVenue !== evVenue) {
+      advisories.push({
+        eventId: ev.id,
+        eventTitle: ev.title,
+        eventRefId: ev.refId,
+        conflictType: 'same_date',
+        message: `Date advisory: "${ev.title}" (${ev.refId}) is also scheduled on ${ev.targetDate}.`,
+      })
+    }
+  }
+
+  return advisories
 }
 
 /* ----------------------------- Seed data ----------------------------- */
@@ -1659,7 +1704,11 @@ interface PortalContextValue {
   toggleSuspend: (id: string) => Promise<void>
   updateStaff: (staff: Staff) => void
   forceLogout: (id: string) => void
-  addEvent: (draft: NewEventDraft, initiatorRole?: string) => void
+  addEvent: (
+    draft: NewEventDraft,
+    initiatorRole?: string,
+    allowConflictOverride?: boolean,
+  ) => Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }>
   updateEvent: (id: string, draft: Partial<PortalEvent>, initiatorRole?: string) => void
   resolveUserAction: (id: string) => void
   addUserAction: (action: Omit<UserAction, 'id'>) => void
@@ -2165,45 +2214,11 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   )
 
   const addEvent = useCallback(
-    (draft: NewEventDraft, initiatorRole = 'Executive') => {
-      const conflicts = checkEventConflicts(draft, events)
-      if (conflicts.length > 0) {
-        console.warn('[addEvent] Blocked creation due to event conflict:', conflicts)
-        throw new Error(`Event creation blocked due to conflict: ${conflicts[0].message}`)
-      }
-      const tempId = `e-${Date.now()}`
-      setEvents((prev) => {
-        const refId = `PRT-2026-${pad(145 + prev.length)}`
-        pushLog({
-          account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
-          initiatorRole,
-          action: 'Event Registry Initialized',
-          detail: `New portfolio "${draft.title}" registered${
-            draft.client ? ` for ${draft.client}` : ''
-          }. Ref ${refId}.`,
-          ip: randomIp(),
-          status: 'Success',
-        })
-        return [
-          ...prev,
-          {
-            id: tempId,
-            refId,
-            title: draft.title,
-            client: draft.client,
-            tier: 'Tier-3 Standard',
-            venue: draft.venue,
-            targetDate: draft.targetDate,
-            installationStart: draft.installationStart,
-            installationEnd: draft.installationEnd,
-            budget: 0,
-            status: 'Initialized',
-            moodPlan: draft.moodPlan,
-          },
-        ]
-      })
-
-      // Asynchronously post to backend API endpoint with mapped DTO schema
+    async (
+      draft: NewEventDraft,
+      initiatorRole = 'Executive',
+      allowConflictOverride = false,
+    ): Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }> => {
       const token = getAuthToken()
 
       const dateOfEventIso = draft.targetDate
@@ -2230,28 +2245,73 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         ingressDate: ingressDateIso,
         ingressTime: formatTimeStr(draft.ingressTime, '08:00:00'),
         fullStop: formatTimeStr(draft.fullStop, '23:00:00'),
+        allowConflictOverride,
       }
 
-      fetch(`${API_BASE_URL}/api/events`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(backendPayload),
-      })
-        .then(async (res) => {
-          if (res.ok) {
-            const created = await res.json()
-            const realId = created ? (created.eventId || created.id) : null
-            if (realId) {
-              setEvents((prev) => prev.map((e) => (e.id === tempId ? { ...e, id: realId } : e)))
-            }
-          }
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/events`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(backendPayload),
         })
-        .catch((err) => console.warn('[store] POST /api/events skipped/failed:', err))
+
+        if (res.status === 409) {
+          const conflictData = await res.json().catch(() => ({}))
+          console.warn('[store] POST /api/events 409 Conflict:', conflictData)
+          return {
+            success: false,
+            conflict: true,
+            message: conflictData.error || conflictData.message || 'Venue scheduling conflict detected.',
+            conflictingEvents: conflictData.conflictingEvents || [],
+          }
+        }
+
+        if (res.ok) {
+          const created = await res.json().catch(() => ({}))
+          const realId = created ? (created.eventId || created.id) : `e-${Date.now()}`
+          const refId = `PRT-2026-${pad(145 + events.length)}`
+
+          const newEvt: PortalEvent = {
+            id: realId,
+            refId,
+            title: draft.title,
+            client: draft.client,
+            tier: 'Tier-3 Standard',
+            venue: draft.venue,
+            targetDate: draft.targetDate,
+            installationStart: draft.installationStart,
+            installationEnd: draft.installationEnd,
+            budget: 0,
+            status: 'Initialized',
+            moodPlan: draft.moodPlan,
+          }
+
+          setEvents((prev) => [...prev, newEvt])
+          pushLog({
+            account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
+            initiatorRole,
+            action: 'Event Registry Initialized',
+            detail: `New portfolio "${draft.title}" registered${
+              draft.client ? ` for ${draft.client}` : ''
+            }. Ref ${refId}.${allowConflictOverride ? ' (Conflict Overridden)' : ''}`,
+            ip: randomIp(),
+            status: 'Success',
+          })
+
+          return { success: true }
+        } else {
+          const errData = await res.json().catch(() => ({}))
+          return { success: false, message: errData.error || `HTTP ${res.status}` }
+        }
+      } catch (err: any) {
+        console.warn('[store] POST /api/events failed:', err)
+        return { success: false, message: err.message || 'Network error' }
+      }
     },
-    [pushLog],
+    [pushLog, events.length],
   )
 
   const updateEvent = useCallback(

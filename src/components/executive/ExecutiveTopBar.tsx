@@ -5,6 +5,7 @@ import { useNav } from '@/lib/nav'
 import { usePortal } from '@/lib/store'
 import { useDarkMode } from '@/lib/theme'
 import { NotificationsBell, type NotificationEntry } from '@/components/NotificationsBell'
+import { AssetInformationModal, type Asset } from '@/components/AssetInformationModal'
 
 // Constant top bar for the Executive console: live date/time, the shared
 // notification bell (size="md", matching the Admin top-bar scale), and a
@@ -17,6 +18,7 @@ export function ExecutiveTopBar() {
   const { navigate } = useNav()
   const { dark, toggle } = useDarkMode()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null)
   const [now, setNow] = useState(() => new Date())
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -89,7 +91,29 @@ export function ExecutiveTopBar() {
           text: `${i.name} (${i.assetId || i.id}) is running low on stock.`,
           time: 'Asset Inventory',
           unread: false,
-          onClick: () => navigate('inventory', { kind: 'reorder-asset', payload: { id: i.id } }),
+          onClick: () => {
+            setSelectedAsset({
+              id: i.id,
+              name: i.name,
+              description: i.description ?? i.category,
+              assetId: i.assetId || i.id,
+              dateAdded: i.dateAdded ?? new Date().toLocaleDateString(),
+              store: i.store ?? '—',
+              representative: i.representative ?? '—',
+              contact: i.contact ?? '—',
+              height: i.height ?? '0',
+              width: i.width ?? '0',
+              weight: i.weight ?? '0',
+              category: i.category,
+              tier: 'Standard',
+              fragile: i.fragile ?? false,
+              quantity: i.stock,
+              unit: i.unit ?? 'pcs',
+              cost: i.cost ?? 0,
+              costPerUnit: i.costPerUnit ?? 0,
+              image: i.image,
+            })
+          },
         })
       })
 
@@ -159,6 +183,15 @@ export function ExecutiveTopBar() {
           )}
         </div>
       </div>
+
+      {selectedAsset && (
+        <AssetInformationModal
+          asset={selectedAsset}
+          onClose={() => setSelectedAsset(null)}
+          readOnly
+        />
+      )}
     </header>
   )
 }
+

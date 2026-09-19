@@ -312,6 +312,11 @@ export interface DamageException {
   custodyMode?: DamageCustodyMode
   unblockMetadata?: SubRoleEmergencyUnblockMetadata
   selfValidation?: DamageSelfValidationRecord
+  // HAVA fields — real photo audit data when captured
+  sha256Hash?: string
+  exifMetadata?: string
+  /** Raw GPS string from backend (e.g. "14.5603° N, 121.032° E"), distinct from display gps */
+  gpsCoordinates?: string
 }
 
 /* ---------- Inventory / Asset Registry ---------- */

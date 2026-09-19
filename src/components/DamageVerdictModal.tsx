@@ -382,6 +382,19 @@ export function DamageVerdictModal({
                 {exception.exifVerified ? 'EXIF Authenticated' : 'EXIF Unverified'}
               </span>
             </div>
+
+            {/* SHA-256 fingerprint row — only shown when populated */}
+            {exception.sha256Hash && (
+              <div className="mt-3 border-t border-border/60 pt-3">
+                <p className="text-[0.58rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  SHA-256 Fingerprint
+                </p>
+                <p className="mt-0.5 break-all font-mono text-[0.6rem] text-emerald-700 dark:text-emerald-400">
+                  {exception.sha256Hash}
+                </p>
+              </div>
+            )}
+
             <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3">
               <Banknote className="size-4 text-primary" />
               <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">

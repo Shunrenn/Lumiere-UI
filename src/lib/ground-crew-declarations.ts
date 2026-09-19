@@ -17,6 +17,10 @@ export interface GroundCrewDeclaration {
   decisionAt?: string
   decisionBy?: string
   demoLabel?: string
+  // HAVA fields — populated when a real photo is captured
+  sha256Hash?: string
+  exifMetadata?: string
+  gpsCoordinates?: string
 }
 
 type Listener = () => void
@@ -86,6 +90,9 @@ export function submitGroundCrewDeclaration(input: Omit<GroundCrewDeclaration, '
         damageType: input.condition === 'Damaged' ? 'Critical' : 'Missing',
         notes: input.description,
         reportingOfficer: input.submittedBy,
+        sha256Hash: input.sha256Hash,
+        exifMetadata: input.exifMetadata,
+        gpsCoordinates: input.gpsCoordinates,
       }).catch((err) => {
         console.warn('[ground-crew-declarations] Backend damage report submit skipped/failed:', err)
       })
