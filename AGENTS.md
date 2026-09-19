@@ -6,6 +6,7 @@ SPA repo for Lumiere. Product docs for this tree live in `docs/`. The API and th
 
 - Login and API calls use `VITE_API_URL` in new code. Do not add `localhost:8080` hardcodes.
 - Catalog cutouts are the API `IBackgroundRemovalService`. The modal chroma-key is not the model. No vision vendor key in this SPA.
+- State Synchronization: Synchronization is **checkpoint-based synchronization via periodic polling and focus-triggered refetch** (30s polling + window focus refetch), not WebSockets or real-time streaming. Do not describe Lumière sync as "real-time" — use "current verified state" or "checkpoint-based".
 - Do not treat git-history writeups as requirements.
 - No AI attribution tags on commits, PRs, or file headers (Cursor, Claude, Codex, Antigravity, Copilot). Optional hook: `core.hooksPath .githooks`. Do not run `git config` from an agent unless a human asked.
 

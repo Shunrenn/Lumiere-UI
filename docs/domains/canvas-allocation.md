@@ -15,7 +15,7 @@ Let Event Planners design peg layouts and lock real assets so two events cannot 
 
 - `DesignCanvasHubPage` is a recents/grid hub. `CanvasWorkspacePage` is a Konva infinite artboard with a logistics sidebar.
 - Allocations are local `AllocatedAsset[]`. Some page JSON sits in `localStorage` keys like `lumiere-canvas-assets-${card.id}`.
-- `ReservationController` exposes `POST /api/reservations/bulk` and `validate-canvas-state`. `ReservationService.ReserveAssetsBulkAsync` checks Active event, temporal overlap with Local 1/1 or National 3/5 day buffers, sets `AssetState = Committed`, broadcasts Supabase Realtime.
+- `ReservationController` exposes `POST /api/reservations/bulk` and `validate-canvas-state`. `ReservationService.ReserveAssetsBulkAsync` checks Active event, temporal overlap with Local 1/1 or National 3/5 day buffers, sets `AssetState = Committed`, triggers state sync (checkpoint-based synchronization via periodic polling and focus-triggered refetch).
 - Canvas does not call those endpoints yet, but Canvas → Reservation API wiring is now in-scope (confirmed as current-sprint priority, not deferred to a future phase). Stock-zero on the board is fixture data.
 
 ## Wire
@@ -45,4 +45,4 @@ Event create stores `TransitBufferDays` Local 1, National 3. Reservation overlap
 **Commit**
 - GIVEN Active E2 and available A
 - WHEN bulk reserve succeeds
-- THEN A is Committed and Realtime `asset-transitions` fires after DB commit
+- THEN A is Committed and state updates via checkpoint-based polling / focus refetch after DB commit
