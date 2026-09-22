@@ -132,11 +132,18 @@ export function checkEventConflicts(
       : 0
     const isHighOverlapTitle = overlap >= 0.75
 
-    // Same date + same venue — actual double-booking (hard block)
-    const isSameDateVenue = Boolean(
-      draftDate && evDate && draftDate === evDate &&
-      cleanDraftVenue && evVenue && cleanDraftVenue === evVenue,
+    // Same date or overlapping ingress/event date window + same venue — actual double-booking (hard block)
+    const draftStart = (draft.ingressDate || draft.targetDate || '').trim().split('T')[0]
+    const draftEnd = (draft.targetDate || draft.ingressDate || '').trim().split('T')[0]
+    const evStart = (ev.ingressDate || ev.targetDate || '').trim().split('T')[0]
+    const evEnd = (ev.targetDate || ev.ingressDate || '').trim().split('T')[0]
+
+    const isSameVenue = Boolean(cleanDraftVenue && evVenue && cleanDraftVenue === evVenue)
+    const isOverlappingDateWindow = Boolean(
+      draftStart && draftEnd && evStart && evEnd &&
+      draftStart <= evEnd && draftEnd >= evStart,
     )
+    const isSameDateVenue = isSameVenue && (draftDate === evDate || isOverlappingDateWindow)
 
     if (isExactTitle || isHighOverlapTitle) {
       conflicts.push({
@@ -149,13 +156,83 @@ export function checkEventConflicts(
     }
 
     if (isSameDateVenue) {
+      const windowDetail = draftStart !== draftEnd || evStart !== evEnd
+        ? ` (Schedule Window: ${evStart} to ${evEnd})`
+        : ` on ${ev.targetDate}`
       conflicts.push({
         eventId: ev.id,
         eventTitle: ev.title,
         eventRefId: ev.refId,
         conflictType: 'same_date_venue',
-        message: `Double-booking: Venue "${ev.venue}" is already reserved on ${ev.targetDate} for "${ev.title}" (${ev.refId}).`,
+        message: `Double-booking: Venue "${ev.venue}" is already reserved${windowDetail} for "${ev.title}" (${ev.refId}).`,
       })
+    }
+  }
+
+  return conflicts
+}
+
+/**
+ * R5 — Asset allocation double-booking conflict detection.
+ * Checks whether placed canvas elements or allocated asset SKUs conflict with another event
+ * sharing the same date or overlapping buffer window.
+ */
+export interface AssetAllocationConflict {
+  assetId?: string
+  assetName: string
+  sku?: string
+  conflictingEventId: string
+  conflictingEventTitle: string
+  conflictingEventRefId?: string
+  targetDate: string
+  message: string
+}
+
+export function checkAssetAllocationConflict(
+  placedElements: Array<{ id?: string; name?: string; sku?: string; elementId?: string; quantity?: number; tracked?: boolean }>,
+  targetDate: string,
+  currentEventId?: string | null,
+  existingEvents: PortalEvent[] = [],
+  eventMaterialsMap: Record<string, Array<{ sku?: string; name?: string; quantity?: number }>> = {},
+): AssetAllocationConflict[] {
+  const conflicts: AssetAllocationConflict[] = []
+  const cleanDate = (targetDate || '').trim().split('T')[0]
+  if (!cleanDate || !placedElements || placedElements.length === 0) return conflicts
+
+  // Identify events occurring on the same date or overlapping window
+  const concurrentEvents = existingEvents.filter((ev) => {
+    if (currentEventId && ev.id === currentEventId) return false
+    if (ev.status === 'Cancelled' || ev.status === 'Settled') return false
+    const evStart = (ev.ingressDate || ev.targetDate || '').trim().split('T')[0]
+    const evEnd = (ev.targetDate || ev.ingressDate || '').trim().split('T')[0]
+    return cleanDate >= evStart && cleanDate <= evEnd
+  })
+
+  if (concurrentEvents.length === 0) return conflicts
+
+  for (const element of placedElements) {
+    const sku = element.sku || element.id || element.elementId
+    const name = element.name || sku || 'Allocated Asset'
+    if (!sku) continue
+
+    for (const otherEv of concurrentEvents) {
+      const otherMaterials = eventMaterialsMap[otherEv.id] || []
+      const hasSkuConflict = otherMaterials.some(
+        (m) => m.sku && (m.sku === sku || m.name?.toLowerCase() === name.toLowerCase()),
+      )
+
+      if (hasSkuConflict) {
+        conflicts.push({
+          assetId: element.id,
+          assetName: name,
+          sku,
+          conflictingEventId: otherEv.id,
+          conflictingEventTitle: otherEv.title,
+          conflictingEventRefId: otherEv.refId,
+          targetDate: otherEv.targetDate,
+          message: `Asset Double-Booking: "${name}" (${sku}) is already allocated to "${otherEv.title}" (${otherEv.refId}) on ${otherEv.targetDate}.`,
+        })
+      }
     }
   }
 

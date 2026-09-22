@@ -76,3 +76,20 @@ export async function saveCanvasLayoutApi(eventId: string, canvasStateJson: stri
     return true
   }
 }
+
+/**
+ * Approves a canvas layout and activates the warehouse dispatch queue bridge via POST /api/canvas/event/{eventId}/approve.
+ */
+export async function approveCanvasApi(eventId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/canvas/event/${encodeURIComponent(eventId)}/approve`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    })
+    return res.ok
+  } catch (err) {
+    console.warn(`[canvasApi] POST /api/canvas/event/${eventId}/approve skipped/fallback:`, err)
+    return true
+  }
+}
+

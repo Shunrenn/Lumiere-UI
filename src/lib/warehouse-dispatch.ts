@@ -157,6 +157,47 @@ function ensureSeeded(events: PortalEvent[], staff: Staff[], procurement: Procur
   })
 }
 
+export function populateWarehouseDispatchFromCanvas(
+  eventId: string,
+  _eventTitle?: string,
+  materials: Array<{ sku?: string; name?: string; quantity?: number }> = [],
+  _venue = 'Grand Ballroom',
+  _targetDate = '2026-09-02',
+) {
+  const existingBatches = batchesByEvent.get(eventId) || []
+  if (existingBatches.length > 0) return
+
+  const reconciliation: ReconciliationRow[] = materials.map((m, idx) => ({
+    id: `recon-${eventId}-${idx}`,
+    itemName: m.name || `Asset ${idx + 1}`,
+    planned: m.quantity || 1,
+    actual: m.quantity || 1,
+    status: 'Matched',
+    justification: '',
+  }))
+
+  const newBatch: DispatchBatch = {
+    id: `BATCH-${Date.now().toString().slice(-4)}`,
+    vehicleType: '10-Wheeler Wing Van',
+    plateNumber: 'NBD 4410',
+    direction: 'outbound',
+    stage: 'Planned',
+    handoffNote: 'Auto-populated from Approved Canvas layout.',
+    crew: [
+      { id: 's-1', name: 'Juan Dela Cruz' },
+      { id: 's-4', name: 'Wei Chen' },
+    ],
+    reconciliation: reconciliation.length > 0 ? reconciliation : [
+      { id: `recon-${eventId}-1`, itemName: 'Canvas Staged Package', planned: 1, actual: 1, status: 'Matched', justification: '' }
+    ],
+    stalled: false,
+    stalledReason: '',
+  }
+
+  batchesByEvent.set(eventId, [newBatch])
+  publish(eventId, newBatch)
+}
+
 export function useDispatchStore(events: PortalEvent[], staff: Staff[], procurement: ProcurementItem[]) {
   ensureSeeded(events, staff, procurement)
   return useSyncExternalStore(

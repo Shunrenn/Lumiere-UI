@@ -9,6 +9,8 @@ import {
 } from 'react'
 import { supabase } from '@/lib/supabase'
 import { API_BASE_URL, getAuthToken } from '@/lib/apiConfig'
+import { approveCanvasApi } from '@/lib/canvasApi'
+import { populateWarehouseDispatchFromCanvas } from '@/lib/warehouse-dispatch'
 
 /* ============================================================
    Event Planner domain — pipeline portfolios, design canvases,
@@ -488,6 +490,8 @@ interface PlannerContextValue {
   saveDraft: (designId: string) => void
   /* Persist the active canvas to the event: docs + materials + warehouse checklist. */
   commitDesign: (designId: string, pdfUrl?: string) => string | null
+  /* R9: Approves canvas and auto-populates warehouse/dispatch preparation queue. */
+  approveDesign: (designId: string) => Promise<boolean>
   /* Tracked inventory item placed after a successful allocation check. */
   placeElement: (elementId: string, quantity: number, x: number, y: number) => void
   /* Untracked design aid (color / floor plan) placed directly. */
@@ -755,9 +759,45 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       setDesigns((prev) =>
         prev.map((d) => (d.id === designId ? { ...d, eventId, status: 'In Review' } : d)),
       )
+
+      // R9: Auto-populate warehouse dispatch preparation queue from committed design
+      const ev = events.find((e) => e.id === eventId)
+      populateWarehouseDispatchFromCanvas(
+        eventId,
+        ev?.title || design.title,
+        materials,
+        ev?.venue || 'Grand Ballroom',
+        ev?.date || '2026-09-02',
+      )
+
       return eventId
     },
-    [designs, placed, selectedEventId, decor],
+    [designs, placed, selectedEventId, decor, events],
+  )
+
+  const approveDesign = useCallback(
+    async (designId: string): Promise<boolean> => {
+      const design = designs.find((d) => d.id === designId)
+      if (!design) return false
+      const eventId = design.eventId ?? selectedEventId ?? undefined
+      if (eventId) {
+        void approveCanvasApi(eventId)
+        const ev = events.find((e) => e.id === eventId)
+        const materials = eventMaterials[eventId] || []
+        populateWarehouseDispatchFromCanvas(
+          eventId,
+          ev?.title || design.title,
+          materials,
+          ev?.venue || 'Grand Ballroom',
+          ev?.date || '2026-09-02',
+        )
+      }
+      setDesigns((prev) =>
+        prev.map((d) => (d.id === designId ? { ...d, status: 'Active' as DesignStatus } : d)),
+      )
+      return true
+    },
+    [designs, selectedEventId, events, eventMaterials],
   )
 
   const renameDesign = useCallback((id: string, title: string) => {
@@ -832,6 +872,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       hasDesignForEvent,
       saveDraft,
       commitDesign,
+      approveDesign,
       placeElement,
       placeDirect,
       addText,
@@ -858,6 +899,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       hasDesignForEvent,
       saveDraft,
       commitDesign,
+      approveDesign,
       placeElement,
       placeDirect,
       addText,

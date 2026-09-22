@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Home, Pencil, ChevronDown, Ruler, Grid3x3, AlignJustify,
   MessageSquare, CloudOff, Star, Copy, Download, Trash2, Cloud,
@@ -20,12 +20,14 @@ import {
   Undo2, Redo2,
 } from 'lucide-react'
 import { useNav } from '@/lib/nav'
-  import { cn } from '@/lib/utils'
-  import { useAuth } from '@/lib/auth'
+import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/auth'
   import { usePlanner } from '@/lib/planner'
   import { EventPipelinePanel } from '@/components/EventPipelinePanel'
   import { EmptyState } from '@/components/EmptyState'
   import { KonvaInfiniteCanvas, type KonvaInfiniteCanvasHandle, type CanvasTool, type KonvaCanvasAsset, ARTBOARD_W, ARTBOARD_H } from '@/components/canvas/KonvaInfiniteCanvas'
+  import { usePortal, checkAssetAllocationConflict } from '@/lib/store'
+  import { approveCanvasApi } from '@/lib/canvasApi'
   import { createDeficitItemApi } from '@/lib/deficitApi'
 
 
@@ -2901,7 +2903,8 @@ function CommentsPanel({ pageId, selectedAsset, comments, onAdd, onClose }: { pa
 export function CanvasWorkspacePage() {
   const { navigate } = useNav()
   const { adminName, hasConfirmationPin, verifyConfirmationPin } = useAuth()
-  const { events, selectedEventId } = usePlanner()
+  const { events: portalEvents } = usePortal()
+  const { events, selectedEventId, approveDesign, eventMaterials } = usePlanner()
   // In-workspace Event Pipeline drawer (Logistical Overview / Material Requirement / Design
   // Documents / Team Assignments) — reuses the exact same panel + data source as the
   // pipeline route, just rendered as a slide-out instead of a full-page navigation. Falls
@@ -2909,6 +2912,7 @@ export function CanvasWorkspacePage() {
   // this design wasn't opened directly from a specific pipeline record.
   const pipelineEvent = events.find((e) => e.id === selectedEventId) ?? events[0]
   const [pipelineDrawerOpen, setPipelineDrawerOpen] = useState(false)
+  const [isApproving, setIsApproving] = useState(false)
 
   const [card] = useState<WorkspaceCard | null>(() => {
     try { const raw = sessionStorage.getItem('lumiere-workspace-card'); return raw ? JSON.parse(raw) : null }
@@ -3591,6 +3595,38 @@ export function CanvasWorkspacePage() {
     setPending((current) => [...current, { id: `pr-${Date.now()}`, name: item.name, requestedQty: 1, unit: item.unit || 'pcs', event: pipelineEvent?.title || 'Current canvas event' }])
   }
 
+  // R5: Real-time asset double-booking conflict detection for canvas placed items
+  const allocationConflicts = useMemo(() => {
+    const targetDate = pipelineEvent?.date || card?.eventDate || '2026-09-02'
+    const eventId = pipelineEvent?.id || card?.id
+    const elements = droppedAssets.map((d) => ({
+      id: d.id,
+      name: d.name,
+      sku: d.id,
+    }))
+    return checkAssetAllocationConflict(elements, targetDate, eventId, portalEvents, eventMaterials)
+  }, [droppedAssets, pipelineEvent?.date, pipelineEvent?.id, card?.eventDate, card?.id, portalEvents, eventMaterials])
+
+  // R9: Canvas approval & direct warehouse dispatch queue bridge
+  async function handleApproveCanvas() {
+    setIsApproving(true)
+    try {
+      const eventId = pipelineEvent?.id || card?.id
+      if (eventId) {
+        await approveCanvasApi(eventId)
+      }
+      if (card?.id) {
+        await approveDesign(card.id)
+      }
+      showToast('Canvas approved! Warehouse dispatch preparation queue populated.')
+    } catch (err) {
+      console.error('Canvas approval failed:', err)
+      showToast('Failed to approve canvas layout')
+    } finally {
+      setIsApproving(false)
+    }
+  }
+
   const handleUndo = useCallback(() => {
     if (pastHistory.length === 0) return
     setPastHistory((past) => {
@@ -3950,12 +3986,37 @@ export function CanvasWorkspacePage() {
               <GalleryVerticalEnd className="size-3.5" />
             </button>
           )}
+          {!isMoodBoard && (
+            <button
+              type="button"
+              onClick={handleApproveCanvas}
+              disabled={isApproving}
+              title="Approve Canvas & auto-populate warehouse dispatch queue"
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-white transition hover:bg-emerald-700 disabled:opacity-50 shadow-sm"
+            >
+              <Check className="size-3" />
+              {isApproving ? 'Approving...' : 'Approve & Route'}
+            </button>
+          )}
           <button type="button" onClick={() => setShowShare(true)}
             className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90">
             <Share2 className="size-3" />Share
           </button>
         </div>
       </header>
+
+      {/* ══════════ R5 ALLOCATION CONFLICT BANNER ══════════ */}
+      {allocationConflicts.length > 0 && (
+        <div className="flex items-center justify-between border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive shrink-0">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="size-4 shrink-0" />
+            <span className="font-semibold">{allocationConflicts[0].message}</span>
+          </div>
+          <span className="rounded bg-destructive/20 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider">
+            R5 Double-Booking Detected
+          </span>
+        </div>
+      )}
 
       {/* ══════════ CONTEXTUAL BAR (when asset selected) ══════════ */}
       {selectedAsset && (
