@@ -23,7 +23,7 @@ export function getTierGlanceDisplay(asset: CatalogAsset): {
   kind: 'fraction' | 'text' | 'health'
   percent?: number
 } {
-  if (asset.category === 'Event Asset') {
+  if (asset.category === 'Event Assets') {
     const stock = asset.currentStock ?? 0
     const threshold = asset.threshold ?? 1
     return {
@@ -33,7 +33,7 @@ export function getTierGlanceDisplay(asset: CatalogAsset): {
     }
   }
 
-  if (asset.category === 'Stockroom') {
+  if (asset.category === 'Stockroom Assets') {
     const stock = asset.currentStock ?? 0
     const crit = asset.criticalThreshold ?? 30
     const ceil = asset.ceilingCap ?? 200
@@ -47,7 +47,7 @@ export function getTierGlanceDisplay(asset: CatalogAsset): {
     }
   }
 
-  if (asset.category === 'Bespoke') {
+  if (asset.category === 'Production Assets') {
     const est = asset.finishTimeMinutes ? formatSmartDuration(asset.finishTimeMinutes) : null
     const stage = asset.bespokeStage ?? 'Unprepped'
     return {
@@ -56,14 +56,14 @@ export function getTierGlanceDisplay(asset: CatalogAsset): {
     }
   }
 
-  if (asset.category === 'Rental') {
+  if (asset.category === 'Rental Assets') {
     return {
       kind: 'text',
       text: asset.onLoanDueDate ? `On Loan · Due ${asset.onLoanDueDate}` : 'In Warehouse',
     }
   }
 
-  // Office Asset
+  // Administrative Assets
   return {
     kind: 'text',
     text: asset.custodian ? `Cust: ${asset.custodian}` : 'Unassigned (Storage)',

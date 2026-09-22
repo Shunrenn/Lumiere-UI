@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X, Pencil, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ASSET_CATEGORIES } from '@/lib/types'
 
 export interface Asset {
   id: string
@@ -316,13 +317,27 @@ export function AssetInformationModal({ asset, onClose, onSave, readOnly = false
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className={labelClass}>Category:</label>
-                      <input
-                        type="text"
-                        value={editedAsset.category}
-                        onChange={(e) => updateField('category', e.target.value)}
-                        readOnly={!isEditing}
-                        className={fieldClass}
-                      />
+                      {isEditing ? (
+                        <select
+                          value={editedAsset.category}
+                          onChange={(e) => updateField('category', e.target.value)}
+                          className={cn(fieldClass, 'mt-1')}
+                        >
+                          <option value="">Select Category</option>
+                          {ASSET_CATEGORIES.map((cat) => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={editedAsset.category}
+                          readOnly
+                          className={fieldClass}
+                        />
+                      )}
                     </div>
                     <div>
                       <label className={labelClass}>Fragile?</label>

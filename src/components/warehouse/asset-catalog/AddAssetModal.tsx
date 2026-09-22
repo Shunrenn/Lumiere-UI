@@ -9,19 +9,19 @@ import { SearchableVendorSelect } from '@/components/warehouse/shared/Searchable
 import { cn } from '@/lib/utils'
 
 const CATEGORIES: AssetCategory[] = [
-  'Event Asset',
-  'Bespoke',
-  'Stockroom',
-  'Rental',
-  'Office Asset',
+  'Event Assets',
+  'Production Assets',
+  'Stockroom Assets',
+  'Rental Assets',
+  'Administrative Assets',
 ]
 
 const SUB_CATEGORIES: Record<AssetCategory, string[]> = {
-  'Event Asset': ['Furniture / Seating', 'Tableware / Chargers', 'Linens / Textiles', 'Lighting / Accents', 'Structures / Arches'],
-  Bespoke: ['Fabrication / Backdrops', 'Fabrication / Hanging Decor', 'Fabrication / Stagecraft', 'Fabrication / Signage', 'Fabrication / Furniture'],
-  Stockroom: ['Consumables / Cutlery', 'Consumables / Glassware', 'Consumables / Candles', 'Consumables / Napkins', 'Consumables / Wiring'],
-  Rental: ['External Rental / Lighting', 'External Rental / Seating', 'External Rental / Tabletop', 'External Rental / Staging'],
-  'Office Asset': ['Equipment / Logistics', 'Equipment / Comms', 'Equipment / Electronics', 'Equipment / Hydraulics'],
+  'Event Assets': ['Furniture / Seating', 'Tableware / Chargers', 'Linens / Textiles', 'Lighting / Accents', 'Structures / Arches'],
+  'Production Assets': ['Fabrication / Backdrops', 'Fabrication / Hanging Decor', 'Fabrication / Stagecraft', 'Fabrication / Signage', 'Fabrication / Furniture'],
+  'Stockroom Assets': ['Consumables / Cutlery', 'Consumables / Glassware', 'Consumables / Candles', 'Consumables / Napkins', 'Consumables / Wiring'],
+  'Rental Assets': ['External Rental / Lighting', 'External Rental / Seating', 'External Rental / Tabletop', 'External Rental / Staging'],
+  'Administrative Assets': ['Equipment / Logistics', 'Equipment / Comms', 'Equipment / Electronics', 'Equipment / Hydraulics'],
 }
 
 const CUSTODIAN_OPTIONS = [
@@ -164,7 +164,7 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
   // Shared Base Fields (BLANK DEFAULTS)
   const [name, setName] = useState('')
   const [itemCallName, setItemCallName] = useState('')
-  const [category, setCategory] = useState<AssetCategory>('Event Asset')
+  const [category, setCategory] = useState<AssetCategory>('Event Assets')
   const [subCategory, setSubCategory] = useState('')
   const [description, setDescription] = useState('')
   const [height, setHeight] = useState('')
@@ -691,8 +691,8 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
               <ShieldCheck className="size-3.5" /> Tier Inputs ({category})
             </p>
 
-            {/* 1. EVENT ASSET */}
-            {category === 'Event Asset' && (
+            {/* 1. EVENT ASSETS */}
+            {category === 'Event Assets' && (
               <div className="space-y-3">
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-3">
                   <label className="flex flex-col gap-1">
@@ -775,8 +775,8 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
               </div>
             )}
 
-            {/* 2. BESPOKE */}
-            {category === 'Bespoke' && (
+            {/* 2. PRODUCTION ASSETS */}
+            {category === 'Production Assets' && (
               <div className="space-y-3">
                 <label className="flex flex-col gap-1">
                   <span className="text-[0.58rem] font-bold uppercase text-muted-foreground">
@@ -886,8 +886,8 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
               </div>
             )}
 
-            {/* 3. STOCKROOM */}
-            {category === 'Stockroom' && (
+            {/* 3. STOCKROOM ASSETS */}
+            {category === 'Stockroom Assets' && (
               <div className="space-y-3">
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-3">
                   <label className="flex flex-col gap-1">
@@ -971,8 +971,8 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
               </div>
             )}
 
-            {/* 4. RENTAL */}
-            {category === 'Rental' && (
+            {/* 4. RENTAL ASSETS */}
+            {category === 'Rental Assets' && (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <SearchableVendorSelect
@@ -1026,8 +1026,8 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
               </div>
             )}
 
-            {/* 5. OFFICE ASSET */}
-            {category === 'Office Asset' && (
+            {/* 5. ADMINISTRATIVE ASSETS */}
+            {category === 'Administrative Assets' && (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <SearchableVendorSelect

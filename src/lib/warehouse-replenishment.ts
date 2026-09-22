@@ -46,7 +46,7 @@ export function getDeficitLines(events: PortalEvent[]): DeficitLine[] {
   const key = events.map((e) => e.id).join(',')
   if (cache && cache.key === key) return cache.lines
 
-  const assets = getCatalogAssets().filter((a) => a.category === 'Event Asset' || a.category === 'Stockroom')
+  const assets = getCatalogAssets().filter((a) => a.category === 'Event Assets' || a.category === 'Stockroom Assets')
   const vendors = getWarehouseVendors()
   const lines: DeficitLine[] = []
 

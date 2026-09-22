@@ -26,6 +26,7 @@ import { useNav } from '@/lib/nav'
   import { EventPipelinePanel } from '@/components/EventPipelinePanel'
   import { EmptyState } from '@/components/EmptyState'
   import { KonvaInfiniteCanvas, type KonvaInfiniteCanvasHandle, type CanvasTool, type KonvaCanvasAsset, ARTBOARD_W, ARTBOARD_H } from '@/components/canvas/KonvaInfiniteCanvas'
+  import { createDeficitItemApi } from '@/lib/deficitApi'
 
 
 /* ─── Types ─── */
@@ -3576,8 +3577,18 @@ export function CanvasWorkspacePage() {
     }
   }, [droppedAssets, assets])
 
-  function handleRouteToDeficit(item: { id: string; name: string; unit: string }) {
-    setPending((current) => [...current, { id: `pr-${Date.now()}`, name: item.name, requestedQty: 1, unit: item.unit || 'pcs', event: 'Current canvas event' }])
+  async function handleRouteToDeficit(item: { id: string; name: string; unit: string }) {
+    const activeEventId = pipelineEvent?.id || selectedEventId
+    try {
+      await createDeficitItemApi({
+        eventId: activeEventId || undefined,
+        itemName: item.name,
+        quantityNeeded: 1,
+      })
+    } catch (err) {
+      console.warn('[handleRouteToDeficit] Failed to route item to deficit queue API:', err)
+    }
+    setPending((current) => [...current, { id: `pr-${Date.now()}`, name: item.name, requestedQty: 1, unit: item.unit || 'pcs', event: pipelineEvent?.title || 'Current canvas event' }])
   }
 
   const handleUndo = useCallback(() => {

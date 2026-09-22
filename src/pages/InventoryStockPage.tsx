@@ -17,7 +17,7 @@ import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { GridRevealContainer } from '@/components/GridRevealContainer'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
-import type { InventoryItem, ProcurementItem, StockStatus } from '@/lib/types'
+import { ASSET_CATEGORIES, type InventoryItem, type ProcurementItem, type StockStatus } from '@/lib/types'
 
 // Map a warehouse inventory category onto an Event Planner décor category so a
 // newly registered asset lands in the right group of the canvas side panel.
@@ -66,16 +66,7 @@ function StatusBadge({ status }: { status: StockStatus }) {
   )
 }
 
-const CATEGORIES = [
-  'Seating · Ceremony',
-  'Furniture · Banquet',
-  'Lighting · Statement',
-  'Décor · Backdrop',
-  'Ambiance · Wax Goods',
-  'Beverage · Glassware',
-  'Floristry · Greenery',
-  'Others',
-]
+const CATEGORIES = ASSET_CATEGORIES
 
 function deriveStatus(stock: number, capacity: number): StockStatus {
   if (stock <= 0) return 'Depleted'

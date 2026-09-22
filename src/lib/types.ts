@@ -321,6 +321,16 @@ export interface DamageException {
 
 /* ---------- Inventory / Asset Registry ---------- */
 
+export const ASSET_CATEGORIES = [
+  'Event Assets',
+  'Production Assets',
+  'Stockroom Assets',
+  'Rental Assets',
+  'Administrative Assets',
+] as const
+
+export type AssetCategory = (typeof ASSET_CATEGORIES)[number]
+
 export type StockStatus =
   | 'Available'
   | 'Low Stock'

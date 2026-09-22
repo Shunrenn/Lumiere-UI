@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { X, Upload, AlertTriangle, Plus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ASSET_CATEGORIES } from '@/lib/types'
 
 interface VendorEntry {
   store: string
@@ -340,14 +341,11 @@ export function AddNewAssetModal({ isOpen, onClose, onSave }: Props) {
                       className={cn(inputClass, 'mt-1')}
                     >
                       <option value="">Select Category</option>
-                      <option value="Seating · Ceremony">Seating · Ceremony</option>
-                      <option value="Furniture · Banquet">Furniture · Banquet</option>
-                      <option value="Lighting · Statement">Lighting · Statement</option>
-                      <option value="Décor · Backdrop">Décor · Backdrop</option>
-                      <option value="Ambiance · Wax Goods">Ambiance · Wax Goods</option>
-                      <option value="Beverage · Glassware">Beverage · Glassware</option>
-                      <option value="Floristry · Greenery">Floristry · Greenery</option>
-                      <option value="Others">Others</option>
+                      {ASSET_CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>

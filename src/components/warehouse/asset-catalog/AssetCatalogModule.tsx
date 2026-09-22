@@ -15,20 +15,20 @@ import { Pill } from '@/components/warehouse/shared/Pill'
 import { cn } from '@/lib/utils'
 
 const FIXED_TIER_ORDER: AssetCategory[] = [
-  'Event Asset',
-  'Bespoke',
-  'Stockroom',
-  'Rental',
-  'Office Asset',
+  'Event Assets',
+  'Production Assets',
+  'Stockroom Assets',
+  'Rental Assets',
+  'Administrative Assets',
 ]
 
 const CATEGORY_FILTERS: Array<AssetCategory | 'All'> = [
   'All',
-  'Event Asset',
-  'Bespoke',
-  'Stockroom',
-  'Rental',
-  'Office Asset',
+  'Event Assets',
+  'Production Assets',
+  'Stockroom Assets',
+  'Rental Assets',
+  'Administrative Assets',
 ]
 
 const STATUS_FILTERS: Array<AssetStatus | 'All'> = [
@@ -82,7 +82,7 @@ export function AssetCatalogModule({ onClose }: AssetCatalogModuleProps) {
   const handleCreate = (draft: NewAssetDraft) => {
     const seed = hashOf(`${draft.name}-${Date.now()}`)
     const assetId = `LM-${draft.category.slice(0, 2).toUpperCase()}-${1000 + assets.length + (seed % 900)}`
-    const isFractional = draft.category === 'Event Asset' || draft.category === 'Stockroom'
+    const isFractional = draft.category === 'Event Assets' || draft.category === 'Stockroom Assets'
     const status: AssetStatus = isFractional
       ? (draft.currentStock ?? 0) === 0
         ? 'Critical Deficit'

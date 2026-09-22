@@ -195,7 +195,7 @@ function publish() {
 
 function seedItems(events: PortalEvent[], staff: Staff[]) {
   if (items.length > 0) return
-  const bespoke = getCatalogAssets().filter((asset) => asset.category === 'Bespoke')
+  const bespoke = getCatalogAssets().filter((asset) => asset.category === 'Production Assets')
   const crewPool = getCrewPool(staff)
   const subCategoryConfigs = getBespokeSubCategoryConfigs()
   const stageForBespoke: Record<string, ProductionStage> = {

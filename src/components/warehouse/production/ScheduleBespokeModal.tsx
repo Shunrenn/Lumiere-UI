@@ -21,7 +21,7 @@ interface ScheduleBespokeModalProps {
 
 export function ScheduleBespokeModal({ onClose, onScheduled }: ScheduleBespokeModalProps) {
   const { events } = usePortal()
-  const bespokeAssets = useMemo(() => getCatalogAssets().filter((a) => a.category === 'Bespoke'), [])
+  const bespokeAssets = useMemo(() => getCatalogAssets().filter((a) => a.category === 'Production Assets'), [])
   const subCategoryConfigs = useMemo(() => getBespokeSubCategoryConfigs(), [])
 
   const [selectedAssetId, setSelectedAssetId] = useState(bespokeAssets[0]?.id || '')

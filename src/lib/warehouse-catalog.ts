@@ -10,7 +10,7 @@ import { createAssetApi, updateAssetApi } from './assetsApi'
 
 import type { WarehouseZone } from '@/lib/warehouse-crew'
 
-export type AssetCategory = 'Event Asset' | 'Bespoke' | 'Stockroom' | 'Rental' | 'Office Asset'
+export type AssetCategory = 'Event Assets' | 'Production Assets' | 'Stockroom Assets' | 'Rental Assets' | 'Administrative Assets'
 
 export type AssetStatus = 'Available' | 'Low Stock' | 'Critical Deficit' | 'Deployed' | 'Lost In Action' | 'In Maintenance'
 
@@ -213,7 +213,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Tiffany Ceremony Chair',
     itemCallName: 'Tiffany Chair',
-    category: 'Event Asset',
+    category: 'Event Assets',
     subCategory: 'Furniture / Seating',
     unit: 'pcs',
     material: 'Resin & Hardwood',
@@ -224,7 +224,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Gold Charger Plate Set',
     itemCallName: 'Gold Charger',
-    category: 'Event Asset',
+    category: 'Event Assets',
     subCategory: 'Tableware / Chargers',
     unit: 'sets',
     material: 'Lacquered Glass',
@@ -238,7 +238,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Silk Table Runner — Ivory',
     itemCallName: 'Ivory Runner',
-    category: 'Event Asset',
+    category: 'Event Assets',
     subCategory: 'Linens / Textiles',
     unit: 'pcs',
     material: '100% Mulberry Silk',
@@ -249,7 +249,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Crystal Votive Candle Holder',
     itemCallName: 'Crystal Votive',
-    category: 'Event Asset',
+    category: 'Event Assets',
     subCategory: 'Lighting / Accents',
     unit: 'pcs',
     material: 'Leaded Crystal Glass',
@@ -263,7 +263,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Uplighting Fixture — Warm Amber',
     itemCallName: 'Amber Uplight',
-    category: 'Event Asset',
+    category: 'Event Assets',
     subCategory: 'AV & Lighting',
     unit: 'units',
     material: 'Aluminum Casing',
@@ -275,7 +275,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Floral Arch Frame — Round',
     itemCallName: 'Round Arch',
-    category: 'Event Asset',
+    category: 'Event Assets',
     subCategory: 'Structures / Arches',
     unit: 'units',
     material: 'Wrought Iron',
@@ -291,7 +291,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Custom Monogram Backdrop',
     itemCallName: 'Monogram Wall',
-    category: 'Bespoke',
+    category: 'Production Assets',
     subCategory: 'Fabrication / Backdrops',
     unit: 'build',
     material: 'Plywood & Acrylic',
@@ -303,7 +303,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Bespoke Ceiling Canopy Installation',
     itemCallName: 'Ceiling Canopy',
-    category: 'Bespoke',
+    category: 'Production Assets',
     subCategory: 'Fabrication / Hanging Decor',
     unit: 'build',
     material: 'Organza & Micro-LEDs',
@@ -314,7 +314,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Client Crest Stage Panel',
     itemCallName: 'Crest Panel',
-    category: 'Bespoke',
+    category: 'Production Assets',
     subCategory: 'Fabrication / Stagecraft',
     unit: 'build',
     material: 'CNC Engraved MDF',
@@ -325,7 +325,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Bespoke Welcome Signage Stand',
     itemCallName: 'Welcome Stand',
-    category: 'Bespoke',
+    category: 'Production Assets',
     subCategory: 'Fabrication / Signage',
     unit: 'build',
     material: 'Frosted Acrylic & Steel',
@@ -336,7 +336,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Custom Dessert Table Facade',
     itemCallName: 'Dessert Facade',
-    category: 'Bespoke',
+    category: 'Production Assets',
     subCategory: 'Fabrication / Furniture',
     unit: 'build',
     material: 'Fluted Molding & Marble Top',
@@ -350,7 +350,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Silver Flatware Set',
     itemCallName: 'Silver Flatware',
-    category: 'Stockroom',
+    category: 'Stockroom Assets',
     subCategory: 'Consumables / Cutlery',
     unit: 'sets',
     material: 'Sterling Silver Plate',
@@ -361,7 +361,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Glassware — Coupe Set',
     itemCallName: 'Coupe Glassware',
-    category: 'Stockroom',
+    category: 'Stockroom Assets',
     subCategory: 'Consumables / Glassware',
     unit: 'sets',
     material: 'Hand-blown Crystal',
@@ -375,7 +375,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Pillar Candle — Unscented',
     itemCallName: 'Pillar Candle',
-    category: 'Stockroom',
+    category: 'Stockroom Assets',
     subCategory: 'Consumables / Candles',
     unit: 'pcs',
     material: 'Paraffin & Soy Wax',
@@ -389,7 +389,7 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'Silk Napkin — Champagne',
     itemCallName: 'Silk Napkin',
-    category: 'Stockroom',
+    category: 'Stockroom Assets',
     subCategory: 'Consumables / Napkins',
     unit: 'pcs',
     material: 'Satin Silk',
@@ -400,108 +400,13 @@ const SEED_ROWS: SeedRow[] = [
   {
     name: 'String Lights — Warm White 10m',
     itemCallName: 'String Lights',
-    category: 'Stockroom',
+    category: 'Stockroom Assets',
     subCategory: 'Consumables / Wiring',
     unit: 'coils',
     material: 'Copper & PVC Wiring',
     colorType: 'changeable',
     colorPrimary: 'Warm Yellow',
     tags: ['Lighting', 'Wiring'],
-  },
-
-  // Rental — sourced from external vendor
-  {
-    name: 'Crystal Chandelier — Grand',
-    itemCallName: 'Grand Chandelier',
-    category: 'Rental',
-    subCategory: 'External Rental / Lighting',
-    unit: 'units',
-    material: 'K9 Austrian Crystal',
-    colorType: 'mono',
-    colorPrimary: 'Sparkling Clear',
-    tags: ['Rental', 'Overhead'],
-    is_circular: true,
-    shape: 'Tiered Circular',
-    circumference: '376 cm',
-  },
-  {
-    name: 'Velvet Lounge Sofa',
-    itemCallName: 'Velvet Sofa',
-    category: 'Rental',
-    subCategory: 'External Rental / Seating',
-    unit: 'pcs',
-    material: 'Plush Emerald Velvet',
-    colorType: 'mono',
-    colorPrimary: 'Deep Emerald',
-    tags: ['Rental', 'Lounge'],
-  },
-  {
-    name: 'Vintage Candelabra Set',
-    itemCallName: 'Vintage Candelabra',
-    category: 'Rental',
-    subCategory: 'External Rental / Tabletop',
-    unit: 'sets',
-    material: 'Antiqued Bronze',
-    colorType: 'mono',
-    colorPrimary: 'Antique Bronze',
-    tags: ['Rental', 'Table Decor'],
-  },
-  {
-    name: 'Dance Floor Panel — Glossy White',
-    itemCallName: 'Dance Panel',
-    category: 'Rental',
-    subCategory: 'External Rental / Staging',
-    unit: 'panels',
-    material: 'High-Gloss Vinyl',
-    colorType: 'mono',
-    colorPrimary: 'Gloss White',
-    tags: ['Rental', 'Dance Floor'],
-  },
-
-  // Office Asset — operational equipment
-  {
-    name: 'Warehouse Forklift Unit',
-    itemCallName: 'Forklift #1',
-    category: 'Office Asset',
-    subCategory: 'Equipment / Logistics',
-    unit: 'unit',
-    material: 'Heavy Industrial Steel',
-    colorType: 'mono',
-    colorPrimary: 'Safety Yellow',
-    tags: ['Office Asset', 'Heavy Machinery'],
-  },
-  {
-    name: 'Field Radio Set',
-    itemCallName: 'Walkie-Talkie Set',
-    category: 'Office Asset',
-    subCategory: 'Equipment / Comms',
-    unit: 'sets',
-    material: 'Polycarbonate Shell',
-    colorType: 'mono',
-    colorPrimary: 'Matte Black',
-    tags: ['Office Asset', 'Communications'],
-  },
-  {
-    name: 'Site Survey Tablet',
-    itemCallName: 'Survey iPad Pro',
-    category: 'Office Asset',
-    subCategory: 'Equipment / Electronics',
-    unit: 'unit',
-    material: 'Anodized Aluminum',
-    colorType: 'mono',
-    colorPrimary: 'Space Gray',
-    tags: ['Office Asset', 'Surveying'],
-  },
-  {
-    name: 'Loading Bay Pallet Jack',
-    itemCallName: 'Pallet Jack #2',
-    category: 'Office Asset',
-    subCategory: 'Equipment / Hydraulics',
-    unit: 'unit',
-    material: 'Reinforced Alloy Steel',
-    colorType: 'mono',
-    colorPrimary: 'Industrial Red',
-    tags: ['Office Asset', 'Hydraulics'],
   },
 ]
 
@@ -511,13 +416,13 @@ const DECLARANTS = ['Marco Villareal', 'Dennis Pineda', 'Joy Abrego', 'Trisha Do
 
 function statusFor(category: AssetCategory, seed: number): AssetStatus {
   const roll = seed % 10
-  if (category === 'Bespoke') {
+  if (category === 'Production Assets') {
     return roll < 6 ? 'Available' : roll < 9 ? 'Deployed' : 'Lost In Action'
   }
-  if (category === 'Rental') {
+  if (category === 'Rental Assets') {
     return roll < 5 ? 'Deployed' : roll < 9 ? 'Available' : 'Lost In Action'
   }
-  if (category === 'Office Asset') {
+  if (category === 'Administrative Assets') {
     return roll < 7 ? 'Available' : roll < 9 ? 'Deployed' : 'Lost In Action'
   }
   // Event Asset / Stockroom — driven by stock ratio, computed by caller
@@ -580,7 +485,7 @@ export function getCatalogAssets(): CatalogAsset[] {
       backupVendorId: backupVendor.id !== primaryVendor.id ? backupVendor.id : undefined,
     }
 
-    if (row.category === 'Event Asset') {
+    if (row.category === 'Event Assets') {
       const threshold = 40 + (seed % 160)
       const ratioRoll = seed % 10
       const ratio = ratioRoll < 5 ? 0.6 + ((seed % 40) / 100) : ratioRoll < 8 ? 0.25 + ((seed % 20) / 100) : (seed % 12) / 100
@@ -596,7 +501,7 @@ export function getCatalogAssets(): CatalogAsset[] {
       }
     }
 
-    if (row.category === 'Stockroom') {
+    if (row.category === 'Stockroom Assets') {
       const criticalThreshold = 30 + (seed % 50)
       const ceilingCap = 180 + (seed % 120)
       const roll = seed % 10
@@ -614,7 +519,7 @@ export function getCatalogAssets(): CatalogAsset[] {
       }
     }
 
-    if (row.category === 'Bespoke') {
+    if (row.category === 'Production Assets') {
       const stages: BespokeStage[] = ['Unprepped', 'Prepping', 'Ready']
       const status = statusFor(row.category, seed)
       const bespokeStage: BespokeStage = status === 'Deployed' ? 'Ready' : stages[seed % stages.length]
@@ -650,7 +555,7 @@ export function getCatalogAssets(): CatalogAsset[] {
       }
     }
 
-    if (row.category === 'Rental') {
+    if (row.category === 'Rental Assets') {
       const status = statusFor(row.category, seed)
       const dueDate = dateFromSeed(seed, 5 + (seed % 25))
       return {
@@ -722,7 +627,7 @@ export function updateCatalogAsset(id: string, changes: Partial<Omit<CatalogAsse
 export function getLowStockAssets(assets: CatalogAsset[] = getCatalogAssets()): CatalogAsset[] {
   return assets.filter(
     (asset) =>
-      (asset.category === 'Event Asset' || asset.category === 'Stockroom') &&
+      (asset.category === 'Event Assets' || asset.category === 'Stockroom Assets') &&
       typeof asset.currentStock === 'number' &&
       typeof asset.threshold === 'number' &&
       asset.currentStock < asset.threshold,

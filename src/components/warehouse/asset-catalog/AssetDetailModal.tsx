@@ -55,7 +55,7 @@ export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: Asse
       { id: 'detailed', label: 'Detailed' },
       { id: 'history', label: 'History' },
     ]
-    if (asset.category === 'Bespoke') {
+    if (asset.category === 'Production Assets') {
       list.push({ id: 'simulation', label: 'Simulation' })
     }
     return list
@@ -310,7 +310,7 @@ export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: Asse
                 </p>
 
                 {/* 1. EVENT ASSET */}
-                {asset.category === 'Event Asset' && (
+                {asset.category === 'Event Assets' && (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     <DetailField label="Primary Vendor" value={primaryVendor?.name ?? '—'} />
                     <DetailField label="Backup Vendor" value={backupVendor?.name ?? '—'} />
@@ -324,8 +324,8 @@ export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: Asse
                   </div>
                 )}
 
-                {/* 2. BESPOKE */}
-                {asset.category === 'Bespoke' && (
+                {/* 2. PRODUCTION ASSETS */}
+                {asset.category === 'Production Assets' && (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                       <DetailField label="Fabrication Crew" value={asset.bespokeCrew ?? 'Fab Team — Ronnie'} />
@@ -357,8 +357,8 @@ export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: Asse
                   </div>
                 )}
 
-                {/* 3. STOCKROOM */}
-                {asset.category === 'Stockroom' && (
+                {/* 3. STOCKROOM ASSETS */}
+                {asset.category === 'Stockroom Assets' && (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                       <DetailField label="Primary Vendor" value={primaryVendor?.name ?? '—'} />
@@ -392,8 +392,8 @@ export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: Asse
                   </div>
                 )}
 
-                {/* 4. RENTAL */}
-                {asset.category === 'Rental' && (
+                {/* 4. RENTAL ASSETS */}
+                {asset.category === 'Rental Assets' && (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     <DetailField label="Supplier / Vendor" value={primaryVendor?.name ?? asset.supplierDetails ?? asset.rentalVendorName ?? 'Ritz Suppliers'} />
                     <DetailField label="Supplier Contact" value={asset.supplierContact ?? 'Vendor Representative'} />
@@ -407,8 +407,8 @@ export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: Asse
                   </div>
                 )}
 
-                {/* 5. OFFICE ASSET */}
-                {asset.category === 'Office Asset' && (
+                {/* 5. ADMINISTRATIVE ASSETS */}
+                {asset.category === 'Administrative Assets' && (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     <DetailField label="Vendor / Source" value={primaryVendor?.name ?? asset.vendorDetails ?? 'Direct Purchase'} />
                     <DetailField label="Purchase Cost" value={`₱${asset.purchaseCost.toLocaleString()}`} />
