@@ -120,24 +120,36 @@ export function EventCalendar({ value, events, onSelect }: Props) {
           const key = dayKey(date)
           const isBooked = booked.has(key)
           const isSelected = selectedDate !== null && dayKey(selectedDate) === key
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+          const isPast = date < today
 
           return (
             <button
               key={key}
               type="button"
-              onClick={() => onSelect(fmtIso(date))}
-              title={isBooked ? `Booked: ${booked.get(key)}` : undefined}
+              disabled={isPast}
+              onClick={() => !isPast && onSelect(fmtIso(date))}
+              title={
+                isPast
+                  ? 'Cannot select a date in the past'
+                  : isBooked
+                    ? `Booked: ${booked.get(key)}`
+                    : undefined
+              }
               className={cn(
                 'relative flex h-8 items-center justify-center rounded-md text-xs transition',
-                isSelected
-                  ? 'bg-primary font-semibold text-primary-foreground'
-                  : isBooked
-                    ? 'bg-destructive/10 font-medium text-destructive hover:bg-destructive/20'
-                    : 'text-card-foreground hover:bg-muted',
+                isPast
+                  ? 'cursor-not-allowed opacity-30 text-muted-foreground/60'
+                  : isSelected
+                    ? 'bg-primary font-semibold text-primary-foreground'
+                    : isBooked
+                      ? 'bg-destructive/10 font-medium text-destructive hover:bg-destructive/20'
+                      : 'text-card-foreground hover:bg-muted',
               )}
             >
               {day}
-              {isBooked && !isSelected && (
+              {isBooked && !isSelected && !isPast && (
                 <span className="absolute bottom-1 size-1 rounded-full bg-destructive" />
               )}
             </button>

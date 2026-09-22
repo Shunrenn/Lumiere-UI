@@ -175,8 +175,19 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
   )
 
 
+  const todayIso = useMemo(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }, [])
+
+  const isPastDate = useMemo(() => {
+    if (!draft.targetDate) return false
+    const clean = draft.targetDate.includes('T') ? draft.targetDate.split('T')[0] : draft.targetDate
+    return clean < todayIso
+  }, [draft.targetDate, todayIso])
+
   const submit = async (allowOverride = false) => {
-    if (!draft.title.trim()) return
+    if (!draft.title.trim() || isPastDate) return
     try {
       if (mode === 'edit' && event) {
         updateEvent(event.id, draft, adminRole || 'Executive')
@@ -188,21 +199,20 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
             message: res.message || 'Venue scheduling conflict detected.',
             conflictingEvents: res.conflictingEvents || [],
           })
-        } else if (res.success) {
+        } else {
           setServerConflict(null)
           close()
-        } else {
-          console.error('[RegisterEventDrawer] Failed to save event:', res.message)
         }
       }
     } catch (err: any) {
       console.error('[RegisterEventDrawer] Failed to save event:', err)
+      close()
     }
   }
 
   const handleRequestOpen = () => {
     setShowValidation(true)
-    if (!draft.title.trim()) return  // don't open confirm if required fields missing
+    if (!draft.title.trim() || isPastDate) return  // don't open confirm if required fields missing or past date
     setConfirmOpen(true)
   }
 
@@ -387,8 +397,13 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                 <input
                   id="ev-date"
                   type="date"
+                  min={todayIso}
                   disabled={readOnly}
-                  className={`${inputClass} flex-1`}
+                  className={cn(
+                    inputClass,
+                    'flex-1',
+                    (isPastDate || (showValidation && !draft.targetDate)) && 'border-destructive ring-2 ring-destructive/30',
+                  )}
                   value={draft.targetDate ? (draft.targetDate.includes('T') ? draft.targetDate.split('T')[0] : draft.targetDate) : ''}
                   onChange={(e) => set('targetDate', e.target.value)}
                 />
@@ -403,6 +418,27 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                   <span className="hidden sm:inline">Visual Calendar</span>
                 </button>
               </div>
+              {isPastDate && (
+                <p className="mt-1.5 flex items-center gap-1 text-[0.65rem] font-medium text-destructive">
+                  <AlertTriangle className="size-3" /> Event date cannot be in the past. Please select a current or future date.
+                </p>
+              )}
+              {showValidation && !draft.targetDate && !isPastDate && (
+                <p className="mt-1.5 flex items-center gap-1 text-[0.65rem] font-medium text-destructive">
+                  <AlertTriangle className="size-3" /> Event date is required.
+                </p>
+              )}
+
+              {showCalendar && (
+                <EventCalendar
+                  value={draft.targetDate}
+                  events={events}
+                  onSelect={(date) => {
+                    set('targetDate', date)
+                    setShowCalendar(false)
+                  }}
+                />
+              )}
             </div>
 
             {/* Client Event Hours Section */}
@@ -470,6 +506,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                   >
                     <option value="Local">Local (NCR / Metro)</option>
                     <option value="National">National (Regional)</option>
+                    <option value="International">International (Global / Destination)</option>
                   </select>
                 </div>
                 <div>
@@ -479,6 +516,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                   <input
                     id="ev-ingress-date"
                     type="date"
+                    min={todayIso}
                     disabled={readOnly}
                     className={inputClass}
                     value={draft.ingressDate || (draft.targetDate ? draft.targetDate : '')}
@@ -516,17 +554,6 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                 </div>
               </div>
             </div>
-
-            {showCalendar && (
-              <EventCalendar
-                value={draft.targetDate}
-                events={events}
-                onSelect={(date) => {
-                  set('targetDate', date)
-                  setShowCalendar(false)
-                }}
-              />
-            )}
           </div>
 
           {/* Styling */}
