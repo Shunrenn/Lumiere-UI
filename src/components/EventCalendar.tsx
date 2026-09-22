@@ -17,8 +17,12 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
-const fmt = (d: Date) =>
-  d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+const fmtIso = (d: Date) => {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 
@@ -27,9 +31,17 @@ export function EventCalendar({ value, events, onSelect }: Props) {
   const booked = useMemo(() => {
     const map = new Map<string, string>()
     for (const ev of events) {
-      const parsed = new Date(ev.targetDate)
-      if (!Number.isNaN(parsed.getTime())) {
-        map.set(dayKey(parsed), ev.title)
+      if (!ev.targetDate) continue
+      let d: Date | null = null
+      if (/^\d{4}-\d{2}-\d{2}$/.test(ev.targetDate.trim())) {
+        const [y, m, day] = ev.targetDate.trim().split('-').map(Number)
+        d = new Date(y, m - 1, day)
+      } else {
+        const parsed = new Date(ev.targetDate)
+        if (!Number.isNaN(parsed.getTime())) d = parsed
+      }
+      if (d) {
+        map.set(dayKey(d), ev.title)
       }
     }
     return map
@@ -37,6 +49,10 @@ export function EventCalendar({ value, events, onSelect }: Props) {
 
   const selectedDate = useMemo(() => {
     if (!value) return null
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+      const [y, m, d] = value.trim().split('-').map(Number)
+      return new Date(y, m - 1, d)
+    }
     const d = new Date(value)
     return Number.isNaN(d.getTime()) ? null : d
   }, [value])
@@ -109,7 +125,7 @@ export function EventCalendar({ value, events, onSelect }: Props) {
             <button
               key={key}
               type="button"
-              onClick={() => onSelect(fmt(date))}
+              onClick={() => onSelect(fmtIso(date))}
               title={isBooked ? `Booked: ${booked.get(key)}` : undefined}
               className={cn(
                 'relative flex h-8 items-center justify-center rounded-md text-xs transition',

@@ -2224,16 +2224,26 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     ): Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }> => {
       const token = getAuthToken()
 
-      const dateOfEventIso = draft.targetDate
-        ? `${draft.targetDate}T00:00:00Z`
-        : new Date().toISOString()
-      const ingressDateIso = draft.ingressDate
-        ? `${draft.ingressDate}T00:00:00Z`
-        : draft.installationStart
-        ? `${draft.installationStart}T00:00:00Z`
-        : draft.targetDate
-        ? `${draft.targetDate}T00:00:00Z`
-        : dateOfEventIso
+      const sanitizeToIsoDate = (val?: string): string => {
+        if (!val) return ''
+        const trimmed = val.trim()
+        if (trimmed.includes('T')) return trimmed.split('T')[0]
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+        const d = new Date(trimmed)
+        if (!isNaN(d.getTime())) {
+          const y = d.getFullYear()
+          const m = String(d.getMonth() + 1).padStart(2, '0')
+          const day = String(d.getDate()).padStart(2, '0')
+          return `${y}-${m}-${day}`
+        }
+        return ''
+      }
+
+      const cleanTargetDate = sanitizeToIsoDate(draft.targetDate) || new Date().toISOString().slice(0, 10)
+      const cleanIngressDate = sanitizeToIsoDate(draft.ingressDate) || sanitizeToIsoDate(draft.installationStart) || cleanTargetDate
+
+      const dateOfEventIso = `${cleanTargetDate}T00:00:00Z`
+      const ingressDateIso = `${cleanIngressDate}T00:00:00Z`
 
       const formatTimeStr = (t?: string, defaultVal = '08:00:00') => {
         if (!t) return defaultVal

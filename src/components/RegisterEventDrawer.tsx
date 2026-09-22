@@ -381,20 +381,28 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
 
             <div>
               <label className={labelClass} htmlFor="ev-date">
-                Event Date
+                Event Date *
               </label>
-              <button
-                id="ev-date"
-                type="button"
-                disabled={readOnly}
-                onClick={() => !readOnly && setShowCalendar((v) => !v)}
-                className={`${inputClass} flex items-center justify-between text-left`}
-              >
-                <span className={draft.targetDate ? 'text-foreground' : 'text-muted-foreground/60'}>
-                  {draft.targetDate || 'Select a date'}
-                </span>
-                <CalendarDays className="size-4 text-muted-foreground" />
-              </button>
+              <div className="flex items-center gap-2">
+                <input
+                  id="ev-date"
+                  type="date"
+                  disabled={readOnly}
+                  className={`${inputClass} flex-1`}
+                  value={draft.targetDate ? (draft.targetDate.includes('T') ? draft.targetDate.split('T')[0] : draft.targetDate) : ''}
+                  onChange={(e) => set('targetDate', e.target.value)}
+                />
+                <button
+                  type="button"
+                  disabled={readOnly}
+                  onClick={() => !readOnly && setShowCalendar((v) => !v)}
+                  title="Toggle Visual Event Calendar"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition"
+                >
+                  <CalendarDays className="size-4" />
+                  <span className="hidden sm:inline">Visual Calendar</span>
+                </button>
+              </div>
             </div>
 
             {/* Client Event Hours Section */}
