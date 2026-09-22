@@ -1,5 +1,6 @@
 import { logAuditEvent } from '@/lib/audit-logger'
 import * as damageApi from '@/lib/damageApi'
+import { fetchAuditLogs } from '@/lib/auditApi'
 import { API_BASE_URL, getAuthToken } from '@/lib/apiConfig'
 import {
   createContext,
@@ -800,32 +801,7 @@ const seedEvents: PortalEvent[] = [
   },
 ]
 
-const seedLogs: ActivityLog[] = [
-  {
-    id: 'l-1',
-    timestamp: '08:42:11',
-    date: 'May 14, 2026',
-    logId: 'LOG-99281',
-    account: 'LM-0001',
-    initiatorRole: 'Event Planner',
-    action: 'Portal Session Authenticated',
-    detail: 'Successful login from registered terminal T-02 within approved access scope.',
-    ip: '192.168.4.21',
-    status: 'Success',
-  },
-  {
-    id: 'l-2',
-    timestamp: '07:15:48',
-    date: 'May 14, 2026',
-    logId: 'LOG-99275',
-    account: 'SYS-ROOT',
-    initiatorRole: 'Admin',
-    action: 'Audit Log Integrity Check',
-    detail: 'Scheduled checksum verification completed across 14 audit nodes. Zero tamper indicators.',
-    ip: '10.0.0.1',
-    status: 'Success',
-  },
-]
+const seedLogs: ActivityLog[] = []
 
 const seedUserActions: UserAction[] = [
   // One row per non-Admin account type, each pointing at a real roster member
@@ -1731,6 +1707,7 @@ interface PortalContextValue {
   settleEvent: (eventId: string, initiatorRole?: string) => Promise<{ success: boolean; reason?: string }>
   addInventoryItem: (item: InventoryItem) => void
   updateInventoryItem: (item: InventoryItem) => void
+  refetchLogs: () => Promise<void>
 }
 
 const PortalContext = createContext<PortalContextValue | null>(null)
@@ -1815,6 +1792,55 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   }, [])
   const [logs, setLogs] = useState<ActivityLog[]>(seedLogs)
   const [userActions, setUserActions] = useState<UserAction[]>(seedUserActions)
+
+  const refetchLogs = useCallback(async () => {
+    const token = getAuthToken()
+    if (!token) return
+    try {
+      const { logs: fetchedLogs, connected } = await fetchAuditLogs(200)
+      if (connected) {
+        setLogs(fetchedLogs)
+      }
+    } catch (err) {
+      console.warn('[store] Failed to load audit logs from backend:', err)
+    }
+  }, [])
+
+  // Hydrate activity audit logs from the backend REST API endpoint
+  useEffect(() => {
+    let active = true
+
+    const loadAuditLogs = async () => {
+      const token = getAuthToken()
+      if (!token) return
+      try {
+        const { logs: fetchedLogs, connected } = await fetchAuditLogs(200)
+        if (!active) return
+        if (connected) {
+          setLogs(fetchedLogs)
+        }
+      } catch (err) {
+        console.warn('[store] Failed to load audit logs from backend:', err)
+      }
+    }
+
+    loadAuditLogs()
+
+    const onFocus = () => {
+      void loadAuditLogs()
+    }
+    window.addEventListener('focus', onFocus)
+
+    const interval = setInterval(() => {
+      void loadAuditLogs()
+    }, 30000)
+
+    return () => {
+      active = false
+      window.removeEventListener('focus', onFocus)
+      clearInterval(interval)
+    }
+  }, [])
 
   // Hydrate pending account requests (forgot-password / request-access) from the database.
   useEffect(() => {
@@ -2836,6 +2862,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       settleEvent,
       addInventoryItem,
       updateInventoryItem,
+      refetchLogs,
     }),
     [
       staff,
@@ -2870,6 +2897,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       settleEvent,
       addInventoryItem,
       updateInventoryItem,
+      refetchLogs,
     ],
   )
 

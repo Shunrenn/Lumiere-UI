@@ -18,7 +18,7 @@ const roleStyles: Record<string, string> = {
 }
 
 export function ActivityLogsPage() {
-  const { logs: storeLogs } = usePortal()
+  const { logs: storeLogs, refetchLogs } = usePortal()
   const { navigate } = useNav()
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
@@ -118,7 +118,9 @@ export function ActivityLogsPage() {
     setIsError(false)
     setIsLoading(true)
     try {
-      await new Promise((r) => setTimeout(r, 200))
+      if (refetchLogs) {
+        await refetchLogs()
+      }
     } catch {
       setIsError(true)
     } finally {
