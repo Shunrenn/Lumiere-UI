@@ -1396,29 +1396,28 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     let active = true
 
     const loadStaff = async () => {
-      const { data, error } = await supabase
-        .from('portal_accounts')
-        .select(
-          'id, email, name, role, temporary_password, employee_id, surname, first_name, middle_name, contact, session_status, updated_at',
-        )
-        .order('employee_id', { ascending: true })
+      try {
+        const token = getAuthToken()
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
 
-      if (!active) return
-      if (error) {
-        console.error('[v0] Failed to load staff from database:', error)
-        return
-      }
-      if (data) {
-        // Full accounts are DB-owned; employee records live only in the client,
-        // so preserve them when the directory syncs from the database.
-        setStaff((prev) => {
-          const records = prev.filter((s) => s.recordKind === 'employee-record')
-          const updated = [...data.map(rowToStaff), ...records]
-          try {
-            localStorage.setItem('_lumiere_cached_staff', JSON.stringify(updated))
-          } catch {}
-          return updated
-        })
+        const res = await fetch(`${API_BASE_URL}/api/workforce`, { headers })
+        if (!active) return
+        if (res.ok) {
+          const data = await res.json()
+          if (Array.isArray(data)) {
+            setStaff((prev) => {
+              const records = prev.filter((s) => s.recordKind === 'employee-record')
+              const updated = [...data.map(rowToStaff), ...records]
+              try {
+                localStorage.setItem('_lumiere_cached_staff', JSON.stringify(updated))
+              } catch {}
+              return updated
+            })
+          }
+        }
+      } catch (err) {
+        console.warn('[Workforce] GET /api/workforce fetch error:', err)
       }
     }
 
@@ -1667,70 +1666,50 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('_lumiere_added_staff', JSON.stringify([...filtered, localStaff]))
       } catch {}
 
-      // Persist the account to the database so it can authenticate at the login page.
-      const { data, error } = await supabase
-        .from('portal_accounts')
-        .insert({
-          email,
-          password_hash: draft.tempPassword,
-          name: fullName,
-          role,
-          sub_role: subRole || null,
-          temporary_password: true,
-          employee_id: draft.employeeId,
-          surname: draft.surname,
-          first_name: draft.firstName,
-          middle_name: draft.middleName,
-          contact: draft.contact,
-          session_status: 'Offline Session',
-        })
-        .select(
-          'id, email, name, role, sub_role, temporary_password, employee_id, surname, first_name, middle_name, contact, session_status, updated_at',
-        )
-        .single()
+      // Persist the account to the database via REST API
+      try {
+        const token = getAuthToken()
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
 
-      if (error || !data) {
-        // No live database in this environment: fall back to an in-memory
-        // account so the directory stays functional. The temporary password is
-        // retained and the account surfaces as "Pending" (forced first-login
-        // password change) exactly like a persisted row would.
-        console.error('[v0] Falling back to local account (DB unavailable):', error)
-        setStaff((prev) => [...prev, localStaff])
-        pushLog({
-          account: draft.employeeId,
-          initiatorRole: 'Admin',
-          action: 'New Employee Profile Created',
-          detail: `Provisioned account for ${fullName} (${role}${subRole ? ` - ${subRole}` : ''}). Saved to the local directory with a temporary password; user must change it on first login.`,
-          ip: randomIp(),
-          status: 'Success',
+        const res = await fetch(`${API_BASE_URL}/api/workforce`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            email,
+            fullName,
+            role,
+            subRole: subRole || null,
+            surname: draft.surname,
+            firstName: draft.firstName,
+            middleName: draft.middleName,
+            contact: draft.contact,
+          }),
         })
-        return
+
+        if (res.ok) {
+          const data = await res.json()
+          setStaff((prev) => [...prev, rowToStaff(data)])
+          pushLog({
+            account: draft.employeeId,
+            initiatorRole: 'Admin',
+            action: 'New Employee Profile Created',
+            detail: `Provisioned account for ${fullName} (${role}). Account saved to directory; temporary password generated server-side.`,
+            ip: randomIp(),
+            status: 'Success',
+          })
+          return
+        }
+      } catch (err) {
+        console.warn('[Workforce] POST /api/workforce error, falling back locally:', err)
       }
 
-      // Ground crew get a matching roster record linked to their account.
-      if (role === 'Ground Crew') {
-        await supabase.from('crew_roster').insert({
-          account_id: data.id,
-          employee_id: draft.employeeId,
-          name: fullName,
-          role: subRole || 'Ground Crew Field',
-          status: 'Available',
-          week_mon: 1,
-          week_tue: 1,
-          week_wed: 1,
-          week_thu: 1,
-          week_fri: 1,
-          week_sat: 0,
-          week_sun: 0,
-        })
-      }
-
-      setStaff((prev) => [...prev, rowToStaff(data)])
+      setStaff((prev) => [...prev, localStaff])
       pushLog({
         account: draft.employeeId,
         initiatorRole: 'Admin',
         action: 'New Employee Profile Created',
-        detail: `Provisioned account for ${fullName} (${role}). Account saved to directory; user can sign in with the temporary password.`,
+        detail: `Provisioned account for ${fullName} (${role}${subRole ? ` - ${subRole}` : ''}). User must change password on first login.`,
         ip: randomIp(),
         status: 'Success',
       })
@@ -1741,12 +1720,22 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const removeStaff = useCallback(
     async (id: string) => {
       const target = staff.find((s) => s.id === id)
-      // Remove from the database (crew_roster rows cascade via FK).
-      const { error } = await supabase.from('portal_accounts').delete().eq('id', id)
-      if (error) {
-        console.error('[v0] Failed to remove account:', error)
-        return
+      try {
+        const token = getAuthToken()
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+
+        const res = await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          headers,
+        })
+        if (!res.ok) {
+          console.warn('[Workforce] DELETE /api/workforce returned status', res.status)
+        }
+      } catch (err) {
+        console.warn('[Workforce] DELETE /api/workforce error:', err)
       }
+
       setStaff((prev) => prev.filter((s) => s.id !== id))
       if (target) {
         pushLog({
@@ -1769,8 +1758,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       const suspending = (target.accountStatus ?? 'Active') !== 'Suspended'
       const fullName = `${target.firstName} ${target.surname}`
 
-      // Employee records carry no portal session and never hit the database —
-      // "suspend" archives them; "reactivate" restores them from the archive.
       if (target.recordKind === 'employee-record') {
         setStaff((prev) =>
           prev.map((s) =>
@@ -1792,20 +1779,25 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      const nextSession = suspending ? 'Suspended' : 'Active Session'
-      // Best-effort DB persistence; the directory update applies regardless so
-      // the action works even when no live database is connected.
-      const { error } = await supabase
-        .from('portal_accounts')
-        .update({ session_status: nextSession })
-        .eq('id', id)
-      if (error) {
-        console.error('[v0] Suspension persisted locally only (DB unavailable):', error)
+      const nextStatus = suspending ? 'Suspended' : 'Active'
+      try {
+        const token = getAuthToken()
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+
+        await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(id)}/status`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ status: nextStatus }),
+        })
+      } catch (err) {
+        console.warn('[Workforce] PUT /api/workforce/status error:', err)
       }
+
       setStaff((prev) =>
         prev.map((s) =>
           s.id === id
-            ? { ...s, sessionStatus: nextSession, accountStatus: suspending ? 'Suspended' : 'Active' }
+            ? { ...s, sessionStatus: suspending ? 'Suspended' : 'Active Session', accountStatus: nextStatus }
             : s,
         ),
       )
@@ -1813,7 +1805,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         account: target.employeeId,
         initiatorRole: 'Admin',
         action: suspending ? 'Session Privileges Revoked' : 'Session Restored',
-        detail: `${fullName} account status changed to ${suspending ? 'Suspended' : 'Active'}.`,
+        detail: `${fullName} account status changed to ${nextStatus}.`,
         ip: randomIp(),
         status: 'Success',
       })
@@ -1865,28 +1857,47 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         ip: randomIp(),
         status: 'Success',
       })
-      // Best-effort persistence to the directory.
-      void supabase
-        .from('portal_accounts')
-        .update({
-          first_name: updated.firstName,
-          surname: updated.surname,
-          contact: updated.contact,
-          email: updated.email,
-          role: updated.role,
+
+      try {
+        const token = getAuthToken()
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+
+        fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(updated.id)}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            firstName: updated.firstName,
+            surname: updated.surname,
+            contact: updated.contact,
+            email: updated.email,
+            role: updated.role,
+          }),
         })
-        .eq('id', updated.id)
-        .then(({ error }) => {
-          if (error) console.error('[v0] Failed to update account:', error)
-        })
+      } catch (err) {
+        console.warn('[Workforce] PUT /api/workforce/{id} error:', err)
+      }
     },
     [pushLog],
   )
 
   const forceLogout = useCallback(
-    (id: string) => {
+    async (id: string) => {
       const target = staff.find((s) => s.id === id)
       if (!target) return
+      try {
+        const token = getAuthToken()
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+
+        await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(id)}/force-logout`, {
+          method: 'POST',
+          headers,
+        })
+      } catch (err) {
+        console.warn('[Workforce] POST /api/workforce/force-logout error:', err)
+      }
+
       setStaff((prev) =>
         prev.map((s) => (s.id === id ? { ...s, sessionStatus: 'Offline Session' } : s)),
       )

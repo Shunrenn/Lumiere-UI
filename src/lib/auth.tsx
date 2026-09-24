@@ -416,27 +416,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const changePassword = useCallback(
-    async (_current: string, next: string) => {
+    async (current: string, next: string) => {
       if (!currentUser) return false
       try {
-        try {
-          await supabase
-            .from('portal_accounts')
-            .update({ password_hash: next, temporary_password: false })
-            .eq('email', currentUser.email)
-        } catch {
-          // Supabase database table error / mock mode fallback
-        }
+        const token = currentUser.token || getStoredAuth().rawToken
+        if (token) {
+          const res = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              currentPassword: current,
+              newPassword: next,
+            }),
+          })
+          if (!res.ok) {
+            console.warn('[Auth] change-password returned status', res.status)
+            return false
+          }
+          const data = await res.json()
+          const newToken = data.token || token
 
-        try {
-          const addedStaff = JSON.parse(localStorage.getItem('_lumiere_added_staff') || '[]')
-          const updatedStaff = addedStaff.map((s: any) =>
-            s.email.toLowerCase() === currentUser.email.toLowerCase()
-              ? { ...s, accountStatus: 'Active', tempPassword: undefined, password: next }
-              : s
-          )
-          localStorage.setItem('_lumiere_added_staff', JSON.stringify(updatedStaff))
-        } catch {}
+          const updated = { ...currentUser, temporaryPassword: false, token: newToken }
+          setCurrentUser(updated)
+          const { isSession } = getStoredAuth()
+          const storage = isSession ? sessionStorage : localStorage
+          storage.setItem('_lumiere_auth_user', JSON.stringify(updated))
+          if (data.token) {
+            storage.setItem('_lumiere_auth_token', data.token)
+          }
+          return true
+        }
 
         const updated = { ...currentUser, temporaryPassword: false }
         setCurrentUser(updated)
