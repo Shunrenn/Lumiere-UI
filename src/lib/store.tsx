@@ -1667,49 +1667,36 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       } catch {}
 
       // Persist the account to the database via REST API
-      try {
-        const token = getAuthToken()
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
+      const token = getAuthToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
 
-        const res = await fetch(`${API_BASE_URL}/api/workforce`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            email,
-            fullName,
-            role,
-            subRole: subRole || null,
-            surname: draft.surname,
-            firstName: draft.firstName,
-            middleName: draft.middleName,
-            contact: draft.contact,
-          }),
-        })
+      const res = await fetch(`${API_BASE_URL}/api/workforce`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          email,
+          fullName,
+          role,
+          subRole: subRole || null,
+          surname: draft.surname,
+          firstName: draft.firstName,
+          middleName: draft.middleName,
+          contact: draft.contact,
+        }),
+      })
 
-        if (res.ok) {
-          const data = await res.json()
-          setStaff((prev) => [...prev, rowToStaff(data)])
-          pushLog({
-            account: draft.employeeId,
-            initiatorRole: 'Admin',
-            action: 'New Employee Profile Created',
-            detail: `Provisioned account for ${fullName} (${role}). Account saved to directory; temporary password generated server-side.`,
-            ip: randomIp(),
-            status: 'Success',
-          })
-          return
-        }
-      } catch (err) {
-        console.warn('[Workforce] POST /api/workforce error, falling back locally:', err)
+      if (!res.ok) {
+        throw new Error(`Failed to create account. Server returned status ${res.status}`)
       }
 
-      setStaff((prev) => [...prev, localStaff])
+      const data = await res.json()
+      setStaff((prev) => [...prev, rowToStaff(data)])
       pushLog({
         account: draft.employeeId,
         initiatorRole: 'Admin',
         action: 'New Employee Profile Created',
-        detail: `Provisioned account for ${fullName} (${role}${subRole ? ` - ${subRole}` : ''}). User must change password on first login.`,
+        detail: `Provisioned account for ${fullName} (${role}). Account saved to directory; temporary password generated server-side.`,
         ip: randomIp(),
         status: 'Success',
       })
@@ -1720,20 +1707,16 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const removeStaff = useCallback(
     async (id: string) => {
       const target = staff.find((s) => s.id === id)
-      try {
-        const token = getAuthToken()
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
+      const token = getAuthToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
 
-        const res = await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(id)}`, {
-          method: 'DELETE',
-          headers,
-        })
-        if (!res.ok) {
-          console.warn('[Workforce] DELETE /api/workforce returned status', res.status)
-        }
-      } catch (err) {
-        console.warn('[Workforce] DELETE /api/workforce error:', err)
+      const res = await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers,
+      })
+      if (!res.ok) {
+        throw new Error(`Failed to remove account. Server returned status ${res.status}`)
       }
 
       setStaff((prev) => prev.filter((s) => s.id !== id))
@@ -1780,18 +1763,18 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       }
 
       const nextStatus = suspending ? 'Suspended' : 'Active'
-      try {
-        const token = getAuthToken()
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
+      const token = getAuthToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
 
-        await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(id)}/status`, {
-          method: 'PUT',
-          headers,
-          body: JSON.stringify({ status: nextStatus }),
-        })
-      } catch (err) {
-        console.warn('[Workforce] PUT /api/workforce/status error:', err)
+      const res = await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(id)}/status`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ status: nextStatus }),
+      })
+
+      if (!res.ok) {
+        throw new Error(`Failed to update status. Server returned status ${res.status}`)
       }
 
       setStaff((prev) =>
@@ -1847,7 +1830,27 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   )
 
   const updateStaff = useCallback(
-    (updated: Staff) => {
+    async (updated: Staff) => {
+      const token = getAuthToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const res = await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(updated.id)}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          firstName: updated.firstName,
+          surname: updated.surname,
+          contact: updated.contact,
+          email: updated.email,
+          role: updated.role,
+        }),
+      })
+
+      if (!res.ok) {
+        throw new Error(`Failed to update profile. Server returned status ${res.status}`)
+      }
+
       setStaff((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
       pushLog({
         account: updated.employeeId,
@@ -1857,26 +1860,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         ip: randomIp(),
         status: 'Success',
       })
-
-      try {
-        const token = getAuthToken()
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
-
-        fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(updated.id)}`, {
-          method: 'PUT',
-          headers,
-          body: JSON.stringify({
-            firstName: updated.firstName,
-            surname: updated.surname,
-            contact: updated.contact,
-            email: updated.email,
-            role: updated.role,
-          }),
-        })
-      } catch (err) {
-        console.warn('[Workforce] PUT /api/workforce/{id} error:', err)
-      }
     },
     [pushLog],
   )
@@ -1885,17 +1868,17 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       const target = staff.find((s) => s.id === id)
       if (!target) return
-      try {
-        const token = getAuthToken()
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
+      const token = getAuthToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
 
-        await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(id)}/force-logout`, {
-          method: 'POST',
-          headers,
-        })
-      } catch (err) {
-        console.warn('[Workforce] POST /api/workforce/force-logout error:', err)
+      const res = await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(id)}/force-logout`, {
+        method: 'POST',
+        headers,
+      })
+
+      if (!res.ok) {
+        throw new Error(`Failed to force logout. Server returned status ${res.status}`)
       }
 
       setStaff((prev) =>
