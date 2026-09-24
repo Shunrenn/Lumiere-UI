@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { KeyRound, LogOut, Check, AlertCircle, Eye, EyeOff } from 'lucide-react'
+import { KeyRound, LogOut, Check, AlertCircle, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 
 export function TempPasswordResetScreen() {
@@ -13,8 +13,30 @@ export function TempPasswordResetScreen() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  const isMatch = newPassword.length >= 6 && confirmPassword.length >= 6 && newPassword === confirmPassword
-  const isMismatch = confirmPassword.length >= 6 && newPassword.length >= 6 && newPassword !== confirmPassword
+  // Password requirement criteria
+  const criteria = [
+    { id: 'length', label: 'Use at least 8 characters', met: newPassword.length >= 8 },
+    { id: 'upper', label: 'At least 1 uppercase letter (A-Z)', met: /[A-Z]/.test(newPassword) },
+    { id: 'lower', label: 'At least 1 lowercase letter (a-z)', met: /[a-z]/.test(newPassword) },
+    { id: 'number', label: 'At least 1 number (0-9)', met: /[0-9]/.test(newPassword) },
+    { id: 'symbol', label: 'At least 1 special symbol (!@#$%...)', met: /[^A-Za-z0-9]/.test(newPassword) },
+  ]
+
+  const metCount = criteria.filter((c) => c.met).length
+  const allCriteriaMet = metCount === criteria.length
+
+  const isMatch = newPassword.length > 0 && confirmPassword.length > 0 && newPassword === confirmPassword
+  const isMismatch = confirmPassword.length > 0 && newPassword.length > 0 && newPassword !== confirmPassword
+
+  const getStrengthInfo = () => {
+    if (!newPassword) return { label: 'Empty', color: 'bg-muted', text: 'text-muted-foreground', percent: 0 }
+    if (metCount <= 2) return { label: 'Weak', color: 'bg-destructive', text: 'text-destructive', percent: 30 }
+    if (metCount <= 3) return { label: 'Fair', color: 'bg-amber-500', text: 'text-amber-500', percent: 60 }
+    if (metCount === 4) return { label: 'Good', color: 'bg-sky-500', text: 'text-sky-500', percent: 80 }
+    return { label: 'Strong', color: 'bg-emerald-500', text: 'text-emerald-500', percent: 100 }
+  }
+
+  const strength = getStrengthInfo()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -24,8 +46,8 @@ export function TempPasswordResetScreen() {
       setError('Please enter your current temporary password.')
       return
     }
-    if (newPassword.length < 6) {
-      setError('New password must be at least 6 characters long.')
+    if (!allCriteriaMet) {
+      setError('Please fulfill all password security requirements before saving.')
       return
     }
     if (newPassword === currentPassword) {
@@ -125,7 +147,7 @@ export function TempPasswordResetScreen() {
                   setNewPassword(e.target.value)
                   setError('')
                 }}
-                placeholder="Minimum 6 characters"
+                placeholder="Combine uppercase, lowercase, numbers & symbols"
                 className="w-full rounded-md border border-input bg-background py-2 pl-3 pr-10 text-xs text-foreground outline-none focus:border-primary"
               />
               <button
@@ -135,6 +157,49 @@ export function TempPasswordResetScreen() {
               >
                 {showNew ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
               </button>
+            </div>
+
+            {newPassword.length > 0 && (
+              <div className="mt-2 space-y-1">
+                <div className="flex items-center justify-between text-[0.7rem]">
+                  <span className="text-muted-foreground">Password strength:</span>
+                  <span className={`font-semibold ${strength.text}`}>{strength.label}</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={`h-full transition-all duration-300 ${strength.color}`}
+                    style={{ width: `${strength.percent}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+              <p className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-muted-foreground flex items-center justify-between">
+                <span>Password Requirements</span>
+                {allCriteriaMet && (
+                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold normal-case">
+                    <ShieldCheck className="size-3.5" /> Requirements Met
+                  </span>
+                )}
+              </p>
+              <div className="space-y-1.5 text-xs">
+                {criteria.map((c) => (
+                  <div
+                    key={c.id}
+                    className={`flex items-center gap-2 transition-colors ${
+                      c.met ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {c.met ? (
+                      <Check className="size-3.5 shrink-0 text-emerald-500" />
+                    ) : (
+                      <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/40 ml-1 mr-1" />
+                    )}
+                    <span className="text-[0.75rem]">{c.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -182,7 +247,7 @@ export function TempPasswordResetScreen() {
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || !allCriteriaMet || !isMatch || !currentPassword}
             className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary py-2.5 text-xs font-bold uppercase tracking-[0.12em] text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
           >
             {submitting ? 'Updating Password...' : 'Save New Password & Continue'}
@@ -192,3 +257,4 @@ export function TempPasswordResetScreen() {
     </main>
   )
 }
+
