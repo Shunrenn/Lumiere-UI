@@ -7,7 +7,6 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { supabase } from './supabase'
 import { womModuleAccessLevel } from './rbac'
 import { API_BASE_URL } from './apiConfig'
 import { useIdleTimeout } from './useIdleTimeout'
@@ -332,82 +331,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { ok: true }
         }
       } catch (err) {
-        console.warn('[Auth] REST API login failed, checking database/local fallbacks:', err)
-      }
-
-      // Fallback 1: Database (portal_accounts table) lookup
-      try {
-        const { data: userRow, error: dbError } = await supabase
-          .from('portal_accounts')
-          .select('*')
-          .eq('email', normalizedEmail)
-          .single()
-
-        if (!dbError && userRow && (userRow.password_hash === password || userRow.password === password)) {
-          const isTemp = Boolean(userRow.temporary_password)
-          const account = mapBackendUserToPortalAccount({
-            userId: userRow.id,
-            email: userRow.email,
-            fullName: userRow.name || `${userRow.first_name || ''} ${userRow.surname || ''}`.trim(),
-            role: userRow.role || 'Ground Crew',
-            temporaryPassword: isTemp,
-          })
-          if (userRow.sub_role) account.subRole = userRow.sub_role
-
-          if (portal && account.portal !== portal) {
-            return { ok: false, reason: 'wrong-portal' }
-          }
-
-          setCurrentUser(account)
-          const storage = remember ? localStorage : sessionStorage
-          const otherStorage = remember ? sessionStorage : localStorage
-          otherStorage.removeItem('_lumiere_auth_user')
-          otherStorage.removeItem('_lumiere_auth_portal')
-          otherStorage.removeItem('_lumiere_auth_token')
-          storage.setItem('_lumiere_auth_user', JSON.stringify(account))
-          storage.setItem('_lumiere_auth_portal', account.portal)
-          return { ok: true }
-        }
-      } catch (e) {
-        console.warn('[Auth] Database login fallback error:', e)
-      }
-
-      // Fallback 2: Local storage created accounts lookup
-      try {
-        const addedStaff = JSON.parse(localStorage.getItem('_lumiere_added_staff') || '[]')
-        const match = addedStaff.find(
-          (s: any) =>
-            s.email.toLowerCase() === normalizedEmail &&
-            (s.tempPassword === password || s.password === password)
-        )
-
-        if (match) {
-          const isTemp = match.accountStatus === 'Pending' || Boolean(match.tempPassword)
-          const account = mapBackendUserToPortalAccount({
-            userId: match.id,
-            email: match.email,
-            fullName: `${match.firstName} ${match.surname}`.trim(),
-            role: match.role || 'Ground Crew',
-            temporaryPassword: isTemp,
-          })
-          if (match.subRole) account.subRole = match.subRole
-
-          if (portal && account.portal !== portal) {
-            return { ok: false, reason: 'wrong-portal' }
-          }
-
-          setCurrentUser(account)
-          const storage = remember ? localStorage : sessionStorage
-          const otherStorage = remember ? sessionStorage : localStorage
-          otherStorage.removeItem('_lumiere_auth_user')
-          otherStorage.removeItem('_lumiere_auth_portal')
-          otherStorage.removeItem('_lumiere_auth_token')
-          storage.setItem('_lumiere_auth_user', JSON.stringify(account))
-          storage.setItem('_lumiere_auth_portal', account.portal)
-          return { ok: true }
-        }
-      } catch (e) {
-        console.warn('[Auth] Local storage login fallback error:', e)
+        console.warn('[Auth] REST API login failed:', err)
       }
 
       return { ok: false, reason: 'invalid' }
