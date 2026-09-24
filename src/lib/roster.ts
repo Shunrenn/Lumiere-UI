@@ -159,9 +159,6 @@ export async function loadRosterFromDatabase() {
         week_sat,
         week_sun,
         account_id,
-        portal_accounts (
-          email
-        ),
         allocations (
           event:event_id (
             title,
@@ -172,6 +169,7 @@ export async function loadRosterFromDatabase() {
         )
       `,
       )
+      .neq('status', 'Inactive')
       .order('employee_id')
 
     if (error) {
@@ -181,32 +179,41 @@ export async function loadRosterFromDatabase() {
 
     if (!crewData) return
 
+    // Import store staff list to map email by account_id / employee_id
+    const { useStore } = await import('./store')
+    const staffList = useStore.getState().staff
+
     // Transform database records into CrewMember format
-    const loaded: CrewMember[] = crewData.map((row: any) => ({
-      id: row.id,
-      name: row.name,
-      employeeId: row.employee_id,
-      email: row.portal_accounts?.[0]?.email || '',
-      role: row.role,
-      status: row.status as CrewStatus,
-      week: [
-        row.week_mon === 1 ? 'on' : row.week_mon === 2 ? 'leave' : 'off',
-        row.week_tue === 1 ? 'on' : row.week_tue === 2 ? 'leave' : 'off',
-        row.week_wed === 1 ? 'on' : row.week_wed === 2 ? 'leave' : 'off',
-        row.week_thu === 1 ? 'on' : row.week_thu === 2 ? 'leave' : 'off',
-        row.week_fri === 1 ? 'on' : row.week_fri === 2 ? 'leave' : 'off',
-        row.week_sat === 1 ? 'on' : row.week_sat === 2 ? 'leave' : 'off',
-        row.week_sun === 1 ? 'on' : row.week_sun === 2 ? 'leave' : 'off',
-      ] as ('on' | 'off' | 'leave')[],
-      allocation: row.allocations?.[0]?.event
-        ? {
-            event: row.allocations[0].event.title,
-            venue: row.allocations[0].event.venue,
-            date: row.allocations[0].event.date,
-            task: row.allocations[0].event.task,
-          }
-        : null,
-    }))
+    const loaded: CrewMember[] = crewData.map((row: any) => {
+      const matched = staffList.find(
+        (s) => (row.account_id && s.id === row.account_id) || (row.employee_id && s.employeeId === row.employee_id)
+      )
+      return {
+        id: row.id,
+        name: row.name,
+        employeeId: row.employee_id,
+        email: matched?.email || '',
+        role: row.role,
+        status: row.status as CrewStatus,
+        week: [
+          row.week_mon === 1 ? 'on' : row.week_mon === 2 ? 'leave' : 'off',
+          row.week_tue === 1 ? 'on' : row.week_tue === 2 ? 'leave' : 'off',
+          row.week_wed === 1 ? 'on' : row.week_wed === 2 ? 'leave' : 'off',
+          row.week_thu === 1 ? 'on' : row.week_thu === 2 ? 'leave' : 'off',
+          row.week_fri === 1 ? 'on' : row.week_fri === 2 ? 'leave' : 'off',
+          row.week_sat === 1 ? 'on' : row.week_sat === 2 ? 'leave' : 'off',
+          row.week_sun === 1 ? 'on' : row.week_sun === 2 ? 'leave' : 'off',
+        ] as ('on' | 'off' | 'leave')[],
+        allocation: row.allocations?.[0]?.event
+          ? {
+              event: row.allocations[0].event.title,
+              venue: row.allocations[0].event.venue,
+              date: row.allocations[0].event.date,
+              task: row.allocations[0].event.task,
+            }
+          : null,
+      }
+    })
 
     // Update the in-memory CREW
     CREW.length = 0

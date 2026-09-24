@@ -46,7 +46,7 @@ import {
   type SubRoleNode,
 } from '@/lib/rbac'
 
-// Map a portal_accounts row into the directory Staff shape used by the UI.
+// Map a backend user / workforce DTO row into the directory Staff shape used by the UI.
 function rowToStaff(row: any): Staff {
   const sessionStatus = (row.session_status ?? 'Offline Session') as Staff['sessionStatus']
   const unclaimedTemp = !!row.temporary_password
@@ -1391,7 +1391,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Hydrate the staff directory from the database (portal_accounts is the source of truth).
+  // Hydrate the staff directory from the C# REST API (/api/workforce is the source of truth).
   useEffect(() => {
     let active = true
 
