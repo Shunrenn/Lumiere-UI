@@ -462,38 +462,7 @@ const seedEvents: PortalEvent[] = [
 
 const seedLogs: ActivityLog[] = []
 
-const seedUserActions: UserAction[] = [
-  // One row per non-Admin account type, each pointing at a real roster member
-  // (see seedStaff above) and tagged with that member's account type.
-  {
-    id: 'ua-1',
-    type: 'account-locked',
-    user: 'isabella.rossi@lumiere.com',
-    accountType: 'Executive',
-    status: 'pending',
-  },
-  {
-    id: 'ua-2',
-    type: 'forgot-password',
-    user: 'juandelacruz@lumiere.com',
-    accountType: 'Event Planner',
-    status: 'pending',
-  },
-  {
-    id: 'ua-3',
-    type: 'account-locked',
-    user: 'warehouse@lumiere.com',
-    accountType: 'Warehouse Manager',
-    status: 'pending',
-  },
-  {
-    id: 'ua-4',
-    type: 'forgot-password',
-    user: 'wei.chen@lumiere.com',
-    accountType: 'Field & Production Crew',
-    status: 'pending',
-  },
-]
+const seedUserActions: UserAction[] = []
 
 const seedProcurement: ProcurementItem[] = [
   {

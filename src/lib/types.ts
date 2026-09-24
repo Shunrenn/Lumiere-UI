@@ -85,6 +85,7 @@ export const SELECTABLE_STAFF_ROLES = [
   'Warehouse Manager',
   'Event Planner',
   'Ground Crew',
+  'Field & Production Crew',
 ] as const
 
 export type SelectableStaffRole = (typeof SELECTABLE_STAFF_ROLES)[number]

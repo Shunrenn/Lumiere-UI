@@ -37,6 +37,13 @@ const GROUND_CREW_SUBROLES = [
   'Field Ops',
 ] as const
 
+const FIELD_PROD_SUBROLES = [
+  'Production Crew',
+  'Field Ops',
+  'Stage & Rigging',
+  'Fabrication',
+] as const
+
 // Generate a one-time temporary password the user must change on first login.
 const generateTempPassword = () => `Lm-Temp-${Math.floor(1000 + Math.random() * 9000)}`
 
@@ -232,7 +239,7 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
               </div>
             </div>
 
-            <div className={`mt-4 grid grid-cols-1 gap-4 ${(draft.role === 'Warehouse Manager' || draft.role === 'Ground Crew') ? 'sm:grid-cols-2' : ''}`}>
+            <div className={`mt-4 grid grid-cols-1 gap-4 ${(draft.role === 'Warehouse Manager' || draft.role === 'Ground Crew' || draft.role === 'Field & Production Crew') ? 'sm:grid-cols-2' : ''}`}>
               <div>
                 <label className={labelClass} htmlFor="role">
                   Role:
@@ -246,7 +253,7 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
                     setDraft((prev) => ({
                       ...prev,
                       role: newRole,
-                      subRole: newRole === 'Warehouse Manager' ? WOM_SUBROLES[0] : newRole === 'Ground Crew' ? GROUND_CREW_SUBROLES[0] : '',
+                      subRole: newRole === 'Warehouse Manager' ? WOM_SUBROLES[0] : newRole === 'Ground Crew' ? GROUND_CREW_SUBROLES[0] : newRole === 'Field & Production Crew' ? FIELD_PROD_SUBROLES[0] : '',
                     }))
                   }}
                 >
@@ -259,7 +266,7 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
                 </select>
               </div>
 
-              {(draft.role === 'Warehouse Manager' || draft.role === 'Ground Crew') && (
+              {(draft.role === 'Warehouse Manager' || draft.role === 'Ground Crew' || draft.role === 'Field & Production Crew') && (
                 <div>
                   <label className={labelClass} htmlFor="subRole">
                     Subrole:
@@ -276,7 +283,13 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
                             {sr}
                           </option>
                         ))
-                      : GROUND_CREW_SUBROLES.map((sr) => (
+                      : draft.role === 'Ground Crew'
+                      ? GROUND_CREW_SUBROLES.map((sr) => (
+                          <option key={sr} value={sr}>
+                            {sr}
+                          </option>
+                        ))
+                      : FIELD_PROD_SUBROLES.map((sr) => (
                           <option key={sr} value={sr}>
                             {sr}
                           </option>
