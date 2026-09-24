@@ -1341,8 +1341,20 @@ interface PortalContextValue {
 const PortalContext = createContext<PortalContextValue | null>(null)
 
 export function PortalProvider({ children }: { children: ReactNode }) {
-  const [staff, setStaff] = useState<Staff[]>(seedStaff)
-  const [events, setEvents] = useState<PortalEvent[]>(seedEvents)
+  const [staff, setStaff] = useState<Staff[]>(() => {
+    try {
+      const cached = localStorage.getItem('_lumiere_cached_staff')
+      if (cached) return JSON.parse(cached)
+    } catch {}
+    return seedStaff
+  })
+  const [events, setEvents] = useState<PortalEvent[]>(() => {
+    try {
+      const cached = localStorage.getItem('_lumiere_cached_events')
+      if (cached) return JSON.parse(cached)
+    } catch {}
+    return seedEvents
+  })
 
   // Hydrate events list from backend REST API (GET /api/events)
   useEffect(() => {
@@ -1352,7 +1364,12 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       import('@/lib/eventsApi').then(({ fetchEventsApi }) => {
         fetchEventsApi().then((remoteEvents) => {
           if (!active) return
-          setEvents(remoteEvents)
+          if (remoteEvents && remoteEvents.length > 0) {
+            setEvents(remoteEvents)
+            try {
+              localStorage.setItem('_lumiere_cached_events', JSON.stringify(remoteEvents))
+            } catch {}
+          }
         })
       })
     }
@@ -1396,7 +1413,11 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         // so preserve them when the directory syncs from the database.
         setStaff((prev) => {
           const records = prev.filter((s) => s.recordKind === 'employee-record')
-          return [...data.map(rowToStaff), ...records]
+          const updated = [...data.map(rowToStaff), ...records]
+          try {
+            localStorage.setItem('_lumiere_cached_staff', JSON.stringify(updated))
+          } catch {}
+          return updated
         })
       }
     }

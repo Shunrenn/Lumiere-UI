@@ -147,24 +147,12 @@ export function AdminWorkforcePage() {
     { label: 'Pending Activations', value: pendingActivations },
   ]
 
-  const [isLoading, setIsLoading] = useState(true)
+  const isLoading = false
   const [isError, setIsError] = useState(false)
 
   const handleRefetch = async () => {
     setIsError(false)
-    setIsLoading(true)
-    try {
-      await new Promise((r) => setTimeout(r, 200))
-    } catch {
-      setIsError(true)
-    } finally {
-      setIsLoading(false)
-    }
   }
-
-  useEffect(() => {
-    handleRefetch()
-  }, [])
 
   const destination = (id: AdminDestinationId) => {
     if (id === 'system-dashboard') navigate('overview')
