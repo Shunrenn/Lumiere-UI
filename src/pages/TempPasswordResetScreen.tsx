@@ -48,6 +48,10 @@ export function TempPasswordResetScreen() {
     }
   }
 
+  const firstName = adminName ? adminName.trim().split(' ')[0] : 'User'
+  const formattedRole = (adminRole || 'user').toLowerCase()
+  const article = /^[aeiou]/i.test(formattedRole) ? 'an' : 'a'
+
   return (
     <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-8 text-foreground">
       <div className="w-full max-w-md space-y-6 rounded-xl border border-border bg-card p-6 shadow-2xl sm:p-8">
@@ -72,12 +76,12 @@ export function TempPasswordResetScreen() {
           </button>
         </div>
 
-        <div className="rounded-lg bg-muted/50 p-3.5 text-xs text-muted-foreground">
-          <p className="font-medium text-foreground">
-            Welcome, {adminName || 'User'} ({adminRole || 'Account'})
+        <div className="rounded-lg bg-primary/5 border border-primary/10 p-4 text-xs text-muted-foreground">
+          <p className="text-base font-semibold text-foreground">
+            Welcome, {firstName}! 🎉
           </p>
-          <p className="mt-1 leading-relaxed">
-            You signed in using a temporary password. You must set a new permanent password before accessing your dashboard.
+          <p className="mt-1.5 leading-relaxed text-xs">
+            You are registered in {article} <span className="font-semibold text-foreground">{formattedRole}</span> account. We're excited to have you onboard! Please create your new permanent password below to secure your account and get started.
           </p>
         </div>
 
