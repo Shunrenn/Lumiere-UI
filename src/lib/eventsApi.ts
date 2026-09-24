@@ -63,10 +63,14 @@ export function mapEventResponseToPortalEvent(dto: EventResponseDto, index = 0):
  * Fetches all events from GET /api/events.
  */
 export async function fetchEventsApi(): Promise<PortalEvent[]> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 600)
   try {
     const res = await fetch(`${API_BASE_URL}/api/events`, {
       headers: getAuthHeaders(),
+      signal: controller.signal,
     })
+    clearTimeout(timeoutId)
     if (!res.ok) {
       console.warn(`[eventsApi] GET /api/events returned HTTP ${res.status}`)
       return []
@@ -75,6 +79,7 @@ export async function fetchEventsApi(): Promise<PortalEvent[]> {
     if (!Array.isArray(data)) return []
     return data.map((dto, idx) => mapEventResponseToPortalEvent(dto, idx))
   } catch (err) {
+    clearTimeout(timeoutId)
     console.warn('[eventsApi] GET /api/events fetch skipped/fallback:', err)
     return []
   }
@@ -84,14 +89,19 @@ export async function fetchEventsApi(): Promise<PortalEvent[]> {
  * Fetches a single event by ID from GET /api/events/{id}.
  */
 export async function fetchEventByIdApi(eventId: string): Promise<PortalEvent | null> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 600)
   try {
     const res = await fetch(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}`, {
       headers: getAuthHeaders(),
+      signal: controller.signal,
     })
+    clearTimeout(timeoutId)
     if (!res.ok) return null
     const dto: EventResponseDto = await res.json()
     return mapEventResponseToPortalEvent(dto)
   } catch (err) {
+    clearTimeout(timeoutId)
     console.warn(`[eventsApi] GET /api/events/${eventId} fetch skipped/fallback:`, err)
     return null
   }

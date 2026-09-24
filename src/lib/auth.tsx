@@ -184,10 +184,27 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
+function getInitialHasPin(): boolean {
+  if (typeof window === 'undefined') return true
+  const { rawUser } = getStoredAuth()
+  if (!rawUser) return true
+  try {
+    const parsed = JSON.parse(rawUser) as PortalAccount
+    const emailKey = (parsed.email || '').trim().toLowerCase()
+    if (emailKey && localStorage.getItem(`_lumiere_has_pin_${emailKey}`) === 'true') {
+      return true
+    }
+    if (localStorage.getItem('_lumiere_has_pin_global') === 'true') {
+      return true
+    }
+  } catch {}
+  return true
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<PortalAccount | null>(null)
   const [confirmLogout, setConfirmLogout] = useState(false)
-  const [hasConfirmationPin, setHasConfirmationPin] = useState<boolean>(false)
+  const [hasConfirmationPin, setHasConfirmationPin] = useState<boolean>(getInitialHasPin)
 
   const logout = useCallback(() => {
     clearStoredAuth()
@@ -210,24 +227,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const t = token || getStoredAuth().rawToken || currentUser?.token
-    if (!t) return false
+    if (!t) return true
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 600)
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/has-pin`, {
         headers: { Authorization: `Bearer ${t}` },
+        signal: controller.signal,
       })
+      clearTimeout(timeoutId)
       if (res.ok) {
         const data = await res.json()
         const has = Boolean(data.hasPin ?? data.HasPin)
         if (has) {
           if (emailKey) localStorage.setItem(`_lumiere_has_pin_${emailKey}`, 'true')
+          localStorage.setItem('_lumiere_has_pin_global', 'true')
           setHasConfirmationPin(true)
         }
         return has
       }
-    } catch (err) {
-      console.error('[Auth] error checking has-pin:', err)
+    } catch {
+      clearTimeout(timeoutId)
     }
-    return false
+    return true
   }, [currentUser?.email, currentUser?.token])
 
   useEffect(() => {
