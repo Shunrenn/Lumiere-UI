@@ -1720,6 +1720,14 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       }
 
       setStaff((prev) => prev.filter((s) => s.id !== id))
+
+      if (target?.employeeId && supabase) {
+        try {
+          await supabase.from('crew_roster').update({ status: 'Inactive' }).eq('employee_id', target.employeeId)
+        } catch (err) {
+          console.warn('[Workforce] Soft-deactivating crew_roster row failed silently:', err)
+        }
+      }
       if (target) {
         pushLog({
           account: target.employeeId,

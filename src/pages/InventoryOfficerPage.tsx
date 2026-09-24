@@ -59,7 +59,7 @@ export function InventoryOfficerPage() {
       {tab === 'tracking' && <Tracking items={ops.eventItems} batches={ops.batches} onNotify={notify} />}
       {tab === 'calendar' && <CalendarView selectedDate={selectedDate} setSelectedDate={setSelectedDate} notes={ops.notes} onSave={(note) => { inventoryOps.saveNote(selectedDate, note); notify('Calendar note saved.') }} orders={ops.orders} batches={ops.batches} />}
       {tab === 'activity' && <Activity entries={ops.activity} />}
-      {tab === 'account' && <Account name={adminName || 'Inventory Officer'} email={adminEmail || 'inventory@lumiere.com'} onLogout={logout} />}
+      {tab === 'account' && <Account name={adminName || 'Inventory Officer'} email={adminEmail || adminEmail || ''} onLogout={logout} />}
         </>
       )}
     </main>

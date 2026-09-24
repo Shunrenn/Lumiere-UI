@@ -91,7 +91,7 @@ export function WarehouseMemberPage() {
       ))}
       {tab === 'calendar' && <CalendarView selectedDate={selectedDate} setSelectedDate={setSelectedDate} notes={notes} setNotes={setNotes} onSave={() => notify('Personal note saved.')} tasks={myTasks} />}
       {tab === 'activity' && <Activity activity={activity} tasks={myTasks} />}
-      {tab === 'account' && <Account name={me} email={adminEmail || 'member@lumiere.com'} onLogout={logout} />}
+      {tab === 'account' && <Account name={me} email={adminEmail || adminEmail || ''} onLogout={logout} />}
         </>
       )}
     </main>

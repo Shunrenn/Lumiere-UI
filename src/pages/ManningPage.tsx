@@ -111,7 +111,7 @@ export function ManningPage() {
             {tab === 'account' && (
               <Account
                 name={adminName || 'Manning Officer'}
-                email={adminEmail || 'manning@lumiere.com'}
+                email={adminEmail || adminEmail || ''}
                 onLogout={logout}
               />
             )}

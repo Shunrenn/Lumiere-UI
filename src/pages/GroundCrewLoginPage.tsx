@@ -139,12 +139,14 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
             </button>
           </form>
 
+          {import.meta.env.DEV && (
           <p
             className="pt-6 text-center text-xs text-muted-foreground/70"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
             Ground crew · crew@lumiere.com · lumiere2026
           </p>
+        )}
         </main>
       </div>
     </div>

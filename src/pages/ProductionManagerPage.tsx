@@ -91,7 +91,7 @@ export function ProductionManagerPage() {
       ))}
       {tab === 'calendar' && <CalendarView selectedDate={selectedDate} setSelectedDate={setSelectedDate} notes={notes} setNotes={setNotes} onSave={() => notify('Personal note saved.')} jobs={productionJobs} events={events} />}
       {tab === 'activity' && <Activity activity={activity} jobs={productionJobs} />}
-      {tab === 'account' && <Account name={adminName || 'Production Manager'} email={adminEmail || 'production@lumiere.com'} onLogout={logout} />}
+      {tab === 'account' && <Account name={adminName || 'Production Manager'} email={adminEmail || adminEmail || ''} onLogout={logout} />}
         </>
       )}
     </main>

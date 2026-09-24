@@ -276,6 +276,7 @@ function SignInView(props: {
         Ground Crew? Field Login
       </button>
 
+      {import.meta.env.DEV && (
       <div className="mt-6 space-y-1 text-center text-xs text-muted-foreground/70">
         <p>Demo admin · admin@lumiere.com · lumiere2026</p>
         <p>Executive · executive@lumiere.com · lumiere2026</p>
@@ -291,6 +292,7 @@ function SignInView(props: {
         <p>Sub-role · Inventory Officer · inventory@lumiere.com · lumiere2026</p>
         <p>Sub-role · Purchasing Officer · purchasing@lumiere.com · lumiere2026</p>
       </div>
+    )}
     </form>
   )
 }

@@ -100,7 +100,7 @@ export function WarehouseLeadPage() {
       ))}
       {tab === 'calendar' && <CalendarView selectedDate={selectedDate} setSelectedDate={setSelectedDate} notes={notes} setNotes={setNotes} onSave={() => notify('Personal note saved.')} tasks={tasks} events={events} />}
       {tab === 'activity' && <Activity activity={activity} tasks={tasks} />}
-      {tab === 'account' && <Account name={adminName || 'Warehouse Lead'} email={adminEmail || 'lead@lumiere.com'} onLogout={logout} />}
+      {tab === 'account' && <Account name={adminName || 'Warehouse Lead'} email={adminEmail || adminEmail || ''} onLogout={logout} />}
         </>
       )}
     </main>
