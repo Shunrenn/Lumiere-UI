@@ -55,6 +55,12 @@ export function NavProvider({
   const navigate = useCallback((next: Route, nextIntent: NavIntent | null = null) => {
     setIntent(nextIntent)
     setRoute(next)
+    if (typeof window !== 'undefined') {
+      const targetPath = `/${next}`
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState({ route: next }, '', targetPath)
+      }
+    }
   }, [])
 
   const clearIntent = useCallback(() => setIntent(null), [])
