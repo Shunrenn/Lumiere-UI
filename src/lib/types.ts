@@ -86,12 +86,19 @@ export const STAFF_ROLES = [
   'Event Planner',
   'Ground Crew',
   'Event Admin',
+  'Warehouse Crew',
+  'Field Crew',
+  'Inventory Crew',
+  'Production Crew',
+  // Legacy role strings retained for backward-compatibility with mock data records:
   'Warehouse Lead',
   'Warehouse Member',
   'Field & Production Crew',
 ] as const
 
 export type StaffRole = (typeof STAFF_ROLES)[number]
+
+export type GroundCrewSubRoleWire = 'Warehouse' | 'Field' | 'Inventory' | 'Production' | 'EventAdmin'
 
 export type SessionStatus =
   | 'Active Session'

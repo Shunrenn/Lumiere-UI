@@ -1,4 +1,6 @@
 // Data model for the Roles & Sub-Roles (RBAC) screen.
+// GroundCrewSubRoleWire is defined in types.ts and imported here so GROUND_CREW_SUBROLE_MAP
+// can use it as a key constraint without creating a circular dependency.
 //
 // The platform recognizes five structural account types. Three of them
 // (Admin, Executive, Event Planner) are single-scope structural roles — they
@@ -7,7 +9,7 @@
 // each company can switch on or off, because not every company staffs every
 // function.
 
-import type { SubRoleEmergencyUnblockMetadata } from '@/lib/types'
+import type { SubRoleEmergencyUnblockMetadata, GroundCrewSubRoleWire } from '@/lib/types'
 
 export type AccessLevel = 'View' | 'Interact' | 'Modify' | 'None'
 
@@ -39,7 +41,8 @@ export interface SubRole {
   permissionsConfigured?: boolean
   // Whether self-validation on audit holds is permitted for this sub-role (defaults to true).
   allowSelfValidation?: boolean
-  // Team Lead headcount quota limits (Foundation F)
+  // Legacy quota metadata retained for workforce scheduling compatibility; the
+  // admin UI no longer exposes direct editing for it.
   minTeamLeads?: number
   maxTeamLeads?: number
   // Traces permanent emergency conversion
@@ -210,7 +213,7 @@ export interface SubRoleNode {
   // leaf nodes. See isNodeConfigured.
   permissionsConfigured?: boolean
   comingSoon?: boolean
-  // Team Lead headcount quota limits (Foundation F)
+  // Legacy quota metadata retained for compatibility; no direct editor is shown.
   minTeamLeads?: number
   maxTeamLeads?: number
   children: SubRoleNode[]
@@ -240,7 +243,6 @@ function groundLeaf(
     name,
     summary,
     comingSoon,
-    maxTeamLeads: 1,
     children: [],
     permissions: GROUND_MODULES.map((module) => {
       if (modifyModules.includes(module)) {
@@ -254,44 +256,67 @@ function groundLeaf(
   }
 }
 
-// Seed: each of these starts as a leaf tier (matches current behavior
-// exactly — real permissions, people assigned directly). An Admin can nest
-// further tiers underneath any of them at any depth via "Add sub-role".
+// Fixed live Ground Crew roster model: exactly five assignable sub-roles.
 export const GROUND_CREW_TREE_SEED: SubRoleNode[] = [
   groundLeaf(
     'event-admin',
     'Event Admin',
-    'Event-scoped 2nd-tier confirmation authority between Team Lead/Field Lead and Manning.',
-    ['Assigned Tasks', 'Field Checklists'],
-    ['Dispatch Handoff'],
+    'Event-scoped confirmation authority over task execution and checklist flow.',
+    ['Assigned Tasks', 'Field Checklists', 'Dispatch Handoff'],
+    ['Warehouse Staging'],
   ),
   groundLeaf(
     'field-crew',
     'Field Crew',
-    'Executes on-site setup; modifies field checklists and acknowledges dispatch handoffs.',
+    'Executes on-site setup and field verification; handles field checklists and task acknowledgement.',
     ['Field Checklists'],
     ['Assigned Tasks', 'Dispatch Handoff'],
   ),
   groundLeaf(
     'warehouse-crew',
     'Warehouse Crew',
-    'Handles picking, staging, and load-out; modifies warehouse staging tasks only.',
+    'Handles staging, receiving, and load-out coordination for event fulfillment.',
     ['Warehouse Staging'],
     ['Assigned Tasks', 'Dispatch Handoff'],
   ),
-  {
-    id: 'production-crew',
-    name: 'Production Crew',
-    summary: 'Production floor execution — not yet available on the platform.',
-    comingSoon: true,
-    children: [],
-    permissions: GROUND_MODULES.map((module) => ({
-      module,
-      level: 'None' as AccessLevel,
-      note: 'Scope defined once this sub-role launches.',
-    })),
-  },
+  groundLeaf(
+    'inventory-crew',
+    'Inventory Crew',
+    'Tracks counts, location checks, and inventory handoff activity across event staging.',
+    ['Warehouse Staging', 'Assigned Tasks'],
+    ['Dispatch Handoff'],
+  ),
+  groundLeaf(
+    'production-crew',
+    'Production Crew',
+    'Coordinates on-site production work and event build execution tasks.',
+    ['Production Floor', 'Assigned Tasks'],
+    ['Field Checklists'],
+  ),
 ]
+
+export interface GroundCrewSubRoleMapping {
+  wireValue: GroundCrewSubRoleWire
+  treeId: 'warehouse-crew' | 'field-crew' | 'inventory-crew' | 'production-crew' | 'event-admin'
+  displayName: string
+}
+
+// Single canonical mapping between backend wire value (users.ground_crew_sub_role),
+// frontend rbac.ts tree id, and display name.
+// Keyed by GroundCrewSubRoleWire so TypeScript enforces exhaustiveness.
+export const GROUND_CREW_SUBROLE_MAP: Record<GroundCrewSubRoleWire, GroundCrewSubRoleMapping> = {
+  Warehouse: { wireValue: 'Warehouse', treeId: 'warehouse-crew', displayName: 'Warehouse Crew' },
+  Field: { wireValue: 'Field', treeId: 'field-crew', displayName: 'Field Crew' },
+  Inventory: { wireValue: 'Inventory', treeId: 'inventory-crew', displayName: 'Inventory Crew' },
+  Production: { wireValue: 'Production', treeId: 'production-crew', displayName: 'Production Crew' },
+  EventAdmin: { wireValue: 'EventAdmin', treeId: 'event-admin', displayName: 'Event Admin' },
+}
+
+// Derived from GROUND_CREW_SUBROLE_MAP — no second hand-written list.
+export const GROUND_CREW_TREE_ID_TO_WIRE: Record<string, GroundCrewSubRoleWire> = Object.fromEntries(
+  (Object.values(GROUND_CREW_SUBROLE_MAP) as GroundCrewSubRoleMapping[]).map((m) => [m.treeId, m.wireValue]),
+)
+
 
 /* ----------------------------- Tree helpers (pure, immutable) ----------------------------- */
 
@@ -400,6 +425,8 @@ export const DEFAULT_ENABLED_SUBROLES: string[] = [
   'event-admin',
   'field-crew',
   'warehouse-crew',
+  'inventory-crew',
+  'production-crew',
 ]
 
 /* ----------------------------- Runtime permission resolution ----------------------------- */
@@ -434,10 +461,3 @@ export function womModuleAccessLevel(subRoleName: string, moduleId: string): Acc
   return sub.permissions.find((perm) => perm.module === moduleName)?.level ?? 'None'
 }
 
-export function updateSubRoleQuotas(subRoleId: string, minTeamLeads: number, maxTeamLeads: number) {
-  const target = WOM_SUBROLES.find((sub) => sub.id === subRoleId)
-  if (target) {
-    target.minTeamLeads = minTeamLeads
-    target.maxTeamLeads = maxTeamLeads
-  }
-}

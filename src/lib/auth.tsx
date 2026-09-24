@@ -8,9 +8,18 @@ import {
   type ReactNode,
 } from 'react'
 import { supabase } from './supabase'
-import { womModuleAccessLevel } from './rbac'
+import type { GroundCrewSubRoleWire } from './types'
+import { GROUND_CREW_SUBROLE_MAP, womModuleAccessLevel } from './rbac'
 import { API_BASE_URL } from './apiConfig'
 import { useIdleTimeout } from './useIdleTimeout'
+
+// Shared helper — validates that an unknown JWT claim value is a known wire
+// key and returns the typed value, or undefined for absent/non-string/invalid input.
+function parseGroundCrewSubRole(raw: unknown): GroundCrewSubRoleWire | undefined {
+  if (typeof raw !== 'string') return undefined
+  if (Object.hasOwn(GROUND_CREW_SUBROLE_MAP, raw)) return raw as GroundCrewSubRoleWire
+  return undefined
+}
 
 export type WomSubRole =
   | 'Manning Officer'
@@ -36,6 +45,7 @@ export interface PortalAccount {
   role: string
   portal: PortalKind
   subRole?: WomSubRole
+  groundCrewSubRole?: GroundCrewSubRoleWire
   fullWarehouseAccess?: boolean
   temporaryPassword: boolean
   token?: string
@@ -91,12 +101,19 @@ export function mapBackendUserToPortalAccount(data: {
   const pwaRoles = new Set(['Ground Crew', 'Warehouse Lead', 'Warehouse Member', 'Event Admin'])
   const portal: PortalKind = pwaRoles.has(rawRole) ? 'pwa' : 'web'
 
+  let groundCrewSubRole: GroundCrewSubRoleWire | undefined = undefined
+  if (data.token) {
+    const payload = parseJwtPayload(data.token)
+    groundCrewSubRole = parseGroundCrewSubRole(payload?.ground_crew_subrole)
+  }
+
   return {
     id: data.userId,
     email: data.email,
     name: data.fullName,
     role: rawRole,
     portal,
+    groundCrewSubRole,
     temporaryPassword: isTemp,
     token: data.token,
   }
@@ -164,6 +181,7 @@ interface AuthContextValue {
   isWarehouseLead: boolean
   isWarehouseMember: boolean
   subRole: string
+  groundCrewSubRole?: GroundCrewSubRoleWire
   hasFullWarehouseAccess: boolean
   isManningOfficer: boolean
   isProductionManager: boolean
@@ -231,8 +249,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        const normalized = {
+        let groundCrewSubRole = parseGroundCrewSubRole(parsed.groundCrewSubRole)
+        if (!groundCrewSubRole && token) {
+          const payload = parseJwtPayload(token)
+          groundCrewSubRole = parseGroundCrewSubRole(payload?.ground_crew_subrole)
+        }
+
+        const normalized: PortalAccount = {
           ...parsed,
+          groundCrewSubRole,
           portal: inferPortal(parsed),
         }
         setCurrentUser(normalized)
@@ -419,6 +444,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isWarehouseLead: currentUser?.role === 'Warehouse Lead',
       isWarehouseMember: currentUser?.role === 'Warehouse Member',
       subRole: currentUser?.subRole ?? '',
+      groundCrewSubRole: currentUser?.groundCrewSubRole,
       hasFullWarehouseAccess: currentUser?.fullWarehouseAccess ?? false,
       isManningOfficer: currentUser?.subRole === MANNING_OFFICER_SUBROLE,
       isProductionManager: currentUser?.subRole === 'Production Manager',

@@ -158,23 +158,6 @@ export function AdminRolesPage() {
   // Feature 3: Warning Threshold Setting
   const [warningThreshold, setWarningThreshold] = useState<number>(3)
 
-  const handleUpdateTeamLeadQuota = (nodeId: string, allowedCount: number) => {
-    const updateNodes = (nodes: SubRoleNode[]): SubRoleNode[] => {
-      return nodes.map((n) => {
-        if (n.id === nodeId) {
-          return { ...n, maxTeamLeads: allowedCount, minTeamLeads: allowedCount > 0 ? 1 : 0 }
-        }
-        if (n.children && n.children.length > 0) {
-          return { ...n, children: updateNodes(n.children) }
-        }
-        return n
-      })
-    }
-    setGroundCrewTree((prev) => updateNodes(prev))
-    const targetNode = findNode(groundCrewTree, nodeId)
-    showToast(`Team Leads allowed updated to ${allowedCount} for '${targetNode?.name ?? nodeId}'.`)
-  }
-
   const activeSet = enabled
 
   const toggleSubRole = (subRoleId: string) => {
@@ -812,15 +795,6 @@ export function AdminRolesPage() {
                       }))
                       showToast(`Self-validation policy updated for '${targetSub.name}'.`)
                     }}
-                    onUpdateQuota={(targetSub, minLeads, maxLeads) => {
-                      setSubRolesByParent((prev) => ({
-                        ...prev,
-                        [parent.id]: (prev[parent.id] ?? []).map((s) =>
-                          s.id === targetSub.id ? { ...s, minTeamLeads: minLeads, maxTeamLeads: maxLeads } : s,
-                        ),
-                      }))
-                      showToast(`Team Lead quotas updated for '${targetSub.name}'.`)
-                    }}
                   />
                 ))}
 
@@ -879,6 +853,9 @@ export function AdminRolesPage() {
               <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground text-pretty">
                 {GROUND_CREW_PARENT.description}
               </p>
+              <p className="mt-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                Lead authority is assigned per shift-date via the event roster; legacy Team Lead quotas are deprecated and are no longer configurable here.
+              </p>
             </div>
             <button
               type="button"
@@ -921,7 +898,6 @@ export function AdminRolesPage() {
                   setCreateError('')
                 }}
                 onSubmitCreate={submitTreeCreate}
-                onUpdateTeamLeadQuota={handleUpdateTeamLeadQuota}
               />
             ))}
 
@@ -1059,7 +1035,6 @@ interface SubRoleRowProps {
   onSaveClick: () => void
   onDeleteClick: () => void
   onToggleSelfValidation?: (sub: SubRole) => void
-  onUpdateQuota?: (sub: SubRole, minLeads?: number, maxLeads?: number) => void
 }
 
 function SubRoleRow({
@@ -1078,7 +1053,6 @@ function SubRoleRow({
   onSaveClick,
   onDeleteClick,
   onToggleSelfValidation,
-  onUpdateQuota,
 }: SubRoleRowProps) {
   const comingSoon = !!sub.comingSoon
   const effectiveName = draftName ?? sub.name
@@ -1211,49 +1185,6 @@ function SubRoleRow({
             )
           })()}
 
-          {/* Team Lead Headcount Quota Configuration (Foundation F) */}
-          <div className="mb-4 rounded-lg border border-border bg-background/60 p-3.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold text-card-foreground">Team Lead Headcount Quotas</p>
-              <p className="text-[0.7rem] text-muted-foreground leading-relaxed mt-0.5">
-                Set active Team Lead limits for this sub-role. Assignment creation enforces maximum quota; assignment closing/removal enforces minimum quota.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="flex items-center gap-1.5">
-                <label className="text-[0.65rem] font-medium text-muted-foreground" htmlFor={`min-lead-${sub.id}`}>Min Leads:</label>
-                <input
-                  id={`min-lead-${sub.id}`}
-                  type="number"
-                  min="0"
-                  max="99"
-                  placeholder="None"
-                  value={sub.minTeamLeads ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value, 10) || 0)
-                    onUpdateQuota?.(sub, val, sub.maxTeamLeads)
-                  }}
-                  className="w-16 rounded border border-input bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <label className="text-[0.65rem] font-medium text-muted-foreground" htmlFor={`max-lead-${sub.id}`}>Max Leads:</label>
-                <input
-                  id={`max-lead-${sub.id}`}
-                  type="number"
-                  min="0"
-                  max="99"
-                  placeholder="None"
-                  value={sub.maxTeamLeads ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value, 10) || 0)
-                    onUpdateQuota?.(sub, sub.minTeamLeads, val)
-                  }}
-                  className="w-16 rounded border border-input bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
-                />
-              </div>
-            </div>
-          </div>
 
           <p className="mb-3 text-[0.58rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">
             Permission detail — by module
@@ -1362,7 +1293,6 @@ interface TreeNodeRowProps {
   onCreatingNameChange: (value: string) => void
   onCancelCreate: () => void
   onSubmitCreate: () => void
-  onUpdateTeamLeadQuota?: (nodeId: string, allowedCount: number) => void
 }
 
 function TreeNodeRow({
@@ -1390,7 +1320,6 @@ function TreeNodeRow({
   onCreatingNameChange,
   onCancelCreate,
   onSubmitCreate,
-  onUpdateTeamLeadQuota,
 }: TreeNodeRowProps) {
   const comingSoon = !!node.comingSoon
   const leaf = isLeafNode(node)
@@ -1530,38 +1459,6 @@ function TreeNodeRow({
             </div>
           </div>
 
-          {/* Ground Crew Internal Tiers & Team Lead Quota Setting (Feature 2) */}
-          <div className="mb-4 rounded-lg border border-border bg-card p-3.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shadow-sm">
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-xs font-semibold text-foreground">Ground Crew Internal Tiers & Quota</p>
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-[0.1em] text-primary">
-                  Tiers: Team Lead & Member
-                </span>
-              </div>
-              <p className="text-[0.7rem] text-muted-foreground leading-relaxed mt-0.5">
-                Controls whether the Team Lead tier is populated at all for this sub-role (0 / 1 / 2 allowed).
-              </p>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <label htmlFor={`team-lead-quota-${node.id}`} className="text-xs font-medium text-foreground whitespace-nowrap">
-                Number of Team Leads allowed:
-              </label>
-              <select
-                id={`team-lead-quota-${node.id}`}
-                value={node.maxTeamLeads ?? 1}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10)
-                  onUpdateTeamLeadQuota?.(node.id, val)
-                }}
-                className="rounded-md border border-input bg-background px-3 py-1.5 text-xs font-bold text-foreground outline-none focus:border-primary cursor-pointer shadow-sm"
-              >
-                <option value={0}>0 (Disabled / Empty)</option>
-                <option value={1}>1 (Up to 1 Team Lead)</option>
-                <option value={2}>2 (Up to 2 Team Leads)</option>
-              </select>
-            </div>
-          </div>
 
           <p className="mb-3 text-[0.58rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">
             Permission detail — by module
@@ -1661,7 +1558,6 @@ function TreeNodeRow({
               onCreatingNameChange={onCreatingNameChange}
               onCancelCreate={onCancelCreate}
               onSubmitCreate={onSubmitCreate}
-              onUpdateTeamLeadQuota={onUpdateTeamLeadQuota}
             />
           ))}
 

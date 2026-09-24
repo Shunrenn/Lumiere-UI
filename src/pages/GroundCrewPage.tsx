@@ -12,7 +12,7 @@ import { decideGroundCrewDeclaration, getApproachingDeclarationsSummary, getDecl
 import { computePhotoSha256, extractPhotoMetadata, type HavaPhotoMetadata } from '@/lib/hava'
 
 type Tab = 'home' | 'tasks' | 'calendar' | 'activity' | 'account'
-type AccessLevel = 'Ground Crew / Member' | 'Team Lead / Field Lead' | 'Receiver' | 'Event Admin'
+type AccessLevel = 'Ground Crew / Member' | 'Shift Lead' | 'Receiver' | 'Event Admin'
 export type CheckpointPhase = 'Dispatch Loading' | 'Venue Arrival' | 'Pre-Event Setup' | 'Post-Event Egress'
 type EventStatus = 'Current' | 'Upcoming' | 'Completed'
 type RequestStatus = 'Pending' | 'Approved' | 'Denied'
@@ -43,7 +43,7 @@ export function GroundCrewPage() {
     effectiveRole === 'Event Admin' || effectiveRole === 'Admin'
       ? 'Event Admin'
       : effectiveRole === 'Warehouse Lead' || effectiveRole === 'Field & Production Crew'
-        ? 'Team Lead / Field Lead'
+        ? 'Shift Lead'
         : 'Ground Crew / Member'
 
   const derivedEvents = useMemo<EventItem[]>(() => {
@@ -226,9 +226,9 @@ function DecisionMode({ declarations, accessLevel, adminEventId, events, onEvent
     <div className="space-y-5">
       <header>
         <p className="eyebrow">Tasks · Decision mode</p>
-        <h1 className="mt-2 text-3xl font-serif">Confirmation authority</h1>
+        <h1 className="mt-2 text-3xl font-serif">Event Admin / Shift-lead confirmation</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Review Team Lead / Field Lead condition and damage declarations before they become committed records.
+          Review event-scoped condition and damage declarations before they become committed records. This authority is tied to the active event and current shift roster, not a generic admin toggle or a one-time-only permission.
         </p>
       </header>
 
@@ -254,12 +254,12 @@ function DecisionMode({ declarations, accessLevel, adminEventId, events, onEvent
               ))}
             </select>
             <p className="mt-1 text-xs text-muted-foreground">
-              Event Admin authority is scoped to this event. Unhandled declarations escalate to Manning after 48 hours.
+              Event Admin / shift-lead confirmation remains scoped to the current event and active shift authorization, not a generic admin action or a one-time-only permission.
             </p>
           </label>
         ) : (
           <p className="text-xs leading-5 text-muted-foreground">
-            Role tier is assigned through Workforce Management &amp; Manning. Ground crew accounts cannot self-modify access privileges.
+            Authority is assigned through Workforce Management and the active event roster. Ground crew accounts cannot self-modify confirmation privileges.
           </p>
         )}
       </section>
@@ -267,17 +267,17 @@ function DecisionMode({ declarations, accessLevel, adminEventId, events, onEvent
       {accessLevel === 'Ground Crew / Member' ? (
         <section className="paper-card">
           <p className="eyebrow">Base access</p>
-          <h2 className="mt-1 font-serif text-xl">Ground Crew / Member</h2>
+          <h2 className="mt-1 font-serif text-xl">Ground Crew Member</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            You can submit condition and damage declarations. Checkpoint reporting, receipt, and confirmation authority are assigned to elevated roles by Manning.
+            You can submit condition and damage declarations. Event Admin / shift-lead confirmation remains event-scoped and is not a generic one-time admin action.
           </p>
         </section>
       ) : accessLevel !== 'Event Admin' ? (
         <section className="paper-card">
           <p className="eyebrow">Checkpoint privileges</p>
-          <h2 className="mt-1 font-serif text-xl">{accessLevel}</h2>
+          <h2 className="mt-1 font-serif text-xl">{accessLevel === 'Shift Lead' ? 'Shift Lead' : 'Ground Crew Member'}</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            You retain checkpoint reporting and receipt privileges as a {accessLevel.toLowerCase()}. Event Admin confirmation authority is managed separately in Manning.
+            You retain checkpoint reporting and receipt privileges under the active event roster. Event Admin / shift-lead confirmation remains separate from basic member access and must stay event-scoped.
           </p>
         </section>
       ) : (
@@ -325,10 +325,10 @@ function DecisionMode({ declarations, accessLevel, adminEventId, events, onEvent
                 </p>
                 <div className="mt-4 flex gap-2">
                   <button className="button-primary" onClick={() => onDecision(declaration.id, 'Confirmed')}>
-                    Confirm declaration
+                    Approve declaration
                   </button>
                   <button className="button-secondary" onClick={() => onDecision(declaration.id, 'Rejected')}>
-                    Reject
+                    Reject declaration
                   </button>
                 </div>
               </article>

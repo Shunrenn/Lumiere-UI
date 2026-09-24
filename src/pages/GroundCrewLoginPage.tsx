@@ -26,7 +26,7 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
     setSigningIn(true)
     try {
       const result = await login(crewId, pin, 'pwa')
-      if (!result.ok) setError(result.reason === 'wrong-portal' ? 'This account belongs to the Lumière web app. Use the Web login to continue.' : 'Credentials not recognized. Check your Crew ID and access code.')
+      if (!result.ok) setError(result.reason === 'wrong-portal' ? 'This account belongs to the Lumière web app. Use the Web login to continue.' : 'Credentials not recognized. Check your email and password.')
     } finally {
       setSigningIn(false)
     }
@@ -65,7 +65,7 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
             Ground Crew Console
           </h1>
           <p className="mt-1.5 text-pretty text-sm leading-relaxed text-sidebar-foreground/75">
-            Clock in to run your on-site chain of custody.
+            Sign in to continue to the active event workflow.
           </p>
 
           {/* Status strip */}
@@ -78,7 +78,7 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
         {/* Form */}
         <main className="flex flex-col px-5 pb-6 pt-6">
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <Field label="Crew ID">
+            <Field label="Email">
               <InputWrap>
                 <IdCard className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <input
@@ -86,28 +86,28 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
                   inputMode="email"
                   value={crewId}
                   onChange={(e) => setCrewId(e.target.value)}
-                  placeholder="crew@lumiere.com"
+                  placeholder="name@lumiere.com"
                   autoComplete="username"
                   className="w-full min-w-0 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/60"
                 />
               </InputWrap>
             </Field>
 
-            <Field label="Access Code">
+            <Field label="Password">
               <InputWrap>
                 <Lock className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <input
                   type={showPin ? 'text' : 'password'}
                   value={pin}
                   onChange={(e) => setPin(e.target.value)}
-                  placeholder="Enter access code"
+                  placeholder="Enter your password"
                   autoComplete="current-password"
                   className="w-full min-w-0 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/60"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPin((s) => !s)}
-                  aria-label={showPin ? 'Hide access code' : 'Show access code'}
+                  aria-label={showPin ? 'Hide password' : 'Show password'}
                   className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
                 >
                   {showPin ? (
@@ -134,17 +134,27 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
               className="mt-1 inline-flex h-13 w-full items-center justify-center gap-2.5 rounded-xl bg-primary text-sm font-bold uppercase tracking-[0.18em] text-primary-foreground shadow-sm transition-opacity hover:opacity-90 active:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
               style={{ height: '3.25rem' }}
             >
-              {signingIn ? 'CLOCKING IN...' : 'Clock In'}
+              {signingIn ? 'SIGNING IN...' : 'Sign In'}
               {!signingIn && <ArrowRight className="size-4" aria-hidden="true" />}
             </button>
           </form>
 
-          <p
-            className="pt-6 text-center text-xs text-muted-foreground/70"
+          {(import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_CREDENTIALS === 'true') && (
+            <div
+            className="pt-6 space-y-1 text-center text-xs text-muted-foreground/70"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
-            Ground crew · crew@lumiere.com · lumiere2026
-          </p>
+            <p>Ground crew · crew@lumiere.com · lumiere2026</p>
+            <p className="pt-2 font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
+              Sub-roles
+            </p>
+            <p>Sub-role · Warehouse Crew · warehousecrew@lumiere.com · lumiere2026</p>
+            <p>Sub-role · Field Crew · fieldcrew@lumiere.com · lumiere2026</p>
+            <p>Sub-role · Inventory Crew · inventorycrew@lumiere.com · lumiere2026</p>
+            <p>Sub-role · Production Crew · productioncrew@lumiere.com · lumiere2026</p>
+            <p>Sub-role · Event Admin · eventadmin@lumiere.com · lumiere2026</p>
+          </div>
+          )}
         </main>
       </div>
     </div>
