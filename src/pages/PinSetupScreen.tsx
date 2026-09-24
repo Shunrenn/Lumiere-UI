@@ -29,6 +29,10 @@ export function PinSetupScreen() {
     }
   }
 
+  const firstName = adminName ? adminName.trim().split(' ')[0] : 'User'
+  const formattedRole = (adminRole || 'user').toLowerCase()
+  const article = /^[aeiou]/i.test(formattedRole) ? 'an' : 'a'
+
   return (
     <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-8 text-foreground">
       <div className="w-full max-w-md space-y-6 rounded-xl border border-border bg-card p-6 shadow-2xl sm:p-8">
@@ -42,32 +46,23 @@ export function PinSetupScreen() {
               <h1 className="font-serif text-xl font-bold tracking-tight">Set Verification PIN</h1>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => void setConfirmationPin('000000')}
-              className="text-xs font-semibold text-muted-foreground transition hover:text-foreground underline decoration-muted-foreground/40 underline-offset-4"
-            >
-              Skip for now
-            </button>
-            <button
-              type="button"
-              onClick={logout}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground transition hover:text-foreground"
-              title="Sign out"
-            >
-              <LogOut className="size-4" />
-              <span>Sign out</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={logout}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+            title="Sign out"
+          >
+            <LogOut className="size-4" />
+            <span>Sign out</span>
+          </button>
         </div>
 
-        <div className="rounded-lg bg-muted/50 p-3.5 text-xs text-muted-foreground">
-          <p className="font-medium text-foreground">
-            Welcome, {adminName || 'User'} ({adminRole || 'Account'})
+        <div className="rounded-lg bg-primary/5 border border-primary/10 p-4 text-xs text-muted-foreground">
+          <p className="text-base font-semibold text-foreground">
+            Welcome, {firstName}! 🎉
           </p>
-          <p className="mt-1 leading-relaxed">
-            Please configure a 6-digit confirmation PIN. You will need this PIN to confirm sensitive operations in Lumière.
+          <p className="mt-1.5 leading-relaxed text-xs">
+            You are registered in {article} <span className="font-semibold text-foreground">{formattedRole}</span> account. Please configure a 6-digit confirmation PIN to protect sensitive actions, or skip to set it up later.
           </p>
         </div>
 
@@ -119,6 +114,16 @@ export function PinSetupScreen() {
           >
             Save PIN &amp; Continue
           </button>
+
+          <div className="pt-1 text-center">
+            <button
+              type="button"
+              onClick={() => void setConfirmationPin('000000')}
+              className="text-xs text-muted-foreground transition hover:text-foreground underline underline-offset-4 decoration-muted-foreground/30 hover:decoration-foreground"
+            >
+              Skip for now
+            </button>
+          </div>
         </form>
       </div>
     </main>
