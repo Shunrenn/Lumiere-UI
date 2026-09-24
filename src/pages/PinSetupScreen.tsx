@@ -42,15 +42,24 @@ export function PinSetupScreen() {
               <h1 className="font-serif text-xl font-bold tracking-tight">Set Verification PIN</h1>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={logout}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground transition hover:text-foreground"
-            title="Sign out"
-          >
-            <LogOut className="size-4" />
-            <span>Sign out</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void setConfirmationPin('000000')}
+              className="text-xs font-semibold text-muted-foreground transition hover:text-foreground underline decoration-muted-foreground/40 underline-offset-4"
+            >
+              Skip for now
+            </button>
+            <button
+              type="button"
+              onClick={logout}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+              title="Sign out"
+            >
+              <LogOut className="size-4" />
+              <span>Sign out</span>
+            </button>
+          </div>
         </div>
 
         <div className="rounded-lg bg-muted/50 p-3.5 text-xs text-muted-foreground">

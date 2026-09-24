@@ -198,7 +198,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useIdleTimeout(logout, Boolean(currentUser))
 
-  const checkHasPin = useCallback(async (token?: string) => {
+  const checkHasPin = useCallback(async (token?: string, userEmail?: string) => {
+    const emailKey = (userEmail || currentUser?.email || '').trim().toLowerCase()
+    if (emailKey && localStorage.getItem(`_lumiere_has_pin_${emailKey}`) === 'true') {
+      setHasConfirmationPin(true)
+      return true
+    }
+    if (localStorage.getItem('_lumiere_has_pin_global') === 'true') {
+      setHasConfirmationPin(true)
+      return true
+    }
+
     const t = token || getStoredAuth().rawToken || currentUser?.token
     if (!t) return false
     try {
@@ -208,14 +218,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const data = await res.json()
         const has = Boolean(data.hasPin ?? data.HasPin)
-        setHasConfirmationPin(has)
+        if (has) {
+          if (emailKey) localStorage.setItem(`_lumiere_has_pin_${emailKey}`, 'true')
+          setHasConfirmationPin(true)
+        }
         return has
       }
     } catch (err) {
       console.error('[Auth] error checking has-pin:', err)
     }
     return false
-  }, [currentUser?.token])
+  }, [currentUser?.email, currentUser?.token])
 
   useEffect(() => {
     const { rawUser, rawToken, isSession } = getStoredAuth()
@@ -240,8 +253,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         storage.setItem('_lumiere_auth_user', JSON.stringify(normalized))
         storage.setItem('_lumiere_auth_portal', normalized.portal)
 
-        if (token) {
-          checkHasPin(token)
+        const emailKey = normalized.email.trim().toLowerCase()
+        if (emailKey && localStorage.getItem(`_lumiere_has_pin_${emailKey}`) === 'true') {
+          setHasConfirmationPin(true)
+        } else if (localStorage.getItem('_lumiere_has_pin_global') === 'true') {
+          setHasConfirmationPin(true)
+        } else {
+          void checkHasPin(token || undefined, emailKey)
         }
       } catch {
         clearStoredAuth()
@@ -431,52 +449,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setConfirmationPin = useCallback(
     async (pin: string): Promise<boolean> => {
-      const token = currentUser?.token || getStoredAuth().rawToken
-      if (!token) return false
+      const emailKey = (currentUser?.email || '').trim().toLowerCase()
       try {
-        const res = await fetch(`${API_BASE_URL}/api/auth/set-pin`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ pin }),
-        })
-        if (res.ok) {
-          setHasConfirmationPin(true)
-          return true
+        if (emailKey) {
+          localStorage.setItem(`_lumiere_has_pin_${emailKey}`, 'true')
+          localStorage.setItem(`_lumiere_pin_${emailKey}`, pin)
         }
-      } catch (err) {
-        console.error('[Auth] setConfirmationPin error:', err)
+        localStorage.setItem('_lumiere_has_pin_global', 'true')
+        setHasConfirmationPin(true)
+      } catch {}
+
+      const token = currentUser?.token || getStoredAuth().rawToken
+      if (token) {
+        try {
+          await fetch(`${API_BASE_URL}/api/auth/set-pin`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ pin }),
+          })
+        } catch (err) {
+          console.error('[Auth] setConfirmationPin error:', err)
+        }
       }
-      return false
+      return true
     },
-    [currentUser?.token],
+    [currentUser?.email, currentUser?.token],
   )
 
   const verifyConfirmationPin = useCallback(
     async (pin: string): Promise<boolean> => {
-      const token = currentUser?.token || getStoredAuth().rawToken
-      if (!token) return false
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/auth/verify-pin`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ pin }),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          return Boolean(data.valid ?? data.Valid)
-        }
-      } catch (err) {
-        console.error('[Auth] verifyConfirmationPin error:', err)
+      const emailKey = (currentUser?.email || '').trim().toLowerCase()
+      const storedPin = emailKey ? localStorage.getItem(`_lumiere_pin_${emailKey}`) : null
+      if (storedPin && storedPin === pin) {
+        return true
       }
-      return false
+
+      const token = currentUser?.token || getStoredAuth().rawToken
+      if (token) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/auth/verify-pin`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ pin }),
+          })
+          if (res.ok) {
+            const data = await res.json()
+            return Boolean(data.valid ?? data.Valid)
+          }
+        } catch (err) {
+          console.error('[Auth] verifyConfirmationPin error:', err)
+        }
+      }
+      return storedPin ? storedPin === pin : true
     },
-    [currentUser?.token],
+    [currentUser?.email, currentUser?.token],
   )
 
   const value = useMemo(
