@@ -79,6 +79,16 @@ export interface ReorderDraft {
 
 /* ---------- Staff / Access Control ---------- */
 
+export const SELECTABLE_STAFF_ROLES = [
+  'Admin',
+  'Executive',
+  'Warehouse Manager',
+  'Event Planner',
+  'Ground Crew',
+] as const
+
+export type SelectableStaffRole = (typeof SELECTABLE_STAFF_ROLES)[number]
+
 export const STAFF_ROLES = [
   'Admin',
   'Executive',
@@ -117,6 +127,7 @@ export interface Staff {
   email: string
   contact: string
   role: StaffRole
+  subRole?: string
   sessionStatus: SessionStatus
   lastAccess: string
   // Date the staff member was onboarded, used to group hires in the User
@@ -141,6 +152,7 @@ export interface NewStaffDraft {
   email: string
   contact: string
   role: StaffRole | ''
+  subRole?: string
   tempPassword: string
 }
 

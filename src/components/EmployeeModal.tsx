@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { X, Eye, EyeOff } from 'lucide-react'
-import { STAFF_ROLES, type NewStaffDraft, type StaffRole } from '@/lib/types'
+import { SELECTABLE_STAFF_ROLES, type NewStaffDraft, type StaffRole } from '@/lib/types'
 import { usePortal } from '@/lib/store'
 
 interface Props {
@@ -18,8 +18,24 @@ const emptyDraft: NewStaffDraft = {
   email: '',
   contact: '',
   role: '',
+  subRole: '',
   tempPassword: '',
 }
+
+const WOM_SUBROLES = [
+  'Manning Officer',
+  'Warehouse Manager',
+  'Production Manager',
+  'Inventory Officer',
+  'Purchasing Officer',
+] as const
+
+const GROUND_CREW_SUBROLES = [
+  'Event Field',
+  'Warehouse Field',
+  'Lead Logistics',
+  'Field Ops',
+] as const
 
 // Generate a one-time temporary password the user must change on first login.
 const generateTempPassword = () => `Lm-Temp-${Math.floor(1000 + Math.random() * 9000)}`
@@ -216,23 +232,58 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
               </div>
             </div>
 
-            <div className="mt-4">
-              <label className={labelClass} htmlFor="role">
-                Role:
-              </label>
-              <select
-                id="role"
-                className={`${inputClass} appearance-none`}
-                value={draft.role}
-                onChange={(e) => set('role', e.target.value as StaffRole)}
-              >
-                <option value="">Select Staff Role</option>
-                {STAFF_ROLES.map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
-              </select>
+            <div className={`mt-4 grid grid-cols-1 gap-4 ${(draft.role === 'Warehouse Manager' || draft.role === 'Ground Crew') ? 'sm:grid-cols-2' : ''}`}>
+              <div>
+                <label className={labelClass} htmlFor="role">
+                  Role:
+                </label>
+                <select
+                  id="role"
+                  className={`${inputClass} appearance-none`}
+                  value={draft.role}
+                  onChange={(e) => {
+                    const newRole = e.target.value as StaffRole
+                    setDraft((prev) => ({
+                      ...prev,
+                      role: newRole,
+                      subRole: newRole === 'Warehouse Manager' ? WOM_SUBROLES[0] : newRole === 'Ground Crew' ? GROUND_CREW_SUBROLES[0] : '',
+                    }))
+                  }}
+                >
+                  <option value="">Select Staff Role</option>
+                  {SELECTABLE_STAFF_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {(draft.role === 'Warehouse Manager' || draft.role === 'Ground Crew') && (
+                <div>
+                  <label className={labelClass} htmlFor="subRole">
+                    Subrole:
+                  </label>
+                  <select
+                    id="subRole"
+                    className={`${inputClass} appearance-none`}
+                    value={draft.subRole}
+                    onChange={(e) => set('subRole', e.target.value)}
+                  >
+                    {draft.role === 'Warehouse Manager'
+                      ? WOM_SUBROLES.map((sr) => (
+                          <option key={sr} value={sr}>
+                            {sr}
+                          </option>
+                        ))
+                      : GROUND_CREW_SUBROLES.map((sr) => (
+                          <option key={sr} value={sr}>
+                            {sr}
+                          </option>
+                        ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="mt-4">

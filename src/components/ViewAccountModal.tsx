@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { X, Eye, EyeOff } from 'lucide-react'
-import { STAFF_ROLES, type Staff } from '@/lib/types'
+import { SELECTABLE_STAFF_ROLES, type Staff } from '@/lib/types'
 
 interface Props {
   open: boolean
@@ -161,7 +161,7 @@ export function ViewAccountModal({
                   onChange={(e) => set('role', e.target.value as Staff['role'])}
                   className={`${inputClass} appearance-none`}
                 >
-                  {STAFF_ROLES.map((r) => (
+                  {SELECTABLE_STAFF_ROLES.map((r) => (
                     <option key={r} value={r}>
                       {r}
                     </option>
@@ -171,6 +171,26 @@ export function ViewAccountModal({
                 readField(staff.role)
               )}
             </div>
+
+            {/* Subrole */}
+            {(staff.subRole || editable) && (
+              <div>
+                <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
+                  Subrole:
+                </label>
+                {editable ? (
+                  <input
+                    type="text"
+                    value={draft.subRole ?? ''}
+                    onChange={(e) => set('subRole', e.target.value)}
+                    className={inputClass}
+                    placeholder="e.g. Manning Officer / Event Field"
+                  />
+                ) : (
+                  readField(staff.subRole || 'N/A')
+                )}
+              </div>
+            )}
 
             {/* Session Status */}
             <div>

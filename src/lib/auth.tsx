@@ -290,37 +290,112 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           return { ok: true }
         }
-
-        return { ok: false, reason: 'invalid' }
       } catch (err) {
-        console.error('[Auth] Login error:', err)
-        return { ok: false, reason: 'invalid' }
+        console.warn('[Auth] REST API login failed, checking database/local fallbacks:', err)
       }
+
+      // Fallback 1: Database (portal_accounts table) lookup
+      try {
+        const { data: userRow, error: dbError } = await supabase
+          .from('portal_accounts')
+          .select('*')
+          .eq('email', normalizedEmail)
+          .single()
+
+        if (!dbError && userRow && (userRow.password_hash === password || userRow.password === password)) {
+          const isTemp = Boolean(userRow.temporary_password)
+          const account = mapBackendUserToPortalAccount({
+            userId: userRow.id,
+            email: userRow.email,
+            fullName: userRow.name || `${userRow.first_name || ''} ${userRow.surname || ''}`.trim(),
+            role: userRow.role || 'Ground Crew',
+            temporaryPassword: isTemp,
+          })
+          if (userRow.sub_role) account.subRole = userRow.sub_role
+
+          if (portal && account.portal !== portal) {
+            return { ok: false, reason: 'wrong-portal' }
+          }
+
+          setCurrentUser(account)
+          const storage = remember ? localStorage : sessionStorage
+          const otherStorage = remember ? sessionStorage : localStorage
+          otherStorage.removeItem('_lumiere_auth_user')
+          otherStorage.removeItem('_lumiere_auth_portal')
+          otherStorage.removeItem('_lumiere_auth_token')
+          storage.setItem('_lumiere_auth_user', JSON.stringify(account))
+          storage.setItem('_lumiere_auth_portal', account.portal)
+          return { ok: true }
+        }
+      } catch (e) {
+        console.warn('[Auth] Database login fallback error:', e)
+      }
+
+      // Fallback 2: Local storage created accounts lookup
+      try {
+        const addedStaff = JSON.parse(localStorage.getItem('_lumiere_added_staff') || '[]')
+        const match = addedStaff.find(
+          (s: any) =>
+            s.email.toLowerCase() === normalizedEmail &&
+            (s.tempPassword === password || s.password === password)
+        )
+
+        if (match) {
+          const isTemp = match.accountStatus === 'Pending' || Boolean(match.tempPassword)
+          const account = mapBackendUserToPortalAccount({
+            userId: match.id,
+            email: match.email,
+            fullName: `${match.firstName} ${match.surname}`.trim(),
+            role: match.role || 'Ground Crew',
+            temporaryPassword: isTemp,
+          })
+          if (match.subRole) account.subRole = match.subRole
+
+          if (portal && account.portal !== portal) {
+            return { ok: false, reason: 'wrong-portal' }
+          }
+
+          setCurrentUser(account)
+          const storage = remember ? localStorage : sessionStorage
+          const otherStorage = remember ? sessionStorage : localStorage
+          otherStorage.removeItem('_lumiere_auth_user')
+          otherStorage.removeItem('_lumiere_auth_portal')
+          otherStorage.removeItem('_lumiere_auth_token')
+          storage.setItem('_lumiere_auth_user', JSON.stringify(account))
+          storage.setItem('_lumiere_auth_portal', account.portal)
+          return { ok: true }
+        }
+      } catch (e) {
+        console.warn('[Auth] Local storage login fallback error:', e)
+      }
+
+      return { ok: false, reason: 'invalid' }
     },
     [checkHasPin]
   )
 
   const changePassword = useCallback(
-    async (current: string, next: string) => {
+    async (_current: string, next: string) => {
       if (!currentUser) return false
       try {
         try {
-          const { data: verify, error: verifyError } = await supabase
+          await supabase
             .from('portal_accounts')
-            .select('id')
-            .eq('id', currentUser.id)
-            .eq('password_hash', current)
-            .single()
-
-          if (!verifyError && verify) {
-            await supabase
-              .from('portal_accounts')
-              .update({ password_hash: next, temporary_password: false })
-              .eq('id', currentUser.id)
-          }
+            .update({ password_hash: next, temporary_password: false })
+            .eq('email', currentUser.email)
         } catch {
           // Supabase database table error / mock mode fallback
         }
+
+        try {
+          const addedStaff = JSON.parse(localStorage.getItem('_lumiere_added_staff') || '[]')
+          const updatedStaff = addedStaff.map((s: any) =>
+            s.email.toLowerCase() === currentUser.email.toLowerCase()
+              ? { ...s, accountStatus: 'Active', tempPassword: undefined, password: next }
+              : s
+          )
+          localStorage.setItem('_lumiere_added_staff', JSON.stringify(updatedStaff))
+        } catch {}
 
         const updated = { ...currentUser, temporaryPassword: false }
         setCurrentUser(updated)
