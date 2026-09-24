@@ -24,6 +24,40 @@ interface NavContextValue {
 
 const NavContext = createContext<NavContextValue | null>(null)
 
+const VALID_ROUTES = new Set<Route>([
+  'overview',
+  'workforce',
+  'dashboard',
+  'registry',
+  'logs',
+  'security-audit',
+  'rbac',
+  'damage',
+  'replenishment',
+  'inventory',
+  'warehouse-logs',
+  'crew',
+  'deployments',
+  'dispatch',
+  'event-detail',
+  'canvas',
+  'canvas-workspace',
+  'field-ops',
+  'warehouse-lead',
+  'warehouse-member',
+  'manning',
+  'production-manager',
+  'inventory-officer',
+])
+
+export function parseRouteFromUrl(): Route | null {
+  if (typeof window === 'undefined') return null
+  const param = new URLSearchParams(window.location.search).get('route')
+  const rawPath = window.location.pathname.trim().replace(/^\/+|\/+$/g, '')
+  const candidate = (param || rawPath) as Route
+  return VALID_ROUTES.has(candidate) ? candidate : null
+}
+
 export function NavProvider({
   children,
   initialRoute = 'overview',
@@ -31,17 +65,26 @@ export function NavProvider({
   children: ReactNode
   initialRoute?: Route
 }) {
-  const [route, setRoute] = useState<Route>(initialRoute)
+  const [route, setRoute] = useState<Route>(() => parseRouteFromUrl() || initialRoute)
   const [intent, setIntent] = useState<NavIntent | null>(null)
 
+  // Keep browser address bar in sync with initial route on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const activeRoute = parseRouteFromUrl() || initialRoute
+      const targetPath = `/${activeRoute}`
+      if (window.location.pathname !== targetPath) {
+        window.history.replaceState({ route: activeRoute }, '', targetPath)
+      }
+    }
+  }, [initialRoute])
+
+  // Handle browser Back & Forward button navigation
   useEffect(() => {
     const handleLocationChange = () => {
-      const param = new URLSearchParams(window.location.search).get('route')
-      const path = window.location.pathname.replace('/', '')
-      const r = (param || path) as Route
-      const valid = ['dashboard', 'registry', 'replenishment', 'logs', 'damage', 'inventory', 'warehouse-logs', 'crew', 'deployments', 'dispatch', 'event-detail', 'canvas', 'canvas-workspace', 'field-ops', 'warehouse-lead', 'warehouse-member', 'manning', 'production-manager', 'inventory-officer', 'workforce', 'security-audit', 'rbac', 'overview']
-      if (r && valid.includes(r)) {
-        setRoute(r)
+      const matched = parseRouteFromUrl()
+      if (matched) {
+        setRoute(matched)
       }
     }
     window.addEventListener('popstate', handleLocationChange)
