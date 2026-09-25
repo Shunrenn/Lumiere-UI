@@ -39,6 +39,7 @@ import {
   PwaHeader,
   PwaLoadingState,
   PwaModal,
+  PwaToast,
   type PwaNavItem,
 } from '@/components/pwa'
 import { cn } from '@/lib/utils'
@@ -365,15 +366,7 @@ export function InventoryOfficerPage() {
       />
 
       {/* Toast Notification HUD */}
-      {toast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-20 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl bg-foreground px-4 py-3 text-center text-xs font-semibold text-background shadow-xl border border-border animate-in fade-in slide-in-from-bottom-2 duration-200"
-        >
-          {toast}
-        </div>
-      )}
+      {toast && <PwaToast message={toast} />}
     </div>
   )
 }

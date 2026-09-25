@@ -38,6 +38,7 @@ import {
   PwaHeader,
   PwaLoadingState,
   PwaModal,
+  PwaToast,
   type PwaNavItem,
 } from '@/components/pwa'
 import { cn } from '@/lib/utils'
@@ -284,15 +285,7 @@ export function ProductionManagerPage() {
       />
 
       {/* Toast Notification */}
-      {toast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-24 left-1/2 z-50 w-[calc(100%-32px)] max-w-md -translate-x-1/2 rounded-2xl bg-foreground px-4 py-3 text-center text-xs font-semibold text-background shadow-2xl backdrop-blur-md"
-        >
-          {toast}
-        </div>
-      )}
+      {toast && <PwaToast message={toast} />}
 
       {/* Build Review & Stage Progression Modal */}
       {activeJob && (

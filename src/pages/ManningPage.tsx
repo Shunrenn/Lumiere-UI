@@ -28,6 +28,7 @@ import {
   PwaEmptyState,
   PwaHeader,
   PwaModal,
+  PwaToast,
   type PwaNavItem,
 } from '@/components/pwa'
 import {
@@ -274,15 +275,7 @@ export function ManningPage() {
       />
 
       {/* Toast Notification */}
-      {toast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-20 left-1/2 z-40 w-[calc(100%-2rem)] max-w-[400px] -translate-x-1/2 rounded-2xl border border-primary/30 bg-card p-3.5 text-center text-xs font-semibold text-foreground shadow-2xl backdrop-blur-md transition-all animate-in fade-in slide-in-from-bottom-2 duration-200"
-        >
-          {toast}
-        </div>
-      )}
+      {toast && <PwaToast message={toast} />}
 
       {/* PIN Gate Modal for Incident Inbox */}
       <PwaModal
