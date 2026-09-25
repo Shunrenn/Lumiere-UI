@@ -19,7 +19,7 @@ export const MAIN_ROLE_SEGMENTS: SegmentItem[] = [
   { label: 'Executive', color: 'text-sky-500', dot: 'bg-sky-500', isDrillable: false },
   { label: 'Warehouse Ops Manager', color: 'text-amber-500', dot: 'bg-amber-500', isDrillable: true },
   { label: 'Event Planner', color: 'text-rose-500', dot: 'bg-rose-500', isDrillable: false },
-  { label: 'Field & Production Crew', color: 'text-indigo-500', dot: 'bg-indigo-500', isDrillable: true },
+  { label: 'Ground Crew', color: 'text-indigo-500', dot: 'bg-indigo-500', isDrillable: true },
 ]
 
 export const WOM_SUBROLE_SEGMENTS: SegmentItem[] = [
@@ -69,7 +69,7 @@ export function UserDistributionCard({
 }) {
   const segments = useMemo(() => {
     if (drillDownCategory === 'Warehouse Ops Manager') return WOM_SUBROLE_SEGMENTS
-    if (drillDownCategory === 'Field & Production Crew' || drillDownCategory === 'Ground Crew') {
+    if (drillDownCategory === 'Ground Crew') {
       return GROUND_CREW_SUBROLE_SEGMENTS
     }
     return MAIN_ROLE_SEGMENTS
@@ -79,7 +79,7 @@ export function UserDistributionCard({
     if (drillDownCategory === 'Warehouse Ops Manager') {
       return { ...WOM_DEFAULT_COUNTS, ...counts }
     }
-    if (drillDownCategory === 'Field & Production Crew' || drillDownCategory === 'Ground Crew') {
+    if (drillDownCategory === 'Ground Crew') {
       return { ...GROUND_CREW_DEFAULT_COUNTS, ...counts }
     }
     return counts

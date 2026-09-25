@@ -141,19 +141,25 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
 
           {(import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_CREDENTIALS === 'true') && (
             <div
-            className="pt-6 space-y-1 text-center text-xs text-muted-foreground/70"
-            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-          >
-            <p>Ground crew · crew@lumiere.com · lumiere2026</p>
-            <p className="pt-2 font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
-              Sub-roles
-            </p>
-            <p>Sub-role · Warehouse Crew · warehousecrew@lumiere.com · lumiere2026</p>
-            <p>Sub-role · Field Crew · fieldcrew@lumiere.com · lumiere2026</p>
-            <p>Sub-role · Inventory Crew · inventorycrew@lumiere.com · lumiere2026</p>
-            <p>Sub-role · Production Crew · productioncrew@lumiere.com · lumiere2026</p>
-            <p>Sub-role · Event Admin · eventadmin@lumiere.com · lumiere2026</p>
-          </div>
+              className="pt-6 space-y-1 text-center text-xs text-muted-foreground/70"
+              style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+            >
+              <p className="font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
+                PWA / Field Accounts
+              </p>
+              <p>Ground Crew (General) · crew@lumiere.com · lumiere2026</p>
+              <p className="pt-2 font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
+                Ground Crew Sub-Roles
+              </p>
+              <p>Warehouse Crew · warehousecrew@lumiere.com · lumiere2026</p>
+              <p>Field Crew · fieldcrew@lumiere.com · lumiere2026</p>
+              <p>Inventory Crew · inventorycrew@lumiere.com · lumiere2026</p>
+              <p>Production Crew · productioncrew@lumiere.com · lumiere2026</p>
+              <p>Event Admin · eventadmin@lumiere.com · lumiere2026</p>
+              <p className="pt-2 italic text-muted-foreground/50">
+                For Web Staff accounts (Admin, WOM, Planner, Exec), click "Staff Portal Login" above.
+              </p>
+            </div>
           )}
         </main>
       </div>

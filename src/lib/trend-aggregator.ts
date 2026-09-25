@@ -35,14 +35,25 @@ export function aggregateUserGrowth(staffList: Staff[], subRoleCategory?: string
   const filtered = staffList.filter((s) => {
     if (!subRoleCategory) return true
     if (subRoleCategory === 'Warehouse Ops Manager') {
-      return (
-        s.role === 'Warehouse Manager' ||
-        s.role === 'Warehouse Lead' ||
-        s.role === 'Warehouse Member'
-      )
+      return s.role === 'Warehouse Manager' || s.role === 'Warehouse Operations Manager'
     }
-    if (subRoleCategory === 'Field & Production Crew' || subRoleCategory === 'Ground Crew') {
-      return s.role === 'Ground Crew' || s.role === 'Field & Production Crew'
+    if (subRoleCategory === 'Ground Crew') {
+      return s.role === 'Ground Crew'
+    }
+    if (subRoleCategory === 'Field Crew' || subRoleCategory === 'Field') {
+      return s.role === 'Ground Crew' && (s.groundCrewSubRole === 'Field' || !s.groundCrewSubRole)
+    }
+    if (subRoleCategory === 'Production Crew' || subRoleCategory === 'Production') {
+      return s.role === 'Ground Crew' && s.groundCrewSubRole === 'Production'
+    }
+    if (subRoleCategory === 'Warehouse Crew' || subRoleCategory === 'Warehouse') {
+      return s.role === 'Ground Crew' && s.groundCrewSubRole === 'Warehouse'
+    }
+    if (subRoleCategory === 'Inventory Crew' || subRoleCategory === 'Inventory') {
+      return s.role === 'Ground Crew' && s.groundCrewSubRole === 'Inventory'
+    }
+    if (subRoleCategory === 'Event Admin' || subRoleCategory === 'EventAdmin') {
+      return s.role === 'Ground Crew' && s.groundCrewSubRole === 'EventAdmin'
     }
     return s.role === subRoleCategory
   })

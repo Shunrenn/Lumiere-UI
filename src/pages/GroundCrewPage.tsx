@@ -8,16 +8,39 @@ import type { DispatchBatch } from '@/lib/event-detail'
 import { IncidentForm } from '@/components/PwaWorkflows'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
-import { decideGroundCrewDeclaration, getApproachingDeclarationsSummary, getDeclarationAging, submitGroundCrewDeclaration, useGroundCrewDeclarations, type GroundCrewDeclaration } from '@/lib/ground-crew-declarations'
+import { decideGroundCrewDeclaration, escalateDeclarationToManning, getApproachingDeclarationsSummary, getDeclarationAging, isSelfFiledDeclaration, isSoleEventAdminForEvent, submitGroundCrewDeclaration, useGroundCrewDeclarations, type GroundCrewDeclaration } from '@/lib/ground-crew-declarations'
+import { deriveGroundCrewAccessLevel, useManningData, type AccessLevel, type ManningAssignment } from '@/lib/manning'
 import { computePhotoSha256, extractPhotoMetadata, type HavaPhotoMetadata } from '@/lib/hava'
+import type { GroundCrewSubRoleWire } from '@/lib/types'
 
 type Tab = 'home' | 'tasks' | 'calendar' | 'activity' | 'account'
-type AccessLevel = 'Ground Crew / Member' | 'Shift Lead' | 'Receiver' | 'Event Admin'
 export type CheckpointPhase = 'Dispatch Loading' | 'Venue Arrival' | 'Pre-Event Setup' | 'Post-Event Egress'
 type EventStatus = 'Current' | 'Upcoming' | 'Completed'
 type RequestStatus = 'Pending' | 'Approved' | 'Denied'
 
-interface EventItem { id: string; name: string; date: string; venue: string; status: EventStatus; editable: boolean; phase: CheckpointPhase; items: { id: string; name: string; sku: string; qty: number; color: string }[] }
+interface EventItem { id: string; name: string; date: string; venue: string; status: EventStatus; editable: boolean; phase: CheckpointPhase; items: { id: string; name: string; sku: string; qty: number; color: string; subRoles: GroundCrewSubRoleWire[] }[] }
+
+// Human-readable label for each Ground Crew sub-role wire value
+export const SUBROLE_DISPLAY: Record<GroundCrewSubRoleWire, string> = {
+  Warehouse: 'Warehouse Crew',
+  Field: 'Field Crew',
+  Inventory: 'Inventory Crew',
+  Production: 'Production Crew',
+  EventAdmin: 'Event Admin',
+}
+
+/**
+ * Given a sub-role, returns the items from an event that are relevant to that
+ * sub-role. EventAdmin sees everything (oversight). Undefined/null sub-role
+ * falls back to showing all items.
+ */
+export function filterItemsBySubRole(
+  items: EventItem['items'],
+  subRole: GroundCrewSubRoleWire | undefined,
+): EventItem['items'] {
+  if (!subRole || subRole === 'EventAdmin') return items
+  return items.filter((item) => item.subRoles.includes(subRole))
+}
 interface DamageReport { id: string; event: string; item: string; phase: CheckpointPhase; quantity: number; description: string; photo: string; photoHash?: string; capturedAt: string; location: string; sha256Hash?: string; gpsCoordinates?: string }
 interface CrewRequest { id: string; type: string; date: string; note: string; status: RequestStatus }
 
@@ -29,22 +52,22 @@ const SEED_REQUESTS: CrewRequest[] = [{ id: 'q1', type: 'Personal leave', date: 
 function dateLabel(date: string) { return new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) }
 
 export function GroundCrewPage() {
-  const { adminName, adminEmail, adminRole, logout } = useAuth()
+  const { userId, adminName, adminEmail, groundCrewSubRole, logout } = useAuth()
   const { events, staff, procurement } = usePortal()
+  const { assignments: manningAssignments } = useManningData()
   const dispatchStore = useDispatchStore(events, staff, procurement)
   const declarations = useGroundCrewDeclarations()
   const [tab, setTab] = useState<Tab>('home')
 
-  // Authoritative staff role lookup — derived strictly from authentication / roster, NEVER self-selected
-  const userStaffRecord = staff.find((s) => s.email.toLowerCase() === (adminEmail || '').toLowerCase())
-  const effectiveRole = userStaffRecord?.role || adminRole || 'Ground Crew'
-
-  const accessLevel: AccessLevel =
-    effectiveRole === 'Event Admin' || effectiveRole === 'Admin'
-      ? 'Event Admin'
-      : effectiveRole === 'Warehouse Lead' || effectiveRole === 'Field & Production Crew'
-        ? 'Shift Lead'
-        : 'Ground Crew / Member'
+  const accessLevel: AccessLevel = useMemo(
+    () =>
+      deriveGroundCrewAccessLevel({
+        groundCrewSubRole,
+        adminEmail,
+        manningAssignments,
+      }),
+    [groundCrewSubRole, adminEmail, manningAssignments],
+  )
 
   const derivedEvents = useMemo<EventItem[]>(() => {
     if (!events || events.length === 0) return []
@@ -57,10 +80,22 @@ export function GroundCrewPage() {
       editable: idx === 0,
       // All events start at Dispatch Loading — crew must advance through each stage
       phase: 'Dispatch Loading' as CheckpointPhase,
+      // Sub-role tags drive which items each Ground Crew discipline sees during
+      // checkpoint phases. EventAdmin sees all items for oversight.
       items: [
-        { id: `i-${idx}-1`, name: 'Premium Crystal Candelabra', sku: 'LM-0012', qty: 24, color: 'Clear / Gold' },
-        { id: `i-${idx}-2`, name: 'Gold Chiavari Chairs', sku: 'LM-0048', qty: 200, color: 'Antique Gold' },
-        { id: `i-${idx}-3`, name: 'Velvet Drapery Panels', sku: 'LM-0211', qty: 40, color: 'Midnight Blue' },
+        // Warehouse: loading manifests, vehicle clearance, egress packing
+        { id: `i-${idx}-1`, name: 'Premium Crystal Candelabra', sku: 'LM-0012', qty: 24, color: 'Clear / Gold', subRoles: ['Warehouse', 'Field', 'Production'] as GroundCrewSubRoleWire[] },
+        { id: `i-${idx}-2`, name: 'Gold Chiavari Chairs', sku: 'LM-0048', qty: 200, color: 'Antique Gold', subRoles: ['Warehouse', 'Field'] as GroundCrewSubRoleWire[] },
+        { id: `i-${idx}-3`, name: 'Velvet Drapery Panels', sku: 'LM-0211', qty: 40, color: 'Midnight Blue', subRoles: ['Warehouse', 'Production'] as GroundCrewSubRoleWire[] },
+        // Field: venue setup and pre-event placement
+        { id: `i-${idx}-4`, name: 'Stage Platform Sections', sku: 'LM-1104', qty: 12, color: 'Matte Black', subRoles: ['Field'] as GroundCrewSubRoleWire[] },
+        { id: `i-${idx}-5`, name: 'LED Par Can Lights', sku: 'LM-2201', qty: 48, color: 'RGB Multi', subRoles: ['Field', 'Production'] as GroundCrewSubRoleWire[] },
+        // Inventory: stock-count and asset reconciliation
+        { id: `i-${idx}-6`, name: 'Table Linen Rolls', sku: 'LM-0520', qty: 80, color: 'Ivory White', subRoles: ['Inventory', 'Warehouse'] as GroundCrewSubRoleWire[] },
+        { id: `i-${idx}-7`, name: 'Centerpiece Floral Frames', sku: 'LM-0715', qty: 30, color: 'Brushed Gold', subRoles: ['Inventory'] as GroundCrewSubRoleWire[] },
+        // Production: builds, rigging, and fabrication
+        { id: `i-${idx}-8`, name: 'Truss Tower Sections', sku: 'LM-3301', qty: 8, color: 'Aluminum', subRoles: ['Production'] as GroundCrewSubRoleWire[] },
+        { id: `i-${idx}-9`, name: 'Pipe & Drape Kits', sku: 'LM-3402', qty: 6, color: 'Black / Chrome', subRoles: ['Production', 'Warehouse'] as GroundCrewSubRoleWire[] },
       ],
     }))
   }, [events])
@@ -129,6 +164,7 @@ export function GroundCrewPage() {
       quantity,
       description,
       submittedBy: adminName || 'Ground Crew Member',
+      submittedByUserId: userId || adminEmail || undefined,
       submittedRole: accessLevel === 'Event Admin' ? 'Field Lead' : accessLevel === 'Ground Crew / Member' ? 'Member' : 'Team Lead',
       submittedAt: hava?.meta.capturedAt ?? new Date().toISOString(),
       demoLabel: undefined,
@@ -191,7 +227,11 @@ export function GroundCrewPage() {
         <p className="eyebrow flex items-center gap-1.5">
           <span>Lumière Operations</span>
         </p>
-        <div className="brand-mark">GROUND CREW</div>
+        <div className="brand-mark">
+          {groundCrewSubRole && SUBROLE_DISPLAY[groundCrewSubRole]
+            ? SUBROLE_DISPLAY[groundCrewSubRole].toUpperCase()
+            : 'GROUND CREW'}
+        </div>
       </div>
       <button className="avatar" onClick={() => setTab('account')} aria-label="Open account">{(adminName || 'GC').slice(0, 2).toUpperCase()}</button>
     </header>
@@ -202,8 +242,22 @@ export function GroundCrewPage() {
         <LoadingSkeleton variant="cards" />
       ) : (
         <>
-          {tab === 'tasks' && <DecisionMode declarations={declarations} accessLevel={accessLevel} adminEventId={adminEventId} events={crewEvents} onEventChange={setAdminEventId} onDecision={(id, decision) => { decideGroundCrewDeclaration(id, decision, adminName || 'Event Admin'); notify(`Declaration ${decision.toLowerCase()}.`) }} />}
-      {tab === 'home' && (selectedEvent ? <EventDetail event={selectedEvent} batches={dispatchStore.get(selectedEvent.id) ?? []} handoffNote={handoffNotes[selectedEvent.id] ?? ''} onHandoffNoteChange={(value) => setHandoffNote(selectedEvent.id, value)} egressError={egressError} onAdvancePhase={() => advancePhase(selectedEvent.id)} onStartEgress={() => startEgress(selectedEvent.id)} onBack={() => { setSelectedEventId(null); setEgressError('') }} onReport={openReport} onStall={(batchId, reason) => { markBatchStalled(selectedEvent.id, batchId, reason); notify('Batch marked Stalled In Transit.') }} onResume={(batchId) => { resolveBatchStall(selectedEvent.id, batchId); notify('Transit resumed.') }} /> : <Home events={crewEvents} onOpen={(event) => setSelectedEventId(event.id)} approachingSummary={accessLevel === 'Event Admin' ? getApproachingDeclarationsSummary() : null} />)}
+          {tab === 'tasks' && (
+            <DecisionMode
+              declarations={declarations}
+              accessLevel={accessLevel}
+              adminEventId={adminEventId}
+              events={crewEvents}
+              onEventChange={setAdminEventId}
+              userId={userId}
+              manningAssignments={manningAssignments}
+              onDecision={(id, decision) => {
+                decideGroundCrewDeclaration(id, decision, adminName || 'Event Admin')
+                notify(`Declaration ${decision.toLowerCase()}.`)
+              }}
+            />
+          )}
+      {tab === 'home' && (selectedEvent ? <EventDetail event={selectedEvent} groundCrewSubRole={groundCrewSubRole} batches={dispatchStore.get(selectedEvent.id) ?? []} handoffNote={handoffNotes[selectedEvent.id] ?? ''} onHandoffNoteChange={(value) => setHandoffNote(selectedEvent.id, value)} egressError={egressError} onAdvancePhase={() => advancePhase(selectedEvent.id)} onStartEgress={() => startEgress(selectedEvent.id)} onBack={() => { setSelectedEventId(null); setEgressError('') }} onReport={openReport} onStall={(batchId, reason) => { markBatchStalled(selectedEvent.id, batchId, reason); notify('Batch marked Stalled In Transit.') }} onResume={(batchId) => { resolveBatchStall(selectedEvent.id, batchId); notify('Transit resumed.') }} /> : <Home events={crewEvents} onOpen={(event) => setSelectedEventId(event.id)} approachingSummary={accessLevel === 'Event Admin' ? getApproachingDeclarationsSummary() : null} groundCrewSubRole={groundCrewSubRole} />)}
           {tab === 'calendar' && <CalendarView selectedDate={selectedDate} setSelectedDate={setSelectedDate} notes={notes} setNotes={setNotes} onSave={() => notify('Personal note saved.')} events={crewEvents} />}
           {tab === 'activity' && <Activity reports={reports} requests={requests} events={crewEvents} />}
           {tab === 'account' && <Account name={adminName || 'Ground Crew'} email={adminEmail || 'crew@lumiere.com'} requests={requests} onRequest={() => setRequestOpen(true)} onLogout={logout} />}
@@ -217,7 +271,25 @@ export function GroundCrewPage() {
   </div>
 }
 
-function DecisionMode({ declarations, accessLevel, adminEventId, events, onEventChange, onDecision }: { declarations: GroundCrewDeclaration[]; accessLevel: AccessLevel; adminEventId: string; events: EventItem[]; onEventChange: (value: string) => void; onDecision: (id: string, decision: 'Confirmed' | 'Rejected') => void }) {
+function DecisionMode({
+  declarations,
+  accessLevel,
+  adminEventId,
+  events,
+  onEventChange,
+  onDecision,
+  userId,
+  manningAssignments = [],
+}: {
+  declarations: GroundCrewDeclaration[]
+  accessLevel: AccessLevel
+  adminEventId: string
+  events: EventItem[]
+  onEventChange: (value: string) => void
+  onDecision: (id: string, decision: 'Confirmed' | 'Rejected') => void
+  userId?: string
+  manningAssignments?: ManningAssignment[]
+}) {
   const [now, setNow] = useState(() => Date.now())
   const assigned = declarations.filter((declaration) => declaration.eventId === adminEventId && declaration.status === 'Pending Event Admin')
   const approachingForEvent = assigned.filter((declaration) => getDeclarationAging(declaration.submittedAt, now).approaching)
@@ -304,35 +376,69 @@ function DecisionMode({ declarations, accessLevel, adminEventId, events, onEvent
           {assigned.length === 0 ? (
             <div className="paper-card text-sm text-muted-foreground">No unconfirmed reports for this event.</div>
           ) : (
-            assigned.map((declaration) => (
-              <article key={declaration.id} className="paper-card">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="eyebrow">{declaration.condition} · {declaration.item}</p>
-                    <h3 className="mt-1 font-serif text-lg">{declaration.eventName}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {declaration.quantity} affected · submitted by {declaration.submittedBy} ({declaration.submittedRole})
-                    </p>
+            assigned.map((declaration) => {
+              const isSelfFiled = isSelfFiledDeclaration(declaration, userId)
+              const isSoleAdmin = isSoleEventAdminForEvent(declaration.eventName, manningAssignments)
+              return (
+                <article key={declaration.id} className="paper-card space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="eyebrow">{declaration.condition} · {declaration.item}</p>
+                      <h3 className="mt-1 font-serif text-lg">{declaration.eventName}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {declaration.quantity} affected · submitted by {declaration.submittedBy} ({declaration.submittedRole})
+                      </p>
+                    </div>
+                    <span className={`status ${getDeclarationAging(declaration.submittedAt, now).approaching ? 'status-in-progress' : 'status-submitted'}`}>
+                      Pending {getDeclarationAging(declaration.submittedAt, now).elapsedHours}h
+                      {getDeclarationAging(declaration.submittedAt, now).approaching ? ' · approaching' : ''}
+                    </span>
                   </div>
-                  <span className={`status ${getDeclarationAging(declaration.submittedAt, now).approaching ? 'status-in-progress' : 'status-submitted'}`}>
-                    Pending {getDeclarationAging(declaration.submittedAt, now).elapsedHours}h
-                    {getDeclarationAging(declaration.submittedAt, now).approaching ? ' · approaching' : ''}
-                  </span>
-                </div>
-                <p className="mt-3 text-sm leading-6">{declaration.description}</p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Submitted {new Date(declaration.submittedAt).toLocaleString()} · 48-hour safety fallback applies
-                </p>
-                <div className="mt-4 flex gap-2">
-                  <button className="button-primary" onClick={() => onDecision(declaration.id, 'Confirmed')}>
-                    Approve declaration
-                  </button>
-                  <button className="button-secondary" onClick={() => onDecision(declaration.id, 'Rejected')}>
-                    Reject declaration
-                  </button>
-                </div>
-              </article>
-            ))
+
+                  {isSelfFiled && (
+                    <div className="rounded border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300">
+                      <span className="inline-flex items-center gap-1.5">
+                        <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400" />
+                        Self-filed declaration — secondary sign-off required
+                      </span>
+                    </div>
+                  )}
+
+                  <p className="mt-2 text-sm leading-6">{declaration.description}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Submitted {new Date(declaration.submittedAt).toLocaleString()} · 48-hour safety fallback applies
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      className="button-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={isSelfFiled}
+                      title={isSelfFiled ? 'Self-filed declaration — secondary sign-off required' : undefined}
+                      onClick={() => onDecision(declaration.id, 'Confirmed')}
+                    >
+                      Approve declaration
+                    </button>
+                    <button
+                      className="button-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={isSelfFiled}
+                      title={isSelfFiled ? 'Self-filed declaration — secondary sign-off required' : undefined}
+                      onClick={() => onDecision(declaration.id, 'Rejected')}
+                    >
+                      Reject declaration
+                    </button>
+
+                    {isSelfFiled && isSoleAdmin && (
+                      <button
+                        className="button-secondary text-amber-800 border-amber-300 hover:bg-amber-50 dark:text-amber-300 dark:border-amber-700 dark:hover:bg-amber-950/40"
+                        onClick={() => escalateDeclarationToManning(declaration.id)}
+                      >
+                        Escalate to Manning Officer (Sole Event Admin)
+                      </button>
+                    )}
+                  </div>
+                </article>
+              )
+            })
           )}
         </section>
       )}
@@ -344,10 +450,12 @@ function Home({
   events,
   onOpen,
   approachingSummary,
+  groundCrewSubRole,
 }: {
   events: EventItem[]
   onOpen: (event: EventItem) => void
   approachingSummary?: { totalApproaching: number; eventsCount: number } | null
+  groundCrewSubRole?: GroundCrewSubRoleWire
 }) {
   const [activeNotif, setActiveNotif] = useState<{ id: string; label: string; detail: string; category?: string; date?: string; venue?: string } | null>(null)
 
@@ -436,8 +544,8 @@ function Home({
                   <p className="font-semibold mt-0.5">{activeNotif.venue || 'Assigned Event'}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Assigned Shift</p>
-                  <p className="font-semibold mt-0.5">Ground Crew Tier A</p>
+                  <p className="text-muted-foreground">Assigned Sub-Role</p>
+                  <p className="font-semibold mt-0.5">{groundCrewSubRole ? SUBROLE_DISPLAY[groundCrewSubRole] : 'Ground Crew'}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Required Gear</p>
@@ -529,8 +637,10 @@ function PhaseMap({ phase }: { phase: CheckpointPhase }) {
   )
 }
 
-function EventDetail({ event, batches, handoffNote, onHandoffNoteChange, egressError, onAdvancePhase, onStartEgress, onBack, onReport, onStall, onResume }: { event: EventItem; batches: DispatchBatch[]; handoffNote: string; onHandoffNoteChange: (value: string) => void; egressError: string; onAdvancePhase: () => void; onStartEgress: () => void; onBack: () => void; onReport: (item: EventItem['items'][number]) => void; onStall: (batchId: string, reason: string) => void; onResume: (batchId: string) => void }) {
+function EventDetail({ event, groundCrewSubRole, batches, handoffNote, onHandoffNoteChange, egressError, onAdvancePhase, onStartEgress, onBack, onReport, onStall, onResume }: { event: EventItem; groundCrewSubRole?: GroundCrewSubRoleWire; batches: DispatchBatch[]; handoffNote: string; onHandoffNoteChange: (value: string) => void; egressError: string; onAdvancePhase: () => void; onStartEgress: () => void; onBack: () => void; onReport: (item: EventItem['items'][number]) => void; onStall: (batchId: string, reason: string) => void; onResume: (batchId: string) => void }) {
   const { phase } = event
+  // Filter items to those relevant to this sub-role. EventAdmin sees all items.
+  const visibleItems = filterItemsBySubRole(event.items, groundCrewSubRole)
   return (
     <div className="space-y-5">
       <button onClick={onBack} className="button-secondary"><ChevronLeft className="size-4" /> All events</button>
@@ -547,7 +657,7 @@ function EventDetail({ event, batches, handoffNote, onHandoffNoteChange, egressE
         <section className="paper-card space-y-4">
           <div><p className="eyebrow">Checkpoint 1 of 4</p><h2 className="mt-1 font-serif text-xl">Dispatch Loading Handoff</h2></div>
           <p className="flex items-start gap-2 text-sm leading-6 text-muted-foreground"><PackageCheck className="mt-0.5 size-4 shrink-0 text-primary" /> Confirm warehouse dispatch manifest loading and vehicle clearance.</p>
-          <div className="space-y-2">{event.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><span className="status status-submitted shrink-0">Manifest Verified</span></div>)}</div>
+          <div className="space-y-2">{visibleItems.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><span className="status status-submitted shrink-0">Manifest Verified</span></div>)}</div>
           <button type="button" onClick={onAdvancePhase} className="button-primary w-full mt-2">
             <ChevronRight className="size-4" /> Confirm Loading — Advance to Venue Arrival
           </button>
@@ -558,7 +668,7 @@ function EventDetail({ event, batches, handoffNote, onHandoffNoteChange, egressE
         <section className="paper-card space-y-4">
           <div><p className="eyebrow">Checkpoint 2 of 4</p><h2 className="mt-1 font-serif text-xl">Venue Arrival Verification</h2></div>
           <p className="text-sm leading-6 text-muted-foreground">Verify vehicle arrival and transit condition before unloading.</p>
-          <div className="space-y-2">{event.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><button onClick={() => onReport(item)} className="button-secondary shrink-0"><Camera className="size-4" /> Condition Check</button></div>)}</div>
+          <div className="space-y-2">{visibleItems.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><button onClick={() => onReport(item)} className="button-secondary shrink-0"><Camera className="size-4" /> Condition Check</button></div>)}</div>
           <button type="button" onClick={onAdvancePhase} className="button-primary w-full mt-2">
             <ChevronRight className="size-4" /> Confirm Arrival — Advance to Pre-Event Setup
           </button>
@@ -569,7 +679,7 @@ function EventDetail({ event, batches, handoffNote, onHandoffNoteChange, egressE
         <section className="paper-card space-y-4">
           <div><p className="eyebrow">Checkpoint 3 of 4</p><h2 className="mt-1 font-serif text-xl">Pre-Event Setup Validation</h2></div>
           <p className="text-sm leading-6 text-muted-foreground">Review each item group. Report damage or missing quantities before event activation.</p>
-          <div className="space-y-2">{event.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><button onClick={() => onReport(item)} className="button-secondary shrink-0"><Camera className="size-4" /> Report</button></div>)}</div>
+          <div className="space-y-2">{visibleItems.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><button onClick={() => onReport(item)} className="button-secondary shrink-0"><Camera className="size-4" /> Report</button></div>)}</div>
           <button type="button" onClick={onAdvancePhase} className="button-primary w-full mt-2">
             <ChevronRight className="size-4" /> Confirm Setup — Advance to Post-Event Egress
           </button>
@@ -580,7 +690,7 @@ function EventDetail({ event, batches, handoffNote, onHandoffNoteChange, egressE
         <section className="paper-card space-y-4">
           <div><p className="eyebrow">Checkpoint 4 of 4</p><h2 className="mt-1 font-serif text-xl">Post-Event Egress Checklist</h2></div>
           <p className="flex items-start gap-2 text-sm leading-6 text-muted-foreground"><PackageCheck className="mt-0.5 size-4 shrink-0 text-primary" /> The warehouse crew confirms every item is packed and truck-ready.</p>
-          <div className="space-y-2">{event.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><span className="status status-submitted shrink-0">Egress Ready</span></div>)}</div>
+          <div className="space-y-2">{visibleItems.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p></div><span className="status status-submitted shrink-0">Egress Ready</span></div>)}</div>
           <div className="border-t border-border pt-4">
             <label className="field-label" htmlFor={`handoff-${event.id}`}>Field Lead handoff note<span className="text-destructive"> *</span>
               <textarea id={`handoff-${event.id}`} value={handoffNote} onChange={(e) => onHandoffNoteChange(e.target.value)} rows={3} placeholder="Where are damaged items placed? (prevents duplicate reporting on arrival)" className="field-input" />

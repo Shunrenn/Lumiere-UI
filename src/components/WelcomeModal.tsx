@@ -18,8 +18,6 @@ export function WelcomeModal() {
     isExecutive,
     isPlanner,
     isGroundCrew,
-    isWarehouseLead,
-    isWarehouseMember,
     isProductionManager,
     isInventoryOfficer,
     isManningOfficer,
@@ -129,18 +127,14 @@ export function WelcomeModal() {
       ],
     }
   } else {
-    // Warehouse Operations / WOM Sub-roles (Warehouse Lead, Warehouse Member, Production Manager, Inventory Officer, Manning Officer)
+    // Warehouse Operations / WOM Sub-roles (Production Manager, Inventory Officer, Manning Officer)
     const subTitle = isProductionManager
       ? 'Production Manager'
       : isInventoryOfficer
         ? 'Inventory Officer'
         : isManningOfficer
           ? 'Manning Officer'
-          : isWarehouseLead
-            ? 'Warehouse Lead'
-            : isWarehouseMember
-              ? 'Warehouse Member'
-              : 'Warehouse Operations'
+          : 'Warehouse Operations'
 
     content = {
       badge: `Warehouse · ${subTitle}`,

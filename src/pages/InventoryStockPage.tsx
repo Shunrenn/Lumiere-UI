@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Plus, ChevronDown, Grid2X2, List, PackageSearch, ArrowLeft } from 'lucide-react'
+import { Search, Plus, ChevronDown, Grid2X2, List, PackageSearch, ArrowLeft, ShieldCheck } from 'lucide-react'
 import { ConsoleLayout } from '@/components/ConsoleLayout'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { AdminShell } from '@/components/admin/AdminShell'
@@ -89,9 +89,11 @@ export function InventoryStockPage() {
   const { inventory: items, addInventoryItem, updateInventoryItem, completeMaintenance } = usePortal()
   const liveOps = useInventoryOps()
   // Executive and Admin have read-only oversight; Warehouse Managers mutate the registry.
-  const { isAdmin, isExecutive } = useAuth()
+  const { isAdmin, isExecutive, canModifyModule, subRole, hasFullWarehouseAccess, getModuleAccessLevel } = useAuth()
   const { intent, clearIntent } = useNav()
-  const readOnly = isAdmin || isExecutive
+  const canModifyAssets = canModifyModule('assets')
+  const assetAccessLevel = getModuleAccessLevel('assets')
+  const readOnly = isAdmin || isExecutive || !canModifyAssets
   const [query, setQuery] = useState('')
   const [stateFilter, setStateFilter] = useState<StockStatus | 'All'>('All')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -177,6 +179,19 @@ export function InventoryStockPage() {
   // Heading + search + add for Warehouse ConsoleLayout
   const headerBlock = (
     <div>
+      {subRole && !hasFullWarehouseAccess && assetAccessLevel !== 'Modify' && (
+        <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>
+              Sub-role <strong>{subRole}</strong> operates in <strong>{assetAccessLevel} Mode</strong> for Asset Catalog &amp; Inventory. Modifying stock catalog entries requires Warehouse Manager or Full Ops privileges.
+            </span>
+          </div>
+          <span className="font-mono text-[0.6rem] font-bold uppercase tracking-wider bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/40 shrink-0">
+            {assetAccessLevel} ACCESS
+          </span>
+        </div>
+      )}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="font-serif text-3xl font-medium tracking-tight text-foreground lg:text-4xl">

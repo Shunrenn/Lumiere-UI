@@ -24,6 +24,8 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: true,
+      port: 5173,
+      strictPort: true, // Fail loudly if 5173 is taken — prevents silent port drift that breaks CORS
       allowedHosts: true,
     },
   }

@@ -41,10 +41,10 @@ function formatDisplayTime(timeOrDate?: string, defaultTime = '06:00 PM'): strin
 
 export function EventRegistryPage() {
   const { events } = usePortal()
-  // Admin has read-only oversight; Executives manage the operations registry.
-  const { isAdmin } = useAuth()
+  // Admin and Executive have read-only oversight; Planners register & edit events.
+  const { isAdmin, isExecutive } = useAuth()
   const { intent, clearIntent, navigate } = useNav()
-  const readOnly = isAdmin
+  const readOnly = isAdmin || isExecutive
   // A single drawer instance serves create / view / edit.
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerMode, setDrawerMode] = useState<'create' | 'view' | 'edit'>('create')

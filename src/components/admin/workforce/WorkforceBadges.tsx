@@ -8,7 +8,11 @@ const ROLE_STYLES: Record<string, string> = {
   'Warehouse Manager': 'bg-sky-100 text-sky-900 border-sky-300 dark:bg-sky-400/15 dark:text-sky-300 dark:border-sky-400/30',
   'Event Planner': 'bg-violet-100 text-violet-900 border-violet-300 dark:bg-violet-400/15 dark:text-violet-300 dark:border-violet-400/30',
   'Ground Crew': 'bg-teal-100 text-teal-900 border-teal-300 dark:bg-teal-400/15 dark:text-teal-300 dark:border-teal-400/30',
-  'Field & Production Crew': 'bg-teal-100 text-teal-900 border-teal-300 dark:bg-teal-400/15 dark:text-teal-300 dark:border-teal-400/30',
+  'Field Crew': 'bg-teal-100 text-teal-900 border-teal-300 dark:bg-teal-400/15 dark:text-teal-300 dark:border-teal-400/30',
+  'Production Crew': 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-400/15 dark:text-amber-300 dark:border-amber-400/30',
+  'Warehouse Crew': 'bg-sky-100 text-sky-900 border-sky-300 dark:bg-sky-400/15 dark:text-sky-300 dark:border-sky-400/30',
+  'Inventory Crew': 'bg-indigo-100 text-indigo-900 border-indigo-300 dark:bg-indigo-400/15 dark:text-indigo-300 dark:border-indigo-400/30',
+  'Event Admin': 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-400/15 dark:text-emerald-300 dark:border-emerald-400/30',
 }
 
 export function RoleBadge({ role }: { role: StaffRole }) {

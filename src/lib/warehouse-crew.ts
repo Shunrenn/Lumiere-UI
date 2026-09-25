@@ -264,7 +264,11 @@ export function checkSymmetricConflict(
 }
 
 export function getCrewPool(staff: Staff[]) {
-  return staff.filter((member) => member.role === 'Field & Production Crew')
+  return staff.filter(
+    (member) =>
+      member.role === 'Ground Crew' ||
+      member.role === 'Event Admin',
+  )
 }
 
 let cache: { key: string; rows: CrewRow[] } | null = null
@@ -494,7 +498,6 @@ export function crewHasConflict(row: CrewRow | undefined, eventId: string): bool
 
 export const QUALIFIED_LEAD_ROLES = [
   'Event Admin',
-  'Warehouse Lead',
   'Team Lead / Field Lead',
   'Field Lead',
   'Team Lead',

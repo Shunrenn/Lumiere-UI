@@ -17,6 +17,8 @@ import {
   ChevronRight,
   ShieldCheck,
   ScrollText,
+  FileText,
+  Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useNav } from '@/lib/nav'
@@ -40,6 +42,16 @@ const adminNavItems: NavItem[] = [
   { label: 'Security Audit Logs', blurb: 'Review security events & system audit trail', icon: ScrollText, route: 'security-audit' },
 ]
 
+// Executive: strategic view — per owner decision (2026-09-25).
+// Scope (5 exact items): dashboard, registry, damage, logs, inventory.
+const executiveNavItems: NavItem[] = [
+  { label: 'Event Dashboard', blurb: 'Cross-portfolio event analytics & KPI dashboard', icon: LayoutGrid, route: 'dashboard' },
+  { label: 'Event Registry', blurb: 'Operations portfolio registry and event records', icon: FileText, route: 'registry' },
+  { label: 'Damage Oversight', blurb: 'Damage validation & Held-for-Audit dual-custody sign-off', icon: AlertTriangle, route: 'damage' },
+  { label: 'Activity Logs', blurb: 'Audit trail and system event logs', icon: Shield, route: 'logs' },
+  { label: 'Stock Catalog', blurb: 'Read-only inventory stock catalog', icon: Boxes, route: 'inventory' },
+]
+
 const warehouseNavItems: NavItem[] = [
   { label: 'Overview', blurb: 'Operations metrics & activity dashboard', icon: LayoutGrid, route: 'overview' },
   { label: 'Inventory Stock', blurb: 'Category-specific asset levels and stock tracking', icon: Boxes, route: 'inventory', moduleId: 'assets' },
@@ -54,6 +66,7 @@ const warehouseNavItems: NavItem[] = [
 const plannerNavItems: NavItem[] = [
   { label: 'Design Canvas', blurb: 'Visual 2D/3D event layout canvas hub', icon: PenTool, route: 'canvas' },
   { label: 'Overview & Events', blurb: 'Event scheduling & project overview', icon: LayoutGrid, route: 'overview' },
+  { label: 'Event Registry', blurb: 'Register and manage event portfolio records', icon: FileText, route: 'registry' },
   { label: 'Inventory Catalog', blurb: 'Browse venue décor and asset catalog', icon: Boxes, route: 'inventory' },
 ]
 
@@ -75,11 +88,20 @@ export function ConsoleSidebar({
   onCloseMobile,
 }: ConsoleSidebarProps) {
   const { route, navigate } = useNav()
-  const { adminName, adminRole, isWarehouse, isPlanner, isAdmin, setConfirmLogout } = useAuth()
+  const { adminName, adminRole, isWarehouse, isPlanner, isAdmin, isExecutive, setConfirmLogout, subRole, hasFullWarehouseAccess, getModuleAccessLevel } = useAuth()
   const { dark, toggle } = useDarkMode()
   const [companionOpen, setCompanionOpen] = useState(false)
 
-  const navItems = isAdmin ? adminNavItems : isPlanner ? plannerNavItems : isWarehouse ? warehouseNavItems : warehouseNavItems
+  // Nav item set is strictly scoped to each role group — no cross-role links.
+  const navItems = isAdmin
+    ? adminNavItems
+    : isExecutive
+    ? executiveNavItems
+    : isPlanner
+    ? plannerNavItems
+    : isWarehouse
+    ? warehouseNavItems
+    : warehouseNavItems // fallback for unrecognized web roles
 
   const activeItem = navItems.find((item) => route === item.route || routeParent[route] === item.route) ?? navItems[0]
 
@@ -185,7 +207,7 @@ export function ConsoleSidebar({
           <div className="flex items-start justify-between border-b border-border px-5 py-5">
             <div>
               <p className="text-[0.58rem] font-bold uppercase tracking-[0.2em] text-primary">
-                {isPlanner ? 'Planner Console' : 'Warehouse Module'}
+                {isAdmin ? 'Admin Console' : isExecutive ? 'Executive View' : isPlanner ? 'Planner Console' : 'Warehouse Module'}
               </p>
               <h2 className="mt-1 font-serif text-xl font-medium text-card-foreground">
                 {activeItem.label}
@@ -227,6 +249,10 @@ export function ConsoleSidebar({
               {navItems.map((item) => {
                 const Icon = item.icon
                 const active = route === item.route || routeParent[route] === item.route
+                const accessLevel = item.moduleId && subRole && !hasFullWarehouseAccess
+                  ? getModuleAccessLevel(item.moduleId)
+                  : null
+
                 return (
                   <button
                     key={item.label}
@@ -245,7 +271,23 @@ export function ConsoleSidebar({
                       <Icon className="size-4 shrink-0" aria-hidden="true" />
                       <span className="truncate">{item.label}</span>
                     </div>
-                    <ChevronRight className="size-3.5 opacity-60" />
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {accessLevel && (
+                        <span className={cn(
+                          'text-[0.55rem] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border',
+                          active
+                            ? 'bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30'
+                            : accessLevel === 'Modify'
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                            : accessLevel === 'Interact'
+                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                            : 'bg-muted text-muted-foreground border-border',
+                        )}>
+                          {accessLevel}
+                        </span>
+                      )}
+                      <ChevronRight className="size-3.5 opacity-60" />
+                    </div>
                   </button>
                 )
               })}

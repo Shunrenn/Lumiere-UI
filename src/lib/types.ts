@@ -22,6 +22,12 @@ export type Route =
   | 'canvas-workspace'
   // Ground crew field app
   | 'field-ops'
+  // Ground Crew sub-role workspaces (distinct screens per sub-role)
+  | 'crew-warehouse'
+  | 'crew-field'
+  | 'crew-inventory'
+  | 'crew-production'
+  | 'crew-event-admin'
   // Warehouse mobile workspaces
   | 'warehouse-lead'
   | 'warehouse-member'
@@ -83,6 +89,7 @@ export const STAFF_ROLES = [
   'Admin',
   'Executive',
   'Warehouse Manager',
+  'Warehouse Operations Manager',
   'Event Planner',
   'Ground Crew',
   'Event Admin',
@@ -90,15 +97,19 @@ export const STAFF_ROLES = [
   'Field Crew',
   'Inventory Crew',
   'Production Crew',
-  // Legacy role strings retained for backward-compatibility with mock data records:
-  'Warehouse Lead',
-  'Warehouse Member',
-  'Field & Production Crew',
 ] as const
 
 export type StaffRole = (typeof STAFF_ROLES)[number]
 
 export type GroundCrewSubRoleWire = 'Warehouse' | 'Field' | 'Inventory' | 'Production' | 'EventAdmin'
+
+export type WomSubRoleWire =
+  | 'ManningOfficer'
+  | 'WarehouseManager'
+  | 'ProductionManager'
+  | 'InventoryOfficer'
+  | 'PurchasingOfficer'
+
 
 export type SessionStatus =
   | 'Active Session'
@@ -124,6 +135,7 @@ export interface Staff {
   email: string
   contact: string
   role: StaffRole
+  groundCrewSubRole?: GroundCrewSubRoleWire
   sessionStatus: SessionStatus
   lastAccess: string
   // Date the staff member was onboarded, used to group hires in the User

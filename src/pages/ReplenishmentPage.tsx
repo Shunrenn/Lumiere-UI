@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Search, Download, Plus, Package } from 'lucide-react'
+import { Search, Download, Plus, Package, ShieldCheck } from 'lucide-react'
 import { ConsoleLayout } from '@/components/ConsoleLayout'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
@@ -8,6 +8,7 @@ import { EditThresholdModal } from '@/components/EditThresholdModal'
 import { ShopForOrderModal } from '@/components/ShopForOrderModal'
 import { WarehouseRequestModal } from '@/components/WarehouseRequestModal'
 import { usePortal } from '@/lib/store'
+import { useAuth } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 import type { DeficitStatus, ProcurementItem } from '@/lib/types'
 import { exportReplenishmentProcurementPdf } from '@/lib/pdf-exporter'
@@ -52,6 +53,10 @@ function KpiCard({ kpi }: { kpi: Kpi }) {
 
 export function ReplenishmentPage() {
   const { procurement, inventory } = usePortal()
+  const { canModifyModule, subRole, hasFullWarehouseAccess, getModuleAccessLevel } = useAuth()
+  const canModifyReplenishment = canModifyModule('replenishment')
+  const replenishmentAccessLevel = getModuleAccessLevel('replenishment')
+
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('All')
   const [reorderItem, setReorderItem] = useState<ProcurementItem | null>(null)
@@ -59,7 +64,6 @@ export function ReplenishmentPage() {
   const [trackingId, setTrackingId] = useState<string | null>(null)
   const [shopModalOpen, setShopModalOpen] = useState(false)
   const [warehouseRequestOpen, setWarehouseRequestOpen] = useState(false)
-  // Flag to track if initiate reorder was explicitly clicked
   const [userInitiatedReorder, setUserInitiatedReorder] = useState(false)
 
   // Ensure modals don't auto-open on page load
@@ -183,6 +187,21 @@ export function ReplenishmentPage() {
         <LoadingSkeleton variant="table" />
       ) : (
         <>
+      {/* Sub-role Scope Banner */}
+      {subRole && !hasFullWarehouseAccess && replenishmentAccessLevel !== 'Modify' && (
+        <div className="mt-4 flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>
+              Sub-role <strong>{subRole}</strong> operates in <strong>{replenishmentAccessLevel} Mode</strong> for Replenishment &amp; Deficit Management. Reorder creation is restricted to Purchasing Officers and Full Ops accounts.
+            </span>
+          </div>
+          <span className="font-mono text-[0.6rem] font-bold uppercase tracking-wider bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/40 shrink-0">
+            {replenishmentAccessLevel} ACCESS
+          </span>
+        </div>
+      )}
+
       {/* Page heading */}
       <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
@@ -220,8 +239,13 @@ export function ReplenishmentPage() {
           </button>
           <button
             type="button"
+            disabled={!canModifyReplenishment}
             onClick={initiateReorder}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-primary-foreground transition hover:opacity-90"
+            title={!canModifyReplenishment ? `Requires Modify permission (current sub-role: ${subRole} - ${replenishmentAccessLevel})` : undefined}
+            className={cn(
+              "inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-primary-foreground transition hover:opacity-90",
+              !canModifyReplenishment && "opacity-50 cursor-not-allowed hover:opacity-50"
+            )}
           >
             <Plus className="size-3.5" />
             Initiate Reorder

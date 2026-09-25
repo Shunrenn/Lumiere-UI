@@ -54,6 +54,8 @@ export interface ManningAssignment {
   status: 'Active' | 'Closed'
   created_by: string | null
   created_at: string
+  IsShiftLead?: boolean
+  is_shift_lead?: boolean
 }
 
 export interface ManningTask {
@@ -119,6 +121,7 @@ const PRESET_ASSIGNMENTS: ManningAssignment[] = [
     deployment_ref: 'EVT-2026-081',
     lead_name: 'Amara Okafor',
     lead_email: 'amara@example.com',
+    IsShiftLead: true,
     member_names: ['Lucia Mendes', 'Noah Williams', 'Sofia Reyes'],
     sub_role: 'Warehouse deployment lead',
     inherited_from: null,
@@ -135,6 +138,7 @@ const PRESET_ASSIGNMENTS: ManningAssignment[] = [
     deployment_ref: 'EVT-2026-094',
     lead_name: 'Lucia Mendes',
     lead_email: 'lucia@example.com',
+    IsShiftLead: true,
     member_names: ['Daniel Price', 'Marcus Chen', 'Aisha Bello', 'Noah Williams'],
     sub_role: 'Outbound logistics lead',
     inherited_from: null,
@@ -151,6 +155,7 @@ const PRESET_ASSIGNMENTS: ManningAssignment[] = [
     deployment_ref: 'EVT-2026-101',
     lead_name: 'Sofia Reyes',
     lead_email: 'sofia@example.com',
+    IsShiftLead: true,
     member_names: ['Amara Okafor', 'Elena Rossi', 'Theo Martin'],
     sub_role: 'Venue setup coordinator',
     inherited_from: null,
@@ -1335,5 +1340,36 @@ export function useManningOverrides() {
   }, [reload])
 
   return { overrides, loading, reload }
+}
+
+export type AccessLevel = 'Ground Crew / Member' | 'Shift Lead' | 'Receiver' | 'Event Admin'
+
+export interface GroundCrewAccessParams {
+  groundCrewSubRole?: string
+  adminEmail?: string
+  manningAssignments: ManningAssignment[]
+  todayIso?: string
+}
+
+export function deriveGroundCrewAccessLevel(params: GroundCrewAccessParams): AccessLevel {
+  const {
+    groundCrewSubRole,
+    adminEmail,
+    manningAssignments,
+    todayIso = new Date().toISOString().slice(0, 10),
+  } = params
+
+  const isEventAdmin = groundCrewSubRole === 'EventAdmin'
+  if (isEventAdmin) return 'Event Admin'
+
+  const emailNorm = (adminEmail || '').toLowerCase().trim()
+  const isShiftLead = manningAssignments.some((a) => {
+    if (a.status !== 'Active') return false
+    if (a.work_date !== todayIso) return false
+    if (a.IsShiftLead !== true) return false
+    return Boolean(emailNorm) && Boolean(a.lead_email) && a.lead_email?.toLowerCase().trim() === emailNorm
+  })
+
+  return isShiftLead ? 'Shift Lead' : 'Ground Crew / Member'
 }
 

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, ChevronDown, CalendarDays } from 'lucide-react'
+import { Search, ChevronDown, CalendarDays, ShieldCheck } from 'lucide-react'
 import { ConsoleLayout } from '@/components/ConsoleLayout'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
 import { CrewDetailModal, type CrewDetail } from '@/components/CrewDetailModal'
 import { CREW, type CrewStatus } from '@/lib/roster'
+import { useAuth } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 
 const statusMeta: Record<CrewStatus, { badge: string; dot: string }> = {
@@ -40,6 +41,9 @@ function Avatar({ name }: { name: string }) {
 }
 
 export function CrewRosterPage() {
+  const { subRole, hasFullWarehouseAccess, getModuleAccessLevel } = useAuth()
+  const crewAccessLevel = getModuleAccessLevel('manning')
+
   const [query, setQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState('All Roles')
   const [statusFilter, setStatusFilter] = useState<'All Statuses' | CrewStatus>('All Statuses')
@@ -97,6 +101,19 @@ export function CrewRosterPage() {
         <LoadingSkeleton variant="table" />
       ) : (
         <>
+      {subRole && !hasFullWarehouseAccess && crewAccessLevel !== 'Modify' && (
+        <div className="mt-4 flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>
+              Sub-role <strong>{subRole}</strong> operates in <strong>{crewAccessLevel} Mode</strong> for Manpower &amp; Crew. Modifying shift rosters and team allocations requires Manning Officer or Full Ops privileges.
+            </span>
+          </div>
+          <span className="font-mono text-[0.6rem] font-bold uppercase tracking-wider bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/40 shrink-0">
+            {crewAccessLevel} ACCESS
+          </span>
+        </div>
+      )}
       <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">

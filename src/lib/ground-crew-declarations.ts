@@ -11,6 +11,7 @@ export interface GroundCrewDeclaration {
   quantity: number
   description: string
   submittedBy: string
+  submittedByUserId?: string
   submittedRole: 'Member' | 'Team Lead' | 'Field Lead' | 'Receiver'
   submittedAt: string
   status: DeclarationStatus
@@ -21,6 +22,27 @@ export interface GroundCrewDeclaration {
   sha256Hash?: string
   exifMetadata?: string
   gpsCoordinates?: string
+}
+
+export function isSelfFiledDeclaration(
+  declaration: GroundCrewDeclaration,
+  currentUserId?: string,
+): boolean {
+  if (!declaration.submittedByUserId || !currentUserId) {
+    // Fail-closed: missing user ID on declaration or context cannot be verified -> block self-confirmation
+    return true
+  }
+  return declaration.submittedByUserId === currentUserId
+}
+
+export function isSoleEventAdminForEvent(
+  eventName: string,
+  manningAssignments: Array<{ event_name: string; sub_role?: string | null; status: string }>,
+): boolean {
+  const eventAdmins = manningAssignments.filter(
+    (a) => a.event_name === eventName && a.status === 'Active' && a.sub_role === 'EventAdmin',
+  )
+  return eventAdmins.length <= 1
 }
 
 type Listener = () => void
@@ -36,6 +58,7 @@ let declarations: GroundCrewDeclaration[] = [
     quantity: 2,
     description: 'Expiry-test declaration seeded beyond the 48-hour confirmation window.',
     submittedBy: 'Field Lead Demo',
+    submittedByUserId: 'user-field-lead-001',
     submittedRole: 'Field Lead',
     submittedAt: seededAt,
     status: 'Pending Event Admin',
@@ -50,6 +73,7 @@ let declarations: GroundCrewDeclaration[] = [
     quantity: 1,
     description: 'Fresh demo declaration for Event Admin confirmation practice.',
     submittedBy: 'Team Lead Demo',
+    submittedByUserId: 'user-team-lead-002',
     submittedRole: 'Team Lead',
     submittedAt: new Date().toISOString(),
     status: 'Pending Event Admin',
@@ -105,8 +129,15 @@ export function decideGroundCrewDeclaration(id: string, decision: 'Confirmed' | 
   emit()
 }
 
-export function getManningFallbackDeclarations(now = Date.now()) {
-  return declarations.filter((declaration) => declaration.status === 'Escalated to Manning' && isExpired(declaration, now))
+export function escalateDeclarationToManning(id: string) {
+  declarations = declarations.map((declaration) =>
+    declaration.id === id ? { ...declaration, status: 'Escalated to Manning' as const } : declaration
+  )
+  emit()
+}
+
+export function getManningFallbackDeclarations(_now = Date.now()) {
+  return declarations.filter((declaration) => declaration.status === 'Escalated to Manning')
 }
 
 export function getDeclarationSla(declaration: GroundCrewDeclaration, now = Date.now()) {

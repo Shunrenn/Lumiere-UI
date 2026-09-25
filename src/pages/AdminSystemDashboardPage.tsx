@@ -61,7 +61,7 @@ function StatCard({
 // Map a staff role onto the donut segment label it belongs to.
 function roleToSegment(role: string): string {
   if (role === 'Warehouse Manager') return 'Warehouse Ops Manager'
-  if (role === 'Ground Crew') return 'Field & Production Crew'
+  if (role === 'Ground Crew' || role === 'Event Admin') return 'Ground Crew'
   return role
 }
 

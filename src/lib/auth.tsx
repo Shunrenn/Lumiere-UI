@@ -9,15 +9,19 @@ import {
 } from 'react'
 import { supabase } from './supabase'
 import type { GroundCrewSubRoleWire } from './types'
-import { GROUND_CREW_SUBROLE_MAP, womModuleAccessLevel } from './rbac'
+import { GROUND_CREW_SUBROLE_MAP, womModuleAccessLevel, type AccessLevel } from './rbac'
 import { API_BASE_URL } from './apiConfig'
 import { useIdleTimeout } from './useIdleTimeout'
+import type { UserRouteContext } from './allowedRoutes'
 
 // Shared helper — validates that an unknown JWT claim value is a known wire
-// key and returns the typed value, or undefined for absent/non-string/invalid input.
+// key or legacy display string and returns the typed value, or undefined for absent/invalid input.
 function parseGroundCrewSubRole(raw: unknown): GroundCrewSubRoleWire | undefined {
   if (typeof raw !== 'string') return undefined
   if (Object.hasOwn(GROUND_CREW_SUBROLE_MAP, raw)) return raw as GroundCrewSubRoleWire
+  // Legacy string mappings
+  if (raw === 'Warehouse Lead' || raw === 'Warehouse Member') return 'Warehouse'
+  if (raw === 'Field & Production Crew') return 'Field'
   return undefined
 }
 
@@ -27,6 +31,24 @@ export type WomSubRole =
   | 'Production Manager'
   | 'Inventory Officer'
   | 'Purchasing Officer'
+
+const WOM_WIRE_TO_SUBROLE: Record<string, WomSubRole> = {
+  ManningOfficer: 'Manning Officer',
+  WarehouseManager: 'Warehouse Manager',
+  ProductionManager: 'Production Manager',
+  InventoryOfficer: 'Inventory Officer',
+  PurchasingOfficer: 'Purchasing Officer',
+  'Manning Officer': 'Manning Officer',
+  'Warehouse Manager': 'Warehouse Manager',
+  'Production Manager': 'Production Manager',
+  'Inventory Officer': 'Inventory Officer',
+  'Purchasing Officer': 'Purchasing Officer',
+}
+
+function parseWomSubRole(raw: unknown): WomSubRole | undefined {
+  if (typeof raw !== 'string') return undefined
+  return WOM_WIRE_TO_SUBROLE[raw]
+}
 
 export type PortalKind = 'web' | 'pwa'
 
@@ -62,12 +84,28 @@ export function mapBackendUserToPortalAccount(data: {
   const rawRole = data.role.trim()
   const isTemp = Boolean(data.temporaryPassword ?? data.email?.toLowerCase().includes('temp'))
 
-  if (rawRole === 'Warehouse Operations Manager') {
+  let jwtPayload: Record<string, any> | null = null
+  if (data.token) {
+    jwtPayload = parseJwtPayload(data.token)
+  }
+
+  // Parse WOM Sub-Role from JWT claim or rawRole (supports wire format & legacy display name)
+  const claimedWomSubRole = parseWomSubRole(
+    jwtPayload?.wom_subrole ?? (rawRole !== 'Warehouse Operations Manager' ? rawRole : undefined)
+  )
+
+  // WOM parent status requires an EXPLICIT positive marker:
+  // Either explicit JWT claim 'wom_parent' === true or (rawRole === 'Warehouse Operations Manager' AND no sub-role claim).
+  const hasExplicitWomParentMarker =
+    Boolean(jwtPayload?.wom_parent ?? jwtPayload?.is_wom_parent) ||
+    (rawRole === 'Warehouse Operations Manager' && !claimedWomSubRole)
+
+  if (hasExplicitWomParentMarker) {
     return {
       id: data.userId,
       email: data.email,
       name: data.fullName,
-      role: 'Warehouse Manager',
+      role: 'Warehouse Operations Manager',
       fullWarehouseAccess: true,
       subRole: undefined,
       portal: 'web',
@@ -76,44 +114,56 @@ export function mapBackendUserToPortalAccount(data: {
     }
   }
 
-  const womSubRoles: Record<string, PortalKind> = {
-    'Manning Officer': 'pwa',
+  const womSubRolesPortal: Record<WomSubRole, PortalKind> = {
+    'Manning Officer': 'web',
     'Warehouse Manager': 'web',
-    'Production Manager': 'pwa',
-    'Inventory Officer': 'pwa',
+    'Production Manager': 'web',
+    'Inventory Officer': 'web',
     'Purchasing Officer': 'web',
   }
 
-  if (rawRole in womSubRoles) {
+  if (claimedWomSubRole) {
     return {
       id: data.userId,
       email: data.email,
       name: data.fullName,
-      role: 'Warehouse Manager',
-      subRole: rawRole as WomSubRole,
+      role: 'Warehouse Operations Manager',
+      subRole: claimedWomSubRole,
       fullWarehouseAccess: false,
-      portal: womSubRoles[rawRole],
+      portal: womSubRolesPortal[claimedWomSubRole],
       temporaryPassword: isTemp,
       token: data.token,
     }
   }
 
-  const pwaRoles = new Set(['Ground Crew', 'Warehouse Lead', 'Warehouse Member', 'Event Admin'])
-  const portal: PortalKind = pwaRoles.has(rawRole) ? 'pwa' : 'web'
+  // Legacy role mapping for Ground Crew cohorts
+  let effectiveRole = rawRole
+  let groundCrewSubRole = parseGroundCrewSubRole(jwtPayload?.ground_crew_subrole)
 
-  let groundCrewSubRole: GroundCrewSubRoleWire | undefined = undefined
-  if (data.token) {
-    const payload = parseJwtPayload(data.token)
-    groundCrewSubRole = parseGroundCrewSubRole(payload?.ground_crew_subrole)
+  if (rawRole === 'Warehouse Lead' || rawRole === 'Warehouse Member') {
+    effectiveRole = 'Ground Crew'
+    if (!groundCrewSubRole) groundCrewSubRole = 'Warehouse'
+  } else if (rawRole === 'Field & Production Crew') {
+    effectiveRole = 'Ground Crew'
+    if (!groundCrewSubRole) groundCrewSubRole = 'Field' // Safe interim mapping to Field
+  } else if (rawRole === 'Ground Crew') {
+    effectiveRole = 'Ground Crew'
+    if (!groundCrewSubRole && jwtPayload?.ground_crew_subrole) {
+      groundCrewSubRole = parseGroundCrewSubRole(jwtPayload.ground_crew_subrole)
+    }
   }
+
+  const pwaRoles = new Set(['Ground Crew', 'Warehouse Lead', 'Warehouse Member', 'Event Admin'])
+  const portal: PortalKind = pwaRoles.has(effectiveRole) || pwaRoles.has(rawRole) ? 'pwa' : 'web'
 
   return {
     id: data.userId,
     email: data.email,
     name: data.fullName,
-    role: rawRole,
+    role: effectiveRole,
     portal,
     groundCrewSubRole,
+    fullWarehouseAccess: false,
     temporaryPassword: isTemp,
     token: data.token,
   }
@@ -121,6 +171,25 @@ export function mapBackendUserToPortalAccount(data: {
 
 export const MANNING_OFFICER_SUBROLE: WomSubRole = 'Manning Officer'
 export const EXECUTIVE_LOGIN_EMAILS = ['executive@lumiere.com']
+
+export function buildUserRouteContext(currentUser: PortalAccount | null): Required<UserRouteContext> {
+  return {
+    isAdmin: Boolean(currentUser?.role === 'Admin'),
+    isExecutive: Boolean(currentUser?.role === 'Executive'),
+    isWarehouse: Boolean(currentUser?.role === 'Warehouse Operations Manager'),
+    isPlanner: Boolean(currentUser?.role === 'Event Planner'),
+    isGroundCrew: Boolean(currentUser?.role === 'Ground Crew' && !currentUser?.groundCrewSubRole),
+    isGroundCrewWarehouse: Boolean(currentUser?.role === 'Ground Crew' && currentUser?.groundCrewSubRole === 'Warehouse'),
+    isGroundCrewField: Boolean(currentUser?.role === 'Ground Crew' && currentUser?.groundCrewSubRole === 'Field'),
+    isGroundCrewInventory: Boolean(currentUser?.role === 'Ground Crew' && currentUser?.groundCrewSubRole === 'Inventory'),
+    isGroundCrewProduction: Boolean(currentUser?.role === 'Ground Crew' && currentUser?.groundCrewSubRole === 'Production'),
+    isGroundCrewEventAdmin: Boolean(currentUser?.role === 'Ground Crew' && currentUser?.groundCrewSubRole === 'EventAdmin'),
+    isManningOfficer: Boolean(currentUser?.subRole === MANNING_OFFICER_SUBROLE),
+    isProductionManager: Boolean(currentUser?.subRole === 'Production Manager'),
+    isInventoryOfficer: Boolean(currentUser?.subRole === 'Inventory Officer'),
+    hasFullWarehouseAccess: Boolean(currentUser?.fullWarehouseAccess),
+  }
+}
 
 export function parseJwtPayload(token: string): Record<string, any> | null {
   try {
@@ -169,6 +238,7 @@ export function getStoredAuth() {
 
 interface AuthContextValue {
   isAuthenticated: boolean
+  userId: string
   adminName: string
   adminRole: string
   adminEmail: string
@@ -178,15 +248,20 @@ interface AuthContextValue {
   isWarehouse: boolean
   isPlanner: boolean
   isGroundCrew: boolean
-  isWarehouseLead: boolean
-  isWarehouseMember: boolean
+  isGroundCrewWarehouse: boolean
+  isGroundCrewField: boolean
+  isGroundCrewInventory: boolean
+  isGroundCrewProduction: boolean
+  isGroundCrewEventAdmin: boolean
   subRole: string
   groundCrewSubRole?: GroundCrewSubRoleWire
   hasFullWarehouseAccess: boolean
   isManningOfficer: boolean
   isProductionManager: boolean
   isInventoryOfficer: boolean
+  getModuleAccessLevel: (moduleId: string) => AccessLevel
   canModifyModule: (moduleId: string) => boolean
+  canInteractModule: (moduleId: string) => boolean
   isTempPassword: boolean
   login: (email: string, password: string, portal?: PortalKind, remember?: boolean) => Promise<{ ok: boolean; reason?: 'wrong-portal' | 'invalid' }>
   changePassword: (current: string, next: string) => Promise<boolean>
@@ -429,30 +504,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [currentUser?.token],
   )
 
+  const routeContext = useMemo(() => buildUserRouteContext(currentUser), [currentUser])
+
   const value = useMemo(
     () => ({
       isAuthenticated: Boolean(currentUser),
+      userId: currentUser?.id ?? '',
       adminName: currentUser?.name ?? '',
       adminRole: currentUser?.role ?? '',
       adminEmail: currentUser?.email ?? '',
       portal: currentUser?.portal ?? null,
-      isAdmin: currentUser?.role === 'Admin',
-      isExecutive: currentUser?.role === 'Executive',
-      isWarehouse: currentUser?.role === 'Warehouse Manager',
-      isPlanner: currentUser?.role === 'Event Planner',
-      isGroundCrew: currentUser?.role === 'Ground Crew',
-      isWarehouseLead: currentUser?.role === 'Warehouse Lead',
-      isWarehouseMember: currentUser?.role === 'Warehouse Member',
+      ...routeContext,
       subRole: currentUser?.subRole ?? '',
       groundCrewSubRole: currentUser?.groundCrewSubRole,
-      hasFullWarehouseAccess: currentUser?.fullWarehouseAccess ?? false,
-      isManningOfficer: currentUser?.subRole === MANNING_OFFICER_SUBROLE,
-      isProductionManager: currentUser?.subRole === 'Production Manager',
-      isInventoryOfficer: currentUser?.subRole === 'Inventory Officer',
+      getModuleAccessLevel: (moduleId: string): AccessLevel => {
+        if (currentUser?.fullWarehouseAccess || !currentUser?.subRole) return 'Modify'
+        return womModuleAccessLevel(currentUser.subRole, moduleId)
+      },
       canModifyModule: (moduleId: string) => {
-        if (currentUser?.fullWarehouseAccess) return true
-        if (!currentUser?.subRole) return false
+        if (currentUser?.fullWarehouseAccess || !currentUser?.subRole) return true
         return womModuleAccessLevel(currentUser.subRole, moduleId) === 'Modify'
+      },
+      canInteractModule: (moduleId: string) => {
+        if (currentUser?.fullWarehouseAccess || !currentUser?.subRole) return true
+        const level = womModuleAccessLevel(currentUser.subRole, moduleId)
+        return level === 'Modify' || level === 'Interact'
       },
       isTempPassword: currentUser?.temporaryPassword ?? false,
       login,

@@ -277,19 +277,21 @@ function SignInView(props: {
       </button>
 
       <div className="mt-6 space-y-1 text-center text-xs text-muted-foreground/70">
-        <p>Demo admin · admin@lumiere.com · lumiere2026</p>
-        <p>Executive · executive@lumiere.com · lumiere2026</p>
-        <p>Event planner · planner@lumiere.com · lumiere2026</p>
-        <p>Ground crew · crew@lumiere.com · lumiere2026</p>
-        <p className="pt-2 font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
-          Warehouse Ops
+        <p className="font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
+          Web Portal Staff Accounts
         </p>
-        <p>Full access · Warehouse Ops Manager · warehouseops@lumiere.com · lumiere2026 · 246810</p>
-        <p>Sub-role · Manning Officer · manning@lumiere.com · lumiere2026</p>
-        <p>Sub-role · Warehouse Manager · warehouse@lumiere.com · lumiere2026</p>
-        <p>Sub-role · Production Manager · production@lumiere.com · lumiere2026</p>
-        <p>Sub-role · Inventory Officer · inventory@lumiere.com · lumiere2026</p>
-        <p>Sub-role · Purchasing Officer · purchasing@lumiere.com · lumiere2026</p>
+        <p>Admin · admin@lumiere.com · lumiere2026</p>
+        <p>Executive · executive@lumiere.com · lumiere2026</p>
+        <p>Event Planner · planner@lumiere.com · lumiere2026</p>
+        <p>WOM Parent (Full Ops) · warehouseops@lumiere.com · lumiere2026</p>
+        <p>WOM Warehouse Manager · warehouse@lumiere.com · lumiere2026</p>
+        <p>WOM Purchasing Officer · purchasing@lumiere.com · lumiere2026</p>
+        <p>WOM Manning Officer · manning@lumiere.com · lumiere2026</p>
+        <p>WOM Production Manager · production@lumiere.com · lumiere2026</p>
+        <p>WOM Inventory Officer · inventory@lumiere.com · lumiere2026</p>
+        <p className="pt-2 italic text-muted-foreground/50">
+          For Field/Ground Crew roles (Warehouse Crew, Field Crew, etc.), click "Ground Crew? Field Login" above.
+        </p>
       </div>
     </form>
   )

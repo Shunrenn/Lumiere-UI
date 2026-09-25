@@ -1,5 +1,5 @@
 import './App.css'
-import { useEffect, useState, lazy, Suspense } from 'react'
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react'
 import type { Route } from '@/lib/types'
 import { NavProvider, useNav } from '@/lib/nav'
 import { PortalProvider } from '@/lib/store'
@@ -12,6 +12,11 @@ import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { loadRosterFromDatabase } from '@/lib/roster'
 import { PlannerProvider } from '@/lib/planner'
 import { WarehouseProvider } from '@/lib/warehouse'
+import {
+  allowedRoutes,
+  PWA_ROUTES,
+  type UserRouteContext,
+} from '@/lib/allowedRoutes'
 
 // Code-split page components for minimal initial bundle latency
 const LoginPage = lazy(() => import('@/pages/LoginPage').then((m) => ({ default: m.LoginPage })))
@@ -36,8 +41,6 @@ const DesignCanvasHubPage = lazy(() => import('@/pages/DesignCanvasHubPage').the
 const CanvasWorkspacePage = lazy(() => import('@/pages/CanvasWorkspacePage').then((m) => ({ default: m.CanvasWorkspacePage })))
 const GroundCrewPage = lazy(() => import('@/pages/GroundCrewPage').then((m) => ({ default: m.GroundCrewPage })))
 const GroundCrewLoginPage = lazy(() => import('@/pages/GroundCrewLoginPage').then((m) => ({ default: m.GroundCrewLoginPage })))
-const WarehouseLeadPage = lazy(() => import('@/pages/WarehouseLeadPage').then((m) => ({ default: m.WarehouseLeadPage })))
-const WarehouseMemberPage = lazy(() => import('@/pages/WarehouseMemberPage').then((m) => ({ default: m.WarehouseMemberPage })))
 const ManningPage = lazy(() => import('@/pages/ManningPage').then((m) => ({ default: m.ManningPage })))
 const ProductionManagerPage = lazy(() => import('@/pages/ProductionManagerPage').then((m) => ({ default: m.ProductionManagerPage })))
 const InventoryOfficerPage = lazy(() => import('@/pages/InventoryOfficerPage').then((m) => ({ default: m.InventoryOfficerPage })))
@@ -62,18 +65,119 @@ function PortalAccessError({ portal }: { portal: 'web' | 'pwa' }) {
 }
 
 function Router() {
-  const { route } = useNav()
-  const { portal, isWarehouse, isAdmin, isProductionManager, isInventoryOfficer, hasFullWarehouseAccess } = useAuth()
-  // The Production Manager WOM sub-role gets its own mobile PWA page (matching
-  // the Ground Crew / Warehouse Lead / Warehouse Member mobile accounts)
-  // instead of the desktop sidebar shell — but only when scoped to that single
-  // sub-role. The full-access Warehouse Ops Manager super-account still uses
-  // the desktop WarehouseHomePage even if its subRole happens to be unset.
-  const isMobileProductionManager = isProductionManager && !hasFullWarehouseAccess
-  const isMobileInventoryOfficer = isInventoryOfficer && !hasFullWarehouseAccess
-  const pwaRoutes = new Set(['field-ops', 'manning', 'production-manager', 'inventory-officer'])
-  const isPwaRoute = pwaRoutes.has(route)
+  const { navigate, route } = useNav()
+  const {
+    portal,
+    isWarehouse,
+    isAdmin,
+    isExecutive,
+    isPlanner,
+    isGroundCrew,
+    isGroundCrewWarehouse,
+    isGroundCrewField,
+    isGroundCrewInventory,
+    isGroundCrewProduction,
+    isGroundCrewEventAdmin,
+    isProductionManager,
+    isInventoryOfficer,
+    isManningOfficer,
+    hasFullWarehouseAccess,
+    logout,
+  } = useAuth()
+
+  // ── Portal boundary check ─────────────────────────────────────────────────
+  // A PWA-portal account must only be shown PWA routes, and vice versa.
+  const isPwaRoute = PWA_ROUTES.has(route)
   if (portal && ((portal === 'pwa') !== isPwaRoute)) return <PortalAccessError portal={portal} />
+
+  // ── Role-aware route guard ────────────────────────────────────────────────────
+  const userContext: UserRouteContext = useMemo(
+    () => ({
+      isAdmin,
+      isExecutive,
+      isPlanner,
+      isWarehouse,
+      isGroundCrew,
+      isGroundCrewWarehouse,
+      isGroundCrewField,
+      isGroundCrewInventory,
+      isGroundCrewProduction,
+      isGroundCrewEventAdmin,
+      isManningOfficer,
+      isProductionManager,
+      isInventoryOfficer,
+      hasFullWarehouseAccess,
+    }),
+    [
+      isAdmin,
+      isExecutive,
+      isPlanner,
+      isWarehouse,
+      isGroundCrew,
+      isGroundCrewWarehouse,
+      isGroundCrewField,
+      isGroundCrewInventory,
+      isGroundCrewProduction,
+      isGroundCrewEventAdmin,
+      isManningOfficer,
+      isProductionManager,
+      isInventoryOfficer,
+      hasFullWarehouseAccess,
+    ],
+  )
+
+  const allowed = useMemo(() => allowedRoutes(userContext), [userContext])
+
+  const roleHome: Route = useMemo(() => {
+    if (isAdmin) return 'overview'
+    if (isExecutive) return 'dashboard'
+    if (isPlanner) return 'canvas'
+    if (isGroundCrewWarehouse) return 'crew-warehouse'
+    if (isGroundCrewField) return 'crew-field'
+    if (isGroundCrewInventory) return 'crew-inventory'
+    if (isGroundCrewProduction) return 'crew-production'
+    if (isGroundCrewEventAdmin) return 'crew-event-admin'
+    if (isGroundCrew) return 'field-ops'
+    if (isManningOfficer) return 'manning'
+    if (isProductionManager) return 'production-manager'
+    if (isInventoryOfficer) return 'inventory-officer'
+    return 'overview'
+  }, [
+    isAdmin,
+    isExecutive,
+    isPlanner,
+    isGroundCrewWarehouse,
+    isGroundCrewField,
+    isGroundCrewInventory,
+    isGroundCrewProduction,
+    isGroundCrewEventAdmin,
+    isGroundCrew,
+    isManningOfficer,
+    isProductionManager,
+    isInventoryOfficer,
+  ])
+
+  // Fail-closed: empty set means unrecognized/unmapped role — force logout inside useEffect.
+  useEffect(() => {
+    if (allowed.size === 0) {
+      logout()
+    }
+  }, [allowed.size, logout])
+
+  // Route redirection inside useEffect to prevent state mutations during render.
+  useEffect(() => {
+    if (allowed.size > 0 && !allowed.has(route)) {
+      navigate(roleHome)
+    }
+  }, [allowed, route, roleHome, navigate])
+
+  if (allowed.size === 0) {
+    return null
+  }
+
+  if (!allowed.has(route)) {
+    return null
+  }
 
   switch (route) {
     case 'dashboard':
@@ -103,11 +207,12 @@ function Router() {
     case 'canvas-workspace':
       return <CanvasWorkspacePage />
     case 'field-ops':
+    case 'crew-warehouse':
+    case 'crew-field':
+    case 'crew-inventory':
+    case 'crew-production':
+    case 'crew-event-admin':
       return <GroundCrewPage />
-    case 'warehouse-lead':
-      return <WarehouseLeadPage />
-    case 'warehouse-member':
-      return <WarehouseMemberPage />
     case 'manning':
       return <ManningPage />
     case 'production-manager':
@@ -122,13 +227,12 @@ function Router() {
       return <AdminRolesPage />
     case 'overview':
     default:
-      // Role-aware home. Admins always land on the icon-rail System Dashboard —
-      // never the legacy sidebar shell — even for unknown routes.
+      // Role-aware home. Admins always land on the icon-rail System Dashboard.
       return isAdmin ? (
         <AdminSystemDashboardPage />
-      ) : isMobileProductionManager ? (
+      ) : isProductionManager ? (
         <ProductionManagerPage />
-      ) : isMobileInventoryOfficer ? (
+      ) : isInventoryOfficer ? (
         <InventoryOfficerPage />
       ) : isWarehouse ? (
         <WarehouseHomePage />
@@ -139,10 +243,25 @@ function Router() {
 }
 
 function Gate() {
-  const { isAuthenticated, isTempPassword, hasConfirmationPin, isWarehouse, isWarehouseLead, isWarehouseMember, isPlanner, isGroundCrew, isExecutive, isProductionManager, isInventoryOfficer, isManningOfficer, hasFullWarehouseAccess } = useAuth()
+  const {
+    isAuthenticated,
+    isTempPassword,
+    hasConfirmationPin,
+    isAdmin,
+    isExecutive,
+    isWarehouse,
+    isPlanner,
+    isGroundCrew,
+    isGroundCrewWarehouse,
+    isGroundCrewField,
+    isGroundCrewInventory,
+    isGroundCrewProduction,
+    isGroundCrewEventAdmin,
+    isProductionManager,
+    isInventoryOfficer,
+    isManningOfficer,
+  } = useAuth()
   const [portal, setPortal] = useState<'staff' | 'crew'>('staff')
-  const isMobileProductionManager = isProductionManager && !hasFullWarehouseAccess
-  const isMobileInventoryOfficer = isInventoryOfficer && !hasFullWarehouseAccess
 
   if (!isAuthenticated) {
     return portal === 'crew' ? (
@@ -166,30 +285,35 @@ function Gate() {
   const hasWorkforceHighlight =
     new URLSearchParams(window.location.search).has('highlight') || Boolean(window.history.state?.highlight)
   const urlParamRoute = (new URLSearchParams(window.location.search).get('route') || window.location.pathname.replace('/', '')) as Route | null
-  const validRoutes = new Set(['dashboard', 'registry', 'replenishment', 'logs', 'damage', 'inventory', 'warehouse-logs', 'crew', 'deployments', 'dispatch', 'event-detail', 'canvas', 'canvas-workspace', 'field-ops', 'manning', 'production-manager', 'inventory-officer', 'workforce', 'security-audit', 'rbac', 'overview'])
-  const targetUrlRoute = urlParamRoute && validRoutes.has(urlParamRoute) ? urlParamRoute : null
+  const validRoutes = new Set<Route>([
+    'dashboard', 'registry', 'replenishment', 'logs', 'damage', 'inventory',
+    'warehouse-logs', 'crew', 'deployments', 'dispatch', 'event-detail',
+    'canvas', 'canvas-workspace', 'field-ops', 'crew-warehouse', 'crew-field',
+    'crew-inventory', 'crew-production', 'crew-event-admin', 'manning',
+    'production-manager', 'inventory-officer', 'workforce', 'security-audit',
+    'rbac', 'overview',
+  ])
+  const targetUrlRoute = (urlParamRoute && validRoutes.has(urlParamRoute as Route)) ? (urlParamRoute as Route) : null
 
-  const initialRoute = targetUrlRoute || (isManningOfficer
-    ? 'manning'
-    : isGroundCrew
-    ? 'field-ops'
-    : isWarehouseLead
-      ? 'warehouse-lead'
-      : isWarehouseMember
-        ? 'warehouse-member'
-        : isMobileProductionManager
-          ? 'production-manager'
-          : isMobileInventoryOfficer
-            ? 'inventory-officer'
-            : isPlanner
-            ? 'canvas'
-            : isWarehouse
-              ? 'overview'
-              : hasWorkforceHighlight
-                ? 'workforce'
-                : isExecutive
-                  ? 'dashboard'
-                  : 'overview')
+  // Role-priority initial route: first matching condition wins.
+  const roleHome: Route =
+    isManningOfficer           ? 'manning'
+    : isGroundCrewWarehouse    ? 'crew-warehouse'
+    : isGroundCrewField        ? 'crew-field'
+    : isGroundCrewInventory    ? 'crew-inventory'
+    : isGroundCrewProduction   ? 'crew-production'
+    : isGroundCrewEventAdmin   ? 'crew-event-admin'
+    : isGroundCrew             ? 'field-ops'
+    : isProductionManager      ? 'production-manager'
+    : isInventoryOfficer       ? 'inventory-officer'
+    : isPlanner                 ? 'canvas'
+    : isExecutive               ? 'dashboard'
+    : isAdmin                   ? 'overview'
+    : isWarehouse               ? 'overview'
+    : hasWorkforceHighlight     ? 'workforce'
+    :                             'overview'
+
+  const initialRoute = targetUrlRoute || roleHome
 
   return (
     <NavProvider initialRoute={initialRoute}>
