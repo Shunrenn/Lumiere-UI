@@ -32,7 +32,7 @@ export const CREW: CrewMember[] = [
     name: 'Mateo Reyes',
     employeeId: 'GC-2041',
     email: 'crew@lumiere.com',
-    role: 'Event Field',
+    role: 'Field',
     status: 'Assigned',
     week: ['on', 'on', 'on', 'on', 'on', 'on', 'off'],
     allocation: {
@@ -47,7 +47,7 @@ export const CREW: CrewMember[] = [
     name: 'Eleanor Vance',
     employeeId: 'EMP-9021',
     email: 'eleanor.vance@lumiere.com',
-    role: 'Event Field',
+    role: 'Field',
     status: 'Assigned',
     week: ['on', 'on', 'on', 'on', 'off', 'off', 'off'],
     allocation: {
@@ -62,7 +62,7 @@ export const CREW: CrewMember[] = [
     name: 'Sebastian Cross',
     employeeId: 'EMP-8842',
     email: 'sebastian.cross@lumiere.com',
-    role: 'Event Field',
+    role: 'Field',
     status: 'Assigned',
     week: ['on', 'on', 'on', 'on', 'on', 'on', 'off'],
     allocation: {
@@ -77,7 +77,7 @@ export const CREW: CrewMember[] = [
     name: 'Isolde Thorne',
     employeeId: 'EMP-7721',
     email: 'isolde.thorne@lumiere.com',
-    role: 'Warehouse Field',
+    role: 'Warehouse',
     status: 'On Leave',
     week: ['leave', 'leave', 'leave', 'off', 'off', 'off', 'off'],
     allocation: null,
@@ -87,7 +87,7 @@ export const CREW: CrewMember[] = [
     name: 'Marcus Sterling',
     employeeId: 'EMP-4521',
     email: 'marcus.sterling@lumiere.com',
-    role: 'Event Field',
+    role: 'Field',
     status: 'Assigned',
     week: ['on', 'on', 'on', 'on', 'off', 'off', 'off'],
     allocation: {
@@ -102,7 +102,7 @@ export const CREW: CrewMember[] = [
     name: 'Camille Laurent',
     employeeId: 'EMP-0007',
     email: 'camille.laurent@lumiere.com',
-    role: 'Warehouse Field',
+    role: 'Warehouse',
     status: 'Assigned',
     week: ['on', 'on', 'on', 'on', 'on', 'off', 'off'],
     allocation: {
@@ -117,7 +117,7 @@ export const CREW: CrewMember[] = [
     name: 'Theo Almeida',
     employeeId: 'EMP-3310',
     email: 'theo.almeida@lumiere.com',
-    role: 'Event Field',
+    role: 'Field',
     status: 'Available',
     week: ['on', 'on', 'off', 'off', 'on', 'on', 'off'],
     allocation: {

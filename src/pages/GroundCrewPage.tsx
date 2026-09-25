@@ -42,7 +42,7 @@ export function GroundCrewPage() {
   const accessLevel: AccessLevel =
     effectiveRole === 'Event Admin' || effectiveRole === 'Admin'
       ? 'Event Admin'
-      : effectiveRole === 'Warehouse Lead' || effectiveRole === 'Field & Production Crew'
+      : effectiveRole === 'Warehouse Lead' || effectiveRole === 'Ground Crew'
         ? 'Team Lead / Field Lead'
         : 'Ground Crew / Member'
 

@@ -32,13 +32,11 @@ const WOM_SUBROLES = [
 ] as const
 
 const GROUND_CREW_SUBROLES = [
-  'Event Field',
-  'Warehouse Field',
-  'Lead Logistics',
-  'Field Ops',
-  'Production Crew',
-  'Stage & Rigging',
-  'Fabrication',
+  'Warehouse',
+  'Field',
+  'Inventory',
+  'Production',
+  'EventAdmin',
 ] as const
 
 const labelClass =
@@ -236,8 +234,8 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
             {(() => {
               const isSubroleAllowed =
                 draft.role === 'Warehouse Manager' ||
-                draft.role === 'Ground Crew' ||
-                draft.role === 'Field & Production Crew'
+                draft.role === ('Ground Crew' as any) ||
+                draft.role === ('Ground Crew' as any)
               return (
                 <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
@@ -252,8 +250,8 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
                         const newRole = e.target.value as StaffRole
                         const isNextSubroleAllowed =
                           newRole === 'Warehouse Manager' ||
-                          newRole === 'Ground Crew' ||
-                          newRole === 'Field & Production Crew'
+                          newRole === ('Ground Crew' as any) ||
+                          newRole === ('Ground Crew' as any)
                         setDraft((prev) => ({
                           ...prev,
                           role: newRole,

@@ -1639,7 +1639,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const addStaff = useCallback(
     async (draft: NewStaffDraft) => {
       const role = (draft.role || 'Ground Crew') as StaffRole
-      const hasSubroleScope = role === 'Warehouse Manager' || role === 'Ground Crew' || role === 'Field & Production Crew'
+      const hasSubroleScope = role === 'Warehouse Manager' || (role as string) === 'Ground Crew' || (role as string) === 'Ground Crew'
       const subRole = hasSubroleScope ? draft.subRole : ''
       const tempPassword = draft.tempPassword?.trim() || generateRandomPassword(8)
       const fullName = `${draft.firstName} ${draft.surname}`.trim()
@@ -1821,7 +1821,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         middleName: '',
         email: '',
         contact: draft.contact,
-        role: 'Field & Production Crew',
+        role: 'Ground Crew',
         sessionStatus: 'Offline Session',
         lastAccess: '—',
         recordKind: 'employee-record',
@@ -1845,8 +1845,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     async (updated: Staff) => {
       const hasSubroleScope =
         updated.role === 'Warehouse Manager' ||
-        updated.role === 'Ground Crew' ||
-        updated.role === 'Field & Production Crew'
+        (updated.role as string) === 'Ground Crew'
       const sanitizedTempPwd = updated.tempPassword?.trim() || generateRandomPassword(8)
       const sanitizedStaff: Staff = {
         ...updated,

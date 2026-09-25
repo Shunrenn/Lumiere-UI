@@ -264,7 +264,7 @@ export function checkSymmetricConflict(
 }
 
 export function getCrewPool(staff: Staff[]) {
-  return staff.filter((member) => member.role === 'Field & Production Crew')
+  return staff.filter((member) => member.role === 'Ground Crew')
 }
 
 let cache: { key: string; rows: CrewRow[] } | null = null

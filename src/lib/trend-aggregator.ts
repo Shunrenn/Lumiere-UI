@@ -41,8 +41,8 @@ export function aggregateUserGrowth(staffList: Staff[], subRoleCategory?: string
         s.role === 'Warehouse Member'
       )
     }
-    if (subRoleCategory === 'Field & Production Crew' || subRoleCategory === 'Ground Crew') {
-      return s.role === 'Ground Crew' || s.role === 'Field & Production Crew'
+    if (subRoleCategory === 'Ground Crew' || subRoleCategory === 'Ground Crew') {
+      return (s.role as string) === 'Ground Crew' || (s.role as string) === 'Ground Crew'
     }
     return s.role === subRoleCategory
   })

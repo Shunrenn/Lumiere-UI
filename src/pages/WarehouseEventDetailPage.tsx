@@ -63,7 +63,7 @@ export function WarehouseEventDetailPage({ event, onBack, onOpenModule }: Wareho
   const [selectedCrewMember, setSelectedCrewMember] = useState<EventCrewAssignment | null>(null)
   const [changesModalOpen, setChangesModalOpen] = useState(false)
 
-  const fieldCrew = useMemo(() => staff.filter((member) => member.role === 'Field & Production Crew'), [staff])
+  const fieldCrew = useMemo(() => staff.filter((member) => member.role === 'Ground Crew'), [staff])
 
   // Production/Bespoke panel — sourced from the real Production &
   // Fabrication store (scoped to this event via eventId), not a synthetic

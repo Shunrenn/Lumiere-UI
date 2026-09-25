@@ -238,7 +238,7 @@ export function getEventDetailSnapshot(
   procurement: ProcurementItem[],
 ): EventDetailSnapshot {
   const seed = hashOf(event.refId)
-  const fieldCrew = staff.filter((member) => member.role === 'Field & Production Crew')
+  const fieldCrew = staff.filter((member) => member.role === 'Ground Crew')
 
   // Manning / crew panel — some events intentionally have none assigned yet.
   const crewCount = fieldCrew.length === 0 ? 0 : (seed % 4 === 0 ? 0 : 1 + (seed % fieldCrew.length))

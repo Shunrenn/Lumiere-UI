@@ -79,13 +79,45 @@ export interface ReorderDraft {
 
 /* ---------- Staff / Access Control ---------- */
 
+/* ---------- Canonical Ground Crew Subroles ---------- */
+
+export const GROUND_CREW_SUBROLES = [
+  'Warehouse',
+  'Field',
+  'Inventory',
+  'Production',
+  'EventAdmin',
+] as const
+
+export type GroundCrewSubRole = (typeof GROUND_CREW_SUBROLES)[number]
+
+export function isGroundCrewSubRole(role?: string): role is GroundCrewSubRole {
+  if (!role) return false
+  const canonical = GROUND_CREW_SUBROLES as readonly string[]
+  return canonical.includes(role)
+}
+
+export function normalizeGroundCrewSubRole(rawRole?: string): GroundCrewSubRole | undefined {
+  if (!rawRole) return undefined
+  const cleaned = rawRole.trim().replace(/\s+/g, '')
+  if (cleaned.toLowerCase() === 'eventadmin') return 'EventAdmin'
+  if (cleaned.toLowerCase() === 'warehouse') return 'Warehouse'
+  if (cleaned.toLowerCase() === 'field') return 'Field'
+  if (cleaned.toLowerCase() === 'inventory') return 'Inventory'
+  if (cleaned.toLowerCase() === 'production') return 'Production'
+  if (cleaned.toLowerCase().includes('field')) return 'Field'
+  if (cleaned.toLowerCase().includes('warehouse')) return 'Warehouse'
+  if (cleaned.toLowerCase().includes('production')) return 'Production'
+  if (cleaned.toLowerCase().includes('inventory')) return 'Inventory'
+  return undefined
+}
+
 export const SELECTABLE_STAFF_ROLES = [
   'Admin',
   'Executive',
   'Warehouse Manager',
   'Event Planner',
   'Ground Crew',
-  'Field & Production Crew',
 ] as const
 
 export type SelectableStaffRole = (typeof SELECTABLE_STAFF_ROLES)[number]
@@ -99,7 +131,6 @@ export const STAFF_ROLES = [
   'Event Admin',
   'Warehouse Lead',
   'Warehouse Member',
-  'Field & Production Crew',
 ] as const
 
 export type StaffRole = (typeof STAFF_ROLES)[number]

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { womModuleAccessLevel } from './rbac'
+import { type GroundCrewSubRole, normalizeGroundCrewSubRole } from './types'
 import { API_BASE_URL } from './apiConfig'
 import { useIdleTimeout } from './useIdleTimeout'
 
@@ -48,7 +49,8 @@ export interface PortalAccount {
   name: string
   role: string
   portal: PortalKind
-  subRole?: WomSubRole
+  subRole?: string
+  groundCrewSubRole?: GroundCrewSubRole
   fullWarehouseAccess?: boolean
   temporaryPassword: boolean
   token?: string
@@ -59,9 +61,14 @@ export function mapBackendUserToPortalAccount(data: {
   email: string
   fullName: string
   role: string
+  subRole?: string
+  groundCrewSubRole?: string
   token?: string
   temporaryPassword?: boolean
 }): PortalAccount {
+  const payload = data.token ? parseJwtPayload(data.token) : null
+  const jwtGcSubRole = payload?.ground_crew_subrole || payload?.groundCrewSubRole
+  const canonicalGcSubRole = normalizeGroundCrewSubRole(jwtGcSubRole || data.groundCrewSubRole || data.subRole)
   const rawRole = data.role.trim()
   const isTemp = Boolean(data.temporaryPassword ?? data.email?.toLowerCase().includes('temp'))
 
@@ -109,6 +116,8 @@ export function mapBackendUserToPortalAccount(data: {
     email: data.email,
     name: data.fullName,
     role: rawRole,
+    subRole: rawRole === 'Ground Crew' ? canonicalGcSubRole || 'Field' : undefined,
+    groundCrewSubRole: rawRole === 'Ground Crew' ? canonicalGcSubRole || 'Field' : undefined,
     portal,
     temporaryPassword: isTemp,
     token: data.token,

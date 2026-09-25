@@ -40,7 +40,7 @@ const ROLE_SEGMENTS = [
   { label: 'Executive', color: 'text-sky-500', dot: 'bg-sky-500' },
   { label: 'Warehouse Ops Manager', color: 'text-amber-500', dot: 'bg-amber-500' },
   { label: 'Event Planner', color: 'text-rose-500', dot: 'bg-rose-500' },
-  { label: 'Field & Production Crew', color: 'text-indigo-500', dot: 'bg-indigo-500' },
+  { label: 'Ground Crew', color: 'text-indigo-500', dot: 'bg-indigo-500' },
 ]
 
 function UserDistributionChart({ counts }: { counts: Record<string, number> }) {
@@ -103,7 +103,7 @@ function UserDistributionChart({ counts }: { counts: Record<string, number> }) {
 // Map a staff role onto the donut segment label it belongs to.
 function roleToSegment(role: string): string {
   if (role === 'Warehouse Manager') return 'Warehouse Ops Manager'
-  if (role === 'Ground Crew') return 'Field & Production Crew'
+  if (role === 'Ground Crew') return 'Ground Crew'
   return role
 }
 
