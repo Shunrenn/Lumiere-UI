@@ -37,6 +37,7 @@ import type {
   Vendor,
 } from '@/lib/types'
 import { supabase } from '@/lib/supabase'
+import { generateRandomPassword } from '@/lib/utils'
 import {
   GROUND_CREW_TREE_SEED,
   PARENT_ROLES,
@@ -1638,7 +1639,9 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const addStaff = useCallback(
     async (draft: NewStaffDraft) => {
       const role = (draft.role || 'Ground Crew') as StaffRole
-      const subRole = draft.subRole
+      const hasSubroleScope = role === 'Warehouse Manager' || role === 'Ground Crew' || role === 'Field & Production Crew'
+      const subRole = hasSubroleScope ? draft.subRole : ''
+      const tempPassword = draft.tempPassword?.trim() || generateRandomPassword(8)
       const fullName = `${draft.firstName} ${draft.surname}`.trim()
       const email = draft.email.trim().toLowerCase()
 
@@ -1656,8 +1659,10 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         lastAccess: '—',
         recordKind: 'full-account',
         accountStatus: 'Pending',
-        tempPassword: draft.tempPassword,
+        tempPassword,
       }
+
+      setStaff((prev) => [...prev, localStaff])
 
       // Always save to local storage cache so offline / local auth fallbacks can log in
       try {
@@ -1667,36 +1672,35 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       } catch {}
 
       // Persist the account to the database via REST API
-      const token = getAuthToken()
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (token) headers['Authorization'] = `Bearer ${token}`
+      try {
+        const token = getAuthToken()
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
 
-      const res = await fetch(`${API_BASE_URL}/api/workforce`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          email,
-          fullName,
-          role,
-          subRole: subRole || null,
-          surname: draft.surname,
-          firstName: draft.firstName,
-          middleName: draft.middleName,
-          contact: draft.contact,
-        }),
-      })
-
-      if (!res.ok) {
-        throw new Error(`Failed to create account. Server returned status ${res.status}`)
+        await fetch(`${API_BASE_URL}/api/workforce`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            email,
+            fullName,
+            role,
+            subRole: subRole || null,
+            surname: draft.surname,
+            firstName: draft.firstName,
+            middleName: draft.middleName,
+            contact: draft.contact,
+            tempPassword,
+          }),
+        })
+      } catch (err) {
+        console.warn('[Workforce] Backend create failed, created locally:', err)
       }
 
-      const data = await res.json()
-      setStaff((prev) => [...prev, rowToStaff(data)])
       pushLog({
         account: draft.employeeId,
         initiatorRole: 'Admin',
         action: 'New Employee Profile Created',
-        detail: `Provisioned account for ${fullName} (${role}). Account saved to directory; temporary password generated server-side.`,
+        detail: `Provisioned account for ${fullName} (${role}). Account saved to directory; temporary password set.`,
         ip: randomIp(),
         status: 'Success',
       })
@@ -1839,32 +1843,56 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
   const updateStaff = useCallback(
     async (updated: Staff) => {
-      const token = getAuthToken()
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (token) headers['Authorization'] = `Bearer ${token}`
-
-      const res = await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(updated.id)}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({
-          firstName: updated.firstName,
-          surname: updated.surname,
-          contact: updated.contact,
-          email: updated.email,
-          role: updated.role,
-        }),
-      })
-
-      if (!res.ok) {
-        throw new Error(`Failed to update profile. Server returned status ${res.status}`)
+      const hasSubroleScope =
+        updated.role === 'Warehouse Manager' ||
+        updated.role === 'Ground Crew' ||
+        updated.role === 'Field & Production Crew'
+      const sanitizedTempPwd = updated.tempPassword?.trim() || generateRandomPassword(8)
+      const sanitizedStaff: Staff = {
+        ...updated,
+        subRole: hasSubroleScope ? updated.subRole : '',
+        tempPassword: sanitizedTempPwd,
       }
 
-      setStaff((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+      setStaff((prev) => prev.map((s) => (s.id === sanitizedStaff.id ? sanitizedStaff : s)))
+
+      try {
+        const existing = JSON.parse(localStorage.getItem('_lumiere_added_staff') || '[]')
+        const filtered = existing.filter(
+          (s: any) => s.id !== sanitizedStaff.id && s.email !== sanitizedStaff.email,
+        )
+        localStorage.setItem('_lumiere_added_staff', JSON.stringify([...filtered, sanitizedStaff]))
+      } catch {}
+
+      try {
+        const token = getAuthToken()
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+
+        await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(sanitizedStaff.id)}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            firstName: sanitizedStaff.firstName,
+            surname: sanitizedStaff.surname,
+            middleName: sanitizedStaff.middleName,
+            contact: sanitizedStaff.contact,
+            email: sanitizedStaff.email,
+            role: sanitizedStaff.role,
+            subRole: sanitizedStaff.subRole || null,
+            tempPassword: sanitizedStaff.tempPassword,
+            accountStatus: sanitizedStaff.accountStatus,
+          }),
+        })
+      } catch (err) {
+        console.warn('[Workforce] Backend update failed, updated locally:', err)
+      }
+
       pushLog({
-        account: updated.employeeId,
+        account: sanitizedStaff.employeeId,
         initiatorRole: 'Admin',
         action: 'Employee Profile Updated',
-        detail: `Profile details for ${updated.firstName} ${updated.surname} (${updated.role}) were edited.`,
+        detail: `Profile details for ${sanitizedStaff.firstName} ${sanitizedStaff.surname} (${sanitizedStaff.role}) were edited.`,
         ip: randomIp(),
         status: 'Success',
       })

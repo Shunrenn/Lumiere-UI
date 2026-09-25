@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X, Eye, EyeOff } from 'lucide-react'
 import { SELECTABLE_STAFF_ROLES, type NewStaffDraft, type StaffRole } from '@/lib/types'
 import { usePortal } from '@/lib/store'
+import { generateRandomPassword } from '@/lib/utils'
 
 interface Props {
   open: boolean
@@ -35,17 +36,10 @@ const GROUND_CREW_SUBROLES = [
   'Warehouse Field',
   'Lead Logistics',
   'Field Ops',
-] as const
-
-const FIELD_PROD_SUBROLES = [
   'Production Crew',
-  'Field Ops',
   'Stage & Rigging',
   'Fabrication',
 ] as const
-
-// Generate a one-time temporary password the user must change on first login.
-const generateTempPassword = () => `Lm-Temp-${Math.floor(1000 + Math.random() * 9000)}`
 
 const labelClass =
   'block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground'
@@ -86,16 +80,16 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
     onClose()
   }
 
-  // Initialize with an auto-generated employee ID and a generated temp password.
+  // Initialize with an auto-generated employee ID and a generated 8-char temp password.
   if (draft.employeeId === '' && draft.firstName === '') {
     setDraft((prev) => ({
       ...prev,
       employeeId: generateEmployeeId(),
-      tempPassword: prev.tempPassword || generateTempPassword(),
+      tempPassword: prev.tempPassword || generateRandomPassword(8),
     }))
   }
 
-  const isValidEmail = draft.email.trim().toLowerCase().endsWith('@lumiere.com')
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())
   const isValidContact = draft.contact.length === 11
 
   const canProceed =
@@ -165,7 +159,7 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
                 <label className={labelClass} htmlFor="surname">
-                  Surname:
+                  <span className="text-destructive mr-0.5">*</span>Surname:
                 </label>
                 <input
                   id="surname"
@@ -177,7 +171,7 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
               </div>
               <div>
                 <label className={labelClass} htmlFor="firstName">
-                  First Name:
+                  <span className="text-destructive mr-0.5">*</span>First Name:
                 </label>
                 <input
                   id="firstName"
@@ -204,25 +198,25 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className={labelClass} htmlFor="email">
-                  Email:
+                  <span className="text-destructive mr-0.5">*</span>Email:
                 </label>
                 <input
                   id="email"
                   type="email"
                   className={inputClass}
-                  placeholder="juandelacruz@lumiere.com"
+                  placeholder="e.g. juandelacruz@gmail.com"
                   value={draft.email}
                   onChange={(e) => set('email', e.target.value)}
                 />
                 {draft.email && !isValidEmail && (
                   <p className="mt-1 text-[0.65rem] text-rose-600">
-                    Email must be a @lumiere.com address
+                    Please enter a valid email address (e.g. name@gmail.com)
                   </p>
                 )}
               </div>
               <div>
                 <label className={labelClass} htmlFor="contact">
-                  Contact:
+                  <span className="text-destructive mr-0.5">*</span>Contact:
                 </label>
                 <input
                   id="contact"
@@ -239,69 +233,82 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
               </div>
             </div>
 
-            <div className={`mt-4 grid grid-cols-1 gap-4 ${(draft.role === 'Warehouse Manager' || draft.role === 'Ground Crew' || draft.role === 'Field & Production Crew') ? 'sm:grid-cols-2' : ''}`}>
-              <div>
-                <label className={labelClass} htmlFor="role">
-                  Role:
-                </label>
-                <select
-                  id="role"
-                  className={`${inputClass} appearance-none`}
-                  value={draft.role}
-                  onChange={(e) => {
-                    const newRole = e.target.value as StaffRole
-                    setDraft((prev) => ({
-                      ...prev,
-                      role: newRole,
-                      subRole: newRole === 'Warehouse Manager' ? WOM_SUBROLES[0] : newRole === 'Ground Crew' ? GROUND_CREW_SUBROLES[0] : newRole === 'Field & Production Crew' ? FIELD_PROD_SUBROLES[0] : '',
-                    }))
-                  }}
-                >
-                  <option value="">Select Staff Role</option>
-                  {SELECTABLE_STAFF_ROLES.map((role) => (
-                    <option key={role} value={role}>
-                      {role}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {(() => {
+              const isSubroleAllowed =
+                draft.role === 'Warehouse Manager' ||
+                draft.role === 'Ground Crew' ||
+                draft.role === 'Field & Production Crew'
+              return (
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelClass} htmlFor="role">
+                      <span className="text-destructive mr-0.5">*</span>Role:
+                    </label>
+                    <select
+                      id="role"
+                      className={`${inputClass} appearance-none`}
+                      value={draft.role}
+                      onChange={(e) => {
+                        const newRole = e.target.value as StaffRole
+                        const isNextSubroleAllowed =
+                          newRole === 'Warehouse Manager' ||
+                          newRole === 'Ground Crew' ||
+                          newRole === 'Field & Production Crew'
+                        setDraft((prev) => ({
+                          ...prev,
+                          role: newRole,
+                          subRole: !isNextSubroleAllowed
+                            ? ''
+                            : newRole === 'Warehouse Manager'
+                            ? WOM_SUBROLES[0]
+                            : GROUND_CREW_SUBROLES[0],
+                        }))
+                      }}
+                    >
+                      <option value="">Select Staff Role</option>
+                      {SELECTABLE_STAFF_ROLES.map((role) => (
+                        <option key={role} value={role}>
+                          {role}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              {(draft.role === 'Warehouse Manager' || draft.role === 'Ground Crew' || draft.role === 'Field & Production Crew') && (
-                <div>
-                  <label className={labelClass} htmlFor="subRole">
-                    Subrole:
-                  </label>
-                  <select
-                    id="subRole"
-                    className={`${inputClass} appearance-none`}
-                    value={draft.subRole}
-                    onChange={(e) => set('subRole', e.target.value)}
-                  >
-                    {draft.role === 'Warehouse Manager'
-                      ? WOM_SUBROLES.map((sr) => (
+                  <div>
+                    <label className={labelClass} htmlFor="subRole">
+                      Subrole: {!isSubroleAllowed && <span className="normal-case text-muted-foreground font-normal">(Blocked for this role)</span>}
+                    </label>
+                    <select
+                      id="subRole"
+                      disabled={!isSubroleAllowed}
+                      className={`${inputClass} appearance-none disabled:cursor-not-allowed disabled:opacity-50`}
+                      value={isSubroleAllowed ? draft.subRole : ''}
+                      onChange={(e) => set('subRole', e.target.value)}
+                    >
+                      {!isSubroleAllowed ? (
+                        <option value="">N/A — Not applicable</option>
+                      ) : draft.role === 'Warehouse Manager' ? (
+                        WOM_SUBROLES.map((sr) => (
                           <option key={sr} value={sr}>
                             {sr}
                           </option>
                         ))
-                      : draft.role === 'Ground Crew'
-                      ? GROUND_CREW_SUBROLES.map((sr) => (
+                      ) : (
+                        GROUND_CREW_SUBROLES.map((sr) => (
                           <option key={sr} value={sr}>
                             {sr}
                           </option>
                         ))
-                      : FIELD_PROD_SUBROLES.map((sr) => (
-                          <option key={sr} value={sr}>
-                            {sr}
-                          </option>
-                        ))}
-                  </select>
+                      )}
+                    </select>
+                  </div>
                 </div>
-              )}
-            </div>
+              )
+            })()}
 
             <div className="mt-4">
               <label className={labelClass} htmlFor="tempPassword">
-                Temporary Password:
+                <span className="text-destructive mr-0.5">*</span>Temporary Password:
               </label>
               <div className="relative">
                 <input

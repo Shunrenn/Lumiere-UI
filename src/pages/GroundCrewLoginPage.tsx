@@ -26,7 +26,7 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
     setSigningIn(true)
     try {
       const result = await login(crewId, pin, 'pwa')
-      if (!result.ok) setError(result.reason === 'wrong-portal' ? 'This account belongs to the Lumière web app. Use the Web login to continue.' : 'Credentials not recognized. Check your Crew ID and access code.')
+      if (!result.ok) setError(result.message || 'Credentials not recognized. Check your Crew ID and access code.')
     } finally {
       setSigningIn(false)
     }
@@ -86,7 +86,7 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
                   inputMode="email"
                   value={crewId}
                   onChange={(e) => setCrewId(e.target.value)}
-                  placeholder="crew@lumiere.com"
+                  placeholder="crew@example.com"
                   autoComplete="username"
                   className="w-full min-w-0 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/60"
                 />
@@ -164,10 +164,11 @@ function StatusPill({ icon: Icon, label }: { icon: typeof WifiOff; label: string
   )
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, children, required = true }: { label: string; children: ReactNode; required?: boolean }) {
   return (
     <label className="flex flex-col gap-2">
       <span className="text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-foreground/70">
+        {required && <span className="text-destructive mr-0.5">*</span>}
         {label}
       </span>
       {children}

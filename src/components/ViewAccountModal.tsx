@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X, Eye, EyeOff } from 'lucide-react'
 import { SELECTABLE_STAFF_ROLES, type Staff } from '@/lib/types'
+import { generateRandomPassword } from '@/lib/utils'
 
 interface Props {
   open: boolean
@@ -85,7 +86,7 @@ export function ViewAccountModal({
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                  First Name:
+                  {editable && <span className="text-destructive mr-0.5">*</span>}First Name:
                 </label>
                 {editable ? (
                   <input
@@ -100,7 +101,7 @@ export function ViewAccountModal({
               </div>
               <div>
                 <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                  Surname:
+                  {editable && <span className="text-destructive mr-0.5">*</span>}Surname:
                 </label>
                 {editable ? (
                   <input
@@ -118,7 +119,7 @@ export function ViewAccountModal({
             {/* Contact Number */}
             <div>
               <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                Contact Number:
+                {editable && <span className="text-destructive mr-0.5">*</span>}Contact Number:
               </label>
               {editable ? (
                 <input
@@ -136,7 +137,7 @@ export function ViewAccountModal({
             {/* Email */}
             <div>
               <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                Email:
+                {editable && <span className="text-destructive mr-0.5">*</span>}Email:
               </label>
               {editable ? (
                 <input
@@ -153,12 +154,31 @@ export function ViewAccountModal({
             {/* Role */}
             <div>
               <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                Role:
+                {editable && <span className="text-destructive mr-0.5">*</span>}Role:
               </label>
               {editable ? (
                 <select
                   value={draft.role}
-                  onChange={(e) => set('role', e.target.value as Staff['role'])}
+                  onChange={(e) => {
+                    const newRole = e.target.value as Staff['role']
+                    const isNextSubroleAllowed =
+                      newRole === 'Warehouse Manager' ||
+                      newRole === 'Ground Crew' ||
+                      newRole === 'Field & Production Crew'
+                    setDraft((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            role: newRole,
+                            subRole: !isNextSubroleAllowed
+                              ? ''
+                              : newRole === 'Warehouse Manager'
+                              ? 'Manning Officer'
+                              : 'Event Field',
+                          }
+                        : prev,
+                    )
+                  }}
                   className={`${inputClass} appearance-none`}
                 >
                   {SELECTABLE_STAFF_ROLES.map((r) => (
@@ -173,24 +193,50 @@ export function ViewAccountModal({
             </div>
 
             {/* Subrole */}
-            {(staff.subRole || editable) && (
-              <div>
-                <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                  Subrole:
-                </label>
-                {editable ? (
-                  <input
-                    type="text"
-                    value={draft.subRole ?? ''}
-                    onChange={(e) => set('subRole', e.target.value)}
-                    className={inputClass}
-                    placeholder="e.g. Manning Officer / Event Field"
-                  />
-                ) : (
-                  readField(staff.subRole || 'N/A')
-                )}
-              </div>
-            )}
+            {(() => {
+              const isSubroleAllowed =
+                draft.role === 'Warehouse Manager' ||
+                draft.role === 'Ground Crew' ||
+                draft.role === 'Field & Production Crew'
+              const womSubroles = ['Manning Officer', 'Warehouse Manager', 'Production Manager', 'Inventory Officer', 'Purchasing Officer']
+              const groundSubroles = ['Event Field', 'Warehouse Field', 'Lead Logistics', 'Field Ops', 'Production Crew', 'Stage & Rigging', 'Fabrication']
+              
+              if (!editable && !staff.subRole && !isSubroleAllowed) return null
+
+              return (
+                <div>
+                  <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
+                    Subrole: {editable && !isSubroleAllowed && <span className="normal-case text-muted-foreground font-normal">(Blocked for this role)</span>}
+                  </label>
+                  {editable ? (
+                    <select
+                      disabled={!isSubroleAllowed}
+                      value={isSubroleAllowed ? (draft.subRole || (draft.role === 'Warehouse Manager' ? 'Manning Officer' : 'Event Field')) : ''}
+                      onChange={(e) => set('subRole', e.target.value)}
+                      className={`${inputClass} appearance-none disabled:cursor-not-allowed disabled:opacity-50`}
+                    >
+                      {!isSubroleAllowed ? (
+                        <option value="">N/A — Not applicable</option>
+                      ) : draft.role === 'Warehouse Manager' ? (
+                        womSubroles.map((sr) => (
+                          <option key={sr} value={sr}>
+                            {sr}
+                          </option>
+                        ))
+                      ) : (
+                        groundSubroles.map((sr) => (
+                          <option key={sr} value={sr}>
+                            {sr}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  ) : (
+                    readField(staff.subRole || 'N/A')
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Session Status */}
             <div>
@@ -211,7 +257,7 @@ export function ViewAccountModal({
             {/* Password */}
             <div>
               <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                Temporary Password:
+                <span className="text-destructive mr-0.5">*</span>Temporary Password:
               </label>
               <div className="relative">
                 <input
@@ -248,7 +294,13 @@ export function ViewAccountModal({
               <button
                 type="button"
                 onClick={() => {
-                  onSave?.(draft)
+                  if (draft) {
+                    const finalPwd = tempPassword.trim() || draft.tempPassword?.trim() || generateRandomPassword(8)
+                    onSave?.({
+                      ...draft,
+                      tempPassword: finalPwd,
+                    })
+                  }
                   onClose()
                 }}
                 className="rounded-md bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-[0.15em] text-primary-foreground transition hover:opacity-90"

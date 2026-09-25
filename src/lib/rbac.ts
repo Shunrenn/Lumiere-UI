@@ -279,18 +279,13 @@ export const GROUND_CREW_TREE_SEED: SubRoleNode[] = [
     ['Warehouse Staging'],
     ['Assigned Tasks', 'Dispatch Handoff'],
   ),
-  {
-    id: 'production-crew',
-    name: 'Production Crew',
-    summary: 'Production floor execution — not yet available on the platform.',
-    comingSoon: true,
-    children: [],
-    permissions: GROUND_MODULES.map((module) => ({
-      module,
-      level: 'None' as AccessLevel,
-      note: 'Scope defined once this sub-role launches.',
-    })),
-  },
+  groundLeaf(
+    'production-crew',
+    'Production Crew',
+    'Production floor execution — handles fabrication, build tasks, and stage rigging.',
+    ['Production Floor'],
+    ['Assigned Tasks', 'Dispatch Handoff'],
+  ),
 ]
 
 /* ----------------------------- Tree helpers (pure, immutable) ----------------------------- */

@@ -179,20 +179,13 @@ export async function loadRosterFromDatabase() {
 
     if (!crewData) return
 
-    // Import store staff list to map email by account_id / employee_id
-    const { useStore } = await import('./store')
-    const staffList = useStore.getState().staff
-
     // Transform database records into CrewMember format
     const loaded: CrewMember[] = crewData.map((row: any) => {
-      const matched = staffList.find(
-        (s) => (row.account_id && s.id === row.account_id) || (row.employee_id && s.employeeId === row.employee_id)
-      )
       return {
         id: row.id,
         name: row.name,
         employeeId: row.employee_id,
-        email: matched?.email || '',
+        email: row.email || '',
         role: row.role,
         status: row.status as CrewStatus,
         week: [

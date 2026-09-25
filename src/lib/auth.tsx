@@ -18,6 +18,20 @@ export type WomSubRole =
   | 'Inventory Officer'
   | 'Purchasing Officer'
 
+export type LoginReason =
+  | 'wrong-portal'
+  | 'invalid'
+  | 'suspended'
+  | 'locked'
+  | 'server-error'
+  | 'network-error'
+
+export interface LoginResult {
+  ok: boolean
+  reason?: LoginReason
+  message?: string
+}
+
 export type PortalKind = 'web' | 'pwa'
 
 const PWA_ROLES = new Set(['Ground Crew', 'Warehouse Lead', 'Warehouse Member', 'Manning Officer', 'Event Admin'])
@@ -169,7 +183,7 @@ interface AuthContextValue {
   isInventoryOfficer: boolean
   canModifyModule: (moduleId: string) => boolean
   isTempPassword: boolean
-  login: (email: string, password: string, portal?: PortalKind, remember?: boolean) => Promise<{ ok: boolean; reason?: 'wrong-portal' | 'invalid' }>
+  login: (email: string, password: string, portal?: PortalKind, remember?: boolean) => Promise<LoginResult>
   changePassword: (current: string, next: string) => Promise<boolean>
   logout: () => void
   confirmLogout: boolean
@@ -296,7 +310,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: string,
       portal?: PortalKind,
       remember = false
-    ): Promise<{ ok: boolean; reason?: 'wrong-portal' | 'invalid' }> => {
+    ): Promise<LoginResult> => {
       const normalizedEmail = email.trim().toLowerCase()
 
       try {
@@ -311,7 +325,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const account = mapBackendUserToPortalAccount(data)
 
           if (portal && account.portal !== portal) {
-            return { ok: false, reason: 'wrong-portal' }
+            return {
+              ok: false,
+              reason: 'wrong-portal',
+              message: portal === 'web'
+                ? 'This account belongs to the Lumière PWA. Use the PWA login to continue.'
+                : 'This account belongs to the Lumière web app. Use the Web login to continue.',
+            }
           }
 
           setCurrentUser(account)
@@ -330,11 +350,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           return { ok: true }
         }
+
+        // Handle Non-200 Responses
+        let errorMsg = ''
+        try {
+          const errBody = await res.json()
+          errorMsg = errBody?.error || errBody?.Error || errBody?.message || ''
+        } catch {}
+
+        const lowerMsg = errorMsg.toLowerCase()
+
+        if (res.status === 429 || lowerMsg.includes('locked') || lowerMsg.includes('too many')) {
+          return {
+            ok: false,
+            reason: 'locked',
+            message: errorMsg || 'Account is temporarily locked due to repeated failed login attempts. Please try again in 15 minutes.',
+          }
+        }
+
+        if (lowerMsg.includes('suspended') || lowerMsg.includes('inactive') || lowerMsg.includes('deactivated')) {
+          return {
+            ok: false,
+            reason: 'suspended',
+            message: errorMsg || 'Account is suspended. Please contact a system administrator.',
+          }
+        }
+
+        if (res.status >= 500) {
+          return {
+            ok: false,
+            reason: 'server-error',
+            message: 'Server error occurred during login. Please try again later.',
+          }
+        }
+
+        if (res.status === 401) {
+          return {
+            ok: false,
+            reason: 'invalid',
+            message: errorMsg || 'Invalid credentials. Please verify your email and password.',
+          }
+        }
+
+        return {
+          ok: false,
+          reason: 'invalid',
+          message: errorMsg || 'Invalid credentials. Please verify your email and password.',
+        }
       } catch (err) {
         console.warn('[Auth] REST API login failed:', err)
+        return {
+          ok: false,
+          reason: 'network-error',
+          message: 'Network connection error. Please check your internet connection or server availability.',
+        }
       }
-
-      return { ok: false, reason: 'invalid' }
     },
     [checkHasPin]
   )

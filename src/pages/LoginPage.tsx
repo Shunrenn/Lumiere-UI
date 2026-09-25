@@ -40,7 +40,7 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
     setSigningIn(true)
     try {
       const result = await login(email, password, 'web', remember)
-      if (!result.ok) setError(result.reason === 'wrong-portal' ? 'This account belongs to the Lumière PWA. Use the PWA login to continue.' : 'Invalid credentials. Please verify your email and password.')
+      if (!result.ok) setError(result.message || 'Invalid credentials. Please verify your email and password.')
     } finally {
       setSigningIn(false)
     }
@@ -50,8 +50,8 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
     e.preventDefault()
     setRequestError('')
     const normalized = requestEmail.trim().toLowerCase()
-    if (!normalized.endsWith('@lumiere.com')) {
-      setRequestError('Access is restricted to @lumiere.com email addresses.')
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+      setRequestError('Please enter a valid email address.')
       return
     }
 
@@ -316,8 +316,8 @@ function RequestView(props: {
       </h2>
       <p className="mx-auto mt-4 max-w-md text-center text-base text-muted-foreground text-pretty">
         {isForgot
-          ? 'Enter your @lumiere.com email below. An administrator will review your request and issue a new temporary password.'
-          : 'Enter your @lumiere.com email below. An administrator will verify your account and provide a temporary password.'}
+          ? 'Enter your email below. An administrator will review your request and issue a new temporary password.'
+          : 'Enter your email below. An administrator will verify your account and provide a temporary password.'}
       </p>
 
       <div className="mt-12">
@@ -329,7 +329,7 @@ function RequestView(props: {
               required
               value={props.email}
               onChange={(e) => props.onEmail(e.target.value)}
-              placeholder="name@lumiere.com"
+              placeholder="user@example.com"
               autoComplete="email"
               className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/70"
             />
@@ -420,10 +420,11 @@ function ThemeToggle({ mode, onChange }: { mode: ThemeMode; onChange: (mode: The
 
 /* ----------------------------- Primitives ----------------------------- */
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, children, required = true }: { label: string; children: ReactNode; required?: boolean }) {
   return (
     <div className="flex flex-col gap-2.5">
       <span className="text-sm font-semibold uppercase tracking-[0.15em] text-foreground/70">
+        {required && <span className="text-destructive mr-0.5">*</span>}
         {label}
       </span>
       {children}

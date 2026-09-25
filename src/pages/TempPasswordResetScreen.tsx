@@ -110,7 +110,7 @@ export function TempPasswordResetScreen() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-              Current Temporary Password
+              <span className="text-destructive mr-0.5">*</span>Current Temporary Password
             </label>
             <div className="relative flex items-center">
               <input
@@ -136,7 +136,7 @@ export function TempPasswordResetScreen() {
 
           <div className="space-y-1.5">
             <label className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-              New Permanent Password
+              <span className="text-destructive mr-0.5">*</span>New Permanent Password
             </label>
             <div className="relative flex items-center">
               <input
@@ -205,7 +205,7 @@ export function TempPasswordResetScreen() {
 
           <div className="space-y-1.5">
             <label className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-              Confirm New Password
+              <span className="text-destructive mr-0.5">*</span>Confirm New Password
             </label>
             <div className="relative flex items-center">
               <input

@@ -32,7 +32,7 @@ export function MaskedPinInput({
 
   return (
     <label className="block text-[0.6rem] font-bold uppercase tracking-[0.14em] text-muted-foreground" htmlFor={id}>
-      {label}
+      <span className="text-destructive mr-0.5">*</span>{label}
       <div className="relative mt-1.5">
         <input
           id={id}
