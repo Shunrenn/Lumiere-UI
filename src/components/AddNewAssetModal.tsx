@@ -229,7 +229,7 @@ export function AddNewAssetModal({ isOpen, onClose, onSave }: Props) {
                       )}
                     </div>
                     <div>
-                      <label className={labelClass}>Store:</label>
+                      <label className={labelClass}><span className="text-destructive mr-0.5">*</span>Store:</label>
                       <input
                         type="text"
                         value={v.store}
@@ -239,7 +239,7 @@ export function AddNewAssetModal({ isOpen, onClose, onSave }: Props) {
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>Representative:</label>
+                      <label className={labelClass}><span className="text-destructive mr-0.5">*</span>Representative:</label>
                       <input
                         type="text"
                         value={v.representative}
@@ -249,7 +249,7 @@ export function AddNewAssetModal({ isOpen, onClose, onSave }: Props) {
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>Contact:</label>
+                      <label className={labelClass}><span className="text-destructive mr-0.5">*</span>Contact:</label>
                       <input
                         type="text"
                         value={v.contact}
@@ -269,7 +269,7 @@ export function AddNewAssetModal({ isOpen, onClose, onSave }: Props) {
               <div>
                 <p className={cn(sectionClass, 'mb-3 border-b border-border pb-2')}>Core Details</p>
                 <div>
-                  <label className={labelClass}>Asset Name:</label>
+                  <label className={labelClass}><span className="text-destructive mr-0.5">*</span>Asset Name:</label>
                   <input
                     type="text"
                     value={assetName}
@@ -285,7 +285,7 @@ export function AddNewAssetModal({ isOpen, onClose, onSave }: Props) {
                 <p className={cn(sectionClass, 'mb-3 border-b border-border pb-2')}>Physical Info</p>
                 <div className="space-y-3">
                   <div>
-                    <label className={labelClass}>Description/Tags:</label>
+                    <label className={labelClass}><span className="text-destructive mr-0.5">*</span>Description/Tags:</label>
                     <textarea
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
@@ -334,7 +334,7 @@ export function AddNewAssetModal({ isOpen, onClose, onSave }: Props) {
                 <p className={cn(sectionClass, 'mb-3 border-b border-border pb-2')}>Asset Type</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className={labelClass}>Category:</label>
+                    <label className={labelClass}><span className="text-destructive mr-0.5">*</span>Category:</label>
                     <select
                       value={category}
                       onChange={(e) => setCategory(e.target.value)}

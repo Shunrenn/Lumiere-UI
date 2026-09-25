@@ -304,8 +304,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
             <SectionHeading icon={FileText}>Core Portfolio Characteristics</SectionHeading>
             <div>
               <label className={labelClass} htmlFor="ev-title">
-                Event Concept / Title
-                <span className="ml-1 text-destructive">*</span>
+                <span className="text-destructive mr-0.5">*</span>Event Concept / Title
               </label>
               <input
                 id="ev-title"
@@ -391,7 +390,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
 
             <div>
               <label className={labelClass} htmlFor="ev-date">
-                Event Date *
+                <span className="text-destructive mr-0.5">*</span>Event Date
               </label>
               <div className="flex items-center gap-2">
                 <input

@@ -48,21 +48,26 @@ export function OfflineBanner() {
       <div
         role="alert"
         aria-live="assertive"
-        className="fixed top-0 left-0 right-0 z-[9999] flex items-center justify-between gap-3 bg-amber-600 px-4 py-2.5 text-white shadow-md dark:bg-amber-700"
+        className="fixed top-2 left-1/2 z-[9999] flex w-[calc(100%-1.5rem)] max-w-[420px] -translate-x-1/2 items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-950/90 px-4 py-2.5 text-amber-200 shadow-xl backdrop-blur-md transition-all"
       >
         <div className="flex items-center gap-2.5 min-w-0">
-          <WifiOff className="size-4 shrink-0 animate-pulse" aria-hidden="true" />
-          <p className="text-xs font-bold uppercase tracking-[0.1em] truncate">
-            You are offline — changes will sync automatically when reconnected
-          </p>
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
+            <WifiOff className="size-4 animate-pulse" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-100">
+              Offline Mode
+            </p>
+            <p className="truncate text-[0.65rem] text-amber-200/80">
+              Changes saved locally; will sync upon reconnect
+            </p>
+          </div>
         </div>
 
         {pendingSyncCount > 0 && (
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="inline-flex items-center gap-1 rounded-full bg-black/20 px-2.5 py-1 text-[0.65rem] font-extrabold uppercase tracking-wider text-amber-100">
-              {pendingSyncCount} queued
-            </span>
-          </div>
+          <span className="inline-flex shrink-0 items-center rounded-full bg-amber-500/20 border border-amber-500/40 px-2.5 py-1 text-[0.625rem] font-bold text-amber-300">
+            {pendingSyncCount} queued
+          </span>
         )}
       </div>
     )
@@ -72,22 +77,29 @@ export function OfflineBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed top-0 left-0 right-0 z-[9999] flex items-center justify-between gap-3 bg-emerald-600 px-4 py-2 text-white shadow-md dark:bg-emerald-700"
+      className="fixed top-2 left-1/2 z-[9999] flex w-[calc(100%-1.5rem)] max-w-[420px] -translate-x-1/2 items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-950/90 px-4 py-2.5 text-emerald-200 shadow-xl backdrop-blur-md transition-all"
     >
       <div className="flex items-center gap-2.5 min-w-0">
-        <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
-        <p className="text-xs font-bold uppercase tracking-[0.1em] truncate">
-          Connection restored — syncing queued offline changes
-        </p>
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
+          <CheckCircle2 className="size-4" aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-100">
+            Connection Restored
+          </p>
+          <p className="truncate text-[0.65rem] text-emerald-200/80">
+            Syncing queued changes to backend
+          </p>
+        </div>
       </div>
 
       {pendingSyncCount > 0 && (
         <button
           type="button"
           onClick={() => triggerOfflineReplay()}
-          className="inline-flex items-center gap-1.5 rounded-md bg-white/20 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-white hover:bg-white/30 transition"
+          className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-xl border border-emerald-400/30 bg-emerald-500/20 px-3 text-[0.65rem] font-bold uppercase tracking-wider text-emerald-100 transition-all hover:bg-emerald-500/30 active:scale-95"
         >
-          <RefreshCw className={cn('size-3', isSyncing && 'animate-spin')} aria-hidden="true" />
+          <RefreshCw className={cn('size-3.5', isSyncing && 'animate-spin')} aria-hidden="true" />
           Sync now
         </button>
       )}

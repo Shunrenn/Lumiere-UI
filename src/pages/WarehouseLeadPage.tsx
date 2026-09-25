@@ -1,11 +1,34 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Bell, Calendar, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, FileText, Plus, Send, UserCircle2, Users, X } from 'lucide-react'
+import {
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  FileText,
+  Lock,
+  Plus,
+  Send,
+  UserCircle2,
+  Users,
+} from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { useWarehouse, LEAD_NOTIFICATIONS, type WarehouseEvent, type WarehouseTask } from '@/lib/warehouse'
 import { FeedbackForm, IncidentForm, GenericTaskPanel } from '@/components/PwaWorkflows'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
+import {
+  PwaBadge,
+  PwaBottomNav,
+  PwaButton,
+  PwaCard,
+  PwaEmptyState,
+  PwaHeader,
+  PwaModal,
+  type PwaNavItem,
+} from '@/components/pwa'
 
 type Tab = 'home' | 'calendar' | 'activity' | 'account'
 
@@ -15,7 +38,13 @@ const SCHEDULE = [
   { date: '2026-08-27', time: '08:00', title: 'Maison Privée load-in briefing', venue: 'BGC Arts Center' },
 ]
 
-function dateLabel(date: string) { return new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) }
+function dateLabel(date: string) {
+  return new Date(`${date}T12:00:00`).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
 
 export function WarehouseLeadPage() {
   const { adminName, adminEmail, logout } = useAuth()
@@ -43,7 +72,10 @@ export function WarehouseLeadPage() {
     }
   }, [notes])
 
-  const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 5000) }
+  const notify = (message: string) => {
+    setToast(message)
+    window.setTimeout(() => setToast(''), 4000)
+  }
   const pendingCount = tasks.filter((t) => t.status === 'Submitted').length
 
   const submitTask = (event: FormEvent<HTMLFormElement>) => {
@@ -56,7 +88,15 @@ export function WarehouseLeadPage() {
     const assignees = data.getAll('assignees').map(String)
     if (!title) return notify('Give the task a name.')
     if (!assignees.length) return notify('Assign at least one available person.')
-    addTask({ eventId: selectedEvent.id, itemId: assignItem.id, title, description: String(data.get('description') || ''), assignees, deadline, deadlineTime })
+    addTask({
+      eventId: selectedEvent.id,
+      itemId: assignItem.id,
+      title,
+      description: String(data.get('description') || ''),
+      assignees,
+      deadline,
+      deadlineTime,
+    })
     setAssignItem(null)
     notify('Task assigned.')
   }
@@ -80,110 +120,468 @@ export function WarehouseLeadPage() {
     handleRefetch()
   }, [])
 
-  return <div className="mobile-shell admin-fade">
-    <header className="app-header"><div><p className="eyebrow">Lumière Operations</p><div className="brand-mark">WAREHOUSE LEAD</div></div><button className="avatar" onClick={() => setTab('account')} aria-label="Open account">{(adminName || 'WL').slice(0, 2).toUpperCase()}</button></header>
-    <main className="app-main">
-      {isError ? (
-        <ErrorFallback
-          title="Warehouse Lead Portal Unavailable"
-          message="Could not load event task assignments."
-          onRetry={handleRefetch}
-        />
-      ) : isLoading ? (
-        <LoadingSkeleton variant="dashboard" />
-      ) : (
-        <>
-      {tab === 'home' && (selectedEvent ? (
-        <EventDetail event={selectedEvent} tasks={tasks.filter((t) => t.eventId === selectedEvent.id)} crew={crew} onBack={() => setSelectedEvent(null)} onAssign={setAssignItem} onApprove={(id) => { updateTaskStatus(id, 'Approved'); notify('Task approved.') }} onReject={(id) => { updateTaskStatus(id, 'Rejected'); notify('Sent back for rework.') }} />
-      ) : (
-        <><Home events={events} tasks={tasks} pendingCount={pendingCount} onOpen={setSelectedEvent} /><GenericTaskPanel canClaim={false} onNotify={notify} /></>
-      ))}
-      {tab === 'calendar' && <CalendarView selectedDate={selectedDate} setSelectedDate={setSelectedDate} notes={notes} setNotes={setNotes} onSave={() => notify('Personal note saved.')} tasks={tasks} events={events} />}
-      {tab === 'activity' && <Activity activity={activity} tasks={tasks} />}
-      {tab === 'account' && <Account name={adminName || 'Warehouse Lead'} email={adminEmail || adminEmail || ''} onLogout={logout} />}
-        </>
+  const navItems: PwaNavItem[] = [
+    { id: 'home', label: 'Home', icon: ClipboardList, badgeCount: pendingCount },
+    { id: 'calendar', label: 'Calendar', icon: CalendarDays },
+    { id: 'activity', label: 'Activity', icon: FileText },
+    { id: 'account', label: 'Account', icon: UserCircle2 },
+  ]
+
+  return (
+    <div className="min-h-screen bg-background text-foreground pb-24">
+      {/* Shared PWA Station Header */}
+      <PwaHeader
+        title={
+          tab === 'home'
+            ? selectedEvent
+              ? selectedEvent.name
+              : 'Warehouse Lead Console'
+            : tab === 'calendar'
+              ? 'Team Operations Calendar'
+              : tab === 'activity'
+                ? 'Team Activity Record'
+                : adminName || 'Lead Account'
+        }
+        subtitle={
+          tab === 'home'
+            ? selectedEvent
+              ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}`
+              : 'Events in production & crew task dispatch'
+            : tab === 'calendar'
+              ? 'Muster times, briefings & task deadlines'
+              : tab === 'activity'
+                ? 'Crew approvals, task assignments & audit trail'
+                : adminEmail || 'Warehouse Operations Lead'
+        }
+        roleName="Warehouse Lead"
+        subRole="Warehouse"
+        icon={
+          tab === 'home' ? (
+            <ClipboardList className="size-5 text-primary" />
+          ) : tab === 'calendar' ? (
+            <CalendarDays className="size-5 text-primary" />
+          ) : tab === 'activity' ? (
+            <FileText className="size-5 text-primary" />
+          ) : (
+            <UserCircle2 className="size-5 text-primary" />
+          )
+        }
+        actions={
+          <button
+            type="button"
+            onClick={logout}
+            className="flex size-10 items-center justify-center rounded-xl border border-sidebar-border bg-sidebar-accent/50 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+            title="Sign out"
+            aria-label="Sign out"
+          >
+            <Lock className="size-4" />
+          </button>
+        }
+      />
+
+      {/* Main Content Area */}
+      <main className="mx-auto w-full max-w-[440px] px-4 pt-4 space-y-4">
+        {isError ? (
+          <ErrorFallback
+            title="Warehouse Lead Portal Unavailable"
+            message="Could not load event task assignments."
+            onRetry={handleRefetch}
+          />
+        ) : isLoading ? (
+          <LoadingSkeleton variant="dashboard" />
+        ) : (
+          <>
+            {tab === 'home' &&
+              (selectedEvent ? (
+                <EventDetail
+                  event={selectedEvent}
+                  tasks={tasks.filter((t) => t.eventId === selectedEvent.id)}
+                  crew={crew}
+                  onBack={() => setSelectedEvent(null)}
+                  onAssign={setAssignItem}
+                  onApprove={(id) => {
+                    updateTaskStatus(id, 'Approved')
+                    notify('Task approved.')
+                  }}
+                  onReject={(id) => {
+                    updateTaskStatus(id, 'Rejected')
+                    notify('Sent back for rework.')
+                  }}
+                />
+              ) : (
+                <>
+                  <Home events={events} tasks={tasks} pendingCount={pendingCount} onOpen={setSelectedEvent} />
+                  <GenericTaskPanel canClaim={false} onNotify={notify} />
+                </>
+              ))}
+
+            {tab === 'calendar' && (
+              <CalendarView
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+                notes={notes}
+                setNotes={setNotes}
+                onSave={() => notify('Personal note saved.')}
+                tasks={tasks}
+                events={events}
+              />
+            )}
+
+            {tab === 'activity' && <Activity activity={activity} tasks={tasks} />}
+
+            {tab === 'account' && (
+              <Account name={adminName || 'Warehouse Lead'} email={adminEmail || 'lead@lumiere.internal'} onLogout={logout} />
+            )}
+          </>
+        )}
+      </main>
+
+      {/* Shared Bottom Navigation */}
+      <PwaBottomNav
+        items={navItems}
+        activeId={tab}
+        onSelect={(key) => {
+          setTab(key as Tab)
+          setSelectedEvent(null)
+        }}
+      />
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-20 left-1/2 z-40 w-[calc(100%-2rem)] max-w-[400px] -translate-x-1/2 rounded-2xl border border-primary/30 bg-card p-3.5 text-center text-xs font-semibold text-foreground shadow-2xl backdrop-blur-md transition-all">
+          {toast}
+        </div>
       )}
-    </main>
-    <nav className="bottom-nav" aria-label="Lead navigation">{([['home', 'Home', ClipboardList], ['calendar', 'Calendar', CalendarDays], ['activity', 'Activity', FileText], ['account', 'Account', UserCircle2]] as const).map(([key, label, Icon]) => <button key={key} onClick={() => { setTab(key); setSelectedEvent(null) }} className={tab === key ? 'active' : ''}><Icon className="size-5" /><span>{label}</span></button>)}</nav>
-    {toast && <div className="fixed bottom-24 left-1/2 z-40 w-[calc(100%-32px)] max-w-[528px] -translate-x-1/2 rounded-md bg-primary px-4 py-3 text-center text-sm text-primary-foreground shadow-lg">{toast}</div>}
-    {assignItem && selectedEvent && <AssignForm item={assignItem} event={selectedEvent} crew={crew} onClose={() => setAssignItem(null)} onSubmit={submitTask} />}
-  </div>
+
+      {/* Shared Modals */}
+      {assignItem && selectedEvent && (
+        <PwaModal
+          isOpen={Boolean(assignItem)}
+          onClose={() => setAssignItem(null)}
+          title="Assign Warehouse Task"
+          subtitle={`${assignItem.name} • ${selectedEvent.name}`}
+        >
+          <AssignForm
+            item={assignItem}
+            event={selectedEvent}
+            crew={crew}
+            onSubmit={submitTask}
+          />
+        </PwaModal>
+      )}
+    </div>
+  )
 }
 
-function Home({ events, tasks, pendingCount, onOpen }: { events: WarehouseEvent[]; tasks: WarehouseTask[]; pendingCount: number; onOpen: (event: WarehouseEvent) => void }) {
-  return <div className="space-y-6">
-    <section className="paper-card"><div className="flex items-center gap-2"><Bell className="size-4 text-primary" /><p className="eyebrow">Notifications</p></div><div className="mt-3 space-y-3 text-sm">{LEAD_NOTIFICATIONS.map((item) => <p key={item.id}><strong>{item.label}:</strong> {item.detail}</p>)}</div></section>
-    <header><p className="eyebrow">Events in production</p><h1 className="mt-2 text-3xl font-serif">Your event list</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Open an event to see items needed and assign tasks to available crew.</p></header>
-    {pendingCount > 0 && <div className="paper-card flex items-center gap-3 border-primary/50 bg-secondary/40"><CheckCircle2 className="size-4 shrink-0 text-primary" /><p className="text-sm">{pendingCount} task{pendingCount > 1 ? 's' : ''} submitted and awaiting your approval.</p></div>}
-    <div className="space-y-3">{events.map((event) => { const eventTasks = tasks.filter((t) => t.eventId === event.id); return <button key={event.id} onClick={() => onOpen(event)} className="paper-card w-full text-left transition-transform active:scale-[.99]"><div className="flex items-start justify-between gap-3"><div><p className="eyebrow">{dateLabel(event.date)}</p><h2 className="mt-2 font-serif text-xl">{event.name}</h2><p className="mt-1 text-sm text-muted-foreground">{event.venue}</p></div><span className={`status ${event.status === 'In Prep' ? 'status-in-progress' : event.status === 'Completed' ? 'status-approved' : ''}`}>{event.status}</span></div><div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground"><span>{event.items.length} item groups · {eventTasks.length} tasks</span><span className="font-semibold text-primary">Open workspace →</span></div></button> })}</div>
-  </div>
+function Home({
+  events,
+  tasks,
+  pendingCount,
+  onOpen,
+}: {
+  events: WarehouseEvent[]
+  tasks: WarehouseTask[]
+  pendingCount: number
+  onOpen: (event: WarehouseEvent) => void
+}) {
+  return (
+    <div className="space-y-4">
+      {/* Notifications Card */}
+      <PwaCard title="Lead Notifications" subtitle="Operational updates for depot crew">
+        <div className="mt-2 space-y-2 text-xs">
+          {LEAD_NOTIFICATIONS.map((item) => (
+            <div key={item.id} className="rounded-xl border border-border/50 bg-muted/20 p-2.5">
+              <span className="font-bold text-foreground">{item.label}: </span>
+              <span className="text-muted-foreground">{item.detail}</span>
+            </div>
+          ))}
+        </div>
+      </PwaCard>
+
+      {/* Pending Approvals Alert */}
+      {pendingCount > 0 && (
+        <div className="flex items-center gap-3 rounded-2xl border border-primary/40 bg-primary/10 p-3.5 text-xs text-foreground">
+          <CheckCircle2 className="size-4 shrink-0 text-primary" />
+          <p className="font-medium">
+            <span className="font-bold">{pendingCount} task{pendingCount > 1 ? 's' : ''}</span> submitted and awaiting your lead approval.
+          </p>
+        </div>
+      )}
+
+      {/* Production Events List */}
+      <div>
+        <h3 className="mb-2.5 font-serif text-sm font-semibold tracking-tight uppercase tracking-[0.14em] text-foreground">
+          Events in Production
+        </h3>
+        <div className="space-y-3">
+          {events.map((event) => {
+            const eventTasks = tasks.filter((t) => t.eventId === event.id)
+            return (
+              <PwaCard key={event.id} className="p-4 transition-shadow hover:shadow-md">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 className="font-serif text-base font-bold text-foreground">{event.name}</h4>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {event.venue} • {dateLabel(event.date)}
+                    </p>
+                  </div>
+                  <PwaBadge
+                    variant={event.status === 'In Prep' ? 'neutral' : event.status === 'Completed' ? 'subrole' : 'accent'}
+                    label={event.status}
+                  />
+                </div>
+
+                <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-3 text-xs">
+                  <span className="text-muted-foreground">
+                    {event.items.length} item groups • {eventTasks.length} task(s)
+                  </span>
+                  <PwaButton onClick={() => onOpen(event)} variant="outline" size="sm">
+                    Open Workspace
+                  </PwaButton>
+                </div>
+              </PwaCard>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
 }
 
-function EventDetail({ event, tasks, crew: _crew, onBack, onAssign, onApprove, onReject }: { event: WarehouseEvent; tasks: WarehouseTask[]; crew: { name: string; available: boolean }[]; onBack: () => void; onAssign: (item: WarehouseEvent['items'][number]) => void; onApprove: (id: string) => void; onReject: (id: string) => void }) {
-  return <div className="space-y-5">
-    <button onClick={onBack} className="button-secondary"><ChevronLeft className="size-4" /> All events</button>
-    <header><p className="eyebrow">{dateLabel(event.date)} · {event.id}</p><h1 className="mt-2 text-3xl font-serif">{event.name}</h1><p className="mt-1 text-sm text-muted-foreground">{event.venue}</p></header>
+function EventDetail({
+  event,
+  tasks,
+  onBack,
+  onAssign,
+  onApprove,
+  onReject,
+}: {
+  event: WarehouseEvent
+  tasks: WarehouseTask[]
+  crew: { name: string; available: boolean }[]
+  onBack: () => void
+  onAssign: (item: WarehouseEvent['items'][number]) => void
+  onApprove: (id: string) => void
+  onReject: (id: string) => void
+}) {
+  return (
+    <div className="space-y-4">
+      <PwaButton onClick={onBack} variant="outline" size="sm" icon={<ChevronLeft className="size-4" />}>
+        All Events
+      </PwaButton>
 
-    <section className="paper-card">
-      <div><p className="eyebrow">Items needed</p><h2 className="mt-1 font-serif text-xl">Assign a task per item</h2></div>
-      <p className="mt-3 text-sm leading-6 text-muted-foreground">Tap an item to assign it to one or more available crew, with a schedule to finish.</p>
-      <div className="mt-4 space-y-2">{event.items.map((item) => { const itemTasks = tasks.filter((t) => t.itemId === item.id); return <div key={item.id} className="flex items-center justify-between gap-3 border-t border-border py-3"><div className="min-w-0"><p className="font-medium">{item.name}{item.needsCreation && <span className="status status-submitted ml-2">To create</span>}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.qty} units · {item.color}</p>{itemTasks.length > 0 && <p className="mt-1 text-xs text-primary">{itemTasks.length} task{itemTasks.length > 1 ? 's' : ''} assigned</p>}</div><button onClick={() => onAssign(item)} className="button-secondary shrink-0"><Plus className="size-4" /> Assign</button></div> })}</div>
-    </section>
+      {/* Items Needed Card */}
+      <PwaCard title="Items Needed for Event" subtitle="Tap an item to assign warehouse tasks to available crew">
+        <div className="mt-3 divide-y divide-border/60">
+          {event.items.map((item) => {
+            const itemTasks = tasks.filter((t) => t.itemId === item.id)
+            return (
+              <div key={item.id} className="flex items-center justify-between gap-2 py-3 text-xs">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-foreground truncate">{item.name}</p>
+                    {item.needsCreation && <PwaBadge variant="accent" label="To Create" />}
+                  </div>
+                  <p className="mt-0.5 text-muted-foreground">
+                    {item.sku} • {item.qty} units • {item.color}
+                  </p>
+                  {itemTasks.length > 0 && (
+                    <p className="mt-1 font-semibold text-primary">
+                      {itemTasks.length} task{itemTasks.length > 1 ? 's' : ''} assigned
+                    </p>
+                  )}
+                </div>
+                <PwaButton
+                  onClick={() => onAssign(item)}
+                  variant="outline"
+                  size="sm"
+                  icon={<Plus className="size-3.5" />}
+                  className="shrink-0"
+                >
+                  Assign
+                </PwaButton>
+              </div>
+            )
+          })}
+        </div>
+      </PwaCard>
 
-    <section className="space-y-3">
-      <div className="section-heading"><h2>Task queue</h2><Users className="size-5 text-primary" /></div>
-      {tasks.length ? tasks.map((task) => <TaskRow key={task.id} task={task} onApprove={() => onApprove(task.id)} onReject={() => onReject(task.id)} />) : <div className="paper-card text-sm text-muted-foreground">No tasks assigned to this event yet.</div>}
-    </section>
-  </div>
+      {/* Task Queue Card */}
+      <div>
+        <div className="mb-2.5 flex items-center justify-between">
+          <h3 className="font-serif text-sm font-semibold tracking-tight uppercase tracking-[0.14em] text-foreground">
+            Task Queue
+          </h3>
+          <Users className="size-4 text-primary" />
+        </div>
+
+        {tasks.length === 0 ? (
+          <PwaEmptyState title="No Tasks Assigned" description="No warehouse tasks have been assigned to this event yet." />
+        ) : (
+          <div className="space-y-3">
+            {tasks.map((task) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                onApprove={() => onApprove(task.id)}
+                onReject={() => onReject(task.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function TaskRow({ task, onApprove, onReject }: { task: WarehouseTask; onApprove: () => void; onReject: () => void }) {
-  return <article className="paper-card">
-    <div className="flex items-start gap-3">
-      <div className="mt-0.5 rounded-md bg-secondary p-2"><ClipboardList className="size-4 text-primary" /></div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold">{task.title}</p><p className="text-xs text-muted-foreground">{task.assignees.join(', ')} · Due {dateLabel(task.deadline)} {task.deadlineTime}</p></div><Status status={task.status} /></div>
-        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{task.description}</p>
-        {task.status === 'Submitted' && <div className="mt-3 flex gap-2"><button className="button-primary flex-1" onClick={onApprove}><Check className="size-3.5" /> Approve</button><button className="button-secondary flex-1" onClick={onReject}>Reject</button></div>}
+  return (
+    <PwaCard className="p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h4 className="font-serif text-sm font-bold text-foreground">{task.title}</h4>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {task.assignees.join(', ')} • Due {dateLabel(task.deadline)} at {task.deadlineTime}
+          </p>
+        </div>
+        <PwaBadge
+          variant={task.status === 'Approved' ? 'subrole' : task.status === 'Rejected' ? 'destructive' : 'accent'}
+          label={task.status}
+        />
       </div>
-    </div>
-  </article>
+
+      <p className="text-xs text-foreground bg-muted/30 p-2.5 rounded-xl border border-border/50 leading-relaxed">
+        {task.description}
+      </p>
+
+      {task.status === 'Submitted' && (
+        <div className="flex items-center gap-2 pt-1">
+          <PwaButton onClick={onApprove} variant="primary" size="sm" icon={<Check className="size-3.5" />} className="flex-1">
+            Approve
+          </PwaButton>
+          <PwaButton onClick={onReject} variant="destructive" size="sm" className="flex-1">
+            Reject
+          </PwaButton>
+        </div>
+      )}
+    </PwaCard>
+  )
 }
 
-function Status({ status }: { status: WarehouseTask['status'] }) { return <span className={'status status-' + status.toLowerCase().replace(' ', '-')}>{status}</span> }
+function AssignForm({
+  item,
+  event,
+  crew,
+  onSubmit,
+}: {
+  item: WarehouseEvent['items'][number]
+  event: WarehouseEvent
+  crew: { name: string; available: boolean }[]
+  onSubmit: (e: FormEvent<HTMLFormElement>) => void
+}) {
+  return (
+    <form onSubmit={onSubmit} className="space-y-4">
+      <label className="block text-xs font-semibold text-foreground">
+        Task Name
+        <input
+          name="title"
+          required
+          defaultValue={`Prep ${item.name}`}
+          placeholder="e.g. Inspect & clean chiavari chairs"
+          className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+      </label>
 
-function AssignForm({ item, event, crew, onClose, onSubmit }: { item: WarehouseEvent['items'][number]; event: WarehouseEvent; crew: { id: string; name: string; available: boolean }[]; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  return <div className="sheet-backdrop">
-    <form className="sheet space-y-4" onSubmit={onSubmit}>
-      <div className="flex items-start justify-between">
-        <div><p className="eyebrow">{event.name}</p><h2 className="mt-1 font-serif text-2xl">Assign task</h2><p className="mt-1 text-sm text-muted-foreground">{item.name} · {item.sku}</p></div>
-        <button type="button" onClick={onClose} className="icon-button" aria-label="Close"><X className="size-4" /></button>
-      </div>
-      <label className="field-label">Task title<input name="title" required placeholder="e.g. Sew custom gold table runners" className="field-input" /></label>
-      <label className="field-label">Details<textarea name="description" rows={3} placeholder="Quantity, color, and finishing notes for the crew..." className="field-input" defaultValue={`${item.qty} units · ${item.color}`} /></label>
-      <fieldset className="field-label"><span>Assign available people</span>
-        <div className="mt-1 space-y-2 rounded border border-border p-3">
-          {crew.map((person) => <label key={person.id} className={`flex items-center justify-between gap-3 text-sm font-normal normal-case tracking-normal ${!person.available ? 'opacity-40' : ''}`}>
-            <span className="flex items-center gap-2"><input type="checkbox" name="assignees" value={person.name} disabled={!person.available} className="size-4" />{person.name}</span>
-            <span className={`status ${person.available ? 'status-approved' : ''}`}>{person.available ? 'Available' : 'Unavailable'}</span>
-          </label>)}
+      <label className="block text-xs font-semibold text-foreground">
+        Instructions & Specs
+        <textarea
+          name="description"
+          rows={3}
+          defaultValue={`Prepare ${item.qty} units (${item.color}). SKU: ${item.sku}.`}
+          className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+      </label>
+
+      <div>
+        <label className="block text-xs font-semibold text-foreground mb-2">Assign Crew Members</label>
+        <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-3">
+          {crew.map((person) => (
+            <label key={person.name} className="flex items-center justify-between text-xs cursor-pointer">
+              <span className="flex items-center gap-2 font-medium text-foreground">
+                <input
+                  type="checkbox"
+                  name="assignees"
+                  value={person.name}
+                  disabled={!person.available}
+                  className="size-4 rounded border-input"
+                />
+                {person.name}
+              </span>
+              <PwaBadge
+                variant={person.available ? 'subrole' : 'neutral'}
+                label={person.available ? 'Available' : 'Unavailable'}
+              />
+            </label>
+          ))}
         </div>
-      </fieldset>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="field-label">Deadline date<input name="deadline" type="date" defaultValue={event.date} className="field-input" /></label>
-        <label className="field-label">Deadline time<input name="time" type="time" defaultValue="17:00" className="field-input" /></label>
       </div>
-      <button className="button-primary w-full" type="submit"><Send className="size-4" /> Assign task</button>
+
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block text-xs font-semibold text-foreground">
+          Deadline Date
+          <input
+            name="deadline"
+            type="date"
+            defaultValue={event.date}
+            className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </label>
+
+        <label className="block text-xs font-semibold text-foreground">
+          Deadline Time
+          <input
+            name="time"
+            type="time"
+            defaultValue="17:00"
+            className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </label>
+      </div>
+
+      <PwaButton type="submit" variant="primary" size="md" icon={<Send className="size-4" />} className="w-full">
+        Assign Task
+      </PwaButton>
     </form>
-  </div>
+  )
 }
 
 function DayDots({ hasSchedule, hasNote }: { hasSchedule: boolean; hasNote: boolean }) {
   if (!hasSchedule && !hasNote) return <span className="mt-1 block h-1.5" />
-  return <span className="mt-1 flex items-center justify-center gap-1">{hasSchedule && <span className="size-1.5 rounded-full bg-primary" />}{hasNote && <span className="size-1.5 rounded-full border border-current" />}</span>
+  return (
+    <span className="mt-1 flex items-center justify-center gap-1">
+      {hasSchedule && <span className="size-1.5 rounded-full bg-primary" />}
+      {hasNote && <span className="size-1.5 rounded-full border border-current" />}
+    </span>
+  )
 }
 
-function CalendarView({ selectedDate, setSelectedDate, notes, setNotes, onSave, tasks, events }: { selectedDate: string; setSelectedDate: (date: string) => void; notes: Record<string, string>; setNotes: (updater: (current: Record<string, string>) => Record<string, string>) => void; onSave: () => void; tasks: WarehouseTask[]; events: WarehouseEvent[] }) {
+function CalendarView({
+  selectedDate,
+  setSelectedDate,
+  notes,
+  setNotes,
+  onSave,
+  tasks,
+  events,
+}: {
+  selectedDate: string
+  setSelectedDate: (date: string) => void
+  notes: Record<string, string>
+  setNotes: (updater: (current: Record<string, string>) => Record<string, string>) => void
+  onSave: () => void
+  tasks: WarehouseTask[]
+  events: WarehouseEvent[]
+}) {
   const days = Array.from({ length: 31 }, (_, i) => i + 1)
   const scheduleDates = new Set(SCHEDULE.map((item) => item.date))
   const deadlineDates = new Set(tasks.map((task) => task.deadline))
@@ -191,43 +589,202 @@ function CalendarView({ selectedDate, setSelectedDate, notes, setNotes, onSave, 
   const deadlinesToday = tasks.filter((task) => task.deadline === selectedDate)
   const eventsToday = events.filter((event) => event.date === selectedDate)
   const noteValue = notes[selectedDate] ?? ''
-  return <div className="space-y-5">
-    <header><p className="eyebrow">Team schedule & personal notes</p><h1 className="mt-2 text-3xl font-serif">Calendar</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Tap a day to see meetings, task deadlines, and event dates.</p></header>
-    <section className="paper-card">
-      <div className="flex items-center justify-between"><button className="icon-button" onClick={() => setSelectedDate('2026-08-01')} aria-label="Previous month"><ChevronLeft className="size-4" /></button><h2 className="font-serif text-xl">August 2026</h2><button className="icon-button" onClick={() => setSelectedDate('2026-08-31')} aria-label="Next month"><ChevronRight className="size-4" /></button></div>
-      <div className="mt-4 grid grid-cols-7 gap-1 text-center text-xs"><div className="col-span-7 grid grid-cols-7 text-muted-foreground">{['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <span key={`${d}-${i}`}>{d}</span>)}</div><span /><span /><span /><span /><span /><span /><span />{days.map((day) => { const date = `2026-08-${String(day).padStart(2, '0')}`; const hasSchedule = scheduleDates.has(date) || deadlineDates.has(date); const hasNote = Boolean(notes[date]); return <button key={date} onClick={() => setSelectedDate(date)} className={`rounded p-2 ${date === selectedDate ? 'bg-primary text-primary-foreground' : hasSchedule ? 'font-bold text-primary' : ''}`}><span className="block">{day}</span><DayDots hasSchedule={hasSchedule} hasNote={hasNote} /></button> })}</div>
-    </section>
 
-    {eventsToday.length > 0 && <section className="paper-card"><div className="flex items-center gap-2"><Calendar className="size-4 text-primary" /><p className="eyebrow">Events on this date</p></div><div className="mt-3 space-y-2">{eventsToday.map((event) => <p key={event.id} className="text-sm"><strong>{event.name}</strong> · {event.venue}</p>)}</div></section>}
+  return (
+    <div className="space-y-4">
+      <PwaCard title="August 2026 Calendar">
+        <div className="flex items-center justify-between mb-3">
+          <PwaButton variant="ghost" size="sm" onClick={() => setSelectedDate('2026-08-01')}>
+            <ChevronLeft className="size-4" /> Prev
+          </PwaButton>
+          <span className="font-serif text-sm font-bold text-foreground">August 2026</span>
+          <PwaButton variant="ghost" size="sm" onClick={() => setSelectedDate('2026-08-31')}>
+            Next <ChevronRight className="size-4" />
+          </PwaButton>
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-center text-xs">
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+            <span key={`${d}-${i}`} className="font-bold text-muted-foreground text-[0.65rem] py-1">
+              {d}
+            </span>
+          ))}
+          {days.map((day) => {
+            const date = `2026-08-${String(day).padStart(2, '0')}`
+            const hasSchedule = scheduleDates.has(date) || deadlineDates.has(date)
+            const hasNote = Boolean(notes[date])
+            const isSelected = date === selectedDate
 
-    <section className="space-y-3">
-      <div className="section-heading"><h2>Schedule for {dateLabel(selectedDate)}</h2><CalendarDays className="size-5 text-primary" /></div>
-      {meetingsToday.map((entry) => <div key={`${entry.date}-${entry.time}`} className="paper-card"><p className="eyebrow">{entry.time} · Meeting</p><p className="mt-1 font-medium">{entry.title}</p><p className="mt-1 text-sm text-muted-foreground">{entry.venue}</p></div>)}
-      {deadlinesToday.map((task) => <div key={task.id} className="paper-card"><p className="eyebrow">{task.deadlineTime} · Task deadline</p><p className="mt-1 font-medium">{task.title}</p><p className="mt-1 text-sm text-muted-foreground">{task.assignees.join(', ')}</p></div>)}
-      {!meetingsToday.length && !deadlinesToday.length && <div className="paper-card text-sm text-muted-foreground">Nothing scheduled on this date.</div>}
-      <div className="paper-card">
-        <label className="field-label mt-0">Personal note for {dateLabel(selectedDate)}<textarea value={noteValue} onChange={(event) => setNotes((current) => ({ ...current, [selectedDate]: event.target.value }))} rows={3} placeholder="Add a reminder for yourself..." className="field-input" /></label>
-        <button onClick={onSave} className="button-primary mt-4"><FileText className="size-4" /> Save note</button>
-      </div>
-    </section>
-  </div>
+            return (
+              <button
+                key={date}
+                onClick={() => setSelectedDate(date)}
+                className={`flex min-h-[44px] flex-col items-center justify-center rounded-xl p-1 text-xs transition-all ${
+                  isSelected
+                    ? 'bg-primary text-primary-foreground font-bold shadow-sm'
+                    : hasSchedule
+                      ? 'bg-primary/10 text-primary font-bold'
+                      : 'hover:bg-accent/40 text-foreground'
+                }`}
+              >
+                <span>{day}</span>
+                <DayDots hasSchedule={hasSchedule} hasNote={hasNote} />
+              </button>
+            )
+          })}
+        </div>
+      </PwaCard>
+
+      {eventsToday.length > 0 && (
+        <PwaCard title="Events on Selected Date">
+          <div className="space-y-2 pt-1 text-xs">
+            {eventsToday.map((event) => (
+              <p key={event.id} className="text-foreground">
+                <strong className="font-bold">{event.name}</strong> • {event.venue}
+              </p>
+            ))}
+          </div>
+        </PwaCard>
+      )}
+
+      <PwaCard title={`Schedule for ${dateLabel(selectedDate)}`}>
+        <div className="space-y-3 pt-1">
+          {meetingsToday.map((entry) => (
+            <div key={`${entry.date}-${entry.time}`} className="rounded-xl border border-border p-3 text-xs">
+              <PwaBadge variant="accent" label={`${entry.time} • Meeting`} />
+              <h4 className="mt-1 font-bold text-foreground">{entry.title}</h4>
+              <p className="text-muted-foreground">{entry.venue}</p>
+            </div>
+          ))}
+
+          {deadlinesToday.map((task) => (
+            <div key={task.id} className="rounded-xl border border-border p-3 text-xs">
+              <PwaBadge variant="neutral" label={`${task.deadlineTime} • Task Deadline`} />
+              <h4 className="mt-1 font-bold text-foreground">{task.title}</h4>
+              <p className="text-muted-foreground">{task.assignees.join(', ')}</p>
+            </div>
+          ))}
+
+          {!meetingsToday.length && !deadlinesToday.length && (
+            <p className="text-xs text-muted-foreground py-2">Nothing scheduled on this date.</p>
+          )}
+
+          <div className="mt-4 border-t border-border pt-3 space-y-2">
+            <label className="block text-xs font-semibold text-foreground">
+              Personal Note for {dateLabel(selectedDate)}
+              <textarea
+                value={noteValue}
+                onChange={(e) => setNotes((curr) => ({ ...curr, [selectedDate]: e.target.value }))}
+                rows={3}
+                placeholder="Add a reminder for yourself..."
+                className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+            <PwaButton onClick={onSave} variant="primary" size="sm" icon={<FileText className="size-3.5" />}>
+              Save Note
+            </PwaButton>
+          </div>
+        </div>
+      </PwaCard>
+    </div>
+  )
 }
 
-function Activity({ activity, tasks }: { activity: { id: string; message: string; at: string }[]; tasks: WarehouseTask[] }) {
+function Activity({
+  activity,
+  tasks,
+}: {
+  activity: { id: string; message: string; at: string }[]
+  tasks: WarehouseTask[]
+}) {
   const approved = tasks.filter((t) => t.status === 'Approved')
-  return <div className="space-y-5">
-    <header><p className="eyebrow">Team record</p><h1 className="mt-2 text-3xl font-serif">Activity</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">Approvals, assignments, and finished tasks across your crew.</p></header>
-    <section className="space-y-3"><h2 className="font-serif text-xl">Recent activity</h2>{activity.map((entry) => <div key={entry.id} className="paper-card"><p className="text-sm">{entry.message}</p><p className="mt-2 text-xs text-muted-foreground">{entry.at}</p></div>)}</section>
-    <section className="space-y-3"><h2 className="font-serif text-xl">Completed tasks</h2>{approved.length ? approved.map((task) => <div key={task.id} className="paper-card flex items-center justify-between gap-3"><div><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.assignees.join(', ')}</p></div><span className="status status-approved">Approved</span></div>) : <div className="paper-card text-sm text-muted-foreground">No tasks approved yet.</div>}</section>
-  </div>
+  return (
+    <div className="space-y-4">
+      <PwaCard title="Recent Team Activity">
+        <div className="space-y-2.5 pt-1 text-xs">
+          {activity.map((entry) => (
+            <div key={entry.id} className="rounded-xl border border-border p-3">
+              <p className="text-foreground font-medium">{entry.message}</p>
+              <p className="mt-1 text-[0.65rem] text-muted-foreground">{entry.at}</p>
+            </div>
+          ))}
+        </div>
+      </PwaCard>
+
+      <PwaCard title="Completed & Approved Tasks">
+        {approved.length === 0 ? (
+          <PwaEmptyState title="No Approved Tasks" description="No warehouse tasks have been approved yet." />
+        ) : (
+          <div className="space-y-2.5 pt-1 text-xs">
+            {approved.map((task) => (
+              <div key={task.id} className="flex items-center justify-between border-b border-border/60 py-2.5">
+                <div>
+                  <p className="font-bold text-foreground">{task.title}</p>
+                  <p className="text-muted-foreground">{task.assignees.join(', ')}</p>
+                </div>
+                <PwaBadge variant="subrole" label="Approved" />
+              </div>
+            ))}
+          </div>
+        )}
+      </PwaCard>
+    </div>
+  )
 }
 
 function Account({ name, email, onLogout }: { name: string; email: string; onLogout: () => void }) {
   const [form, setForm] = useState<'feedback' | 'incident' | null>(null)
   const [message, setMessage] = useState('')
-  return <div className="space-y-5">
-    <header><p className="eyebrow">Lead account</p><h1 className="mt-2 text-3xl font-serif">{name}</h1><p className="mt-1 text-sm text-muted-foreground">{email}</p></header>
-    <section className="paper-card"><div className="flex items-center gap-3"><Users className="size-4 text-primary" /><div><p className="text-sm font-semibold">Crew oversight</p><p className="text-xs text-muted-foreground">Assign tasks and review submissions from the Home tab.</p></div></div></section>
-    <div className="grid grid-cols-2 gap-2"><button className="button-secondary" onClick={() => setForm('feedback')}>Feedback</button><button className="button-secondary" onClick={() => setForm('incident')}>Incident Report</button></div>{message && <p className="text-sm text-primary">{message}</p>}<button className="button-secondary w-full" onClick={onLogout}>Sign out</button>{form === 'feedback' && <FeedbackForm onClose={() => setForm(null)} onSubmitted={setMessage} />}{form === 'incident' && <IncidentForm onClose={() => setForm(null)} onSubmitted={setMessage} />}
-  </div>
+
+  return (
+    <div className="space-y-4">
+      <PwaCard title={name} subtitle={email} action={<PwaBadge subRole="Warehouse" label="Lead Operator" />}>
+        <div className="flex items-center gap-3 pt-2">
+          <Users className="size-5 text-primary shrink-0" />
+          <div className="text-xs">
+            <p className="font-bold text-foreground">Crew Oversight</p>
+            <p className="text-muted-foreground">Assign tasks and review submissions from the Home tab.</p>
+          </div>
+        </div>
+      </PwaCard>
+
+      <PwaCard title="Lead Actions">
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <PwaButton onClick={() => setForm('feedback')} variant="outline" size="md" className="w-full">
+              Feedback
+            </PwaButton>
+            <PwaButton onClick={() => setForm('incident')} variant="outline" size="md" className="w-full">
+              Incident Report
+            </PwaButton>
+          </div>
+          {message && <p className="text-xs text-primary font-medium text-center">{message}</p>}
+          <PwaButton onClick={onLogout} variant="destructive" size="md" className="w-full">
+            Sign Out
+          </PwaButton>
+        </div>
+      </PwaCard>
+
+      {form === 'feedback' && (
+        <PwaModal
+          isOpen={Boolean(form)}
+          onClose={() => setForm(null)}
+          title="Submit Operations Feedback"
+          subtitle="Send feedback to Workforce Management"
+        >
+          <FeedbackForm onClose={() => setForm(null)} onSubmitted={setMessage} />
+        </PwaModal>
+      )}
+
+      {form === 'incident' && (
+        <PwaModal
+          isOpen={Boolean(form)}
+          onClose={() => setForm(null)}
+          title="Submit Incident Report"
+          subtitle="File emergency or operational incident"
+        >
+          <IncidentForm onClose={() => setForm(null)} onSubmitted={setMessage} />
+        </PwaModal>
+      )}
+    </div>
+  )
 }
