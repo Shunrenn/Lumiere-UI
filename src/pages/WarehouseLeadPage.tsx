@@ -8,7 +8,7 @@ import {
   ChevronRight,
   ClipboardList,
   FileText,
-  Lock,
+  LogOut,
   Plus,
   Send,
   UserCircle2,
@@ -175,7 +175,7 @@ export function WarehouseLeadPage() {
             title="Sign out"
             aria-label="Sign out"
           >
-            <Lock className="size-4" />
+            <LogOut className="size-4" />
           </button>
         }
       />

@@ -8,7 +8,7 @@ import {
   ClipboardList,
   FileText,
   ImageOff,
-  Lock,
+  LogOut,
   UserCircle2,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
@@ -160,7 +160,7 @@ export function WarehouseMemberPage() {
             title="Sign out"
             aria-label="Sign out"
           >
-            <Lock className="size-4" />
+            <LogOut className="size-4" />
           </button>
         }
       />

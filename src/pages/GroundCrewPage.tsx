@@ -9,6 +9,7 @@ import {
   ChevronRight,
   FileText,
   Lock,
+  LogOut,
   MapPin,
   MessageSquare,
   PackageCheck,
@@ -406,7 +407,7 @@ export function GroundCrewPage() {
             title="Sign out"
             aria-label="Sign out"
           >
-            <Lock className="size-4" />
+            <LogOut className="size-4" />
           </button>
         }
       />

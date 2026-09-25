@@ -38,7 +38,7 @@ export function PwaHeader({
             </span>
           )}
           <div className="min-w-0">
-            <p className="font-serif text-lg font-bold tracking-[0.2em] text-sidebar-foreground">LUMIA^RE</p>
+            <p className="font-serif text-lg font-bold tracking-[0.2em] text-sidebar-foreground">LUMIÈRE</p>
             <div className="mt-0.5 flex flex-wrap items-center gap-2">
               <span className="text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/75">
                 {roleName}
