@@ -28,6 +28,8 @@ export type Route =
   | 'manning'
   | 'production-manager'
   | 'inventory-officer'
+  // Project Manager console
+  | 'project-manager'
 
 /* ---------- Procurement / Replenishment ---------- */
 
@@ -115,6 +117,7 @@ export function normalizeGroundCrewSubRole(rawRole?: string): GroundCrewSubRole 
 export const SELECTABLE_STAFF_ROLES = [
   'Admin',
   'Executive',
+  'Project Manager',
   'Warehouse Manager',
   'Event Planner',
   'Ground Crew',
@@ -125,6 +128,7 @@ export type SelectableStaffRole = (typeof SELECTABLE_STAFF_ROLES)[number]
 export const STAFF_ROLES = [
   'Admin',
   'Executive',
+  'Project Manager',
   'Warehouse Manager',
   'Event Planner',
   'Ground Crew',
@@ -231,6 +235,8 @@ export interface PortalEvent {
   budget: number
   status: EventStatus
   moodPlan: string
+  projectManagerId?: string
+  projectManagerName?: string
 }
 
 /* ---------- Dispatch & Batches ---------- */

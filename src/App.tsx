@@ -45,6 +45,7 @@ const WarehouseMemberPage = lazy(() => import('@/pages/WarehouseMemberPage').the
 const ManningPage = lazy(() => import('@/pages/ManningPage').then((m) => ({ default: m.ManningPage })))
 const ProductionManagerPage = lazy(() => import('@/pages/ProductionManagerPage').then((m) => ({ default: m.ProductionManagerPage })))
 const InventoryOfficerPage = lazy(() => import('@/pages/InventoryOfficerPage').then((m) => ({ default: m.InventoryOfficerPage })))
+const ProjectManagerDashboardPage = lazy(() => import('@/pages/ProjectManagerDashboardPage').then((m) => ({ default: m.ProjectManagerDashboardPage })))
 
 function PortalAccessError({ portal }: { portal: 'web' | 'pwa' }) {
   const { logout } = useAuth()
@@ -65,7 +66,7 @@ function PortalAccessError({ portal }: { portal: 'web' | 'pwa' }) {
 
 function Router() {
   const { route } = useNav()
-  const { portal, isWarehouse, isAdmin, isProductionManager, isInventoryOfficer, hasFullWarehouseAccess } = useAuth()
+  const { portal, isWarehouse, isAdmin, isProjectManager, isProductionManager, isInventoryOfficer, hasFullWarehouseAccess } = useAuth()
   // The Production Manager WOM sub-role gets its own mobile PWA page (matching
   // the Ground Crew / Warehouse Lead / Warehouse Member mobile accounts)
   // instead of the desktop sidebar shell — but only when scoped to that single
@@ -116,6 +117,8 @@ function Router() {
       return <ProductionManagerPage />
     case 'inventory-officer':
       return <InventoryOfficerPage />
+    case 'project-manager':
+      return <ProjectManagerDashboardPage />
     case 'workforce':
       return <AdminWorkforcePage />
     case 'security-audit':
@@ -132,6 +135,8 @@ function Router() {
         <ProductionManagerPage />
       ) : isMobileInventoryOfficer ? (
         <InventoryOfficerPage />
+      ) : isProjectManager ? (
+        <ProjectManagerDashboardPage />
       ) : isWarehouse ? (
         <WarehouseHomePage />
       ) : (
@@ -141,7 +146,7 @@ function Router() {
 }
 
 function Gate() {
-  const { isAuthenticated, isTempPassword, hasConfirmationPin, isWarehouse, isWarehouseLead, isWarehouseMember, isPlanner, isGroundCrew, isExecutive, isProductionManager, isInventoryOfficer, isManningOfficer, hasFullWarehouseAccess } = useAuth()
+  const { isAuthenticated, isTempPassword, hasConfirmationPin, isWarehouse, isWarehouseLead, isWarehouseMember, isPlanner, isProjectManager, isGroundCrew, isExecutive, isProductionManager, isInventoryOfficer, isManningOfficer, hasFullWarehouseAccess } = useAuth()
   const [portal, setPortal] = useState<'staff' | 'crew'>('staff')
   const isMobileProductionManager = isProductionManager && !hasFullWarehouseAccess
   const isMobileInventoryOfficer = isInventoryOfficer && !hasFullWarehouseAccess
@@ -168,7 +173,7 @@ function Gate() {
   const hasWorkforceHighlight =
     new URLSearchParams(window.location.search).has('highlight') || Boolean(window.history.state?.highlight)
   const urlParamRoute = (new URLSearchParams(window.location.search).get('route') || window.location.pathname.replace('/', '')) as Route | null
-  const validRoutes = new Set(['dashboard', 'registry', 'replenishment', 'logs', 'damage', 'inventory', 'warehouse-logs', 'crew', 'deployments', 'dispatch', 'event-detail', 'canvas', 'canvas-workspace', 'field-ops', 'warehouse-lead', 'warehouse-member', 'manning', 'production-manager', 'inventory-officer', 'workforce', 'security-audit', 'rbac', 'overview'])
+  const validRoutes = new Set(['dashboard', 'registry', 'replenishment', 'logs', 'damage', 'inventory', 'warehouse-logs', 'crew', 'deployments', 'dispatch', 'event-detail', 'canvas', 'canvas-workspace', 'field-ops', 'warehouse-lead', 'warehouse-member', 'manning', 'production-manager', 'inventory-officer', 'workforce', 'security-audit', 'rbac', 'overview', 'project-manager'])
   const targetUrlRoute = urlParamRoute && validRoutes.has(urlParamRoute) ? urlParamRoute : null
 
   const initialRoute = targetUrlRoute || (isManningOfficer
@@ -185,6 +190,8 @@ function Gate() {
             ? 'inventory-officer'
             : isPlanner
             ? 'canvas'
+            : isProjectManager
+            ? 'project-manager'
             : isWarehouse
               ? 'overview'
               : hasWorkforceHighlight

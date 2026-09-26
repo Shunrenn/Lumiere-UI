@@ -12,6 +12,8 @@ export interface EventResponseDto {
   ingressDate?: string
   status?: string
   isLossMaker?: boolean
+  projectManagerId?: string
+  projectManagerName?: string
 }
 
 function getAuthHeaders(): HeadersInit {
@@ -56,6 +58,8 @@ export function mapEventResponseToPortalEvent(dto: EventResponseDto, index = 0):
     budget: 0,
     status: (dto.status || 'Active') as any,
     moodPlan: '',
+    projectManagerId: dto.projectManagerId,
+    projectManagerName: dto.projectManagerName,
   }
 }
 
@@ -64,7 +68,7 @@ export function mapEventResponseToPortalEvent(dto: EventResponseDto, index = 0):
  */
 export async function fetchEventsApi(): Promise<PortalEvent[]> {
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 600)
+  const timeoutId = setTimeout(() => controller.abort(), 1200)
   try {
     const res = await fetch(`${API_BASE_URL}/api/events`, {
       headers: getAuthHeaders(),
@@ -75,8 +79,12 @@ export async function fetchEventsApi(): Promise<PortalEvent[]> {
       console.warn(`[eventsApi] GET /api/events returned HTTP ${res.status}`)
       return []
     }
-    const data: EventResponseDto[] = await res.json()
-    if (!Array.isArray(data)) return []
+    const body = await res.json()
+    const data: EventResponseDto[] = Array.isArray(body)
+      ? body
+      : Array.isArray(body?.items)
+      ? body.items
+      : []
     return data.map((dto, idx) => mapEventResponseToPortalEvent(dto, idx))
   } catch (err) {
     clearTimeout(timeoutId)

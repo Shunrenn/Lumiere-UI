@@ -182,6 +182,7 @@ interface AuthContextValue {
   isExecutive: boolean
   isWarehouse: boolean
   isPlanner: boolean
+  isProjectManager: boolean
   isGroundCrew: boolean
   isWarehouseLead: boolean
   isWarehouseMember: boolean
@@ -560,6 +561,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isExecutive: currentUser?.role === 'Executive',
       isWarehouse: currentUser?.role === 'Warehouse Manager',
       isPlanner: currentUser?.role === 'Event Planner',
+      isProjectManager: currentUser?.role === 'Project Manager',
       isGroundCrew: currentUser?.role === 'Ground Crew',
       isWarehouseLead: currentUser?.role === 'Warehouse Lead',
       isWarehouseMember: currentUser?.role === 'Warehouse Member',

@@ -86,6 +86,13 @@ export const STRUCTURAL_ROLES: StructuralRole[] = [
       'Strategic, read-only oversight of every event, portfolio, and analytics surface. Executives observe but do not operate day-to-day workflows.',
   },
   {
+    id: 'project-manager',
+    name: 'Project Manager',
+    scope: 'Project lifecycle, client pitching, master scheduling & event oversight',
+    description:
+      'Leads operational project coordination across assigned events: client briefs, proposal pitching, master scheduling, and cross-team execution oversight.',
+  },
+  {
     id: 'event-planner',
     name: 'Event Planner',
     scope: 'Event design, canvas & pipeline',
