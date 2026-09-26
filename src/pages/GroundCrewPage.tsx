@@ -1358,7 +1358,10 @@ function Activity({
 
       <PwaCard title="Completed Events">
         {events.filter((e) => e.status === 'Completed').length === 0 ? (
-          <p className="text-xs text-muted-foreground py-2">Founders Dinner is in progress and will appear here after close-out.</p>
+          <PwaEmptyState
+            title="No Completed Events"
+            description="Completed events and closed-out shifts will appear here after close-out."
+          />
         ) : (
           events.filter((e) => e.status === 'Completed').map((e) => (
             <div key={e.id} className="py-2 text-xs">
