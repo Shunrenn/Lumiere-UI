@@ -579,7 +579,29 @@ function CalendarView({
   tasks: WarehouseTask[]
   events: WarehouseEvent[]
 }) {
-  const days = Array.from({ length: 31 }, (_, i) => i + 1)
+  const [view, setView] = useState(() => {
+    if (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate.trim())) {
+      const [y, m] = selectedDate.trim().split('-').map(Number)
+      return { year: y, month: m - 1 }
+    }
+    return { year: 2026, month: 7 }
+  })
+
+  const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ]
+
+  const shiftMonth = (delta: number) => {
+    setView((prev) => {
+      const next = new Date(prev.year, prev.month + delta, 1)
+      return { year: next.getFullYear(), month: next.getMonth() }
+    })
+  }
+
+  const firstWeekday = new Date(view.year, view.month, 1).getDay()
+  const daysInMonth = new Date(view.year, view.month + 1, 0).getDate()
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
   const scheduleDates = new Set(SCHEDULE.map((item) => item.date))
   const deadlineDates = new Set(tasks.map((task) => task.deadline))
   const meetingsToday = SCHEDULE.filter((item) => item.date === selectedDate)
@@ -589,13 +611,15 @@ function CalendarView({
 
   return (
     <div className="space-y-4">
-      <PwaCard title="August 2026 Calendar">
+      <PwaCard title={`${MONTH_NAMES[view.month]} ${view.year} Calendar`}>
         <div className="flex items-center justify-between mb-3">
-          <PwaButton variant="ghost" size="sm" onClick={() => setSelectedDate('2026-08-01')}>
+          <PwaButton variant="ghost" size="sm" onClick={() => shiftMonth(-1)} aria-label="Previous month">
             <ChevronLeft className="size-4" /> Prev
           </PwaButton>
-          <span className="font-serif text-sm font-bold text-foreground">August 2026</span>
-          <PwaButton variant="ghost" size="sm" onClick={() => setSelectedDate('2026-08-31')}>
+          <span className="font-serif text-sm font-bold text-foreground">
+            {MONTH_NAMES[view.month]} {view.year}
+          </span>
+          <PwaButton variant="ghost" size="sm" onClick={() => shiftMonth(1)} aria-label="Next month">
             Next <ChevronRight className="size-4" />
           </PwaButton>
         </div>
@@ -605,8 +629,11 @@ function CalendarView({
               {d}
             </span>
           ))}
+          {Array.from({ length: firstWeekday }).map((_, i) => (
+            <span key={`pad-${i}`} />
+          ))}
           {days.map((day) => {
-            const date = `2026-08-${String(day).padStart(2, '0')}`
+            const date = `${view.year}-${String(view.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
             const hasSchedule = scheduleDates.has(date) || deadlineDates.has(date)
             const hasNote = Boolean(notes[date])
             const isSelected = date === selectedDate

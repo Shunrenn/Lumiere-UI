@@ -1056,7 +1056,31 @@ function CalendarTabView({
   jobs,
   events,
 }: CalendarTabViewProps) {
-  const days = Array.from({ length: 31 }, (_, i) => i + 1)
+  const [view, setView] = useState(() => {
+    if (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate.trim())) {
+      const [y, m] = selectedDate.trim().split('-').map(Number)
+      return { year: y, month: m - 1 }
+    }
+    return { year: 2026, month: 7 }
+  })
+
+  const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ]
+
+  const shiftMonth = (delta: number) => {
+    setView((prev) => {
+      const next = new Date(prev.year, prev.month + delta, 1)
+      return { year: next.getFullYear(), month: next.getMonth() }
+    })
+  }
+
+  const firstWeekday = new Date(view.year, view.month, 1).getDay()
+  const daysInMonth = new Date(view.year, view.month + 1, 0).getDate()
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+  const prevMonthName = MONTH_NAMES[(view.month + 11) % 12].slice(0, 3)
+  const nextMonthName = MONTH_NAMES[(view.month + 1) % 12].slice(0, 3)
   const scheduleDates = useMemo(() => new Set(SCHEDULE.map((item) => item.date)), [])
   const eventDates = useMemo(() => new Set(events.map((event) => event.date)), [events])
 
@@ -1085,21 +1109,23 @@ function CalendarTabView({
           <PwaButton
             variant="ghost"
             size="sm"
-            onClick={() => setSelectedDate('2026-08-01')}
+            onClick={() => shiftMonth(-1)}
             aria-label="Previous month"
             icon={<ChevronLeft className="size-4" />}
           >
-            Jul
+            {prevMonthName}
           </PwaButton>
-          <h3 className="font-serif text-base font-bold text-foreground">August 2026</h3>
+          <h3 className="font-serif text-base font-bold text-foreground">
+            {MONTH_NAMES[view.month]} {view.year}
+          </h3>
           <PwaButton
             variant="ghost"
             size="sm"
-            onClick={() => setSelectedDate('2026-08-31')}
+            onClick={() => shiftMonth(1)}
             aria-label="Next month"
             icon={<ChevronRight className="size-4" />}
           >
-            Sep
+            {nextMonthName}
           </PwaButton>
         </div>
 
@@ -1110,16 +1136,12 @@ function CalendarTabView({
             ))}
           </div>
 
-          {/* Month start pad for Aug 1, 2026 (Saturday) */}
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
+          {Array.from({ length: firstWeekday }).map((_, idx) => (
+            <span key={`pad-${idx}`} />
+          ))}
 
           {days.map((day) => {
-            const dateStr = `2026-08-${String(day).padStart(2, '0')}`
+            const dateStr = `${view.year}-${String(view.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
             const hasSchedule = scheduleDates.has(dateStr) || eventDates.has(dateStr)
             const hasNote = Boolean(notes[dateStr])
             const isSelected = dateStr === selectedDate

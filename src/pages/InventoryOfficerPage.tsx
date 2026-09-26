@@ -4,6 +4,7 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
   FileText,
@@ -52,7 +53,10 @@ type PrimaryTab = 'home' | 'stock' | 'tracking' | 'account'
 type StockSubTab = 'items' | 'orders'
 type TrackingSubTab = 'batches' | 'items'
 
-const CALENDAR_DAYS = Array.from({ length: 31 }, (_, index) => index + 1)
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
 const TRACKING_STAGES: TrackingStatus[] = [
   'Warehouse',
   'Loaded',
@@ -1357,6 +1361,7 @@ function AccountTab({
   onLogout,
 }: AccountTabProps) {
   const [activeTool, setActiveTool] = useState<'calendar' | 'activity'>('calendar')
+  const [calView, setCalView] = useState({ year: 2026, month: 7 })
   const [noteDraft, setNoteDraft] = useState(ops.notes[selectedDate] ?? '')
 
   useEffect(() => {
@@ -1470,9 +1475,43 @@ function AccountTab({
       {activeTool === 'calendar' && (
         <div className="space-y-3">
           <PwaCard
-            title="August 2026 Schedule"
+            title={`${MONTH_NAMES[calView.month]} ${calView.year} Schedule`}
             subtitle="Procurement deliveries, dispatch batches & personal notes"
           >
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/60">
+              <PwaButton
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setCalView((prev) => {
+                    const next = new Date(prev.year, prev.month - 1, 1)
+                    return { year: next.getFullYear(), month: next.getMonth() }
+                  })
+                }
+                aria-label="Previous month"
+                icon={<ChevronLeft className="size-4" />}
+              >
+                Prev
+              </PwaButton>
+              <span className="font-serif text-sm font-bold text-foreground">
+                {MONTH_NAMES[calView.month]} {calView.year}
+              </span>
+              <PwaButton
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setCalView((prev) => {
+                    const next = new Date(prev.year, prev.month + 1, 1)
+                    return { year: next.getFullYear(), month: next.getMonth() }
+                  })
+                }
+                aria-label="Next month"
+                icon={<ChevronRight className="size-4" />}
+              >
+                Next
+              </PwaButton>
+            </div>
+
             {/* Calendar Grid */}
             <div className="mt-2 grid grid-cols-7 gap-1 text-center text-xs">
               <div className="col-span-7 grid grid-cols-7 text-[0.65rem] font-bold text-muted-foreground uppercase pb-1 border-b border-border/50">
@@ -1481,16 +1520,13 @@ function AccountTab({
                 ))}
               </div>
 
-              {/* Leading blanks for Aug 2026 (Starts on Saturday) */}
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
+              {/* Dynamic leading blanks */}
+              {Array.from({ length: new Date(calView.year, calView.month, 1).getDay() }).map((_, idx) => (
+                <span key={`pad-${idx}`} />
+              ))}
 
-              {CALENDAR_DAYS.map((day) => {
-                const date = `2026-08-${String(day).padStart(2, '0')}`
+              {Array.from({ length: new Date(calView.year, calView.month + 1, 0).getDate() }, (_, i) => i + 1).map((day) => {
+                const date = `${calView.year}-${String(calView.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
                 const isActive = date === selectedDate
                 const isScheduled = hasSchedule.has(date)
                 const hasNote = Boolean(ops.notes[date])
