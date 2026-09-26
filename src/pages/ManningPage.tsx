@@ -641,7 +641,7 @@ function HomeTab({
         isOpen={detailModalOpen}
         onClose={() => setDetailModalOpen(false)}
         title="Notifications & SLA Breaches"
-        subtitle="Manning Control Real-Time Escalation Feed"
+        subtitle="Manning Control SLA Monitoring Feed"
       >
         <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-0.5">
           <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs">
