@@ -555,18 +555,17 @@ function HomeView({
                         <span className="truncate">{event.venue}</span>
                       </div>
                     </div>
-                    <span
+                    <PwaBadge
+                      label={event.status}
                       className={cn(
-                        'shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-[0.625rem] font-bold uppercase tracking-wider border',
+                        'shrink-0',
                         event.status === 'In Prep'
                           ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
                           : event.status === 'Completed'
                             ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                             : 'bg-muted/60 text-muted-foreground border-border'
                       )}
-                    >
-                      {event.status}
-                    </span>
+                    />
                   </div>
 
                   {/* Progress Bar & Readiness Count */}
@@ -711,14 +710,10 @@ function EventJobsView({ event, jobs, onBack, onOpen }: EventJobsViewProps) {
                     {job.crew.length > 0 ? job.crew.join(', ') : 'Unassigned'}
                   </p>
                   <div className="mt-1.5 flex items-center gap-2">
-                    <span
-                      className={cn(
-                        'inline-flex items-center rounded-full px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider border',
-                        getStageBadgeClass(job.stage)
-                      )}
-                    >
-                      {job.stage}
-                    </span>
+                    <PwaBadge
+                      label={job.stage}
+                      className={getStageBadgeClass(job.stage)}
+                    />
                     <span className="text-[0.65rem] text-muted-foreground">
                       {job.estimatedHours}h est.
                     </span>
@@ -1169,9 +1164,7 @@ function CalendarTabView({
           <PwaCard key={`${entry.date}-${entry.time}`}>
             <div className="flex items-start justify-between gap-2">
               <div>
-                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[0.6rem] font-bold text-primary uppercase">
-                  <Clock className="size-3" /> {entry.time} · Meeting
-                </span>
+                <PwaBadge variant="accent" label={`${entry.time} · Meeting`} />
                 <h4 className="font-serif text-sm font-bold text-foreground mt-1.5">
                   {entry.title}
                 </h4>
@@ -1187,9 +1180,10 @@ function CalendarTabView({
             <PwaCard key={event.id}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.6rem] font-bold text-amber-700 dark:text-amber-300 uppercase">
-                    Event Fabrication
-                  </span>
+                  <PwaBadge
+                    label="Event Fabrication"
+                    className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30"
+                  />
                   <h4 className="font-serif text-sm font-bold text-foreground mt-1.5">
                     {event.name}
                   </h4>
@@ -1313,9 +1307,10 @@ function ActivityTabView({ activity, jobs }: ActivityTabViewProps) {
                     Crew: {job.crew.join(', ') || 'Assigned'}
                   </p>
                 </div>
-                <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2.5 py-1 text-[0.65rem] font-bold text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 shrink-0">
-                  Ready
-                </span>
+                <PwaBadge
+                  label="Ready"
+                  className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 shrink-0"
+                />
               </div>
             </PwaCard>
           ))

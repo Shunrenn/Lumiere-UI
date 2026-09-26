@@ -566,14 +566,10 @@ function HomeTab({
                   <h4 className="font-serif text-sm font-bold text-foreground truncate">
                     {order.itemName}
                   </h4>
-                  <span
-                    className={cn(
-                      'inline-flex items-center rounded-full border px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider shrink-0',
-                      getOrderStatusBadgeClass(order.status)
-                    )}
-                  >
-                    {order.status}
-                  </span>
+                  <PwaBadge
+                    label={order.status}
+                    className={cn('shrink-0', getOrderStatusBadgeClass(order.status))}
+                  />
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground truncate">
                   Vendor: {order.vendor} · Event: {order.eventName}
@@ -632,14 +628,10 @@ function HomeTab({
                   <h4 className="font-serif text-sm font-bold text-foreground truncate">
                     {batch.truck}
                   </h4>
-                  <span
-                    className={cn(
-                      'inline-flex items-center rounded-full border px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider shrink-0',
-                      getTrackingBadgeClass(batch.status)
-                    )}
-                  >
-                    {batch.status}
-                  </span>
+                  <PwaBadge
+                    label={batch.status}
+                    className={cn('shrink-0', getTrackingBadgeClass(batch.status))}
+                  />
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground truncate">
                   Event: {batch.eventName} · Driver: {batch.driver}
@@ -886,16 +878,15 @@ function StockTab({
                           <h4 className="font-serif text-sm font-bold text-foreground truncate">
                             {item.name}
                           </h4>
-                          <span
+                          <PwaBadge
+                            label={item.status}
                             className={cn(
-                              'inline-flex items-center rounded-full px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider shrink-0 border',
+                              'shrink-0',
                               item.status === 'Available'
                                 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                                 : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
                             )}
-                          >
-                            {item.status}
-                          </span>
+                          />
                         </div>
 
                         <p className="text-[0.7rem] text-muted-foreground mt-0.5">
@@ -999,14 +990,10 @@ function StockTab({
                           <h4 className="font-serif text-sm font-bold text-foreground truncate">
                             {order.itemName}
                           </h4>
-                          <span
-                            className={cn(
-                              'inline-flex items-center rounded-full border px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider shrink-0',
-                              getOrderStatusBadgeClass(order.status)
-                            )}
-                          >
-                            {order.status}
-                          </span>
+                          <PwaBadge
+                            label={order.status}
+                            className={cn('shrink-0', getOrderStatusBadgeClass(order.status))}
+                          />
                         </div>
                         <p className="mt-0.5 text-xs text-muted-foreground truncate">
                           Vendor: <strong>{order.vendor}</strong> · Event: {order.eventName}
@@ -1152,14 +1139,10 @@ function TrackingTab({
                         </p>
                       </div>
                     </div>
-                    <span
-                      className={cn(
-                        'inline-flex items-center rounded-full border px-2.5 py-1 text-[0.625rem] font-bold uppercase tracking-wider shrink-0',
-                        getTrackingBadgeClass(batch.status)
-                      )}
-                    >
-                      {batch.status}
-                    </span>
+                    <PwaBadge
+                      label={batch.status}
+                      className={cn('shrink-0', getTrackingBadgeClass(batch.status))}
+                    />
                   </div>
 
                   <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2 text-[0.65rem] text-muted-foreground font-mono">
@@ -1238,14 +1221,10 @@ function TrackingTab({
                       </div>
                     </div>
 
-                    <span
-                      className={cn(
-                        'inline-flex items-center rounded-full border px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider shrink-0',
-                        getTrackingBadgeClass(item.tracked)
-                      )}
-                    >
-                      {item.tracked}
-                    </span>
+                    <PwaBadge
+                      label={item.tracked}
+                      className={cn('shrink-0', getTrackingBadgeClass(item.tracked))}
+                    />
                   </div>
 
                   {/* Interactive Controls: Tracking Stage & Batch Assignment */}
@@ -1564,14 +1543,10 @@ function AccountTab({
                       Vendor: {order.vendor} · {order.received}/{order.quantity} received
                     </p>
                   </div>
-                  <span
-                    className={cn(
-                      'inline-flex items-center rounded-full border px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider',
-                      getOrderStatusBadgeClass(order.status)
-                    )}
-                  >
-                    {order.status}
-                  </span>
+                  <PwaBadge
+                    label={order.status}
+                    className={getOrderStatusBadgeClass(order.status)}
+                  />
                 </div>
               ))}
 
@@ -1588,14 +1563,10 @@ function AccountTab({
                       Truck: {batch.truck} · Driver: {batch.driver} ({batch.itemCount} items)
                     </p>
                   </div>
-                  <span
-                    className={cn(
-                      'inline-flex items-center rounded-full border px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider',
-                      getTrackingBadgeClass(batch.status)
-                    )}
-                  >
-                    {batch.status}
-                  </span>
+                  <PwaBadge
+                    label={batch.status}
+                    className={getTrackingBadgeClass(batch.status)}
+                  />
                 </div>
               ))}
 
