@@ -17,8 +17,6 @@ import {
 import { useAuth } from '@/lib/auth'
 import { useWarehouse, LEAD_NOTIFICATIONS, type WarehouseEvent, type WarehouseTask } from '@/lib/warehouse'
 import { FeedbackForm, IncidentForm, GenericTaskPanel } from '@/components/PwaWorkflows'
-import { LoadingSkeleton } from '@/components/LoadingSkeleton'
-import { ErrorFallback } from '@/components/ErrorFallback'
 import {
   PwaBadge,
   PwaBottomNav,
@@ -102,25 +100,6 @@ export function WarehouseLeadPage() {
     notify('Task assigned.')
   }
 
-  const [isLoading, setIsLoading] = useState(true)
-  const [isError, setIsError] = useState(false)
-
-  const handleRefetch = async () => {
-    setIsError(false)
-    setIsLoading(true)
-    try {
-      await new Promise((r) => setTimeout(r, 200))
-    } catch {
-      setIsError(true)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    handleRefetch()
-  }, [])
-
   const navItems: PwaNavItem[] = [
     { id: 'home', label: 'Home', icon: ClipboardList, badgeCount: pendingCount },
     { id: 'calendar', label: 'Calendar', icon: CalendarDays },
@@ -182,58 +161,46 @@ export function WarehouseLeadPage() {
 
       {/* Main Content Area */}
       <main className="mx-auto w-full max-w-[440px] px-4 pt-4 space-y-4">
-        {isError ? (
-          <ErrorFallback
-            title="Warehouse Lead Portal Unavailable"
-            message="Could not load event task assignments."
-            onRetry={handleRefetch}
+        {tab === 'home' &&
+          (selectedEvent ? (
+            <EventDetail
+              event={selectedEvent}
+              tasks={tasks.filter((t) => t.eventId === selectedEvent.id)}
+              crew={crew}
+              onBack={() => setSelectedEvent(null)}
+              onAssign={setAssignItem}
+              onApprove={(id) => {
+                updateTaskStatus(id, 'Approved')
+                notify('Task approved.')
+              }}
+              onReject={(id) => {
+                updateTaskStatus(id, 'Rejected')
+                notify('Sent back for rework.')
+              }}
+            />
+          ) : (
+            <>
+              <Home events={events} tasks={tasks} pendingCount={pendingCount} onOpen={setSelectedEvent} />
+              <GenericTaskPanel canClaim={false} onNotify={notify} />
+            </>
+          ))}
+
+        {tab === 'calendar' && (
+          <CalendarView
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            notes={notes}
+            setNotes={setNotes}
+            onSave={() => notify('Personal note saved.')}
+            tasks={tasks}
+            events={events}
           />
-        ) : isLoading ? (
-          <LoadingSkeleton variant="dashboard" />
-        ) : (
-          <>
-            {tab === 'home' &&
-              (selectedEvent ? (
-                <EventDetail
-                  event={selectedEvent}
-                  tasks={tasks.filter((t) => t.eventId === selectedEvent.id)}
-                  crew={crew}
-                  onBack={() => setSelectedEvent(null)}
-                  onAssign={setAssignItem}
-                  onApprove={(id) => {
-                    updateTaskStatus(id, 'Approved')
-                    notify('Task approved.')
-                  }}
-                  onReject={(id) => {
-                    updateTaskStatus(id, 'Rejected')
-                    notify('Sent back for rework.')
-                  }}
-                />
-              ) : (
-                <>
-                  <Home events={events} tasks={tasks} pendingCount={pendingCount} onOpen={setSelectedEvent} />
-                  <GenericTaskPanel canClaim={false} onNotify={notify} />
-                </>
-              ))}
+        )}
 
-            {tab === 'calendar' && (
-              <CalendarView
-                selectedDate={selectedDate}
-                setSelectedDate={setSelectedDate}
-                notes={notes}
-                setNotes={setNotes}
-                onSave={() => notify('Personal note saved.')}
-                tasks={tasks}
-                events={events}
-              />
-            )}
+        {tab === 'activity' && <Activity activity={activity} tasks={tasks} />}
 
-            {tab === 'activity' && <Activity activity={activity} tasks={tasks} />}
-
-            {tab === 'account' && (
-              <Account name={adminName || 'Warehouse Lead'} email={adminEmail || 'lead@lumiere.internal'} onLogout={logout} />
-            )}
-          </>
+        {tab === 'account' && (
+          <Account name={adminName || 'Warehouse Lead'} email={adminEmail || 'lead@lumiere.internal'} onLogout={logout} />
         )}
       </main>
 

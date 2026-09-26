@@ -14,8 +14,6 @@ import {
 import { useAuth } from '@/lib/auth'
 import { useWarehouse, MEMBER_NOTIFICATIONS, type WarehouseEvent, type WarehouseTask } from '@/lib/warehouse'
 import { FeedbackForm, IncidentForm, GenericTaskPanel } from '@/components/PwaWorkflows'
-import { LoadingSkeleton } from '@/components/LoadingSkeleton'
-import { ErrorFallback } from '@/components/ErrorFallback'
 import {
   PwaBadge,
   PwaBottomNav,
@@ -85,25 +83,6 @@ export function WarehouseMemberPage() {
     notify(`${title} submitted for lead approval.`)
   }
 
-  const [isLoading, setIsLoading] = useState(true)
-  const [isError, setIsError] = useState(false)
-
-  const handleRefetch = async () => {
-    setIsError(false)
-    setIsLoading(true)
-    try {
-      await new Promise((r) => setTimeout(r, 200))
-    } catch {
-      setIsError(true)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    handleRefetch()
-  }, [])
-
   const pendingCount = myTasks.filter((t) => t.status === 'Assigned').length
 
   const navItems: PwaNavItem[] = [
@@ -167,48 +146,36 @@ export function WarehouseMemberPage() {
 
       {/* Main Content Area */}
       <main className="mx-auto w-full max-w-[440px] px-4 pt-4 space-y-4">
-        {isError ? (
-          <ErrorFallback
-            title="Warehouse Member Portal Unavailable"
-            message="Could not load your assigned warehouse tasks."
-            onRetry={handleRefetch}
+        {tab === 'home' &&
+          (selectedEvent ? (
+            <EventTasks
+              event={selectedEvent}
+              tasks={myTasks.filter((t) => t.eventId === selectedEvent.id)}
+              onBack={() => setSelectedEvent(null)}
+              onOpenTask={setSelectedTask}
+            />
+          ) : (
+            <>
+              <Home events={myEvents} tasks={myTasks} onOpen={setSelectedEvent} />
+              <GenericTaskPanel onNotify={notify} />
+            </>
+          ))}
+
+        {tab === 'calendar' && (
+          <CalendarView
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            notes={notes}
+            setNotes={setNotes}
+            onSave={() => notify('Personal note saved.')}
+            tasks={myTasks}
           />
-        ) : isLoading ? (
-          <LoadingSkeleton variant="dashboard" />
-        ) : (
-          <>
-            {tab === 'home' &&
-              (selectedEvent ? (
-                <EventTasks
-                  event={selectedEvent}
-                  tasks={myTasks.filter((t) => t.eventId === selectedEvent.id)}
-                  onBack={() => setSelectedEvent(null)}
-                  onOpenTask={setSelectedTask}
-                />
-              ) : (
-                <>
-                  <Home events={myEvents} tasks={myTasks} onOpen={setSelectedEvent} />
-                  <GenericTaskPanel onNotify={notify} />
-                </>
-              ))}
+        )}
 
-            {tab === 'calendar' && (
-              <CalendarView
-                selectedDate={selectedDate}
-                setSelectedDate={setSelectedDate}
-                notes={notes}
-                setNotes={setNotes}
-                onSave={() => notify('Personal note saved.')}
-                tasks={myTasks}
-              />
-            )}
+        {tab === 'activity' && <Activity activity={activity} tasks={myTasks} />}
 
-            {tab === 'activity' && <Activity activity={activity} tasks={myTasks} />}
-
-            {tab === 'account' && (
-              <Account name={me} email={adminEmail || 'member@lumiere.internal'} onLogout={logout} />
-            )}
-          </>
+        {tab === 'account' && (
+          <Account name={me} email={adminEmail || 'member@lumiere.internal'} onLogout={logout} />
         )}
       </main>
 

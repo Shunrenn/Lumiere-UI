@@ -34,9 +34,7 @@ import {
   PwaButton,
   PwaCard,
   PwaEmptyState,
-  PwaErrorState,
   PwaHeader,
-  PwaLoadingState,
   PwaModal,
   PwaToast,
   type PwaNavItem,
@@ -124,25 +122,6 @@ export function ProductionManagerPage() {
     ? productionJobs.find((j) => j.id === openJob.id) ?? openJob
     : null
 
-  const [isLoading, setIsLoading] = useState(true)
-  const [isError, setIsError] = useState(false)
-
-  const handleRefetch = async () => {
-    setIsError(false)
-    setIsLoading(true)
-    try {
-      await new Promise((r) => setTimeout(r, 200))
-    } catch {
-      setIsError(true)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    handleRefetch()
-  }, [])
-
   const navItems: readonly PwaNavItem[] = [
     { id: 'home', label: 'Home', icon: ClipboardList, badgeCount: pendingCount },
     { id: 'calendar', label: 'Calendar', icon: CalendarDays },
@@ -218,58 +197,46 @@ export function ProductionManagerPage() {
 
       {/* Main Operational Container */}
       <main className="mx-auto max-w-lg px-4 pt-4 space-y-4">
-        {isError ? (
-          <PwaErrorState
-            title="Production Management Unavailable"
-            message="Could not load production prep jobs and queue status."
-            onRetry={handleRefetch}
+        {tab === 'home' &&
+          (selectedEvent ? (
+            <EventJobsView
+              event={selectedEvent}
+              jobs={productionJobs.filter((j) => j.eventId === selectedEvent.id)}
+              onBack={() => setSelectedEvent(null)}
+              onOpen={setOpenJob}
+            />
+          ) : (
+            <HomeView
+              events={events}
+              jobs={productionJobs}
+              pendingCount={pendingCount}
+              onOpenEvent={setSelectedEvent}
+              onOpenNotif={setActiveNotif}
+            />
+          ))}
+
+        {tab === 'calendar' && (
+          <CalendarTabView
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            notes={notes}
+            setNotes={setNotes}
+            onSave={() => notify('Personal note saved.')}
+            jobs={productionJobs}
+            events={events}
           />
-        ) : isLoading ? (
-          <PwaLoadingState message="Loading bespoke fabrication queue..." />
-        ) : (
-          <>
-            {tab === 'home' &&
-              (selectedEvent ? (
-                <EventJobsView
-                  event={selectedEvent}
-                  jobs={productionJobs.filter((j) => j.eventId === selectedEvent.id)}
-                  onBack={() => setSelectedEvent(null)}
-                  onOpen={setOpenJob}
-                />
-              ) : (
-                <HomeView
-                  events={events}
-                  jobs={productionJobs}
-                  pendingCount={pendingCount}
-                  onOpenEvent={setSelectedEvent}
-                  onOpenNotif={setActiveNotif}
-                />
-              ))}
+        )}
 
-            {tab === 'calendar' && (
-              <CalendarTabView
-                selectedDate={selectedDate}
-                setSelectedDate={setSelectedDate}
-                notes={notes}
-                setNotes={setNotes}
-                onSave={() => notify('Personal note saved.')}
-                jobs={productionJobs}
-                events={events}
-              />
-            )}
+        {tab === 'activity' && (
+          <ActivityTabView activity={activity} jobs={productionJobs} />
+        )}
 
-            {tab === 'activity' && (
-              <ActivityTabView activity={activity} jobs={productionJobs} />
-            )}
-
-            {tab === 'account' && (
-              <AccountTabView
-                name={adminName || 'Production Manager'}
-                email={adminEmail || ''}
-                onLogout={logout}
-              />
-            )}
-          </>
+        {tab === 'account' && (
+          <AccountTabView
+            name={adminName || 'Production Manager'}
+            email={adminEmail || ''}
+            onLogout={logout}
+          />
         )}
       </main>
 

@@ -36,9 +36,7 @@ import {
   PwaButton,
   PwaCard,
   PwaEmptyState,
-  PwaErrorState,
   PwaHeader,
-  PwaLoadingState,
   PwaModal,
   PwaToast,
   type PwaNavItem,
@@ -134,30 +132,10 @@ export function InventoryOfficerPage() {
   const [selectedDate, setSelectedDate] = useState('2026-08-20')
   const [toast, setToast] = useState('')
 
-  // Loading & Error States
-  const [isLoading, setIsLoading] = useState(true)
-  const [isError, setIsError] = useState(false)
-
   const notify = (message: string) => {
     setToast(message)
     window.setTimeout(() => setToast(''), 4500)
   }
-
-  const handleRefetch = async () => {
-    setIsError(false)
-    setIsLoading(true)
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 200))
-    } catch {
-      setIsError(true)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    handleRefetch()
-  }, [])
 
   // Derived Metrics
   const lowItems = useMemo(
@@ -248,82 +226,70 @@ export function InventoryOfficerPage() {
 
       {/* Main Content Viewport */}
       <main className="mx-auto w-full max-w-xl px-4 pt-3 sm:px-6">
-        {isError ? (
-          <PwaErrorState
-            title="Inventory Operations Offline"
-            message="Unable to communicate with the central inventory store. Please verify network access and retry."
-            onRetry={handleRefetch}
+        {/* 1. Home Command Center */}
+        {tab === 'home' && (
+          <HomeTab
+            ops={ops}
+            lowItems={lowItems}
+            inTransitBatches={inTransitBatches}
+            openOrders={openOrders}
+            availableCount={availableItems.length}
+            onOpenAlerts={() => setIsAlertModalOpen(true)}
+            onNavigateStock={(sub) => {
+              setTab('stock')
+              setStockSubTab(sub)
+            }}
+            onNavigateTracking={(sub) => {
+              setTab('tracking')
+              setTrackingSubTab(sub)
+            }}
+            onOpenNewOrder={() => setIsNewOrderModalOpen(true)}
+            onOpenAccountSection={() => setTab('account')}
           />
-        ) : isLoading ? (
-          <PwaLoadingState message="Syncing warehouse stock & dispatch fleet..." />
-        ) : (
-          <>
-            {/* 1. Home Command Center */}
-            {tab === 'home' && (
-              <HomeTab
-                ops={ops}
-                lowItems={lowItems}
-                inTransitBatches={inTransitBatches}
-                openOrders={openOrders}
-                availableCount={availableItems.length}
-                onOpenAlerts={() => setIsAlertModalOpen(true)}
-                onNavigateStock={(sub) => {
-                  setTab('stock')
-                  setStockSubTab(sub)
-                }}
-                onNavigateTracking={(sub) => {
-                  setTab('tracking')
-                  setTrackingSubTab(sub)
-                }}
-                onOpenNewOrder={() => setIsNewOrderModalOpen(true)}
-                onOpenAccountSection={() => setTab('account')}
-              />
-            )}
+        )}
 
-            {/* 2. Stock Workspace (Inventory Items & Orders) */}
-            {tab === 'stock' && (
-              <StockTab
-                items={ops.inventory}
-                orders={ops.orders}
-                activeSubTab={stockSubTab}
-                onChangeSubTab={setStockSubTab}
-                search={search}
-                setSearch={setSearch}
-                selectedCategory={selectedCategory}
-                setSelectedCategory={setSelectedCategory}
-                orderFilter={orderFilter}
-                setOrderFilter={setOrderFilter}
-                onOpenItem={setSelectedItem}
-                onOpenNewOrder={() => setIsNewOrderModalOpen(true)}
-              />
-            )}
+        {/* 2. Stock Workspace (Inventory Items & Orders) */}
+        {tab === 'stock' && (
+          <StockTab
+            items={ops.inventory}
+            orders={ops.orders}
+            activeSubTab={stockSubTab}
+            onChangeSubTab={setStockSubTab}
+            search={search}
+            setSearch={setSearch}
+            selectedCategory={selectedCategory}
+            setSelectedCategory={setSelectedCategory}
+            orderFilter={orderFilter}
+            setOrderFilter={setOrderFilter}
+            onOpenItem={setSelectedItem}
+            onOpenNewOrder={() => setIsNewOrderModalOpen(true)}
+          />
+        )}
 
-            {/* 3. Tracking & Dispatch (Batches & Items) */}
-            {tab === 'tracking' && (
-              <TrackingTab
-                batches={ops.batches}
-                items={ops.eventItems}
-                activeSubTab={trackingSubTab}
-                onChangeSubTab={setTrackingSubTab}
-                trackingFilter={trackingFilter}
-                setTrackingFilter={setTrackingFilter}
-                onNotify={notify}
-              />
-            )}
+        {/* 3. Tracking & Dispatch (Batches & Items) */}
+        {tab === 'tracking' && (
+          <TrackingTab
+            batches={ops.batches}
+            items={ops.eventItems}
+            activeSubTab={trackingSubTab}
+            onChangeSubTab={setTrackingSubTab}
+            trackingFilter={trackingFilter}
+            setTrackingFilter={setTrackingFilter}
+            onNotify={notify}
+          />
+        )}
 
-            {/* 4. Account, Schedule Calendar & Operations Log */}
-            {tab === 'account' && (
-              <AccountTab
-                name={adminName || 'Danielle Morales'}
-                email={adminEmail || 'inventory@lumiere.com'}
-                ops={ops}
-                selectedDate={selectedDate}
-                setSelectedDate={setSelectedDate}
-                onNotify={notify}
-                onLogout={logout}
-              />
-            )}
-          </>
+        {/* 4. Account, Schedule Calendar & Operations Log */}
+        {tab === 'account' && (
+          <AccountTab
+            name={adminName || 'Danielle Morales'}
+            email={adminEmail || 'inventory@lumiere.com'}
+            ops={ops}
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            onNotify={notify}
+            onLogout={logout}
+          />
         )}
       </main>
 

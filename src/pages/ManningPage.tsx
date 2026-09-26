@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
   Clock,
@@ -16,8 +17,6 @@ import {
   UserCircle2,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
-import { LoadingSkeleton } from '@/components/LoadingSkeleton'
-import { ErrorFallback } from '@/components/ErrorFallback'
 import { MaskedPinInput } from '@/components/admin/MaskedPinInput'
 import { logAuditEvent } from '@/lib/audit-logger'
 import {
@@ -115,24 +114,7 @@ export function ManningPage() {
     }
   }
 
-  const [isLoading, setIsLoading] = useState(true)
-  const [isError, setIsError] = useState(false)
 
-  const handleRefetch = async () => {
-    setIsError(false)
-    setIsLoading(true)
-    try {
-      await new Promise((r) => setTimeout(r, 200))
-    } catch {
-      setIsError(true)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    handleRefetch()
-  }, [])
 
   const navItems: PwaNavItem[] = [
     { id: 'home', label: 'Home', icon: ClipboardList, badgeCount: totalBreaches },
@@ -207,63 +189,51 @@ export function ManningPage() {
 
       {/* Main Container */}
       <main className="mx-auto w-full max-w-[440px] px-4 pt-4 space-y-4">
-        {isError ? (
-          <ErrorFallback
-            title="Manning Dashboard Unavailable"
-            message="Could not synchronize ground crew declarations and SLA breaches."
-            onRetry={handleRefetch}
+        {tab === 'home' && (
+          <HomeTab
+            totalBreaches={totalBreaches}
+            overdue={overdueTasks}
+            fallbackDeclarations={fallbackDeclarations}
+            approachingSummary={approachingSummary}
+            onOverrideTask={(id, title) => {
+              setOverdueTasks((prev) => prev.filter((t) => t.id !== id))
+              notify(`Task "${title}" overridden and approved by Manning.`)
+            }}
+            onOverrideDeclaration={(id, decision) => {
+              decideGroundCrewDeclaration(id, decision, adminName || 'Manning Officer')
+              notify(`Declaration ${decision.toLowerCase()} by Manning Officer.`)
+            }}
+            onOpenPin={() => (unlocked ? null : setPinOpen(true))}
+            unlocked={unlocked}
+            incidentStates={incidentStates}
+            setIncidentStates={setIncidentStates}
+            standingWarningCount={standingWarningCount}
+            onIssueWarning={handleIssueWarning}
           />
-        ) : isLoading ? (
-          <LoadingSkeleton variant="dashboard" />
-        ) : (
-          <>
-            {tab === 'home' && (
-              <HomeTab
-                totalBreaches={totalBreaches}
-                overdue={overdueTasks}
-                fallbackDeclarations={fallbackDeclarations}
-                approachingSummary={approachingSummary}
-                onOverrideTask={(id, title) => {
-                  setOverdueTasks((prev) => prev.filter((t) => t.id !== id))
-                  notify(`Task "${title}" overridden and approved by Manning.`)
-                }}
-                onOverrideDeclaration={(id, decision) => {
-                  decideGroundCrewDeclaration(id, decision, adminName || 'Manning Officer')
-                  notify(`Declaration ${decision.toLowerCase()} by Manning Officer.`)
-                }}
-                onOpenPin={() => (unlocked ? null : setPinOpen(true))}
-                unlocked={unlocked}
-                incidentStates={incidentStates}
-                setIncidentStates={setIncidentStates}
-                standingWarningCount={standingWarningCount}
-                onIssueWarning={handleIssueWarning}
-              />
-            )}
+        )}
 
-            {tab === 'calendar' && (
-              <CalendarTab
-                fallbackCount={fallbackDeclarations.length}
-                approachingCount={approachingSummary.totalApproaching}
-                onSave={() => notify('Daily review log entry preserved.')}
-              />
-            )}
+        {tab === 'calendar' && (
+          <CalendarTab
+            fallbackCount={fallbackDeclarations.length}
+            approachingCount={approachingSummary.totalApproaching}
+            onSave={() => notify('Daily review log entry preserved.')}
+          />
+        )}
 
-            {tab === 'activity' && (
-              <ActivityTab
-                standingWarningCount={standingWarningCount}
-                unlocked={unlocked}
-                incidentStates={incidentStates}
-              />
-            )}
+        {tab === 'activity' && (
+          <ActivityTab
+            standingWarningCount={standingWarningCount}
+            unlocked={unlocked}
+            incidentStates={incidentStates}
+          />
+        )}
 
-            {tab === 'account' && (
-              <AccountTab
-                name={adminName || 'Manning Officer'}
-                email={adminEmail || 'manning@lumiere.internal'}
-                onLogout={logout}
-              />
-            )}
-          </>
+        {tab === 'account' && (
+          <AccountTab
+            name={adminName || 'Manning Officer'}
+            email={adminEmail || 'manning@lumiere.internal'}
+            onLogout={logout}
+          />
         )}
       </main>
 
@@ -786,6 +756,29 @@ interface CalendarTabProps {
 
 function CalendarTab({ fallbackCount, approachingCount, onSave }: CalendarTabProps) {
   const [selectedDate, setSelectedDate] = useState('2026-08-20')
+  const [view, setView] = useState(() => {
+    if (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate.trim())) {
+      const [y, m] = selectedDate.trim().split('-').map(Number)
+      return { year: y, month: m - 1 }
+    }
+    return { year: 2026, month: 7 }
+  })
+
+  const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ]
+
+  const shiftMonth = (delta: number) => {
+    setView((prev) => {
+      const next = new Date(prev.year, prev.month + delta, 1)
+      return { year: next.getFullYear(), month: next.getMonth() }
+    })
+  }
+
+  const firstWeekday = new Date(view.year, view.month, 1).getDay()
+  const daysInMonth = new Date(view.year, view.month + 1, 0).getDate()
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
 
   return (
     <div className="space-y-4">
@@ -794,17 +787,60 @@ function CalendarTab({ fallbackCount, approachingCount, onSave }: CalendarTabPro
         subtitle="Audit checkpoint for unconfirmed event assignments"
       >
         <div className="space-y-4">
-          <div>
-            <label htmlFor="manning-review-date" className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-              Review Date
-            </label>
-            <input
-              id="manning-review-date"
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="flex min-h-[44px] w-full rounded-xl border border-border bg-card px-3.5 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            />
+          {/* Mobile-first PWA Calendar Grid */}
+          <div className="rounded-xl border border-border bg-card p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <PwaButton
+                variant="ghost"
+                size="sm"
+                onClick={() => shiftMonth(-1)}
+                aria-label="Previous month"
+              >
+                <ChevronLeft className="size-4" /> Prev
+              </PwaButton>
+              <span className="font-serif text-sm font-bold text-foreground">
+                {MONTH_NAMES[view.month]} {view.year}
+              </span>
+              <PwaButton
+                variant="ghost"
+                size="sm"
+                onClick={() => shiftMonth(1)}
+                aria-label="Next month"
+              >
+                Next <ChevronRight className="size-4" />
+              </PwaButton>
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 text-center text-xs">
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                <span key={`${d}-${i}`} className="font-bold text-muted-foreground text-[0.65rem] py-1">
+                  {d}
+                </span>
+              ))}
+              {Array.from({ length: firstWeekday }).map((_, i) => (
+                <span key={`pad-${i}`} />
+              ))}
+              {days.map((day) => {
+                const date = `${view.year}-${String(view.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                const isSelected = date === selectedDate
+
+                return (
+                  <button
+                    key={date}
+                    type="button"
+                    onClick={() => setSelectedDate(date)}
+                    aria-label={`Select ${date}`}
+                    className={`flex min-h-[44px] flex-col items-center justify-center rounded-xl p-1 text-xs transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-primary text-primary-foreground font-bold shadow-sm'
+                        : 'hover:bg-accent/40 text-foreground'
+                    }`}
+                  >
+                    <span>{day}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           <div className="rounded-xl border border-border/60 bg-muted/20 p-3.5 space-y-2 text-xs">
