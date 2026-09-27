@@ -278,7 +278,7 @@ export function checkDateAdvisory(
 // Seed staff directory initialized to zero state as requested
 const seedStaff: Staff[] = []
 
-const seedEvents: PortalEvent[] = [
+export const seedEvents: PortalEvent[] = [
   {
     id: 'e-101',
     refId: 'PRT-2026-0145',
@@ -1275,7 +1275,7 @@ const now = () => {
 const randomIp = () =>
   `192.168.${Math.floor(Math.random() * 9) + 1}.${Math.floor(Math.random() * 254) + 1}`
 
-const pad = (n: number) => String(n).padStart(4, '0')
+export const pad = (n: number) => String(n).padStart(4, '0')
 
 const deriveStockStatus = (stock: number, capacity: number): StockStatus => {
   if (stock <= 0) return 'Depleted'
@@ -1317,7 +1317,8 @@ interface PortalContextValue {
     initiatorRole?: string,
     allowConflictOverride?: boolean,
   ) => Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }>
-  updateEvent: (id: string, draft: Partial<PortalEvent>, initiatorRole?: string) => void
+  updateEvent: (id: string, draft: Partial<PortalEvent>, initiatorRole?: string) => Promise<void>
+  refreshEvents: () => Promise<PortalEvent[]>
   resolveUserAction: (id: string) => void
   addUserAction: (action: Omit<UserAction, 'id'>) => void
   routeReorder: (draft: ReorderDraft) => void
@@ -1354,43 +1355,49 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       const cached = localStorage.getItem('_lumiere_cached_events')
       if (cached) return JSON.parse(cached)
     } catch {}
-    return seedEvents
+    return []
   })
 
   // Hydrate events list from backend REST API (GET /api/events)
+  const loadEvents = useCallback(async (): Promise<PortalEvent[]> => {
+    try {
+      const { fetchEventsApi } = await import('@/lib/eventsApi')
+      const remoteEvents = await fetchEventsApi()
+      setEvents(remoteEvents)
+      try {
+        localStorage.setItem('_lumiere_cached_events', JSON.stringify(remoteEvents))
+      } catch {}
+      return remoteEvents
+    } catch (err) {
+      console.warn('[store] loadEvents failed:', err)
+      return []
+    }
+  }, [])
+
   useEffect(() => {
     let active = true
 
-    const loadEvents = () => {
-      import('@/lib/eventsApi').then(({ fetchEventsApi }) => {
-        fetchEventsApi().then((remoteEvents) => {
-          if (!active) return
-          if (remoteEvents && remoteEvents.length > 0) {
-            setEvents(remoteEvents)
-            try {
-              localStorage.setItem('_lumiere_cached_events', JSON.stringify(remoteEvents))
-            } catch {}
-          }
-        })
-      })
+    const syncEvents = () => {
+      if (!active) return
+      loadEvents()
     }
 
-    loadEvents()
+    syncEvents()
 
     const onFocus = () => {
-      loadEvents()
+      syncEvents()
     }
     window.addEventListener('focus', onFocus)
 
     // Periodic checkpoint refresh (30s polling fallback)
-    const interval = setInterval(loadEvents, 30000)
+    const interval = setInterval(syncEvents, 30000)
 
     return () => {
       active = false
       window.removeEventListener('focus', onFocus)
       clearInterval(interval)
     }
-  }, [])
+  }, [loadEvents])
 
   // Hydrate the staff directory from the C# REST API (/api/workforce is the source of truth).
   useEffect(() => {
@@ -1997,107 +2004,46 @@ export function PortalProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        if (res.ok) {
-          const created = await res.json().catch(() => ({}))
-          const realId = created ? (created.eventId || created.id) : `e-${Date.now()}`
-          const refId = `PRT-2026-${pad(145 + events.length)}`
-
-          const newEvt: PortalEvent = {
-            id: realId,
-            refId,
-            title: draft.title,
-            client: draft.client,
-            tier: 'Tier-3 Standard',
-            venue: draft.venue,
-            targetDate: draft.targetDate,
-            installationStart: draft.installationStart,
-            installationEnd: draft.installationEnd,
-            budget: 0,
-            status: 'Initialized',
-            moodPlan: draft.moodPlan,
-          }
-
-          setEvents((prev) => [...prev, newEvt])
-          pushLog({
-            account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
-            initiatorRole,
-            action: 'Event Registry Initialized',
-            detail: `New portfolio "${draft.title}" registered${
-              draft.client ? ` for ${draft.client}` : ''
-            }. Ref ${refId}.${allowConflictOverride ? ' (Conflict Overridden)' : ''}`,
-            ip: randomIp(),
-            status: 'Success',
-          })
-
-          return { success: true }
-        } else {
-          const errData = await res.json().catch(() => ({}))
-          console.warn('[store] POST /api/events non-ok response, creating local event fallback:', res.status, errData)
-          
-          const realId = `e-local-${Date.now()}`
-          const refId = `PRT-2026-${pad(145 + events.length)}`
-          const newEvt: PortalEvent = {
-            id: realId,
-            refId,
-            title: draft.title,
-            client: draft.client,
-            tier: 'Tier-3 Standard',
-            venue: draft.venue,
-            targetDate: draft.targetDate,
-            installationStart: draft.installationStart,
-            installationEnd: draft.installationEnd,
-            budget: 0,
-            status: 'Initialized',
-            moodPlan: draft.moodPlan,
-          }
-          setEvents((prev) => [...prev, newEvt])
-          pushLog({
-            account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
-            initiatorRole,
-            action: 'Event Registry Initialized (Local Fallback)',
-            detail: `New portfolio "${draft.title}" registered locally. Ref ${refId}.`,
-            ip: randomIp(),
-            status: 'Success',
-          })
-          return { success: true, message: 'Saved to local portfolio' }
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '')
+          console.warn('[store] POST /api/events non-ok response:', res.status, errText)
+          return { success: false, message: `Failed to create event: ${res.status} ${errText}` }
         }
+
+        const created = await res.json().catch(() => ({}))
+        const realId = created ? (created.eventId || created.id) : undefined
+
+        // Retrieve authoritative updated event list from backend
+        await loadEvents()
+
+        pushLog({
+          account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
+          initiatorRole,
+          action: 'Event Registry Initialized',
+          detail: `New portfolio "${draft.title}" registered${
+            draft.client ? ` for ${draft.client}` : ''
+          }.${realId ? ` ID: ${realId}.` : ''}${allowConflictOverride ? ' (Conflict Overridden)' : ''}`,
+          ip: randomIp(),
+          status: 'Success',
+        })
+
+        return { success: true }
       } catch (err: any) {
-        console.warn('[store] POST /api/events failed, creating local event fallback:', err)
-        const realId = `e-local-${Date.now()}`
-        const refId = `PRT-2026-${pad(145 + events.length)}`
-        const newEvt: PortalEvent = {
-          id: realId,
-          refId,
-          title: draft.title,
-          client: draft.client,
-          tier: 'Tier-3 Standard',
-          venue: draft.venue,
-          targetDate: draft.targetDate,
-          installationStart: draft.installationStart,
-          installationEnd: draft.installationEnd,
-          budget: 0,
-          status: 'Initialized',
-          moodPlan: draft.moodPlan,
-        }
-        setEvents((prev) => [...prev, newEvt])
-        return { success: true, message: 'Saved to local portfolio' }
+        console.warn('[store] POST /api/events failed:', err)
+        return { success: false, message: err?.message || 'Network error creating event' }
       }
     },
-    [pushLog, events.length],
+    [pushLog, loadEvents],
   )
 
   const updateEvent = useCallback(
-    (id: string, draft: Partial<PortalEvent>, initiatorRole = 'Executive') => {
-      setEvents((prev) =>
-        prev.map((e) =>
-          e.id === id
-            ? {
-                ...e,
-                ...draft,
-              }
-            : e,
-        ),
-      )
+    async (id: string, draft: Partial<PortalEvent>, initiatorRole = 'Executive'): Promise<void> => {
+      const { updateEventApi } = await import('@/lib/eventsApi')
+      await updateEventApi(id, draft)
+
+      // Retrieve authoritative updated event list from backend
+      await loadEvents()
+
       pushLog({
         account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
         initiatorRole,
@@ -2107,7 +2053,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         status: 'Success',
       })
     },
-    [pushLog],
+    [pushLog, loadEvents],
   )
 
   const resolveUserAction = useCallback(
@@ -2542,6 +2488,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       forceLogout,
       addEvent,
       updateEvent,
+      refreshEvents: loadEvents,
       resolveUserAction,
       addUserAction,
       routeReorder,
@@ -2577,6 +2524,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       forceLogout,
       addEvent,
       updateEvent,
+      loadEvents,
       resolveUserAction,
       addUserAction,
       routeReorder,

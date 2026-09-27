@@ -156,21 +156,30 @@ export function mapPitchResponseToProjectPitch(dto: ClientPitchResponseDto): Pro
   }
 }
 
+export interface ConvertPitchToEventResult {
+  success: boolean
+  eventId?: string
+  pitchId?: string
+  conflict?: boolean
+  message?: string
+  conflictingEvents?: any[]
+}
+
 /**
- * REST API: GET /api/pitches
+ * REST API: GET /api/pitches?page=1&pageSize=100
+ * 10-second timeout. Throws on failure to distinguish empty list from network error.
  */
 export async function fetchPitchesApi(): Promise<ProjectPitch[]> {
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 1500)
+  const timeoutId = setTimeout(() => controller.abort(), 10000)
   try {
-    const res = await fetch(`${API_BASE_URL}/api/pitches`, {
+    const res = await fetch(`${API_BASE_URL}/api/pitches?page=1&pageSize=100`, {
       headers: getAuthHeaders(),
       signal: controller.signal,
     })
     clearTimeout(timeoutId)
     if (!res.ok) {
-      console.warn(`[pitchesApi] GET /api/pitches returned HTTP ${res.status}`)
-      return []
+      throw new Error(`GET /api/pitches returned HTTP ${res.status}`)
     }
     const body = await res.json()
     const rawItems: ClientPitchResponseDto[] = Array.isArray(body)
@@ -182,7 +191,7 @@ export async function fetchPitchesApi(): Promise<ProjectPitch[]> {
   } catch (err) {
     clearTimeout(timeoutId)
     console.warn('[pitchesApi] GET /api/pitches failed:', err)
-    return []
+    throw err
   }
 }
 
@@ -302,12 +311,26 @@ export async function addPitchFeedbackApi(id: string, note: string): Promise<voi
 /**
  * REST API: POST /api/pitches/{id}/convert-to-event
  */
-export async function convertPitchToEventApi(id: string): Promise<{ eventId: string; pitchId: string }> {
+export async function convertPitchToEventApi(
+  id: string,
+  allowConflictOverride = false,
+): Promise<ConvertPitchToEventResult> {
   const res = await fetch(`${API_BASE_URL}/api/pitches/${encodeURIComponent(id)}/convert-to-event`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({}),
+    body: JSON.stringify({ allowConflictOverride }),
   })
+
+  if (res.status === 409) {
+    const conflictData = await res.json().catch(() => ({}))
+    return {
+      success: false,
+      conflict: true,
+      pitchId: id,
+      message: conflictData.error || conflictData.Error || conflictData.message || 'Venue scheduling conflict detected.',
+      conflictingEvents: conflictData.conflictingEvents || conflictData.ConflictingEvents || [],
+    }
+  }
 
   if (!res.ok) {
     const errorText = await res.text()
@@ -316,6 +339,7 @@ export async function convertPitchToEventApi(id: string): Promise<{ eventId: str
 
   const data = await res.json()
   return {
+    success: true,
     eventId: data.eventId || data.EventId || data.id || '',
     pitchId: data.pitchId || data.PitchId || id,
   }
@@ -383,9 +407,11 @@ export function useProjectPitches() {
   )
 
   const convertToEvent = useCallback(
-    async (pitchId: string) => {
-      const result = await convertPitchToEventApi(pitchId)
-      await refreshPitches()
+    async (pitchId: string, allowConflictOverride = false) => {
+      const result = await convertPitchToEventApi(pitchId, allowConflictOverride)
+      if (result.success) {
+        await refreshPitches()
+      }
       return result
     },
     [refreshPitches],

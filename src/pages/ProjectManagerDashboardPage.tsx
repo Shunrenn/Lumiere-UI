@@ -13,14 +13,22 @@ import { ProjectManagerEventWorkspace } from '@/components/project-manager/Proje
 import { RegisterEventDrawer } from '@/components/RegisterEventDrawer'
 import { OfflineBanner } from '@/components/OfflineBanner'
 import type { PortalEvent } from '@/lib/types'
-import { fetchEventsApi } from '@/lib/eventsApi'
-import { CheckCircle2, Clock, Sparkles, Layers, AlertCircle } from 'lucide-react'
+import { CheckCircle2, Clock, Sparkles, Layers, AlertCircle, AlertTriangle, Info, RefreshCw } from 'lucide-react'
 
 export function ProjectManagerDashboardPage() {
-  const { events, staff, procurement, damageExceptions } = usePortal()
+  const { events, staff, procurement, damageExceptions, refreshEvents } = usePortal()
   const { adminName, adminEmail } = useAuth()
   const { navigate } = useNav()
-  const { pitches, loading: pitchesLoading, error: pitchesError, addPitch, updatePitch, addFeedback, convertToEvent } = useProjectPitches()
+  const {
+    pitches,
+    loading: pitchesLoading,
+    error: pitchesError,
+    refreshPitches,
+    addPitch,
+    updatePitch,
+    addFeedback,
+    convertToEvent,
+  } = useProjectPitches()
 
   // Selected event for single-event workspace
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
@@ -32,6 +40,14 @@ export function ProjectManagerDashboardPage() {
   // Pitch modal
   const [pitchModalOpen, setPitchModalOpen] = useState(false)
   const [editingPitch, setEditingPitch] = useState<ProjectPitch | null>(null)
+
+  // Conversion 409 Conflict Dialog State
+  const [conversionConflict, setConversionConflict] = useState<{
+    pitch: ProjectPitch
+    message: string
+    conflictingEvents: any[]
+  } | null>(null)
+  const [isConverting, setIsConverting] = useState(false)
 
   // Register event drawer
   const [registerDrawerOpen, setRegisterDrawerOpen] = useState(false)
@@ -54,15 +70,38 @@ export function ProjectManagerDashboardPage() {
   }, [events, selectedCalendarDate])
 
   // Server-side conversion from pitch to event via POST /api/pitches/{id}/convert-to-event
-  const handleConvertToEvent = async (pitch: ProjectPitch) => {
+  const handleConvertToEvent = async (pitch: ProjectPitch, allowConflictOverride = false) => {
+    setIsConverting(true)
     try {
-      const result = await convertToEvent(pitch.id)
-      await fetchEventsApi()
-      if (result && result.eventId) {
-        setSelectedEventId(result.eventId)
+      const result = await convertToEvent(pitch.id, allowConflictOverride)
+      if (result.conflict) {
+        setConversionConflict({
+          pitch,
+          message: result.message || 'Venue scheduling conflict detected.',
+          conflictingEvents: result.conflictingEvents || [],
+        })
+        return
+      }
+
+      if (!result.success) {
+        alert(result.message || 'Pitch conversion failed.')
+        return
+      }
+
+      setConversionConflict(null)
+      const freshEvents = await refreshEvents()
+      if (result.eventId) {
+        const found = freshEvents.find((e) => e.id === result.eventId)
+        if (found) {
+          setSelectedEventId(found.id)
+        } else {
+          setSelectedEventId(result.eventId)
+        }
       }
     } catch (err: any) {
       alert(`Pitch conversion failed: ${err?.message || 'Unknown error'}`)
+    } finally {
+      setIsConverting(false)
     }
   }
 
@@ -213,9 +252,19 @@ export function ProjectManagerDashboardPage() {
 
         {/* Client Pitching Summary Section */}
         {pitchesError && (
-          <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-xs font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-2">
-            <AlertCircle className="size-4" />
-            <span>Could not load pitches: {pitchesError}</span>
+          <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-xs font-semibold text-rose-700 dark:text-rose-300 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="size-4 shrink-0" />
+              <span>Could not load pitches: {pitchesError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => refreshPitches()}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-700"
+            >
+              <RefreshCw className="size-3.5" />
+              Retry
+            </button>
           </div>
         )}
 
@@ -258,6 +307,84 @@ export function ProjectManagerDashboardPage() {
         currentUserEmail={adminEmail || 'projectmanager@lumiere.com'}
         currentUserName={adminName || 'Project Manager'}
       />
+
+      {/* 409 Venue Scheduling Conflict Review & Override Modal */}
+      {conversionConflict && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-xl border border-rose-500/30 bg-card p-6 shadow-2xl space-y-4 animate-in fade-in-0 zoom-in-95">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-rose-500/10 p-2.5 text-rose-500 shrink-0">
+                <AlertTriangle className="size-6" />
+              </div>
+              <div>
+                <h3 className="font-serif text-lg font-bold text-card-foreground">
+                  Venue Schedule Conflict Warning
+                </h3>
+                <p className="text-[0.7rem] text-rose-600 dark:text-rose-400 font-semibold uppercase tracking-wider mt-0.5">
+                  HTTP 409 Conflict — Proposed Pitch Overlaps with Existing Event
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {conversionConflict.message}
+            </p>
+
+            <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2 max-h-56 overflow-y-auto">
+              <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">
+                Conflicting Active Event(s):
+              </p>
+              {conversionConflict.conflictingEvents.length > 0 ? (
+                conversionConflict.conflictingEvents.map((ce: any, idx: number) => (
+                  <div key={ce.id || idx} className="rounded border border-border/80 bg-background p-2.5 text-xs space-y-1">
+                    <div className="flex items-center justify-between font-semibold text-foreground">
+                      <span>{ce.name || ce.title || 'Conflicting Event'}</span>
+                      <span className="text-[0.6rem] font-mono uppercase bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 px-1.5 py-0.5 rounded">
+                        {ce.status || 'Active'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[0.7rem] text-muted-foreground">
+                      <div><span className="font-medium text-foreground">Venue:</span> {ce.venue || ce.eventVenue || 'Venue TBD'}</div>
+                      <div><span className="font-medium text-foreground">Date:</span> {ce.dateOfEvent ? ce.dateOfEvent.split('T')[0] : 'N/A'}</div>
+                      <div className="col-span-2">
+                        <span className="font-medium text-foreground">Schedule Window:</span> {ce.ingressDate ? ce.ingressDate.split('T')[0] : 'N/A'} to {ce.returnDate ? ce.returnDate.split('T')[0] : 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground italic">Overlapping venue schedule detected on server.</p>
+              )}
+            </div>
+
+            <div className="rounded border border-amber-500/20 bg-amber-500/10 p-2 text-[0.7rem] text-amber-800 dark:text-amber-300 flex items-center gap-2">
+              <Info className="size-4 shrink-0" />
+              <span>
+                Proceeding will force conversion with <code className="font-mono text-[0.65rem]">allowConflictOverride: true</code>.
+              </span>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isConverting}
+                onClick={() => setConversionConflict(null)}
+                className="rounded-md border border-border px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isConverting}
+                onClick={() => handleConvertToEvent(conversionConflict.pitch, true)}
+                className="rounded-md bg-rose-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-rose-700 transition disabled:opacity-50"
+              >
+                {isConverting ? 'Overriding...' : 'Proceed with Override'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Official Event Registry Drawer */}
       <RegisterEventDrawer

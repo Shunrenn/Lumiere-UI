@@ -42,19 +42,24 @@ function getHeaders(): HeadersInit {
  * GET /api/manning/event/{eventId}
  */
 export async function fetchManningForEvent(eventId: string): Promise<ManningRecordDto[]> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10000)
   try {
     const res = await fetch(`${API_BASE_URL}/api/manning/event/${encodeURIComponent(eventId)}`, {
       headers: getHeaders(),
+      signal: controller.signal,
     })
+    clearTimeout(timeoutId)
     if (!res.ok) {
       console.warn(`[manningApi] GET /api/manning/event/${eventId} returned HTTP ${res.status}`)
-      return []
+      throw new Error(`Failed to fetch manning: HTTP ${res.status}`)
     }
     const data = await res.json()
     return Array.isArray(data) ? data : []
   } catch (err) {
+    clearTimeout(timeoutId)
     console.warn(`[manningApi] GET /api/manning/event/${eventId} failed:`, err)
-    return []
+    throw err
   }
 }
 

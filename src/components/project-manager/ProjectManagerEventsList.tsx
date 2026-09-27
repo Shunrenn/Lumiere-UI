@@ -7,17 +7,15 @@ import {
   CheckCircle2,
   AlertTriangle,
   Building2,
-  Users,
-  Package,
+  Clock,
 } from 'lucide-react'
 import type { PortalEvent, ProcurementItem, Staff } from '@/lib/types'
-import { getEventDetailSnapshot } from '@/lib/event-detail'
 import { cn } from '@/lib/utils'
 
 interface ProjectManagerEventsListProps {
   events: PortalEvent[]
-  staff: Staff[]
-  procurement: ProcurementItem[]
+  staff?: Staff[]
+  procurement?: ProcurementItem[]
   assignedPmName?: string
   searchQuery?: string
   onOpenEvent: (eventId: string) => void
@@ -27,26 +25,26 @@ type FilterTab = 'all' | 'in-production' | 'planning' | 'attention' | 'completed
 
 export function ProjectManagerEventsList({
   events,
-  staff,
-  procurement,
   assignedPmName = 'Project Manager',
   searchQuery = '',
   onOpenEvent,
 }: ProjectManagerEventsListProps) {
   const [activeTab, setActiveTab] = useState<FilterTab>('all')
 
-  // Calculate snapshot and health status for each event
+  // Calculate health and attention status for each event using real event fields
   const enrichedEvents = useMemo(() => {
     return events.map((ev) => {
-      const snapshot = getEventDetailSnapshot(ev, staff, procurement)
-      const isAttention = snapshot.overallStatus === 'Attention Needed' || ev.status === 'On Hold'
+      const isAttention =
+        ev.status === 'On Hold' ||
+        !ev.venue ||
+        ev.venue.toLowerCase().includes('pending') ||
+        ev.venue.toLowerCase().includes('tbd')
       return {
         ...ev,
-        snapshot,
         isAttention,
       }
     })
-  }, [events, staff, procurement])
+  }, [events])
 
   // Filter events by tab and search
   const filteredEvents = useMemo(() => {
@@ -172,9 +170,6 @@ export function ProjectManagerEventsList({
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredEvents.map((ev) => {
             const pmLabel = ev.projectManagerName || assignedPmName
-            const healthStatus = ev.snapshot.overallStatus
-            const crewCount = ev.snapshot.crew.length
-            const itemsCount = ev.snapshot.items.length
 
             return (
               <div
@@ -188,35 +183,41 @@ export function ProjectManagerEventsList({
                     <span className="rounded-md border border-border/80 bg-background px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider text-primary">
                       {ev.refId || 'PRT-2026'}
                     </span>
-                    <span
-                      className={cn(
-                        'rounded-md px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider border',
-                        ev.tier?.includes('Tier-1')
-                          ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
-                          : 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20',
-                      )}
-                    >
-                      {ev.tier?.includes('Tier-1') ? 'VIP Tier-1' : 'Premium Tier-2'}
-                    </span>
+                    {ev.tier && (
+                      <span
+                        className={cn(
+                          'rounded-md px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider border',
+                          ev.tier.includes('Tier-1')
+                            ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+                            : 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20',
+                        )}
+                      >
+                        {ev.tier}
+                      </span>
+                    )}
                   </div>
 
-                  {/* Health status badge */}
+                  {/* Real status badge */}
                   <span
                     className={cn(
                       'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.62rem] font-semibold border',
-                      healthStatus === 'On Track'
+                      ev.status === 'Completed'
                         ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                        : healthStatus === 'Attention Needed'
-                        ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
-                        : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20',
+                        : ev.status === 'In Production'
+                        ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/20'
+                        : ev.status === 'On Hold'
+                        ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
+                        : 'bg-muted text-muted-foreground border-border',
                     )}
                   >
-                    {healthStatus === 'On Track' ? (
-                      <CheckCircle2 className="size-3" />
+                    {ev.status === 'Completed' ? (
+                      <CheckCircle2 className="size-3 text-emerald-500" />
+                    ) : ev.status === 'On Hold' ? (
+                      <AlertTriangle className="size-3 text-rose-500" />
                     ) : (
-                      <AlertTriangle className="size-3" />
+                      <Clock className="size-3 text-muted-foreground" />
                     )}
-                    {healthStatus}
+                    {ev.status}
                   </span>
                 </div>
 
@@ -235,11 +236,11 @@ export function ProjectManagerEventsList({
                 <div className="mt-3 flex flex-col gap-1.5 border-y border-border/50 py-3 text-xs text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <Calendar className="size-3.5 text-primary shrink-0" />
-                    <span>Target Date: <strong className="text-foreground font-medium">{ev.targetDate}</strong></span>
+                    <span>Target Date: <strong className="text-foreground font-medium">{ev.targetDate || 'TBD'}</strong></span>
                   </div>
                   <div className="flex items-center gap-2">
                     <MapPin className="size-3.5 text-primary shrink-0" />
-                    <span className="truncate">{ev.venue}</span>
+                    <span className="truncate">{ev.venue || 'Venue Pending'}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <User className="size-3.5 text-primary shrink-0" />
@@ -247,21 +248,11 @@ export function ProjectManagerEventsList({
                   </div>
                 </div>
 
-                {/* Micro Metrics Strip & Action CTA */}
+                {/* Footer Strip & Action CTA */}
                 <div className="mt-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1" title="Assigned Crew">
-                      <Users className="size-3 text-muted-foreground/70" />
-                      <strong className="text-foreground font-semibold">{crewCount}</strong>
-                    </span>
-                    <span className="flex items-center gap-1" title="Allocated Assets">
-                      <Package className="size-3 text-muted-foreground/70" />
-                      <strong className="text-foreground font-semibold">{itemsCount}</strong>
-                    </span>
-                    <span className="rounded bg-muted/80 px-1.5 py-0.5 text-[0.62rem] font-semibold text-foreground">
-                      {ev.status}
-                    </span>
-                  </div>
+                  <span className="text-[0.68rem] text-muted-foreground">
+                    {ev.geoClass ? `Geo: ${ev.geoClass}` : 'Standard Project'}
+                  </span>
 
                   <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary transition group-hover:translate-x-1">
                     Open Workspace

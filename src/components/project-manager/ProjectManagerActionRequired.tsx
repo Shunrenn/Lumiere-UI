@@ -1,13 +1,13 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { ArrowRight, CheckCircle2 } from 'lucide-react'
 import type { PortalEvent, ProcurementItem, Staff, DamageException } from '@/lib/types'
 import type { ProjectPitch } from '@/lib/project-pitch'
-import { getEventDetailSnapshot } from '@/lib/event-detail'
+import { fetchDeficitQueueApi, type DeficitQueueItemDto } from '@/lib/deficitApi'
 import { cn } from '@/lib/utils'
 
 export interface ActionItem {
   id: string
-  type: 'event-hold' | 'missing-venue' | 'snapshot-alert' | 'pitch-revision' | 'damage-hold' | 'deficit-alert'
+  type: 'event-hold' | 'missing-venue' | 'pitch-revision' | 'damage-hold' | 'deficit-alert'
   severity: 'high' | 'medium' | 'low'
   title: string
   subtitle: string
@@ -18,8 +18,8 @@ export interface ActionItem {
 
 interface ProjectManagerActionRequiredProps {
   events: PortalEvent[]
-  staff: Staff[]
-  procurement: ProcurementItem[]
+  staff?: Staff[]
+  procurement?: ProcurementItem[]
   damageExceptions: DamageException[]
   pitches: ProjectPitch[]
   onOpenEvent: (eventId: string) => void
@@ -28,13 +28,19 @@ interface ProjectManagerActionRequiredProps {
 
 export function ProjectManagerActionRequired({
   events,
-  staff,
-  procurement,
   damageExceptions,
   pitches,
   onOpenEvent,
   onOpenPitch,
 }: ProjectManagerActionRequiredProps) {
+  const [deficits, setDeficits] = useState<DeficitQueueItemDto[]>([])
+
+  useEffect(() => {
+    fetchDeficitQueueApi()
+      .then((data) => setDeficits(data))
+      .catch((err) => console.warn('[ProjectManagerActionRequired] fetchDeficitQueueApi failed:', err))
+  }, [])
+
   const actionItems: ActionItem[] = useMemo(() => {
     const items: ActionItem[] = []
 
@@ -73,23 +79,7 @@ export function ProjectManagerActionRequired({
         })
       })
 
-    // 3. Events with Attention Needed from operational snapshot
-    events.forEach((e) => {
-      const snap = getEventDetailSnapshot(e, staff, procurement)
-      if (snap.overallStatus === 'Attention Needed' && e.status !== 'On Hold') {
-        items.push({
-          id: `snap-${e.id}`,
-          type: 'snapshot-alert',
-          severity: 'medium',
-          title: `${e.title}: Logistics Attention Needed`,
-          subtitle: `Warehouse, manning, or replenishment synchronization requires PM confirmation.`,
-          eventId: e.id,
-          badgeLabel: 'Logistics Flag',
-        })
-      }
-    })
-
-    // 4. Client Pitches in For Revision state
+    // 3. Client Pitches in For Revision state
     pitches
       .filter((p) => p.status === 'For Revision')
       .forEach((p) => {
@@ -104,23 +94,76 @@ export function ProjectManagerActionRequired({
         })
       })
 
-    // 5. Open Damage Exceptions pending verdict
-    damageExceptions
-      .filter((d) => d.status === 'Pending Verdict' || d.status === 'Held for Audit')
-      .slice(0, 2)
-      .forEach((d) => {
+    // 5. Open Damage Exceptions & Settlement Blockers
+    const openDamages = damageExceptions.filter(
+      (d) => d.status === 'Pending Verdict' || d.status === 'Held for Audit',
+    )
+
+    // Match damages to events to flag settlement blockers
+    events.forEach((e) => {
+      const eventBlockingDamages = openDamages.filter(
+        (d) =>
+          d.boundEvent === e.title ||
+          d.boundEvent === e.refId ||
+          d.boundEvent === e.id,
+      )
+      if (eventBlockingDamages.length > 0) {
+        items.push({
+          id: `settle-block-${e.id}`,
+          type: 'damage-hold',
+          severity: e.status === 'Completed' ? 'high' : 'medium',
+          title: `${e.title}: Settlement Blocked (${eventBlockingDamages.length} Damage Hold${eventBlockingDamages.length > 1 ? 's' : ''})`,
+          subtitle: `Unresolved asset damage reports hold financial clearance for this project.`,
+          eventId: e.id,
+          badgeLabel: 'Settlement Blocker',
+        })
+      }
+    })
+
+    // If there are general open damages not attached to mapped events, show up to 2 items
+    if (!items.some((it) => it.badgeLabel === 'Settlement Blocker')) {
+      openDamages.slice(0, 2).forEach((d) => {
+        const matchingEvent = events.find(
+          (e) => e.title === d.boundEvent || e.refId === d.boundEvent || e.id === d.boundEvent,
+        )
         items.push({
           id: `damage-${d.id}`,
           type: 'damage-hold',
-          severity: 'low',
+          severity: 'medium',
           title: `Logistics Damage Flag: ${d.assetName || 'Asset Item'}`,
-          subtitle: `Damage verdict pending review by Executive or Operations Manager.`,
+          subtitle: `Damage report logged in logistics pipeline pending sign-off.`,
+          eventId: matchingEvent?.id,
           badgeLabel: 'Audit Exception',
         })
       })
+    }
+
+    // 6. Critical Deficit Alerts from Deficit Queue
+    const activeDeficits = deficits.filter(
+      (d) => d.status !== 'Fulfilled' && d.status !== 'Cancelled',
+    )
+    events.forEach((e) => {
+      const eventDeficits = activeDeficits.filter(
+        (d) => d.eventId === e.id || (d.eventName && d.eventName === e.title),
+      )
+      const criticalDeficits = eventDeficits.filter(
+        (d) => d.priority === 'Critical' || d.urgencyLevel === 'Critical',
+      )
+      if (criticalDeficits.length > 0) {
+        items.push({
+          id: `deficit-${e.id}`,
+          type: 'deficit-alert',
+          severity: 'high',
+          title: `${e.title}: Material Deficit Flagged (${criticalDeficits.length} Critical Item${criticalDeficits.length > 1 ? 's' : ''})`,
+          subtitle: `Critical inventory shortage requires supplier PO replenishment to avoid dispatch delay.`,
+          eventId: e.id,
+          badgeLabel: 'Material Deficit',
+        })
+      }
+    })
 
     return items
-  }, [events, staff, procurement, damageExceptions, pitches])
+  }, [events, damageExceptions, pitches, deficits])
 
   if (actionItems.length === 0) {
     return (

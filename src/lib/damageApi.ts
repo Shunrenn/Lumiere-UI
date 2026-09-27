@@ -20,12 +20,13 @@ function getHeaders(): HeadersInit {
 }
 
 function resolveGuid(id: string): string {
+  if (!id) return '11111111-1111-1111-1111-111111111111'
   if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id)) {
     return id
   }
   if (id === 'DEMO-001') return '33333333-3333-3333-3333-333333333333'
   if (id === 'DEMO-002') return '44444444-4444-4444-4444-444444444444'
-  return '11111111-1111-1111-1111-111111111111'
+  return id
 }
 
 function mapBackendDtoToDamageException(dto: any): DamageException {
@@ -39,22 +40,22 @@ function mapBackendDtoToDamageException(dto: any): DamageException {
   return {
     id: dto.id,
     logId: `EXC-2026-${shortId}`,
-    boundEvent: dto.eventId === '11111111-1111-1111-1111-111111111111' ? 'Maison Lumine Premiere Gala' : 'Casa Ruiz Wedding',
-    reportingOfficer: dto.submittedBy === 'ab72d5b3-4f46-4068-87a1-8680b0db0d96' ? 'R. Montoya' : (dto.submittedBy || 'Ground Crew Lead'),
+    boundEvent: dto.eventName || dto.eventTitle || (dto.eventId === '11111111-1111-1111-1111-111111111111' ? 'Maison Lumine Premiere Gala' : dto.eventId || 'Event'),
+    reportingOfficer: dto.submittedByName || (dto.submittedBy === 'ab72d5b3-4f46-4068-87a1-8680b0db0d96' ? 'R. Montoya' : (dto.submittedBy || 'Ground Crew Lead')),
     officerRole: 'GROUND CREW',
-    assetName: dto.id === '33333333-3333-3333-3333-333333333333'
+    assetName: dto.assetName || (dto.id === '33333333-3333-3333-3333-333333333333'
       ? 'SkyPanel S60-C LED Softlight'
       : dto.id === '44444444-4444-4444-4444-444444444444'
       ? 'Gold Chiavari Chair — Leg Fracture'
-      : 'White Linen Table Runner',
-    assetSku: dto.id === '33333333-3333-3333-3333-333333333333' ? 'SKU: LMR-LGT-S60C' : 'SKU: LMR-FURN-CH08',
-    damageType: dto.severity || 'Critical',
+      : 'Asset Item'),
+    assetSku: dto.assetSku || (dto.id === '33333333-3333-3333-3333-333333333333' ? 'SKU: LMR-LGT-S60C' : 'SKU: LMR-FURN-CH08'),
+    damageType: dto.severity || dto.damageType || 'Critical',
     imageUrl: dto.photoUrl || 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04',
     gps: gpsDisplay,
     capturedAt: dto.submittedAt ? new Date(dto.submittedAt).toLocaleDateString() : '12 Dec 2025 · 22:40',
     exifVerified: !dto.noPhotographicEvidence,
     estimatedCost: dto.repairCostEstimate ?? 150,
-    notes: dto.verdictBy ? `Verdict by ${dto.verdictBy}` : 'Physical inspection pending',
+    notes: dto.description || (dto.verdictBy ? `Verdict by ${dto.verdictBy}` : 'Physical inspection pending'),
     status: (dto.reportStatus || dto.status || 'Pending Verdict') as DamageVerdict,
     noPhotographicEvidence: dto.noPhotographicEvidence ?? false,
     firstSignOff: dto.firstSignOff,
@@ -69,14 +70,24 @@ function mapBackendDtoToDamageException(dto: any): DamageException {
 
 export async function fetchDamageReportsForEvent(eventId: string): Promise<DamageException[]> {
   const realGuid = resolveGuid(eventId)
-  const res = await fetch(`${BASE_URL}/event/${encodeURIComponent(realGuid)}`, {
-    headers: getHeaders(),
-  })
-  if (!res.ok) {
-    throw new Error(`Failed to fetch damage reports for event ${eventId}: ${res.statusText}`)
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10000)
+  try {
+    const res = await fetch(`${BASE_URL}/event/${encodeURIComponent(realGuid)}`, {
+      headers: getHeaders(),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    if (!res.ok) {
+      throw new Error(`Failed to fetch damage reports for event ${eventId}: HTTP ${res.status}`)
+    }
+    const rawList = await res.json()
+    return Array.isArray(rawList) ? rawList.map(mapBackendDtoToDamageException) : []
+  } catch (err) {
+    clearTimeout(timeoutId)
+    console.warn(`[damageApi] fetchDamageReportsForEvent failed for ${eventId}:`, err)
+    throw err
   }
-  const rawList = await res.json()
-  return Array.isArray(rawList) ? rawList.map(mapBackendDtoToDamageException) : []
 }
 
 export async function fetchDamageReportsAllEvents(events: Array<{ id: string; title?: string; refId?: string }>): Promise<{ reports: DamageException[]; connected: boolean }> {
@@ -201,11 +212,25 @@ export async function completeMaintenanceBackend(reportId: string): Promise<{ su
 
 export async function checkSettlementBlockedBackend(eventId: string): Promise<{ blocked: boolean; blockingItemsCount: number }> {
   const realGuid = resolveGuid(eventId)
-  const res = await fetch(`${BASE_URL}/event/${encodeURIComponent(realGuid)}/settlement-blocked`, {
-    headers: getHeaders(),
-  })
-  if (!res.ok) {
-    throw new Error(`Failed to check settlement blocked status: ${res.statusText}`)
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10000)
+  try {
+    const res = await fetch(`${BASE_URL}/event/${encodeURIComponent(realGuid)}/settlement-blocked`, {
+      headers: getHeaders(),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    if (!res.ok) {
+      throw new Error(`Failed to check settlement blocked status: HTTP ${res.status}`)
+    }
+    const data = await res.json()
+    return {
+      blocked: Boolean(data.blocked ?? data.isBlocked ?? data.Blocked),
+      blockingItemsCount: Number(data.blockingItemsCount ?? data.count ?? data.BlockingItemsCount ?? 0),
+    }
+  } catch (err) {
+    clearTimeout(timeoutId)
+    console.warn(`[damageApi] checkSettlementBlockedBackend failed for ${eventId}:`, err)
+    throw err
   }
-  return res.json()
 }

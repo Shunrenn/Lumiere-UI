@@ -153,19 +153,26 @@ export function ProjectManagerPitchModal({
 
           <div className="flex items-center gap-2">
             {/* Status Selector */}
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as PitchStatus)}
-              className="rounded-lg border border-input bg-background px-2.5 py-1 text-xs font-semibold text-foreground outline-none focus:border-primary"
-            >
-              <option value="Draft">Draft</option>
-              <option value="For Presentation">For Presentation</option>
-              <option value="Presented">Presented</option>
-              <option value="For Revision">For Revision</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-              <option value="Converted to Event">Converted to Event</option>
-            </select>
+            {status === 'Converted to Event' ? (
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 text-xs font-semibold border border-emerald-500/20">
+                <CheckCircle2 className="size-3.5 text-emerald-500" />
+                Converted
+              </span>
+            ) : (
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as PitchStatus)}
+                className="rounded-lg border border-input bg-background px-2.5 py-1 text-xs font-semibold text-foreground outline-none focus:border-primary"
+              >
+                <option value="Draft">Draft</option>
+                <option value="For Presentation">For Presentation</option>
+                <option value="Presented">Presented</option>
+                <option value="For Revision">For Revision</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            )}
 
             <button
               type="button"

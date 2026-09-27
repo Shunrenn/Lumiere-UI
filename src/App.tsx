@@ -78,6 +78,21 @@ function Router() {
   const isPwaRoute = pwaRoutes.has(route)
   if (portal && ((portal === 'pwa') !== isPwaRoute)) return <PortalAccessError portal={portal} />
 
+  // Client-side role guard for Project Manager:
+  // PM is restricted to project manager dashboard and design canvas oversight surfaces.
+  // PM cannot mount Admin/Executive operational pages (security-audit, workforce, rbac, executive dashboard/logs).
+  if (isProjectManager) {
+    switch (route) {
+      case 'canvas':
+        return <DesignCanvasHubPage />
+      case 'canvas-workspace':
+        return <CanvasWorkspacePage />
+      case 'project-manager':
+      default:
+        return <ProjectManagerDashboardPage />
+    }
+  }
+
   switch (route) {
     case 'dashboard':
       return <EventDashboardPage />
@@ -176,7 +191,13 @@ function Gate() {
   const validRoutes = new Set(['dashboard', 'registry', 'replenishment', 'logs', 'damage', 'inventory', 'warehouse-logs', 'crew', 'deployments', 'dispatch', 'event-detail', 'canvas', 'canvas-workspace', 'field-ops', 'warehouse-lead', 'warehouse-member', 'manning', 'production-manager', 'inventory-officer', 'workforce', 'security-audit', 'rbac', 'overview', 'project-manager'])
   const targetUrlRoute = urlParamRoute && validRoutes.has(urlParamRoute) ? urlParamRoute : null
 
-  const initialRoute = targetUrlRoute || (isManningOfficer
+  // PM allowed routes protection in URL resolution
+  const pmAllowedRoutes = new Set<Route>(['project-manager', 'canvas', 'canvas-workspace'])
+  const resolvedTargetRoute = targetUrlRoute && (!isProjectManager || pmAllowedRoutes.has(targetUrlRoute))
+    ? targetUrlRoute
+    : null
+
+  const initialRoute = resolvedTargetRoute || (isManningOfficer
     ? 'manning'
     : isGroundCrew
     ? 'field-ops'

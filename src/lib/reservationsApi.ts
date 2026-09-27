@@ -83,3 +83,39 @@ export async function validateCanvasState(eventId: string, assetIds: string[]): 
     return { valid: false, reason: err?.message || 'Could not verify reservation — please retry' }
   }
 }
+
+export interface ReservationResponseDto {
+  id: string
+  eventId: string
+  assetId: string
+  assetName?: string
+  assetSku?: string
+  lockStart: string
+  lockEnd: string
+  status: string
+}
+
+/**
+ * Loads reservations for an event from GET /api/reservations/event/{eventId}.
+ */
+export async function fetchReservationsForEvent(eventId: string): Promise<ReservationResponseDto[]> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10000)
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/reservations/event/${encodeURIComponent(eventId)}`, {
+      headers: getAuthHeaders(),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    if (!res.ok) {
+      console.warn(`[reservationsApi] GET /api/reservations/event/${eventId} returned HTTP ${res.status}`)
+      throw new Error(`Failed to fetch reservations: HTTP ${res.status}`)
+    }
+    const data = await res.json()
+    return Array.isArray(data) ? data : []
+  } catch (err) {
+    clearTimeout(timeoutId)
+    console.warn(`[reservationsApi] GET /api/reservations/event/${eventId} failed:`, err)
+    throw err
+  }
+}

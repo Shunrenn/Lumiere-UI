@@ -190,7 +190,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
     if (!draft.title.trim() || isPastDate) return
     try {
       if (mode === 'edit' && event) {
-        updateEvent(event.id, draft, adminRole || 'Executive')
+        await updateEvent(event.id, draft, adminRole || 'Executive')
         close()
       } else {
         const res = await addEvent(draft, adminRole || 'Executive', allowOverride)
@@ -199,6 +199,8 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
             message: res.message || 'Venue scheduling conflict detected.',
             conflictingEvents: res.conflictingEvents || [],
           })
+        } else if (!res.success) {
+          alert(`Failed to register event: ${res.message || 'Unknown error'}`)
         } else {
           setServerConflict(null)
           close()
@@ -206,7 +208,7 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
       }
     } catch (err: any) {
       console.error('[RegisterEventDrawer] Failed to save event:', err)
-      close()
+      alert(`Failed to save event: ${err?.message || 'Unknown error'}`)
     }
   }
 

@@ -43,15 +43,26 @@ function getAuthHeaders(): HeadersInit {
  * Loads canvas layout state from GET /api/canvas/event/{eventId}.
  */
 export async function fetchCanvasLayoutApi(eventId: string): Promise<CanvasResponseDto | null> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10000)
   try {
     const res = await fetch(`${API_BASE_URL}/api/canvas/event/${encodeURIComponent(eventId)}`, {
       headers: getAuthHeaders(),
+      signal: controller.signal,
     })
-    if (!res.ok) return null
+    clearTimeout(timeoutId)
+    if (!res.ok) {
+      if (res.status === 404) {
+        return null
+      }
+      console.warn(`[canvasApi] GET /api/canvas/event/${eventId} returned HTTP ${res.status}`)
+      throw new Error(`Failed to fetch canvas layout: HTTP ${res.status}`)
+    }
     return await res.json()
   } catch (err) {
-    console.warn(`[canvasApi] GET /api/canvas/event/${eventId} fetch skipped/fallback:`, err)
-    return null
+    clearTimeout(timeoutId)
+    console.warn(`[canvasApi] GET /api/canvas/event/${eventId} fetch failed:`, err)
+    throw err
   }
 }
 
