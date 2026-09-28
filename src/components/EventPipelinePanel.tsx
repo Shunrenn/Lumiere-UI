@@ -15,6 +15,7 @@ import { usePlanner, type PipelineEvent } from '@/lib/planner'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
+import { PartialEgressSection } from '@/components/warehouse/PartialEgressSection'
 
 // Shared Event Pipeline content — the "Logistical Overview / Material Requirement / Design
 // Documents / Team Assignments" data — reused by both the full-page EventDetailPage and the
@@ -83,7 +84,7 @@ export function EventPipelinePanel({
   compact?: boolean
 }) {
   const { eventMaterials, eventChecklist, eventDocuments } = usePlanner()
-  const { damageExceptions, events: portalEvents, settleEvent } = usePortal()
+  const { damageExceptions, events: portalEvents, settleEvent, partialEgressesByEvent } = usePortal()
   const { navigate } = useNav()
   const materials = eventMaterials[event.id] ?? []
   const checklist = eventChecklist[event.id] ?? []
@@ -105,6 +106,9 @@ export function EventPipelinePanel({
   )
   const portalMatch = portalEvents.find((e) => e.id === event.id || e.title === event.title)
   const isSettled = event.status === 'Settled' || portalMatch?.status === 'Settled'
+  const targetEventId = portalMatch?.id || event.id
+  const currentEgress = partialEgressesByEvent[targetEventId] || partialEgressesByEvent[event.id]
+  const isEgressBlocking = currentEgress && currentEgress.state === 'Pending Completion'
 
   const verifiedCount = checklist.filter((c) => verified[c.id]).length
 
@@ -206,6 +210,15 @@ export function EventPipelinePanel({
             </div>
           </section>
 
+          {/* Post-Event Partial Egress Accountability Section */}
+          <PartialEgressSection
+            eventId={targetEventId}
+            eventTitle={event.title}
+            isSettled={isSettled}
+            className="mt-6"
+            onNavigateToDamage={() => navigate('logs')}
+          />
+
           {/* Event Settlement Enforcement Section */}
           <section className="mt-6 rounded-xl border border-border bg-card p-6">
             <h2 className="flex items-center gap-2 text-[0.62rem] font-bold uppercase tracking-[0.16em] text-card-foreground">
@@ -222,6 +235,27 @@ export function EventPipelinePanel({
                     This event has been fully settled and closed. All bound damage exceptions are resolved and ledger entries are locked.
                   </p>
                 </div>
+              </div>
+            ) : isEgressBlocking ? (
+              <div className="mt-4 flex flex-col gap-4 rounded-lg border border-amber-300 bg-amber-50/90 p-4 sm:flex-row sm:items-center sm:justify-between text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+                <div>
+                  <div className="flex items-center gap-2 font-semibold text-amber-900 dark:text-amber-300 text-sm">
+                    <AlertTriangle className="size-4 text-amber-600 shrink-0" />
+                    Settlement Blocked: Post-Event Egress Accountability Active
+                  </div>
+                  <p className="mt-1 text-xs text-amber-800 dark:text-amber-400 leading-relaxed max-w-xl">
+                    Event settlement cannot proceed. Partial Egress accountability is Pending Completion with{' '}
+                    {currentEgress?.outstandingItems?.length ?? 0} outstanding item(s) unverified or unfinalized.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled
+                  title="Settlement blocked by active Partial Egress accountability"
+                  className="cursor-not-allowed rounded-md bg-amber-200 px-3.5 py-2 text-[0.65rem] font-bold uppercase tracking-wider text-amber-700 opacity-75"
+                >
+                  Settle Event
+                </button>
               </div>
             ) : blockingExceptions.length > 0 ? (
               <div className="mt-4 flex flex-col gap-4 rounded-lg border border-rose-200 bg-rose-50/80 p-4 sm:flex-row sm:items-center sm:justify-between text-rose-950">

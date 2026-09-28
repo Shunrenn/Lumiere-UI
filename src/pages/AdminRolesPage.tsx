@@ -91,9 +91,60 @@ export function AdminRolesPage() {
   // creates, edits, and deletes sub-roles, no separate draft/staging model
   // per spec — so the System Dashboard's Pending Actions panel can surface
   // newly created sub-roles that still need permissions configured.
-  const { subRolesByParent, setSubRolesByParent, groundCrewTree, setGroundCrewTree } = usePortal()
+  const {
+    subRolesByParent,
+    setSubRolesByParent,
+    groundCrewTree,
+    setGroundCrewTree,
+    partialEgressPolicy,
+    loadPostEgressPolicy,
+    updatePostEgressPolicy,
+  } = usePortal()
 
   const [expanded, setExpanded] = useState<string | null>(null)
+
+  // Post-Egress Policy settings state
+  const [policyMinutesInput, setPolicyMinutesInput] = useState<number>(120)
+  const [savingPolicy, setSavingPolicy] = useState(false)
+  const [policyError, setPolicyError] = useState<string | null>(null)
+
+  useEffect(() => {
+    loadPostEgressPolicy().then((p) => {
+      if (p) setPolicyMinutesInput(p.completionWindowMinutes)
+    })
+  }, [loadPostEgressPolicy])
+
+  useEffect(() => {
+    if (partialEgressPolicy) {
+      setPolicyMinutesInput(partialEgressPolicy.completionWindowMinutes)
+    }
+  }, [partialEgressPolicy])
+
+  const handleSavePostEgressPolicy = async () => {
+    if (!partialEgressPolicy) return
+    if (policyMinutesInput < 1 || policyMinutesInput > 1440) {
+      setPolicyError('Post-egress completion window must be between 1 and 1440 minutes (24 hours).')
+      return
+    }
+
+    setSavingPolicy(true)
+    setPolicyError(null)
+
+    try {
+      const res = await updatePostEgressPolicy({
+        completionWindowMinutes: policyMinutesInput,
+        expectedVersion: partialEgressPolicy.version,
+      })
+
+      if (res.success) {
+        showToast(`Post-Egress completion window policy updated to ${res.data.completionWindowMinutes} minutes.`)
+      } else {
+        setPolicyError(res.error)
+      }
+    } finally {
+      setSavingPolicy(false)
+    }
+  }
 
   // Ground Crew's tree: which container nodes currently have their children
   // revealed. Multiple containers can be open at once (unlike `expanded`,
@@ -706,6 +757,66 @@ export function AdminRolesPage() {
                   className="w-20 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-bold text-foreground text-center outline-none focus:border-primary shadow-sm"
                 />
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Post-Event Egress Completion Window Policy */}
+        <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">
+                  Post-Event Egress Completion Window
+                </h3>
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[0.55rem] font-bold uppercase text-primary">
+                  Server Policy
+                </span>
+                {partialEgressPolicy && (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[0.55rem] font-semibold text-muted-foreground font-mono">
+                    v{partialEgressPolicy.version}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground max-w-2xl leading-relaxed">
+                Server-owned accountability window granted to ground crew and warehouse operations to complete physical return verification and resolve liabilities before an egress is marked overdue.
+              </p>
+              <div className="mt-2 rounded-lg bg-muted/40 p-2.5 text-[0.68rem] text-muted-foreground border border-border/60 max-w-2xl">
+                <strong className="text-foreground">Snapshot Invariant:</strong> Updates to this policy apply strictly to future event egress initiations. Historical egress records permanently snapshot their deadline upon departure and will not be rewritten.
+              </div>
+              {policyError && (
+                <p className="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400">
+                  {policyError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 bg-muted/40 p-3 rounded-lg border border-border shrink-0">
+              <div className="flex items-center gap-2">
+                <label htmlFor="egress-window-input" className="text-xs font-semibold text-foreground whitespace-nowrap">
+                  Window (mins):
+                </label>
+                <input
+                  id="egress-window-input"
+                  type="number"
+                  min="1"
+                  max="1440"
+                  value={policyMinutesInput}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10) || 1
+                    setPolicyMinutesInput(val)
+                  }}
+                  className="w-24 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-bold text-foreground text-center outline-none focus:border-primary shadow-sm"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleSavePostEgressPolicy}
+                disabled={savingPolicy || !partialEgressPolicy || policyMinutesInput === partialEgressPolicy.completionWindowMinutes}
+                className="rounded-md bg-primary px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition"
+              >
+                {savingPolicy ? 'Saving...' : 'Save Policy'}
+              </button>
             </div>
           </div>
         </section>

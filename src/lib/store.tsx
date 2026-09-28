@@ -1,5 +1,6 @@
 import { logAuditEvent } from '@/lib/audit-logger'
 import * as damageApi from '@/lib/damageApi'
+import * as partialEgressApi from '@/lib/partialEgressApi'
 import { fetchAuditLogs } from '@/lib/auditApi'
 import { API_BASE_URL, getAuthToken } from '@/lib/apiConfig'
 import {
@@ -21,18 +22,23 @@ import type {
   DamageSelfValidationRecord,
   DamageSignOff,
   DamageVerdict,
+  EscalatePartialEgressRequest,
+  EventEgressResponse,
   EventUpdate,
+  ExceptionResolveEgressItemRequest,
   InventoryItem,
   NewEmployeeRecordDraft,
   NewEventDraft,
   NewStaffDraft,
   PortalEvent,
+  PostEgressPolicyResponse,
   ProcurementItem,
   ReorderDraft,
   Staff,
   StaffRole,
   StockStatus,
   SubRoleEmergencyUnblockMetadata,
+  UpdatePostEgressPolicyRequest,
   UserAction,
   Vendor,
 } from '@/lib/types'
@@ -1375,6 +1381,32 @@ interface PortalContextValue {
   addInventoryItem: (item: InventoryItem) => void
   updateInventoryItem: (item: InventoryItem) => void
   refetchLogs: () => Promise<void>
+  partialEgressesByEvent: Record<string, EventEgressResponse>
+  partialEgressPolicy: PostEgressPolicyResponse | null
+  fetchEventEgress: (eventId: string) => Promise<EventEgressResponse | null>
+  initiateEventEgress: (
+    eventId: string,
+    note?: string,
+  ) => Promise<partialEgressApi.PartialEgressApiResult<EventEgressResponse>>
+  completeEgressItem: (
+    eventId: string,
+    itemId: string,
+    expectedEgressVersion: number,
+    expectedItemVersion: number,
+  ) => Promise<partialEgressApi.PartialEgressApiResult<EventEgressResponse>>
+  exceptionResolveEgressItem: (
+    eventId: string,
+    itemId: string,
+    request: ExceptionResolveEgressItemRequest,
+  ) => Promise<partialEgressApi.PartialEgressApiResult<EventEgressResponse>>
+  escalateEventEgress: (
+    eventId: string,
+    request: EscalatePartialEgressRequest,
+  ) => Promise<partialEgressApi.PartialEgressApiResult<EventEgressResponse>>
+  loadPostEgressPolicy: () => Promise<PostEgressPolicyResponse | null>
+  updatePostEgressPolicy: (
+    request: UpdatePostEgressPolicyRequest,
+  ) => Promise<partialEgressApi.PartialEgressApiResult<PostEgressPolicyResponse>>
 }
 
 const PortalContext = createContext<PortalContextValue | null>(null)
@@ -1394,6 +1426,8 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     } catch {}
     return []
   })
+  const [partialEgressesByEvent, setPartialEgressesByEvent] = useState<Record<string, EventEgressResponse>>({})
+  const [partialEgressPolicy, setPartialEgressPolicy] = useState<PostEgressPolicyResponse | null>(null)
 
   // Hydrate events list from backend REST API (GET /api/events)
   const loadEvents = useCallback(async (): Promise<PortalEvent[]> => {
@@ -2487,6 +2521,16 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      // Check Partial Egress status: Pending Completion blocks settlement!
+      const currentEgress = partialEgressesByEvent[target.id] || partialEgressesByEvent[eventId]
+      if (currentEgress && currentEgress.state === 'Pending Completion') {
+        const outstandingCount = currentEgress.outstandingItems?.length ?? 0
+        return {
+          success: false,
+          reason: `Settlement blocked: Post-Event Egress accountability is Pending Completion (${outstandingCount} unresolved item${outstandingCount === 1 ? '' : 's'}). All return items and HAVA declarations must be resolved before settling.`,
+        }
+      }
+
       setEvents((prev) =>
         prev.map((e) => (e.id === target.id ? { ...e, status: 'Settled' } : e)),
       )
@@ -2502,7 +2546,168 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
       return { success: true }
     },
-    [events, damageExceptions, pushLog],
+    [events, damageExceptions, partialEgressesByEvent, pushLog],
+  )
+
+  const fetchEventEgress = useCallback(async (eventId: string): Promise<EventEgressResponse | null> => {
+    try {
+      const remote = await partialEgressApi.getEventEgressApi(eventId)
+      if (remote) {
+        setPartialEgressesByEvent((prev) => ({ ...prev, [eventId]: remote }))
+      }
+      return remote
+    } catch (err) {
+      console.warn('[store] fetchEventEgress failed:', err)
+      return null
+    }
+  }, [])
+
+  const initiateEventEgress = useCallback(
+    async (
+      eventId: string,
+      note?: string,
+    ): Promise<partialEgressApi.PartialEgressApiResult<EventEgressResponse>> => {
+      const idempotencyKey =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `egress-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`
+
+      const res = await partialEgressApi.initiatePartialEgressApi(eventId, {
+        idempotencyKey,
+        note,
+      })
+
+      if (res.success) {
+        setPartialEgressesByEvent((prev) => ({ ...prev, [eventId]: res.data }))
+        pushLog({
+          account: 'SYS-ROOT',
+          initiatorRole: 'Warehouse Ops',
+          action: 'Post-Event Egress Initiated',
+          detail: `Partial Egress initiated for event ${eventId}. Status: ${res.data.state}. Deadline: ${res.data.completionDeadlineAt}. Outstanding items: ${res.data.outstandingItems.length}.`,
+          ip: randomIp(),
+          status: 'Success',
+        })
+      }
+      return res
+    },
+    [pushLog],
+  )
+
+  const completeEgressItem = useCallback(
+    async (
+      eventId: string,
+      itemId: string,
+      expectedEgressVersion: number,
+      expectedItemVersion: number,
+    ): Promise<partialEgressApi.PartialEgressApiResult<EventEgressResponse>> => {
+      const res = await partialEgressApi.completeEgressItemApi(eventId, itemId, {
+        expectedEgressVersion,
+        expectedItemVersion,
+      })
+
+      if (res.success) {
+        setPartialEgressesByEvent((prev) => ({ ...prev, [eventId]: res.data }))
+        pushLog({
+          account: 'SYS-ROOT',
+          initiatorRole: 'Warehouse Ops',
+          action: 'Egress Item Completed',
+          detail: `Egress item ${itemId} completed for event ${eventId}. Aggregate state: ${res.data.state}.`,
+          ip: randomIp(),
+          status: 'Success',
+        })
+      } else if (res.isStaleVersion) {
+        fetchEventEgress(eventId).catch(() => {})
+      }
+      return res
+    },
+    [fetchEventEgress, pushLog],
+  )
+
+  const exceptionResolveEgressItem = useCallback(
+    async (
+      eventId: string,
+      itemId: string,
+      request: ExceptionResolveEgressItemRequest,
+    ): Promise<partialEgressApi.PartialEgressApiResult<EventEgressResponse>> => {
+      const res = await partialEgressApi.exceptionResolveEgressItemApi(eventId, itemId, request)
+
+      if (res.success) {
+        setPartialEgressesByEvent((prev) => ({ ...prev, [eventId]: res.data }))
+        pushLog({
+          account: 'SYS-ROOT',
+          initiatorRole: 'Warehouse Manager',
+          action: 'Egress Item Exception Resolved',
+          detail: `Supervisory exception recorded for item ${itemId} (Event ${eventId}). Reason: "${request.reason}". Aggregate state: ${res.data.state}.`,
+          ip: randomIp(),
+          status: 'Flagged',
+        })
+      } else if (res.isStaleVersion) {
+        fetchEventEgress(eventId).catch(() => {})
+      }
+      return res
+    },
+    [fetchEventEgress, pushLog],
+  )
+
+  const escalateEventEgress = useCallback(
+    async (
+      eventId: string,
+      request: EscalatePartialEgressRequest,
+    ): Promise<partialEgressApi.PartialEgressApiResult<EventEgressResponse>> => {
+      const res = await partialEgressApi.escalatePartialEgressApi(eventId, request)
+
+      if (res.success) {
+        setPartialEgressesByEvent((prev) => ({ ...prev, [eventId]: res.data }))
+        pushLog({
+          account: 'SYS-ROOT',
+          initiatorRole: 'Warehouse Manager',
+          action: 'Partial Egress Escalated',
+          detail: `Overdue post-egress accountability escalated for event ${eventId}. Reason: "${request.reason}".`,
+          ip: randomIp(),
+          status: 'Flagged',
+        })
+      } else if (res.isStaleVersion) {
+        fetchEventEgress(eventId).catch(() => {})
+      }
+      return res
+    },
+    [fetchEventEgress, pushLog],
+  )
+
+  const loadPostEgressPolicy = useCallback(async (): Promise<PostEgressPolicyResponse | null> => {
+    try {
+      const res = await partialEgressApi.getPostEgressPolicyApi()
+      if (res) {
+        setPartialEgressPolicy(res)
+      }
+      return res
+    } catch (err) {
+      console.warn('[store] loadPostEgressPolicy failed:', err)
+      return null
+    }
+  }, [])
+
+  const updatePostEgressPolicy = useCallback(
+    async (
+      request: UpdatePostEgressPolicyRequest,
+    ): Promise<partialEgressApi.PartialEgressApiResult<PostEgressPolicyResponse>> => {
+      const res = await partialEgressApi.updatePostEgressPolicyApi(request)
+      if (res.success) {
+        setPartialEgressPolicy(res.data)
+        pushLog({
+          account: 'SYS-ROOT',
+          initiatorRole: 'Admin',
+          action: 'Post-Egress Policy Updated',
+          detail: `Default post-egress completion window set to ${res.data.completionWindowMinutes} minutes (Version ${res.data.version}).`,
+          ip: randomIp(),
+          status: 'Success',
+        })
+      } else if (res.isStaleVersion) {
+        loadPostEgressPolicy().catch(() => {})
+      }
+      return res
+    },
+    [loadPostEgressPolicy, pushLog],
   )
 
   const addInventoryItem = useCallback(
@@ -2622,6 +2827,15 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       addInventoryItem,
       updateInventoryItem,
       refetchLogs,
+      partialEgressesByEvent,
+      partialEgressPolicy,
+      fetchEventEgress,
+      initiateEventEgress,
+      completeEgressItem,
+      exceptionResolveEgressItem,
+      escalateEventEgress,
+      loadPostEgressPolicy,
+      updatePostEgressPolicy,
     }),
     [
       staff,
@@ -2662,6 +2876,15 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       addInventoryItem,
       updateInventoryItem,
       refetchLogs,
+      partialEgressesByEvent,
+      partialEgressPolicy,
+      fetchEventEgress,
+      initiateEventEgress,
+      completeEgressItem,
+      exceptionResolveEgressItem,
+      escalateEventEgress,
+      loadPostEgressPolicy,
+      updatePostEgressPolicy,
     ],
   )
 

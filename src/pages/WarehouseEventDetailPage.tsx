@@ -33,6 +33,7 @@ import { CrewInfoModal } from '@/components/warehouse/event-detail/CrewInfoModal
 import { EventChangesModal } from '@/components/warehouse/event-detail/EventChangesModal'
 import { AssetDetailModal } from '@/components/warehouse/asset-catalog/AssetDetailModal'
 import { ProductionDetailModal } from '@/components/warehouse/production/ProductionDetailModal'
+import { PartialEgressSection } from '@/components/warehouse/PartialEgressSection'
 
 interface WarehouseEventDetailPageProps {
   event: PortalEvent
@@ -140,6 +141,12 @@ export function WarehouseEventDetailPage({ event, onBack, onOpenModule }: Wareho
           batches={batches}
           onNewBatch={handleNewBatch}
           onOpenBatch={setActiveBatchId}
+        />
+
+        <PartialEgressSection
+          eventId={event.id}
+          eventTitle={event.title}
+          onNavigateToAssets={() => onOpenModule('assets')}
         />
       </div>
 

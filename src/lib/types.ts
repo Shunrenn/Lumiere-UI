@@ -462,3 +462,79 @@ export interface ActivityLog {
   ip: string
   status: string
 }
+
+/* ---------- Partial Egress & Post-Event Accountability ---------- */
+
+export type PartialEgressState = 'Pending Completion' | 'Completed'
+export type PartialEgressItemType = 'Asset Return Accountability' | 'HAVA Declaration Finalization'
+export type PartialEgressItemStatus = 'Outstanding' | 'Resolved' | 'Exception Resolved'
+export type PartialEgressEscalationStatus = 'None' | 'Escalated'
+
+export interface EventEgressItemResponse {
+  id: string
+  itemType: PartialEgressItemType | string
+  checkpoint: string
+  assetId?: string | null
+  damageReportId?: string | null
+  status: PartialEgressItemStatus | string
+  createdAt: string
+  resolvedAt?: string | null
+  resolvedBy?: string | null
+  resolutionMethod?: string | null
+  resolutionReason?: string | null
+  resolvedAfterDeadline: boolean
+  version: number
+}
+
+export interface EventEgressResponse {
+  id: string
+  eventId: string
+  state: PartialEgressState | string
+  egressedAt: string
+  initiatedBy: string
+  initiationNote?: string | null
+  completionWindowMinutes: number
+  completionDeadlineAt: string
+  completedAt?: string | null
+  completedAfterDeadline: boolean
+  isOverdue: boolean
+  escalationStatus: PartialEgressEscalationStatus | string
+  escalatedAt?: string | null
+  escalatedBy?: string | null
+  escalationReason?: string | null
+  version: number
+  isDuplicate: boolean
+  outstandingItems: EventEgressItemResponse[]
+  items: EventEgressItemResponse[]
+}
+
+export interface PostEgressPolicyResponse {
+  completionWindowMinutes: number
+  version: number
+  updatedAt: string
+  updatedBy?: string | null
+}
+
+export interface InitiatePartialEgressRequest {
+  idempotencyKey: string
+  note?: string | null
+}
+
+export interface CompleteEgressItemRequest {
+  expectedEgressVersion: number
+  expectedItemVersion: number
+}
+
+export interface ExceptionResolveEgressItemRequest extends CompleteEgressItemRequest {
+  reason: string
+}
+
+export interface EscalatePartialEgressRequest {
+  expectedVersion: number
+  reason: string
+}
+
+export interface UpdatePostEgressPolicyRequest {
+  completionWindowMinutes: number
+  expectedVersion: number
+}

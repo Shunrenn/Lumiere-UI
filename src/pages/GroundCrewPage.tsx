@@ -27,6 +27,7 @@ import { usePortal } from '@/lib/store'
 import { markBatchStalled, resolveBatchStall, useDispatchStore } from '@/lib/warehouse-dispatch'
 import type { DispatchBatch } from '@/lib/event-detail'
 import { IncidentForm } from '@/components/PwaWorkflows'
+import { PartialEgressSection } from '@/components/warehouse/PartialEgressSection'
 import {
   decideGroundCrewDeclaration,
   getApproachingDeclarationsSummary,
@@ -131,7 +132,7 @@ function dateLabel(date: string) {
 
 export function GroundCrewPage() {
   const { adminName, adminEmail, adminRole, logout } = useAuth()
-  const { events, staff, procurement } = usePortal()
+  const { events, staff, procurement, initiateEventEgress } = usePortal()
   const dispatchStore = useDispatchStore(events, staff, procurement)
   const declarations = useGroundCrewDeclarations()
   const [tab, setTab] = useState<Tab>('home')
@@ -423,7 +424,7 @@ export function GroundCrewPage() {
     )
   }
 
-  const handleStartEgress = (eventId: string) => {
+  const handleStartEgress = async (eventId: string) => {
     const note = (handoffNotes[eventId] || '').trim()
     if (!note) {
       setEgressErrors((prev) => ({
@@ -433,17 +434,45 @@ export function GroundCrewPage() {
       return
     }
 
-    setEgressErrors((prev) => ({ ...prev, [eventId]: '' }))
-    setCrewEvents((prev) =>
-      prev.map((item) => {
-        if (item.id !== eventId) return item
-        return { ...item, status: 'Completed' }
-      })
-    )
+    if (!navigator.onLine) {
+      setEgressErrors((prev) => ({
+        ...prev,
+        [eventId]:
+          'Network unavailable. Consequential post-event egress accountability requires an active connection. Reconnect to initiate.',
+      }))
+      return
+    }
 
-    setToast(`Post-Event Egress completed for ${selectedEvent?.name || 'event'}. Transit lock acquired.`)
-    window.setTimeout(() => setToast(''), 3500)
-    setSelectedEventId(null)
+    setEgressErrors((prev) => ({ ...prev, [eventId]: '' }))
+
+    try {
+      const res = await initiateEventEgress(eventId, note)
+      if (!res.success) {
+        setEgressErrors((prev) => ({
+          ...prev,
+          [eventId]: res.error || 'Failed to initiate partial egress with server.',
+        }))
+        return
+      }
+
+      setCrewEvents((prev) =>
+        prev.map((item) => {
+          if (item.id !== eventId) return item
+          return { ...item, status: 'Completed' }
+        }),
+      )
+
+      const isDup = res.isDuplicate ? ' (active session resumed)' : ''
+      setToast(
+        `Post-Event Egress initiated for ${selectedEvent?.name || 'event'}${isDup}. Post-egress accountability active.`,
+      )
+      window.setTimeout(() => setToast(''), 3500)
+    } catch (err: any) {
+      setEgressErrors((prev) => ({
+        ...prev,
+        [eventId]: err?.message || 'Network error initiating egress.',
+      }))
+    }
   }
 
   const handleStall = (batchId: string, reason: string) => {
@@ -1074,39 +1103,43 @@ function EventDetail({
       )}
 
       {phase === 'Post-Event Egress' && (
-        <PwaCard title="Post-Event Egress Checklist" subtitle="Checkpoint 4 of 4">
-          <p className="text-xs text-muted-foreground leading-relaxed flex items-start gap-2">
-            <PackageCheck className="mt-0.5 size-4 shrink-0 text-primary" />
-            The warehouse crew confirms every item is packed and truck-ready.
-          </p>
-          <div className="mt-3 divide-y divide-border/60">
-            {event.items.map((item) => (
-              <div key={item.id} className="flex items-center justify-between gap-2 py-2.5 text-xs">
-                <div>
-                  <p className="font-bold text-foreground">{item.name}</p>
-                  <p className="text-muted-foreground">{item.sku} • {item.qty} units • {item.color}</p>
+        <div className="space-y-4">
+          <PwaCard title="Post-Event Egress Checklist" subtitle="Checkpoint 4 of 4">
+            <p className="text-xs text-muted-foreground leading-relaxed flex items-start gap-2">
+              <PackageCheck className="mt-0.5 size-4 shrink-0 text-primary" />
+              The warehouse crew confirms every item is packed and truck-ready.
+            </p>
+            <div className="mt-3 divide-y divide-border/60">
+              {event.items.map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-2 py-2.5 text-xs">
+                  <div>
+                    <p className="font-bold text-foreground">{item.name}</p>
+                    <p className="text-muted-foreground">{item.sku} • {item.qty} units • {item.color}</p>
+                  </div>
+                  <PwaBadge variant="subrole" subRole="Field" label="Egress Ready" />
                 </div>
-                <PwaBadge variant="subrole" subRole="Field" label="Egress Ready" />
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 border-t border-border/80 pt-3 space-y-3">
-            <label className="block text-xs font-semibold text-foreground">
-              Field Lead Handoff Note <span className="text-destructive">*</span>
-              <textarea
-                value={handoffNote}
-                onChange={(e) => onHandoffNoteChange(e.target.value)}
-                rows={3}
-                placeholder="Where are damaged items placed? (prevents duplicate reporting on arrival)"
-                className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </label>
-            {egressError && <p className="text-xs text-destructive font-medium">{egressError}</p>}
-            <PwaButton onClick={onStartEgress} variant="primary" size="md" className="w-full">
-              Complete Post-Event Egress
-            </PwaButton>
-          </div>
-        </PwaCard>
+              ))}
+            </div>
+            <div className="mt-4 border-t border-border/80 pt-3 space-y-3">
+              <label className="block text-xs font-semibold text-foreground">
+                Field Lead Handoff Note <span className="text-destructive">*</span>
+                <textarea
+                  value={handoffNote}
+                  onChange={(e) => onHandoffNoteChange(e.target.value)}
+                  rows={3}
+                  placeholder="Where are damaged items placed? (prevents duplicate reporting on arrival)"
+                  className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </label>
+              {egressError && <p className="text-xs text-destructive font-medium">{egressError}</p>}
+              <PwaButton onClick={onStartEgress} variant="primary" size="md" className="w-full">
+                Initiate Post-Event Egress Accountability
+              </PwaButton>
+            </div>
+          </PwaCard>
+
+          <PartialEgressSection eventId={event.id} eventTitle={event.name} />
+        </div>
       )}
     </div>
   )
