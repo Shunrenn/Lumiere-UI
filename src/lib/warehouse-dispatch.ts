@@ -40,44 +40,16 @@ function computeHandshake(batches: DispatchBatch[]): { percent: number; hasPahab
   return { percent: Math.round((matched / rows.length) * 100), hasPahabol }
 }
 
-import { supabase } from '@/lib/supabase'
-
 const listeners = new Set<() => void>()
 const storeKey = '__warehouse_dispatch_store__'
 type DispatchGlobal = typeof globalThis & { [storeKey]?: Map<string, DispatchBatch[]> }
 const globalStore = globalThis as DispatchGlobal
 let batchesByEvent: Map<string, DispatchBatch[]> = globalStore[storeKey] ?? new Map()
 
-export async function persistBatchToSupabase(eventId: string, batch: DispatchBatch) {
-  try {
-    await supabase.from('manning_dispatch_batches').upsert({
-      id: batch.id,
-      event_id: eventId,
-      vehicle_type: batch.vehicleType,
-      plate_number: batch.plateNumber,
-      driver_name: batch.driverName || null,
-      direction: batch.direction,
-      stage: batch.stage,
-      handoff_note: batch.handoffNote,
-      crew: batch.crew,
-      reconciliation: batch.reconciliation,
-      stalled: batch.stalled,
-      stalled_reason: batch.stalledReason,
-      updated_at: new Date().toISOString(),
-    })
-  } catch (e) {
-    console.warn('[v0] Supabase dispatch batch persist fallback to local store.', e)
-  }
-}
-
-function publish(targetEventId?: string, targetBatch?: DispatchBatch) {
+function publish(_targetEventId?: string, _targetBatch?: DispatchBatch) {
   batchesByEvent = new Map(batchesByEvent)
   globalStore[storeKey] = batchesByEvent
   listeners.forEach((listener) => listener())
-
-  if (targetEventId && targetBatch) {
-    persistBatchToSupabase(targetEventId, targetBatch)
-  }
 }
 
 import { logAuditEvent } from '@/lib/audit-logger'
@@ -107,7 +79,7 @@ export function deleteBatch(
   batchesByEvent.set(eventId, updated)
 
   logActivity(`Dispatch batch ${batchId} was canceled & archived by ${actor.name}. Reason: ${reason}`, 'info')
-  publish(eventId, updatedBatch)
+  publish()
 
   // Log structured audit entry
   void logAuditEvent({
@@ -119,26 +91,6 @@ export function deleteBatch(
     target_snapshot: (targetBatch as unknown) as Record<string, unknown>,
     reason,
   })
-
-  // Update Supabase dispatch batch soft-delete state
-  void (async () => {
-    try {
-      const { error } = await supabase
-        .from('manning_dispatch_batches')
-        .update({
-          is_archived: true,
-          archived_at: now,
-          archived_by: actor.name,
-          archive_reason: reason,
-        })
-        .eq('id', batchId)
-      if (error) {
-        console.warn('[v0] Supabase archive batch error; falling back to local store.', error)
-      }
-    } catch (e) {
-      console.warn('[v0] Supabase archive batch network fallback to local store.', e)
-    }
-  })()
 }
 
 export function getArchivedBatches(eventId: string): DispatchBatch[] {

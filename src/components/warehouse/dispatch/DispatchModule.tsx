@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Archive, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Download, Truck, User, X } from 'lucide-react'
+import { AlertTriangle, Archive, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ChevronRight, Clock, Download, PackageCheck, Truck, User, X } from 'lucide-react'
 import { usePortal } from '@/lib/store'
+import { getPreparation, type DispatchPreparationResponse } from '@/lib/dispatchApi'
 import {
   addNewCustomBatch,
   advanceBatchStage,
@@ -356,9 +357,50 @@ function EventBatchLevel({
   onExportManifest: () => void
 }) {
   const [showArchived, setShowArchived] = useState(false)
+  const [prepStatus, setPrepStatus] = useState<DispatchPreparationResponse | null>(null)
+
+  useEffect(() => {
+    let active = true
+    void getPreparation(summary.eventId, false).then((res) => {
+      if (active && res.success) {
+        setPrepStatus(res.data)
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [summary.eventId])
 
   return (
     <div className="flex flex-col gap-4">
+      {prepStatus && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-xs">
+          <div className="flex items-center gap-2">
+            <PackageCheck className="size-4 text-primary shrink-0" />
+            <span className="font-semibold text-foreground">Preparation Readiness:</span>
+            {!prepStatus.isManifestCurrent ? (
+              <span className="inline-flex items-center gap-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-2 py-0.5 font-bold uppercase text-[0.6rem]">
+                <AlertTriangle className="size-3" />
+                Reservation Manifest Mismatch ({prepStatus.quantityMismatches.length} qty, {prepStatus.missingPreparationAssetIds.length} missing)
+              </span>
+            ) : prepStatus.isPreparationComplete ? (
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2 py-0.5 font-bold uppercase text-[0.6rem]">
+                <CheckCircle2 className="size-3" />
+                All {prepStatus.items.length} Items Prepared &amp; Verified
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 px-2 py-0.5 font-bold uppercase text-[0.6rem]">
+                <Clock className="size-3" />
+                {prepStatus.items.filter((i) => i.prepStatus === 'Completed').length}/{prepStatus.items.length} Items Completed
+              </span>
+            )}
+          </div>
+          <span className="text-[0.62rem] text-muted-foreground font-mono">
+            Event GUID: {summary.eventId}
+          </span>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           Handshake rate <span className="font-semibold text-card-foreground">{summary.handshakePercent}%</span> across{' '}

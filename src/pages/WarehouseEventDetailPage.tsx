@@ -135,6 +135,7 @@ export function WarehouseEventDetailPage({ event, onBack, onOpenModule }: Wareho
         />
 
         <DispatchPanel
+          event={event}
           banner={dispatchBannerFor(batches)}
           batches={batches}
           onNewBatch={handleNewBatch}
