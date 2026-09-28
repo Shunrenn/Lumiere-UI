@@ -8,9 +8,15 @@ import {
   X,
   Search,
   Maximize2,
+  ShieldAlert,
+  AlertTriangle,
 } from 'lucide-react'
 import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
+import {
+  canPerformRoutineRemoval,
+  canPerformOverrideRemoval,
+} from '@/lib/manningApi'
 import {
   useCrewRows,
   getPresetSquads,
@@ -777,10 +783,33 @@ function AssignmentDetailModal({
   onAssignmentClosed?: () => void
 }) {
   const { subRolesByParent } = usePortal()
+  const { adminRole, subRole, hasFullWarehouseAccess } = useAuth()
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [closing, setClosing] = useState(false)
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false)
+  const [removalReason, setRemovalReason] = useState('')
+
+  const isOverride = Boolean(assignment.is_override || assignment.isOverride)
+  const canRoutineRemove = canPerformRoutineRemoval({ role: adminRole, subRole })
+  const canOverrideRemove = canPerformOverrideRemoval({ role: adminRole, subRole, fullWarehouseAccess: hasFullWarehouseAccess })
 
   async function handleCloseAssignment() {
+    const trimmedReason = removalReason.trim()
+    if (!trimmedReason) {
+      setErrorMsg('Mandatory operational reason is required for assignment removal.')
+      return
+    }
+
+    if (isOverride && !canOverrideRemove) {
+      setErrorMsg('Manning Officers cannot remove override assignments. Only Warehouse Operations Managers (WOM) and Administrators can authorize override removal.')
+      return
+    }
+
+    if (!isOverride && !canRoutineRemove) {
+      setErrorMsg('Your current role is not authorized to remove crew assignments.')
+      return
+    }
+
     setErrorMsg(null)
     setClosing(true)
     try {
@@ -794,12 +823,14 @@ function AssignmentDetailModal({
       await closeAssignment(
         assignment.id,
         matched ? { minTeamLeads: matched.minTeamLeads } : undefined,
+        trimmedReason,
+        isOverride,
       )
       onAssignmentClosed?.()
       onClose()
     } catch (err: any) {
-      console.error('[v0] close assignment failed', err)
-      setErrorMsg(err?.message || 'Failed to remove assignment')
+      console.error('[ManningModule] close assignment failed:', err)
+      setErrorMsg(err?.message || 'Failed to remove assignment from backend ledger')
       setClosing(false)
     }
   }
@@ -817,9 +848,16 @@ function AssignmentDetailModal({
       >
         <div className="flex items-start justify-between border-b border-border pb-3">
           <div>
-            <span className="text-[0.58rem] font-bold uppercase tracking-[0.2em] text-primary">
-              Manning Assignment Record
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[0.58rem] font-bold uppercase tracking-[0.2em] text-primary">
+                Manning Assignment Record
+              </span>
+              {isOverride && (
+                <span className="rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[0.6rem] font-bold text-amber-600 dark:text-amber-400">
+                  Manual Override
+                </span>
+              )}
+            </div>
             <h2 className="font-serif text-xl font-medium text-card-foreground">
               {assignment.event_name}
             </h2>
@@ -852,7 +890,9 @@ function AssignmentDetailModal({
             <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
               Status
             </span>
-            <span className="font-bold text-emerald-600">{assignment.status}</span>
+            <span className={cn('font-bold', assignment.status === 'Active' ? 'text-emerald-600' : 'text-muted-foreground')}>
+              {assignment.status}
+            </span>
           </div>
           <div className="rounded-lg border border-border bg-background p-3">
             <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
@@ -893,37 +933,99 @@ function AssignmentDetailModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-border pt-3">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                onExport?.(assignment)
-              }}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-card-foreground hover:bg-accent"
-            >
-              <Download className="size-3.5" />
-              Export Roster (PDF)
-            </button>
-            {assignment.status === 'Active' && (
+        {/* Confirmation Sub-Dialog for Assignment Removal */}
+        {confirmRemoveOpen ? (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-destructive font-semibold text-xs">
+              <AlertTriangle className="size-4 shrink-0" />
+              <span>
+                {isOverride
+                  ? 'Confirm Manual Resource Override Removal (POST /api/manning/{id}/remove-override)'
+                  : 'Confirm Routine Crew Removal (POST /api/manning/{id}/remove)'}
+              </span>
+            </div>
+            <p className="text-[0.72rem] text-muted-foreground">
+              This action will permanently release the assigned crew slots on the authoritative server ledger. A non-blank operational reason is required for the audit trail.
+            </p>
+            <textarea
+              value={removalReason}
+              disabled={closing}
+              onChange={(e) => setRemovalReason(e.target.value)}
+              placeholder="State mandatory operational reason for removing this crew assignment..."
+              rows={2}
+              className="w-full rounded-md border border-input bg-background p-2 text-xs text-foreground outline-none focus:border-destructive"
+            />
+            <div className="flex items-center justify-end gap-2 pt-1">
               <button
                 type="button"
                 disabled={closing}
-                onClick={handleCloseAssignment}
-                className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-destructive hover:bg-destructive/20 disabled:opacity-50"
+                onClick={() => setConfirmRemoveOpen(false)}
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-accent disabled:opacity-50"
               >
-                {closing ? 'Removing...' : 'Remove Assignment'}
+                Back
               </button>
-            )}
+              <button
+                type="button"
+                disabled={!removalReason.trim() || closing}
+                onClick={handleCloseAssignment}
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition',
+                  removalReason.trim() && !closing
+                    ? 'bg-destructive hover:bg-destructive/90'
+                    : 'bg-destructive/40 cursor-not-allowed',
+                )}
+              >
+                {closing ? 'Removing from Ledger...' : 'Confirm Authoritative Removal'}
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-border px-4 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-accent"
-          >
-            Close
-          </button>
-        </div>
+        ) : (
+          <div className="flex items-center justify-between border-t border-border pt-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onExport?.(assignment)
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-card-foreground hover:bg-accent"
+              >
+                <Download className="size-3.5" />
+                Export Roster (PDF)
+              </button>
+
+              {assignment.status === 'Active' && (
+                isOverride && !canOverrideRemove ? (
+                  <div className="flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[0.62rem] text-amber-700 dark:text-amber-400">
+                    <ShieldAlert className="size-3.5 shrink-0" />
+                    <span>Override removal restricted to WOM / Admin</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={closing || (!isOverride && !canRoutineRemove)}
+                    onClick={() => {
+                      setErrorMsg(null)
+                      setRemovalReason('')
+                      setConfirmRemoveOpen(true)
+                    }}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-destructive hover:bg-destructive/20 disabled:opacity-50',
+                    )}
+                  >
+                    {isOverride ? 'Remove Override Assignment' : 'Remove Assignment'}
+                  </button>
+                )
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-border px-4 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-accent"
+            >
+              Close
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

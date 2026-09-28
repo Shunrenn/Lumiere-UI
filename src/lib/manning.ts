@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { isTeamLead, isTeamLeadToday, QUALIFIED_LEAD_ROLES } from '@/lib/warehouse-crew'
+import { removeManningApi, removeManningOverrideApi } from './manningApi'
 
 // =====================================================================
 // Manning & SLA engine + Incident Reporting data access
@@ -52,6 +53,8 @@ export interface ManningAssignment {
   inherited_from: string | null
   notes: string | null
   status: 'Active' | 'Closed'
+  is_override?: boolean
+  isOverride?: boolean
   created_by: string | null
   created_at: string
 }
@@ -497,16 +500,6 @@ export async function createAssignment(
     )
   }
 
-  const { data, error } = await supabase
-    .from('manning_assignments')
-    .insert(input)
-    .select('*')
-    .single()
-  if (!error && data) {
-    localAssignments = dedupeActiveAssignments([data as ManningAssignment, ...localAssignments])
-    return data as ManningAssignment
-  }
-
   const now = new Date().toISOString()
   const fallback: ManningAssignment = {
     id: `preset-assignment-${Date.now()}`,
@@ -526,7 +519,6 @@ export async function createAssignment(
   }
   localAssignments = dedupeActiveAssignments([fallback, ...localAssignments])
   manningUsingPreset = true
-  console.warn('[v0] Assignment save unavailable; applied the assignment to preset data.', error)
   return fallback
 }
 
@@ -591,6 +583,8 @@ export async function inheritAssignment(
 export async function closeAssignment(
   id: string,
   quotaConfig?: { minTeamLeads?: number },
+  reason: string = 'Routine operational removal',
+  isOverride: boolean = false,
 ): Promise<void> {
   const target = localAssignments.find((a) => a.id === id)
   if (target && target.status === 'Active' && Boolean(target.lead_name?.trim())) {
@@ -612,14 +606,15 @@ export async function closeAssignment(
     }
   }
 
-  try {
-    const { error } = await supabase
-      .from('manning_assignments')
-      .update({ status: 'Closed' })
-      .eq('id', id)
-    if (error) console.warn('[v0] Supabase close assignment fallback:', error)
-  } catch (e) {
-    console.warn('[v0] Failed to close assignment in Supabase; updating local state.', e)
+  // Call authoritative backend Manning API for valid backend GUID assignments
+  const isGuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id)
+  if (isGuid) {
+    const res = isOverride
+      ? await removeManningOverrideApi(id, reason)
+      : await removeManningApi(id, reason)
+    if (!res.success) {
+      throw new Error(res.error)
+    }
   }
 
   localAssignments = localAssignments.map((a) => (a.id === id ? { ...a, status: 'Closed' } : a))
@@ -683,20 +678,6 @@ export async function handleCrewLeaveAutoRelease(
         notes: a.notes ? `${a.notes} | ${autoNote}` : autoNote,
       }
     })
-
-    // Try updating Supabase if connected
-    try {
-      await supabase
-        .from('manning_assignments')
-        .update({
-          member_names: updatedMembers,
-          lead_name: nextLeadName,
-          status: nextStatus,
-        })
-        .eq('id', assignment.id)
-    } catch (e) {
-      console.warn('[v0] Supabase auto-release assignment sync fallback:', e)
-    }
 
     // Evaluate Team Lead quota deficit (Foundation F minimum quota threshold)
     const subRole = assignment.sub_role || 'General'
