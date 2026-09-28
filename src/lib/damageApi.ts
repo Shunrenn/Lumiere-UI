@@ -3,11 +3,15 @@ import type {
   DamageSelfValidationRecord,
   SubRoleEmergencyUnblockMetadata,
   DamageVerdict,
+  HavaDeclarationState,
+  HavaEvidenceStatus,
+  DamageReportAmendment,
 } from './types'
 import { API_BASE_URL, getAuthToken } from './apiConfig'
 import { isGuid } from './eventsApi'
 
 const BASE_URL = `${API_BASE_URL}/api/damage-reports`
+const HAVA_URL = `${API_BASE_URL}/api/hava`
 
 /**
  * Authoritative backend create request for POST /api/damage-reports
@@ -29,6 +33,17 @@ export interface CreateDamageReportRequest {
   idempotencyKey?: string // UUID / unique request key
 }
 
+export interface DamageReportAmendmentDto {
+  id: string
+  fromVersion: number
+  toVersion: number
+  reason: string
+  previousValues: string
+  correctedValues: string
+  correctedBy: string
+  correctedAt: string
+}
+
 /**
  * Authoritative backend DamageReportResponse contract from C# API
  */
@@ -46,7 +61,8 @@ export interface DamageReportResponseDto {
   isTemporallyValid: boolean
   noPhotographicEvidence: boolean
   damagedQuantity: number
-  reportStatus: string
+  reportStatus?: string
+  status?: string
   severity?: string
   liabilityParty?: string
   linkedExceptionId?: string
@@ -63,6 +79,21 @@ export interface DamageReportResponseDto {
   selfValidation?: string
   emergencyUnblockMetadata?: string
   idempotencyKey?: string
+
+  // Authoritative HAVA contract fields
+  evidenceStatus?: HavaEvidenceStatus | string
+  captureTimestamp?: string
+  evidenceProcessedAt?: string
+  evidenceDerivationError?: string
+  captureSource?: string
+  operationalCheckpoint?: string
+  declarationState?: HavaDeclarationState | string
+  lastEditedAt?: string
+  reviewDeadlineAt?: string
+  finalizedAt?: string
+  isEditable?: boolean
+  version?: number
+  amendments?: DamageReportAmendmentDto[]
 }
 
 export type SubmitDamageReportResult =
@@ -91,8 +122,8 @@ function getHeaders(idempotencyKey?: string): HeadersInit {
 /**
  * Maps authoritative DamageReportResponseDto from backend to frontend DamageException.
  * Note on HAVA boundary:
- * exifVerified is intentionally set to false — photo presence alone NEVER proves temporal validity.
- * Evidence is presented neutrally as "Photo Attached" or "No Photographic Evidence".
+ * Evidence temporal status (Temporally Valid, Temporally Invalid, Unverifiable)
+ * is derived exclusively by the backend, never fabricated on the client.
  */
 export function mapBackendDtoToDamageException(dto: DamageReportResponseDto): DamageException {
   const shortId = dto.id ? dto.id.slice(0, 4).toUpperCase() : '800'
@@ -101,6 +132,31 @@ export function mapBackendDtoToDamageException(dto: DamageReportResponseDto): Da
     : dto.noPhotographicEvidence
     ? 'No photo — GPS not captured'
     : 'GPS not captured'
+
+  // Authoritative temporal evidence status from backend
+  const evidenceStatus: HavaEvidenceStatus | string =
+    dto.evidenceStatus ||
+    (dto.noPhotographicEvidence
+      ? 'No Photographic Evidence'
+      : dto.isTemporallyValid
+      ? 'Temporally Valid'
+      : 'Unverifiable')
+
+  const declarationState: HavaDeclarationState =
+    (dto.declarationState as HavaDeclarationState) || 'Finalized'
+
+  const amendments: DamageReportAmendment[] = Array.isArray(dto.amendments)
+    ? dto.amendments.map((a) => ({
+        id: a.id,
+        fromVersion: a.fromVersion,
+        toVersion: a.toVersion,
+        reason: a.reason,
+        previousValues: typeof a.previousValues === 'string' ? a.previousValues : JSON.stringify(a.previousValues),
+        correctedValues: typeof a.correctedValues === 'string' ? a.correctedValues : JSON.stringify(a.correctedValues),
+        correctedBy: a.correctedBy,
+        correctedAt: a.correctedAt,
+      }))
+    : []
 
   return {
     id: dto.id,
@@ -111,20 +167,24 @@ export function mapBackendDtoToDamageException(dto: DamageReportResponseDto): Da
     reportingOfficer: dto.submittedBy ? `Officer ${dto.submittedBy.slice(0, 6)}` : 'Ground Crew Member',
     officerRole: 'GROUND CREW',
     assetName: dto.assetName || 'Asset Item',
-    assetSku: `ID: ${dto.assetId.slice(0, 8).toUpperCase()}`,
+    assetSku: `ID: ${dto.assetId ? dto.assetId.slice(0, 8).toUpperCase() : 'ASSET'}`,
     damageType: dto.severity || 'Critical',
     damagedQuantity: dto.damagedQuantity ?? 1,
     photoUrl: dto.photoUrl || '',
     imageUrl: dto.photoUrl || '',
     gps: gpsDisplay,
-    capturedAt: dto.submittedAt ? new Date(dto.submittedAt).toLocaleDateString() : 'Just now',
-    // CRITICAL HAVA BOUNDARY:
-    // Never infer verified merely because a photo exists.
-    exifVerified: false,
-    evidenceStatus: dto.noPhotographicEvidence ? 'No Photographic Evidence' : 'Photo Evidence Attached',
+    capturedAt: dto.captureTimestamp
+      ? new Date(dto.captureTimestamp).toLocaleString()
+      : dto.submittedAt
+      ? new Date(dto.submittedAt).toLocaleDateString()
+      : 'Just now',
+    // Authoritative server-derived temporal validity
+    exifVerified: Boolean(dto.isTemporallyValid),
+    evidenceStatus,
+    isTemporallyValid: Boolean(dto.isTemporallyValid),
     estimatedCost: dto.repairCostEstimate ?? 150,
     notes: dto.supervisorVerdict ? `Supervisor Verdict: ${dto.supervisorVerdict}` : 'Condition inspection recorded',
-    status: (dto.reportStatus || 'Pending Verdict') as DamageVerdict,
+    status: ((dto.status || dto.reportStatus || 'Pending Verdict') as DamageVerdict),
     noPhotographicEvidence: dto.noPhotographicEvidence ?? false,
     firstSignOff: dto.firstSignOff ? JSON.parseSafe(dto.firstSignOff) : undefined,
     secondSignOff: dto.secondSignOff ? JSON.parseSafe(dto.secondSignOff) : undefined,
@@ -134,6 +194,21 @@ export function mapBackendDtoToDamageException(dto: DamageReportResponseDto): Da
     sha256Hash: dto.sha256Hash || undefined,
     exifMetadata: dto.exifMetadata || undefined,
     gpsCoordinates: dto.gpsCoordinates || undefined,
+    declarationState,
+    reviewDeadlineAt: dto.reviewDeadlineAt,
+    finalizedAt: dto.finalizedAt,
+    lastEditedAt: dto.lastEditedAt,
+    isEditable: dto.isEditable,
+    version: dto.version ?? 1,
+    captureTimestamp: dto.captureTimestamp,
+    evidenceProcessedAt: dto.evidenceProcessedAt,
+    evidenceDerivationError: dto.evidenceDerivationError,
+    captureSource: dto.captureSource,
+    operationalCheckpoint: dto.operationalCheckpoint,
+    idempotencyKey: dto.idempotencyKey,
+    submittedBy: dto.submittedBy,
+    submittedAt: dto.submittedAt,
+    amendments,
   }
 }
 
@@ -473,4 +548,225 @@ export async function checkSettlementBlockedBackend(eventId: string): Promise<{ 
     console.warn(`[damageApi] checkSettlementBlockedBackend failed for ${eventId}:`, err)
     throw err
   }
+}
+
+/**
+ * Edit an existing declaration during the authoritative Declaration Review Window.
+ * Ground Crew only. Rejects with 409 DECLARATION_FINALIZED if window has passed.
+ */
+export interface EditDamageReportRequest {
+  damagedQuantity: number
+  photoUrl?: string
+  noPhotographicEvidence?: boolean
+  severity?: string
+  liabilityParty?: string
+  sha256Hash?: string
+  exifMetadata?: string
+  gpsCoordinates?: string
+  captureSource?: string
+  expectedVersion: number
+}
+
+export type EditDamageReportResult =
+  | { kind: 'success'; report: DamageException; raw: DamageReportResponseDto }
+  | { kind: 'finalized'; message: string }
+  | { kind: 'stale_version'; message: string }
+  | { kind: 'forbidden'; message: string }
+  | { kind: 'validation_error'; message: string }
+  | { kind: 'not_found'; message: string }
+  | { kind: 'error'; message: string; statusCode?: number }
+
+export async function editDamageReportApi(
+  reportId: string,
+  request: EditDamageReportRequest,
+): Promise<EditDamageReportResult> {
+  if (!isGuid(reportId)) {
+    return {
+      kind: 'validation_error',
+      message: `Invalid reportId "${reportId}". Must be a canonical GUID.`,
+    }
+  }
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 12000)
+
+  try {
+    const res = await fetch(`${BASE_URL}/${encodeURIComponent(reportId)}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(request),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+
+    if (res.ok) {
+      const data: DamageReportResponseDto = await res.json()
+      const report = mapBackendDtoToDamageException(data)
+      return { kind: 'success', report, raw: data }
+    }
+
+    const body = await res.json().catch(() => ({}))
+    const code = body.code || body.Code
+    const message = body.error || body.Error || body.message || `Failed to edit report (HTTP ${res.status})`
+
+    if (res.status === 409) {
+      if (code === 'DECLARATION_FINALIZED') {
+        return { kind: 'finalized', message }
+      }
+      if (code === 'STALE_VERSION') {
+        return { kind: 'stale_version', message }
+      }
+      return { kind: 'error', message, statusCode: 409 }
+    }
+
+    if (res.status === 403) {
+      return { kind: 'forbidden', message }
+    }
+
+    if (res.status === 400) {
+      return { kind: 'validation_error', message }
+    }
+
+    if (res.status === 404) {
+      return { kind: 'not_found', message }
+    }
+
+    return { kind: 'error', message, statusCode: res.status }
+  } catch (err: any) {
+    clearTimeout(timeoutId)
+    return { kind: 'error', message: err?.message || 'Network error connecting to Damage service' }
+  }
+}
+
+/**
+ * Supervisory amendment for finalized declarations.
+ * Warehouse Operations Manager or Admin only. Requires explicit reason (>= 10 chars).
+ */
+export interface AmendDamageReportRequest {
+  reason: string
+  damagedQuantity?: number
+  severity?: string
+  liabilityParty?: string
+  settlementDueAt?: string
+  expectedVersion: number
+}
+
+export type AmendDamageReportResult =
+  | { kind: 'success'; report: DamageException; raw: DamageReportResponseDto }
+  | { kind: 'not_finalized'; message: string }
+  | { kind: 'stale_version'; message: string }
+  | { kind: 'forbidden'; message: string }
+  | { kind: 'validation_error'; message: string }
+  | { kind: 'not_found'; message: string }
+  | { kind: 'error'; message: string; statusCode?: number }
+
+export async function amendDamageReportApi(
+  reportId: string,
+  request: AmendDamageReportRequest,
+): Promise<AmendDamageReportResult> {
+  if (!isGuid(reportId)) {
+    return {
+      kind: 'validation_error',
+      message: `Invalid reportId "${reportId}". Must be a canonical GUID.`,
+    }
+  }
+
+  if (!request.reason || request.reason.trim().length < 10) {
+    return {
+      kind: 'validation_error',
+      message: 'Supervisory amendment requires a substantial operational reason (minimum 10 characters).',
+    }
+  }
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 12000)
+
+  try {
+    const res = await fetch(`${BASE_URL}/${encodeURIComponent(reportId)}/amendments`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(request),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+
+    if (res.ok) {
+      const data: DamageReportResponseDto = await res.json()
+      const report = mapBackendDtoToDamageException(data)
+      return { kind: 'success', report, raw: data }
+    }
+
+    const body = await res.json().catch(() => ({}))
+    const code = body.code || body.Code
+    const message = body.error || body.Error || body.message || `Failed to amend report (HTTP ${res.status})`
+
+    if (res.status === 409) {
+      if (code === 'STALE_VERSION') {
+        return { kind: 'stale_version', message }
+      }
+      return { kind: 'error', message, statusCode: 409 }
+    }
+
+    if (res.status === 400 && message.toLowerCase().includes('finalized')) {
+      return { kind: 'not_finalized', message }
+    }
+
+    if (res.status === 403) {
+      return { kind: 'forbidden', message }
+    }
+
+    if (res.status === 400) {
+      return { kind: 'validation_error', message }
+    }
+
+    if (res.status === 404) {
+      return { kind: 'not_found', message }
+    }
+
+    return { kind: 'error', message, statusCode: res.status }
+  } catch (err: any) {
+    clearTimeout(timeoutId)
+    return { kind: 'error', message: err?.message || 'Network error connecting to Damage service' }
+  }
+}
+
+/**
+ * Fetch a single damage report by canonical GUID (also runs server-side FinalizeIfExpired).
+ */
+export async function getDamageReportByIdApi(reportId: string): Promise<DamageException> {
+  if (!isGuid(reportId)) {
+    throw new Error(`Invalid reportId "${reportId}". Must be a canonical GUID.`)
+  }
+
+  const res = await fetch(`${BASE_URL}/${encodeURIComponent(reportId)}`, {
+    headers: getHeaders(),
+  })
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}))
+    const msg = errBody.error || errBody.Error || res.statusText
+    throw new Error(`Failed to fetch damage report: ${msg}`)
+  }
+
+  const raw: DamageReportResponseDto = await res.json()
+  return mapBackendDtoToDamageException(raw)
+}
+
+export interface HavaPolicyResponse {
+  declarationReviewWindowMinutes: number
+  version: number
+  updatedAt: string
+  updatedBy?: string
+}
+
+/**
+ * Fetches authoritative HAVA policy configuration from /api/hava/policy
+ */
+export async function getHavaPolicyApi(): Promise<HavaPolicyResponse> {
+  const res = await fetch(`${HAVA_URL}/policy`, {
+    headers: getHeaders(),
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to fetch HAVA policy: HTTP ${res.status}`)
+  }
+  return res.json()
 }

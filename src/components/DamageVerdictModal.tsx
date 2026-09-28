@@ -17,9 +17,15 @@ import {
   UserCheck2,
   ChevronLeft,
   ChevronRight,
+  Clock,
+  History,
+  FileEdit,
+  RefreshCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { DamageException, DamageVerdict } from '@/lib/types'
+import { StatusBadge } from '@/components/StatusBadge'
+import { usePortal } from '@/lib/store'
 
 type ResolvableVerdict = Exclude<DamageVerdict, 'Pending Verdict'>
 
@@ -115,9 +121,19 @@ export function DamageVerdictModal({
 }: Props) {
   if (!exception) return null
 
+  const { amendDamageReport, refetchDamageReport } = usePortal()
+
   const [note, setNote] = useState('')
   const [pendingVerdict, setPendingVerdict] = useState<ResolvableVerdict | null>(null)
   const [currentImgIndex, setCurrentImgIndex] = useState(0)
+
+  // Supervisory amendment states
+  const [showAmendModal, setShowAmendModal] = useState(false)
+  const [amendReason, setAmendReason] = useState('')
+  const [amendQuantity, setAmendQuantity] = useState(exception.damagedQuantity ?? 1)
+  const [amendDamageType, setAmendDamageType] = useState(exception.damageType)
+  const [amendError, setAmendError] = useState<string | null>(null)
+  const [isAmending, setIsAmending] = useState(false)
 
   const allImages = useMemo(() => {
     if (exception.images && exception.images.length > 0) return exception.images
@@ -135,6 +151,10 @@ export function DamageVerdictModal({
   const [showHighFrictionWarning, setShowHighFrictionWarning] = useState(false)
   const [ackChecked, setAckChecked] = useState(false)
 
+  const isReviewable = exception.declarationState === 'Reviewable'
+  const isFinalized = exception.declarationState === 'Finalized'
+  const canAmend = editable && isFinalized
+
   useEffect(() => {
     setNote('')
     setPendingVerdict(null)
@@ -142,6 +162,11 @@ export function DamageVerdictModal({
     setShowEmergencyModal(false)
     setShowHighFrictionWarning(false)
     setAckChecked(false)
+    setShowAmendModal(false)
+    setAmendReason('')
+    setAmendError(null)
+    setAmendQuantity(exception.damagedQuantity ?? 1)
+    setAmendDamageType(exception.damageType)
 
     if (!exception) return
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -150,6 +175,38 @@ export function DamageVerdictModal({
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [exception])
+
+  const handleAmend = async () => {
+    if (amendReason.trim().length < 10) {
+      setAmendError('A reason of at least 10 characters is required for supervisory amendments.')
+      return
+    }
+    setIsAmending(true)
+    setAmendError(null)
+    try {
+      const res = await amendDamageReport(exception.id, {
+        reason: amendReason.trim(),
+        expectedVersion: exception.version ?? 1,
+        damagedQuantity: amendQuantity,
+        severity: amendDamageType,
+      })
+      if (res.kind === 'success') {
+        setShowAmendModal(false)
+        await refetchDamageReport(exception.id)
+      } else if (res.kind === 'stale_version') {
+        setAmendError(
+          'Version Conflict (409 STALE_VERSION): This declaration was modified elsewhere. The current authoritative state has been refetched. Please review updated values before reapplying.',
+        )
+        await refetchDamageReport(exception.id)
+      } else {
+        setAmendError(res.message || 'Failed to submit supervisory amendment.')
+      }
+    } catch (err: any) {
+      setAmendError(err.message || 'An unexpected error occurred while submitting amendment.')
+    } finally {
+      setIsAmending(false)
+    }
+  }
 
   const showControls = editable
   const isHeldForAudit = exception.status === 'Held for Audit'
@@ -268,6 +325,33 @@ export function DamageVerdictModal({
 
         {/* Body */}
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
+          {/* Declaration Review Window Banner (Provisional State) */}
+          {isReviewable && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50/90 dark:border-amber-900/60 dark:bg-amber-950/40 p-4">
+              <div className="flex items-start gap-3">
+                <Clock className="size-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-xs text-amber-950 dark:text-amber-200 uppercase tracking-wider">
+                      Provisional Declaration · Server Review Window Active
+                    </span>
+                    <StatusBadge variant="warning" showDot={false}>
+                      Reviewable
+                    </StatusBadge>
+                  </div>
+                  <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                    Persistence ≠ Finality. This damage declaration was durably saved by Ground Crew but remains provisional and reviewable until the authoritative server deadline. Ground crew may correct permitted fields. Supervisory verdicts remain locked until finalization.
+                  </p>
+                  {exception.reviewDeadlineAt && (
+                    <p className="text-[0.68rem] font-mono text-amber-900 dark:text-amber-400">
+                      Authoritative Server Deadline: {new Date(exception.reviewDeadlineAt).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Field-captured evidence photo uploaded by ground crew */}
           {exception.noPhotographicEvidence ? (
             <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
@@ -384,28 +468,72 @@ export function DamageVerdictModal({
                   )}
                 </p>
               </div>
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[0.55rem] font-bold uppercase tracking-[0.1em]',
-                  exception.noPhotographicEvidence || (!exception.photoUrl && !exception.sha256Hash)
-                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
-                    : 'bg-muted text-muted-foreground border border-border',
+              <div className="flex flex-col items-end gap-1">
+                {exception.noPhotographicEvidence || (!exception.photoUrl && !exception.sha256Hash) ? (
+                  <StatusBadge variant="neutral" icon={<Ban className="size-3" />}>
+                    No Photo Attached
+                  </StatusBadge>
+                ) : exception.evidenceStatus === 'Temporally Valid' ? (
+                  <StatusBadge variant="success" icon={<ShieldCheck className="size-3" />}>
+                    Temporally Valid
+                  </StatusBadge>
+                ) : exception.evidenceStatus === 'Temporally Invalid' ? (
+                  <StatusBadge variant="destructive" icon={<AlertTriangle className="size-3" />}>
+                    Temporally Invalid
+                  </StatusBadge>
+                ) : (
+                  <StatusBadge variant="warning" icon={<ShieldAlert className="size-3" />}>
+                    Unverifiable
+                  </StatusBadge>
                 )}
-              >
-                <ShieldCheck className="size-3" />
-                {exception.noPhotographicEvidence || (!exception.photoUrl && !exception.sha256Hash)
-                  ? 'No Photographic Evidence'
-                  : 'Photo Evidence Attached'}
+                <span className="text-[0.55rem] text-muted-foreground">
+                  {isReviewable ? (
+                    <span className="text-amber-600 dark:text-amber-400 font-semibold">Provisional (Reviewable)</span>
+                  ) : (
+                    <span>Finalized (v{exception.version ?? 1})</span>
+                  )}
+                </span>
+              </div>
+            </div>
+
+            {/* Concise operational explanation for temporal evidence status */}
+            {!exception.noPhotographicEvidence && (exception.photoUrl || exception.sha256Hash) && (
+              <div className="mt-2.5 rounded border border-border/60 bg-background/50 px-3 py-1.5 text-[0.62rem] text-muted-foreground">
+                {exception.evidenceStatus === 'Temporally Valid' ? (
+                  <p className="text-emerald-700 dark:text-emerald-300">
+                    <strong>Temporal Integrity:</strong> Photo capture timestamp independently verified within event operational window by backend.
+                  </p>
+                ) : exception.evidenceStatus === 'Temporally Invalid' ? (
+                  <p className="text-rose-700 dark:text-rose-300">
+                    <strong>Temporal Integrity:</strong> Photo capture timestamp fell outside the authorized operational window ({exception.evidenceDerivationError || 'Timestamp out of range'}).
+                  </p>
+                ) : (
+                  <p className="text-amber-700 dark:text-amber-300">
+                    <strong>Temporal Integrity:</strong> System lacks sufficient trustworthy metadata to establish temporal validity ({exception.evidenceDerivationError || 'No verifiable camera timestamp'}). Unverifiable does not imply physical fabrication.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Bulk damage invariant explanation */}
+            <div className="mt-2.5 flex items-center justify-between border-t border-border/60 pt-2.5 text-[0.62rem]">
+              <span className="text-muted-foreground">
+                <strong>Bulk Invariant:</strong> Photo provides condition evidence; numeric quantity ({exception.damagedQuantity ?? 1}) governs accountability.
               </span>
             </div>
 
-            {/* SHA-256 fingerprint row — only shown when populated */}
+            {/* SHA-256 transport payload checksum — truthful trust boundary */}
             {exception.sha256Hash && (
-              <div className="mt-3 border-t border-border/60 pt-3">
-                <p className="text-[0.58rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  SHA-256 Fingerprint
-                </p>
-                <p className="mt-0.5 break-all font-mono text-[0.6rem] text-emerald-700 dark:text-emerald-400">
+              <div className="mt-2.5 border-t border-border/60 pt-2.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-[0.58rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    Transport Payload Digest (Client SHA-256 Checksum)
+                  </p>
+                  <span className="text-[0.55rem] text-muted-foreground italic">
+                    Network integrity check · Not photographic proof
+                  </span>
+                </div>
+                <p className="mt-0.5 break-all font-mono text-[0.6rem] text-muted-foreground">
                   {exception.sha256Hash}
                 </p>
               </div>
@@ -458,6 +586,46 @@ export function DamageVerdictModal({
             </div>
           )}
 
+          {/* Supervisory Amendment Audit History */}
+          {exception.amendments && exception.amendments.length > 0 && (
+            <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-4">
+              <div className="flex items-center gap-2">
+                <History className="size-4 text-primary" />
+                <p className="text-[0.58rem] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+                  Authoritative Amendment Ledger ({exception.amendments.length})
+                </p>
+              </div>
+              <div className="space-y-2 pt-1">
+                {exception.amendments.map((am) => (
+                  <div key={am.id} className="rounded-md border border-border/60 bg-card p-3 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between text-[0.6rem] text-muted-foreground">
+                      <span className="font-semibold text-card-foreground">
+                        {am.correctedBy || 'Warehouse Supervisor'}
+                      </span>
+                      <span className="font-mono">{new Date(am.correctedAt).toLocaleString()}</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-[0.68rem] text-card-foreground">
+                      {am.previousValues && (
+                        <span>
+                          Prior: <span className="font-mono text-muted-foreground">{am.previousValues}</span>
+                        </span>
+                      )}
+                      {am.correctedValues && (
+                        <span>
+                          Corrected: <span className="font-mono text-primary font-semibold">{am.correctedValues}</span>
+                        </span>
+                      )}
+                      <span className="text-[0.58rem] font-mono text-muted-foreground">Version v{am.fromVersion} → v{am.toVersion}</span>
+                    </div>
+                    <p className="text-[0.68rem] italic text-muted-foreground bg-muted/40 p-2 rounded">
+                      "{am.reason}"
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Supervisory note — editable when in edit mode for pending reports */}
           <div>
             <label
@@ -470,12 +638,12 @@ export function DamageVerdictModal({
               id="verdict-note"
               value={note}
               onChange={(e) => showControls && setNote(e.target.value)}
-              readOnly={!showControls}
+              readOnly={!showControls || isReviewable}
               rows={3}
-              placeholder={showControls ? "Document the rationale for this verdict or sign-off..." : ""}
+              placeholder={isReviewable ? "Supervisory sign-off note locked while in declaration review window..." : showControls ? "Document the rationale for this verdict or sign-off..." : ""}
               className={cn(
                 "mt-2 w-full resize-none rounded-md border px-3 py-2 text-xs outline-none",
-                showControls
+                showControls && !isReviewable
                   ? "border-input bg-card text-foreground focus:border-primary focus:ring-2 focus:ring-ring/30"
                   : "border-input bg-muted text-muted-foreground"
               )}
@@ -552,62 +720,89 @@ export function DamageVerdictModal({
         </div>
 
         {/* Footer */}
-        <div className="flex flex-col items-stretch gap-3 border-t border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-end shrink-0">
-          {showControls && exception.status === 'Pending Verdict' ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setPendingVerdict('Dismissed')}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-card px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition hover:border-destructive/50 hover:text-destructive"
-              >
-                <XCircle className="size-3.5" />
-                Dismiss Claim
-              </button>
-              <button
-                type="button"
-                onClick={() => setPendingVerdict('Held for Audit')}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-amber-800 transition hover:bg-amber-100"
-              >
-                <Scale className="size-3.5" />
-                Hold for Audit
-              </button>
-              <button
-                type="button"
-                onClick={() => setPendingVerdict('Validated')}
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-primary-foreground transition hover:opacity-90"
-              >
-                <CheckCircle2 className="size-3.5" />
-                Validate Damage
-              </button>
-            </>
-          ) : showControls && (isHeldForAudit || isPendingSecondSignOff) && !isStrictBlock ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setPendingVerdict('Write-off')}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-card px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition hover:border-destructive/50 hover:text-destructive"
-              >
-                <Ban className="size-3.5" />
-                Sign Off · Write-off
-              </button>
-              <button
-                type="button"
-                onClick={() => setPendingVerdict('Repair')}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-sky-300 bg-sky-50 px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-sky-700 transition hover:bg-sky-100"
-              >
-                <Wrench className="size-3.5" />
-                Sign Off · Repair
-              </button>
-            </>
+        <div className="flex flex-col items-stretch gap-3 border-t border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between shrink-0">
+          {isReviewable ? (
+            <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300">
+              <Clock className="size-4 shrink-0" />
+              <span>Declaration in Review Window. Supervisory sign-offs locked until finalized.</span>
+            </div>
           ) : (
-            <button
-              type="button"
-              onClick={closeAll}
-              className="rounded-md bg-primary px-6 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-primary-foreground transition hover:opacity-90"
-            >
-              Close
-            </button>
+            <div className="flex items-center gap-2">
+              {canAmend && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAmendReason('')
+                    setAmendQuantity(exception.damagedQuantity ?? 1)
+                    setAmendDamageType(exception.damageType)
+                    setAmendError(null)
+                    setShowAmendModal(true)
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-[0.68rem] font-semibold uppercase tracking-wider text-card-foreground hover:bg-muted"
+                >
+                  <History className="size-3.5 text-primary" />
+                  Supervisory Amendment
+                </button>
+              )}
+            </div>
           )}
+          <div className="flex items-center justify-end gap-2">
+            {!isReviewable && showControls && exception.status === 'Pending Verdict' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setPendingVerdict('Dismissed')}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-card px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition hover:border-destructive/50 hover:text-destructive"
+                >
+                  <XCircle className="size-3.5" />
+                  Dismiss Claim
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingVerdict('Held for Audit')}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-amber-800 transition hover:bg-amber-100"
+                >
+                  <Scale className="size-3.5" />
+                  Hold for Audit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingVerdict('Validated')}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-primary-foreground transition hover:opacity-90"
+                >
+                  <CheckCircle2 className="size-3.5" />
+                  Validate Damage
+                </button>
+              </>
+            ) : !isReviewable && showControls && (isHeldForAudit || isPendingSecondSignOff) && !isStrictBlock ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setPendingVerdict('Write-off')}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-card px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition hover:border-destructive/50 hover:text-destructive"
+                >
+                  <Ban className="size-3.5" />
+                  Sign Off · Write-off
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingVerdict('Repair')}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-sky-300 bg-sky-50 px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-sky-700 transition hover:bg-sky-100"
+                >
+                  <Wrench className="size-3.5" />
+                  Sign Off · Repair
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={closeAll}
+                className="rounded-md bg-primary px-6 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-primary-foreground transition hover:opacity-90"
+              >
+                Close
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -832,6 +1027,157 @@ export function DamageVerdictModal({
                 className="rounded-md bg-destructive px-5 py-2 text-xs font-bold uppercase tracking-wider text-destructive-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Confirm Permanent Change
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Supervisory Amendment Modal */}
+      {showAmendModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={(e) => {
+            e.stopPropagation()
+            if (!isAmending) setShowAmendModal(false)
+          }}
+        >
+          <div
+            className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <FileEdit className="size-5 text-primary" />
+                <h3 className="font-serif text-lg font-medium text-card-foreground">
+                  Authoritative Supervisory Amendment
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isAmending && setShowAmendModal(false)}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="Close"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+              This declaration is <strong>Finalized</strong>. Ordinary crew editing is locked. As an authorized supervisor, you may record an audited amendment to correct values. This action requires a mandatory operational rationale and increments the authoritative version.
+            </p>
+
+            {amendError && (
+              <div className="mt-3 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+                <p>{amendError}</p>
+              </div>
+            )}
+
+            <div className="mt-4 space-y-4">
+              <div className="grid grid-cols-2 gap-3 rounded-lg border border-border/80 bg-muted/30 p-3 text-xs">
+                <div>
+                  <p className="text-[0.58rem] font-semibold uppercase tracking-wider text-muted-foreground">Current Version</p>
+                  <p className="font-mono font-bold text-card-foreground">v{exception.version ?? 1}</p>
+                </div>
+                <div>
+                  <p className="text-[0.58rem] font-semibold uppercase tracking-wider text-muted-foreground">Declaration Status</p>
+                  <p className="font-semibold text-emerald-600">Finalized</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground">
+                  Damaged Quantity (Bulk Accountability)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={amendQuantity}
+                  onChange={(e) => setAmendQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="mt-1 w-full rounded border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+                />
+                <p className="mt-1 text-[0.55rem] text-muted-foreground">
+                  Previous value: {exception.damagedQuantity ?? 1} unit(s)
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground">
+                  Damage Type / Severity
+                </label>
+                <input
+                  type="text"
+                  value={amendDamageType}
+                  onChange={(e) => setAmendDamageType(e.target.value)}
+                  placeholder="e.g. Scratched surface, Broken frame"
+                  className="mt-1 w-full rounded border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+                />
+                <p className="mt-1 text-[0.55rem] text-muted-foreground">
+                  Previous value: {exception.damageType}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground">
+                  Mandatory Supervisory Rationale (≥10 characters)
+                </label>
+                <textarea
+                  rows={3}
+                  value={amendReason}
+                  onChange={(e) => setAmendReason(e.target.value)}
+                  placeholder="Detail the operational reason for this supervisory amendment..."
+                  className="mt-1 w-full rounded border border-input bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
+                />
+                <div className="mt-1 flex items-center justify-between text-[0.58rem]">
+                  <span className={amendReason.trim().length >= 10 ? 'text-emerald-600 font-semibold' : 'text-amber-600 font-semibold'}>
+                    {amendReason.trim().length} / 10 characters minimum
+                  </span>
+                  {amendReason.trim().length >= 10 && <span className="text-emerald-600 font-bold">✓ Valid Rationale</span>}
+                </div>
+              </div>
+
+              {/* Effective values preview */}
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs space-y-1">
+                <p className="text-[0.58rem] font-bold uppercase tracking-wider text-primary">Effective Values Confirmation Preview</p>
+                <p className="text-[0.65rem] text-card-foreground">
+                  Quantity: <strong className="line-through text-muted-foreground">{exception.damagedQuantity ?? 1}</strong> → <strong className="text-primary">{amendQuantity}</strong>
+                </p>
+                <p className="text-[0.65rem] text-card-foreground">
+                  Damage Type: <strong className="line-through text-muted-foreground">{exception.damageType}</strong> → <strong className="text-primary">{amendDamageType}</strong>
+                </p>
+                <p className="text-[0.65rem] text-card-foreground">
+                  Authoritative Version: <strong>v{exception.version ?? 1}</strong> → <strong className="text-primary">v{(exception.version ?? 1) + 1}</strong>
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3 border-t border-border pt-4">
+              <button
+                type="button"
+                disabled={isAmending}
+                onClick={() => setShowAmendModal(false)}
+                className="rounded-md border border-border px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isAmending || amendReason.trim().length < 10}
+                onClick={handleAmend}
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2 text-xs font-bold uppercase tracking-wider text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAmending ? (
+                  <>
+                    <RefreshCw className="size-3.5 animate-spin" />
+                    Amending...
+                  </>
+                ) : (
+                  <>
+                    <FileEdit className="size-3.5" />
+                    Confirm Authoritative Amendment
+                  </>
+                )}
               </button>
             </div>
           </div>

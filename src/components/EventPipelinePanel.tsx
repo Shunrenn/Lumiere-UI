@@ -97,7 +97,11 @@ export function EventPipelinePanel({
     (d) => d.boundEvent === event.title || d.boundEvent === event.id || d.boundEvent.includes(event.title)
   )
   const blockingExceptions = boundExceptions.filter(
-    (d) => d.status === 'Pending Verdict' || d.status === 'Held for Audit' || d.status === 'Pending Second Sign-off'
+    (d) =>
+      d.declarationState === 'Reviewable' ||
+      d.status === 'Pending Verdict' ||
+      d.status === 'Held for Audit' ||
+      d.status === 'Pending Second Sign-off'
   )
   const portalMatch = portalEvents.find((e) => e.id === event.id || e.title === event.title)
   const isSettled = event.status === 'Settled' || portalMatch?.status === 'Settled'

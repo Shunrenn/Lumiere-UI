@@ -658,6 +658,10 @@ const seedDamage: DamageException[] = [
     gps: '14.5492° N, 121.019° E',
     capturedAt: '12 Dec 2025 · 22:40',
     exifVerified: true,
+    evidenceStatus: 'Temporally Valid',
+    isTemporallyValid: true,
+    declarationState: 'Finalized',
+    version: 1,
     estimatedCost: 4200,
     notes: 'Chair leg snapped during teardown. Captured under venue floodlight, EXIF intact.',
     status: 'Validated',
@@ -674,7 +678,11 @@ const seedDamage: DamageException[] = [
     imageUrl: '/damage/linen-runner-stain.png',
     gps: '14.5603° N, 121.032° E',
     capturedAt: '20 Apr 2026 · 08:15',
-    exifVerified: true,
+    exifVerified: false,
+    evidenceStatus: 'Temporally Invalid',
+    isTemporallyValid: false,
+    declarationState: 'Finalized',
+    version: 1,
     estimatedCost: 850,
     notes: 'Stain persists after first wash cycle. Routed to textile recovery before write-off.',
     status: 'Dismissed',
@@ -691,7 +699,13 @@ const seedDamage: DamageException[] = [
     imageUrl: '/damage/bar-counter-chip.png',
     gps: '14.5521° N, 121.024° E',
     capturedAt: '10 May 2026 · 23:55',
-    exifVerified: true,
+    exifVerified: false,
+    evidenceStatus: 'Unverifiable',
+    isTemporallyValid: false,
+    declarationState: 'Reviewable',
+    reviewDeadlineAt: new Date(Date.now() + 25 * 60 * 1000).toISOString(),
+    isEditable: true,
+    version: 1,
     estimatedCost: 2100,
     notes: 'Cosmetic chip on front edge. Refinishing quote pending from vendor.',
     status: 'Validated',
@@ -709,6 +723,10 @@ const seedDamage: DamageException[] = [
     gps: '14.5547° N, 121.0244° E',
     capturedAt: '30 May 2026 · 01:14 AM',
     exifVerified: false,
+    evidenceStatus: 'Unverifiable',
+    isTemporallyValid: false,
+    declarationState: 'Finalized',
+    version: 1,
     estimatedCost: 6800,
     notes:
       'Low-light capture during late strike. No photographic evidence was captured on site — EXIF timestamp could not be authenticated. Held for audit pending two Executive sign-offs.',
@@ -728,6 +746,10 @@ const seedDamage: DamageException[] = [
     gps: '14.5581° N, 121.0289° E',
     capturedAt: '26 Aug 2026 · 11:52 PM',
     exifVerified: false,
+    evidenceStatus: 'Unverifiable',
+    isTemporallyValid: false,
+    declarationState: 'Finalized',
+    version: 1,
     estimatedCost: 5400,
     notes:
       'Fixture found shattered during breakdown; no photographic evidence was captured on site — EXIF timestamp could not be authenticated. Held for audit pending two Executive sign-offs.',
@@ -747,6 +769,12 @@ const seedDamage: DamageException[] = [
     gps: '14.5603° N, 121.032° E',
     capturedAt: '26 Aug 2026 · 09:20 PM',
     exifVerified: true,
+    evidenceStatus: 'Temporally Valid',
+    isTemporallyValid: true,
+    declarationState: 'Reviewable',
+    reviewDeadlineAt: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
+    isEditable: true,
+    version: 1,
     estimatedCost: 1200,
     notes: 'Panel stained during teardown reception service. Field photo captured with intact EXIF.',
     status: 'Pending Verdict',
@@ -1338,6 +1366,10 @@ interface PortalContextValue {
     unblockMetadata?: SubRoleEmergencyUnblockMetadata,
     selfValidation?: DamageSelfValidationRecord,
   ) => void
+  refreshDamageReports: () => Promise<DamageException[]>
+  refetchDamageReport: (id: string) => Promise<DamageException | null>
+  editDamageReport: (id: string, updates: damageApi.EditDamageReportRequest) => Promise<damageApi.EditDamageReportResult>
+  amendDamageReport: (id: string, updates: damageApi.AmendDamageReportRequest) => Promise<damageApi.AmendDamageReportResult>
   completeMaintenance: (assetId: string, initiatorRole?: string) => void
   settleEvent: (eventId: string, initiatorRole?: string) => Promise<{ success: boolean; reason?: string }>
   addInventoryItem: (item: InventoryItem) => void
@@ -2198,6 +2230,12 @@ export function PortalProvider({ children }: { children: ReactNode }) {
           if (i.id !== id) return i
           targetItem = i
 
+          // CRITICAL HAVA RULE: Cannot execute supervisory sign-off during the Review Window
+          if (i.declarationState === 'Reviewable') {
+            console.warn(`[store] Cannot sign off on report ${i.id}: declaration is still in review window.`)
+            return i
+          }
+
           const isAuditResolution =
             (verdict === 'Repair' || verdict === 'Write-off' || verdict === 'Validated' || verdict === 'Dismissed') &&
             (i.status === 'Held for Audit' || i.status === 'Pending Second Sign-off')
@@ -2418,6 +2456,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         const matchesEvent =
           d.boundEvent === target.title || d.boundEvent === target.refId || d.boundEvent === target.id
         const isBlocking =
+          d.declarationState === 'Reviewable' ||
           d.status === 'Pending Verdict' ||
           d.status === 'Held for Audit' ||
           d.status === 'Pending Second Sign-off'
@@ -2485,6 +2524,64 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     setInventory((prev) => prev.map((it) => (it.id === item.id ? item : it)))
   }, [])
 
+  const refreshDamageReports = useCallback(async (): Promise<DamageException[]> => {
+    try {
+      const { reports, connected } = await damageApi.fetchDamageReportsAllEvents(events)
+      setIsBackendConnected(connected)
+      if (connected && reports.length > 0) {
+        setDamageExceptions(reports)
+      }
+      return reports
+    } catch (err) {
+      console.warn('[store] Failed to refresh damage reports:', err)
+      return []
+    }
+  }, [events])
+
+  const refetchDamageReport = useCallback(async (reportId: string): Promise<DamageException | null> => {
+    try {
+      const report = await damageApi.getDamageReportByIdApi(reportId)
+      setDamageExceptions((prev) => prev.map((item) => (item.id === reportId ? report : item)))
+      return report
+    } catch (err) {
+      console.warn(`[store] Failed to refetch damage report ${reportId}:`, err)
+      return null
+    }
+  }, [])
+
+  const editDamageReport = useCallback(
+    async (id: string, updates: damageApi.EditDamageReportRequest): Promise<damageApi.EditDamageReportResult> => {
+      const result = await damageApi.editDamageReportApi(id, updates)
+      if (result.kind === 'success') {
+        setDamageExceptions((prev) => prev.map((item) => (item.id === id ? result.report : item)))
+      } else if (result.kind === 'finalized') {
+        // Authoritative server rejection: transition local record to Finalized
+        setDamageExceptions((prev) =>
+          prev.map((item) => (item.id === id ? { ...item, declarationState: 'Finalized', isEditable: false } : item)),
+        )
+      } else if (result.kind === 'stale_version') {
+        // Stale version: refetch current authoritative version
+        void refetchDamageReport(id)
+      }
+      return result
+    },
+    [refetchDamageReport],
+  )
+
+  const amendDamageReport = useCallback(
+    async (id: string, updates: damageApi.AmendDamageReportRequest): Promise<damageApi.AmendDamageReportResult> => {
+      const result = await damageApi.amendDamageReportApi(id, updates)
+      if (result.kind === 'success') {
+        setDamageExceptions((prev) => prev.map((item) => (item.id === id ? result.report : item)))
+      } else if (result.kind === 'stale_version') {
+        // Concurrency conflict: refetch current authoritative state
+        void refetchDamageReport(id)
+      }
+      return result
+    },
+    [refetchDamageReport],
+  )
+
   const value = useMemo(
     () => ({
       staff,
@@ -2516,6 +2613,10 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       routeReorder,
       updateThreshold,
       resolveDamage,
+      refreshDamageReports,
+      refetchDamageReport,
+      editDamageReport,
+      amendDamageReport,
       completeMaintenance,
       settleEvent,
       addInventoryItem,
@@ -2552,6 +2653,10 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       routeReorder,
       updateThreshold,
       resolveDamage,
+      refreshDamageReports,
+      refetchDamageReport,
+      editDamageReport,
+      amendDamageReport,
       completeMaintenance,
       settleEvent,
       addInventoryItem,

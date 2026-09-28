@@ -6,6 +6,7 @@ import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
 import { EmptyState } from '@/components/EmptyState'
+import { StatusBadge } from '@/components/StatusBadge'
 import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
@@ -34,8 +35,8 @@ const statusIcon: Record<DamageVerdict, typeof Clock3> = {
   'Write-off': Ban,
 }
 
-type Filter = 'All' | 'Pending' | 'Held for Audit' | 'Second Sign-off' | 'Validated' | 'Dismissed'
-const filters: Filter[] = ['All', 'Pending', 'Held for Audit', 'Second Sign-off', 'Validated', 'Dismissed']
+type Filter = 'All' | 'Reviewable' | 'Pending' | 'Held for Audit' | 'Second Sign-off' | 'Validated' | 'Dismissed'
+const filters: Filter[] = ['All', 'Reviewable', 'Pending', 'Held for Audit', 'Second Sign-off', 'Validated', 'Dismissed']
 
 export function DamageValidationPage() {
   const { damageExceptions: items, isBackendConnected, resolveDamage, staff, subRolesByParent, setSubRolesByParent } = usePortal()
@@ -81,6 +82,7 @@ export function DamageValidationPage() {
   const stats = useMemo(
     () => ({
       total: items.length,
+      reviewable: items.filter((i) => i.declarationState === 'Reviewable').length,
       pending: items.filter((i) => i.status === 'Pending Verdict').length,
       resolved: items.filter((i) => i.status !== 'Pending Verdict').length,
     }),
@@ -99,9 +101,10 @@ export function DamageValidationPage() {
         i.assetSku.toLowerCase().includes(q)
       const matchesFilter =
         filter === 'All' ||
+        (filter === 'Reviewable' && i.declarationState === 'Reviewable') ||
         (filter === 'Pending' && i.status === 'Pending Verdict') ||
         (filter === 'Second Sign-off' && i.status === 'Pending Second Sign-off') ||
-        (filter !== 'Pending' && filter !== 'Second Sign-off' && i.status === filter)
+        (filter !== 'Pending' && filter !== 'Second Sign-off' && filter !== 'Reviewable' && i.status === filter)
       return matchesQuery && matchesFilter
     })
   }, [items, query, filter])
@@ -218,9 +221,11 @@ export function DamageValidationPage() {
           const count =
             f === 'All'
               ? items.length
-              : f === 'Pending'
-                ? stats.pending
-                : items.filter((i) => i.status === f).length
+              : f === 'Reviewable'
+                ? stats.reviewable
+                : f === 'Pending'
+                  ? stats.pending
+                  : items.filter((i) => i.status === f).length
           return (
             <button
               key={f}
@@ -247,8 +252,9 @@ export function DamageValidationPage() {
         <CompactStatStrip
           stats={[
             { label: 'Total Reports', value: stats.total },
-            { label: 'Resolved Cases', value: stats.resolved },
+            { label: 'Reviewable (Provisional)', value: stats.reviewable },
             { label: 'Pending Verdicts', value: stats.pending },
+            { label: 'Resolved Cases', value: stats.resolved },
           ]}
         />
         <div className="overflow-x-auto">
@@ -263,6 +269,8 @@ export function DamageValidationPage() {
                 'ROLE',
                 'ASSET',
                 'DETAILS',
+                'HAVA STATE',
+                'EVIDENCE',
                 'STATUS',
                 'ACTIONS',
               ].map((h) => (
@@ -278,7 +286,7 @@ export function DamageValidationPage() {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-8">
+                <td colSpan={11} className="py-8">
                   <EmptyState
                     title="No damage reports found"
                     message="No damage exception reports match your search query or filter criteria."
@@ -356,6 +364,44 @@ export function DamageValidationPage() {
                       <p>{i.capturedAt}</p>
                       {i.damagedQuantity !== undefined && <p>Qty: {i.damagedQuantity}</p>}
                     </td>
+                    {/* HAVA State */}
+                    <td className="px-4 py-4">
+                      {i.declarationState === 'Reviewable' ? (
+                        <div className="space-y-1">
+                          <StatusBadge variant="warning" size="sm">
+                            Reviewable
+                          </StatusBadge>
+                          <p className="text-[0.55rem] text-amber-700 dark:text-amber-400 font-medium">Provisional</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <StatusBadge variant="neutral" size="sm">
+                            Finalized
+                          </StatusBadge>
+                          <p className="text-[0.55rem] font-mono text-muted-foreground">v{i.version ?? 1}</p>
+                        </div>
+                      )}
+                    </td>
+                    {/* Evidence */}
+                    <td className="px-4 py-4">
+                      {i.noPhotographicEvidence || (!i.imageUrl && (!i.images || i.images.length === 0)) ? (
+                        <StatusBadge variant="neutral" size="sm">
+                          No Photo
+                        </StatusBadge>
+                      ) : i.evidenceStatus === 'Temporally Valid' ? (
+                        <StatusBadge variant="success" size="sm">
+                          Temporally Valid
+                        </StatusBadge>
+                      ) : i.evidenceStatus === 'Temporally Invalid' ? (
+                        <StatusBadge variant="destructive" size="sm">
+                          Temporally Invalid
+                        </StatusBadge>
+                      ) : (
+                        <StatusBadge variant="warning" size="sm">
+                          Unverifiable
+                        </StatusBadge>
+                      )}
+                    </td>
                     {/* Status */}
                     <td className="px-4 py-4">
                       <span
@@ -381,9 +427,15 @@ export function DamageValidationPage() {
                           onClick={() => setActive(i)}
                           className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary underline-offset-4 transition hover:underline"
                         >
-                          {pending ? (canEvaluate ? 'Evaluate Report' : 'View Report') : 'View Report'}
+                          {i.declarationState === 'Reviewable'
+                            ? 'Review (Provisional)'
+                            : pending
+                              ? canEvaluate
+                                ? 'Evaluate Report'
+                                : 'View Report'
+                              : 'View Report'}
                         </button>
-                        {canEvaluate && !pending && (
+                        {canEvaluate && !pending && i.declarationState === 'Finalized' && (
                           <div className="relative">
                             <button
                               type="button"
@@ -402,7 +454,7 @@ export function DamageValidationPage() {
                                   }}
                                   className="block w-full px-4 py-2 text-left text-[0.6rem] font-bold uppercase tracking-[0.12em] text-card-foreground hover:bg-muted rounded"
                                 >
-                                  Edit
+                                  Supervisory Amend
                                 </button>
                               </div>
                             )}

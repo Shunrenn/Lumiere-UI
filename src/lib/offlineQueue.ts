@@ -1,3 +1,9 @@
+export type OfflineItemStatus =
+  | 'locally queued'
+  | 'syncing'
+  | 'server accepted'
+  | 'server rejected/conflicted'
+
 export interface QueuedDeclaration {
   id: string
   idempotencyKey: string
@@ -16,6 +22,8 @@ export interface QueuedDeclaration {
   noPhotographicEvidence?: boolean
   timestamp: string
   retryCount: number
+  syncStatus?: OfflineItemStatus
+  lastError?: string
 }
 
 const DB_NAME = 'lumiere-offline-db'
@@ -47,14 +55,15 @@ function openDB(): Promise<IDBDatabase> {
  * Enqueues a declaration item into IndexedDB storage.
  */
 export async function enqueueDeclaration(
-  item: Omit<QueuedDeclaration, 'id' | 'idempotencyKey' | 'timestamp' | 'retryCount'>
+  item: Omit<QueuedDeclaration, 'id' | 'idempotencyKey' | 'timestamp' | 'retryCount' | 'syncStatus'>
 ): Promise<QueuedDeclaration> {
   const queuedItem: QueuedDeclaration = {
     ...item,
     id: `q-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-    idempotencyKey: crypto.randomUUID ? crypto.randomUUID() : `key-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+    idempotencyKey: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `key-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
     timestamp: new Date().toISOString(),
     retryCount: 0,
+    syncStatus: 'locally queued',
   }
 
   try {
@@ -109,6 +118,37 @@ export async function removeQueuedDeclaration(id: string): Promise<void> {
     })
   } catch (err) {
     const existing = getFallbackQueue().filter((item) => item.id !== id)
+    setFallbackQueue(existing)
+  }
+}
+
+export async function updateQueuedDeclaration(
+  id: string,
+  updates: Partial<QueuedDeclaration>,
+): Promise<void> {
+  try {
+    const db = await openDB()
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    const store = tx.objectStore(STORE_NAME)
+    const getReq = store.get(id)
+    await new Promise<void>((resolve, reject) => {
+      getReq.onsuccess = () => {
+        if (getReq.result) {
+          const updated = { ...getReq.result, ...updates }
+          store.put(updated)
+        }
+        resolve()
+      }
+      getReq.onerror = () => reject(getReq.error)
+    })
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = resolve
+      tx.onerror = reject
+    })
+  } catch (err) {
+    const existing = getFallbackQueue().map((item) =>
+      item.id === id ? { ...item, ...updates } : item,
+    )
     setFallbackQueue(existing)
   }
 }

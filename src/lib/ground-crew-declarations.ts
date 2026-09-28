@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import type { HavaDeclarationState, HavaEvidenceStatus } from './types'
 
 export type DeclarationStatus = 'Pending Event Admin' | 'Confirmed' | 'Rejected' | 'Escalated to Manning'
 
@@ -26,6 +27,18 @@ export interface GroundCrewDeclaration {
   sha256Hash?: string
   exifMetadata?: string
   gpsCoordinates?: string
+
+  // Authoritative HAVA fields
+  declarationState?: HavaDeclarationState
+  evidenceStatus?: HavaEvidenceStatus | string
+  isTemporallyValid?: boolean
+  reviewDeadlineAt?: string
+  version?: number
+  isEditable?: boolean
+  finalizedAt?: string
+  lastEditedAt?: string
+  offlineSyncStatus?: 'locally queued' | 'syncing' | 'server accepted' | 'server rejected/conflicted'
+  lastError?: string
 }
 
 export type SubmitDeclarationResult =
@@ -50,6 +63,9 @@ let declarations: GroundCrewDeclaration[] = [
     submittedAt: seededAt,
     status: 'Pending Event Admin',
     demoLabel: '48+ hour expiry test',
+    declarationState: 'Finalized',
+    evidenceStatus: 'Unverifiable',
+    version: 1,
   },
   {
     id: 'decl-event-admin-demo',
@@ -64,6 +80,12 @@ let declarations: GroundCrewDeclaration[] = [
     submittedAt: new Date().toISOString(),
     status: 'Pending Event Admin',
     demoLabel: 'Event Admin confirmation demo',
+    declarationState: 'Reviewable',
+    evidenceStatus: 'Temporally Valid',
+    isTemporallyValid: true,
+    reviewDeadlineAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    isEditable: true,
+    version: 1,
   },
 ]
 
@@ -104,6 +126,10 @@ export async function submitGroundCrewDeclaration(
         id: queued.id,
         status: 'Pending Event Admin',
         isOfflineQueued: true,
+        offlineSyncStatus: 'locally queued',
+        declarationState: 'Reviewable',
+        evidenceStatus: input.noPhotographicEvidence ? 'No Photographic Evidence' : 'Unverifiable',
+        version: 1,
       }
       declarations = [queuedDecl, ...declarations]
       emit()
@@ -136,6 +162,13 @@ export async function submitGroundCrewDeclaration(
         id: res.report.id,
         status: 'Pending Event Admin',
         isOfflineQueued: false,
+        offlineSyncStatus: 'server accepted',
+        declarationState: res.report.declarationState,
+        evidenceStatus: res.report.evidenceStatus,
+        isTemporallyValid: res.report.isTemporallyValid,
+        reviewDeadlineAt: res.report.reviewDeadlineAt,
+        version: res.report.version,
+        isEditable: res.report.isEditable,
       }
       declarations = [persistedDecl, ...declarations]
       emit()
@@ -160,6 +193,85 @@ export async function submitGroundCrewDeclaration(
     }
   }
 }
+
+/**
+ * Edit an existing declaration during the authoritative Declaration Review Window.
+ */
+export async function updateGroundCrewDeclaration(
+  id: string,
+  updates: {
+    quantity: number
+    description?: string
+    condition?: 'Damaged' | 'Missing'
+    photoUrl?: string
+    sha256Hash?: string
+    gpsCoordinates?: string
+    expectedVersion: number
+  },
+): Promise<{ success: boolean; declaration?: GroundCrewDeclaration; error?: string; code?: string }> {
+  try {
+    const { editDamageReportApi } = await import('./damageApi')
+    const res = await editDamageReportApi(id, {
+      damagedQuantity: updates.quantity,
+      photoUrl: updates.photoUrl,
+      severity: updates.condition === 'Damaged' ? 'Critical' : 'Minor',
+      sha256Hash: updates.sha256Hash,
+      gpsCoordinates: updates.gpsCoordinates,
+      expectedVersion: updates.expectedVersion,
+    })
+
+    if (res.kind === 'success') {
+      const prev = declarations.find((d) => d.id === id)
+      const updated: GroundCrewDeclaration = {
+        ...(prev || {
+          id,
+          eventId: '',
+          eventName: '',
+          item: '',
+          condition: updates.condition ?? 'Damaged',
+          quantity: updates.quantity,
+          description: updates.description ?? '',
+          submittedBy: '',
+          submittedRole: 'Member',
+          submittedAt: new Date().toISOString(),
+          status: 'Pending Event Admin',
+        }),
+        quantity: res.report.damagedQuantity ?? updates.quantity,
+        description: updates.description ?? (prev ? prev.description : ''),
+        condition: updates.condition ?? (prev ? prev.condition : 'Damaged'),
+        photoUrl: res.report.photoUrl || prev?.photoUrl,
+        declarationState: res.report.declarationState,
+        evidenceStatus: res.report.evidenceStatus,
+        isTemporallyValid: res.report.isTemporallyValid,
+        reviewDeadlineAt: res.report.reviewDeadlineAt,
+        version: res.report.version,
+        isEditable: res.report.isEditable,
+        lastEditedAt: res.report.lastEditedAt,
+      }
+      declarations = declarations.map((d) => (d.id === id ? updated : d))
+      emit()
+      return { success: true, declaration: updated }
+    }
+
+    if (res.kind === 'finalized') {
+      // Transition local state to finalized
+      declarations = declarations.map((d) =>
+        d.id === id ? { ...d, declarationState: 'Finalized', isEditable: false } : d,
+      )
+      emit()
+      return { success: false, error: res.message, code: 'DECLARATION_FINALIZED' }
+    }
+
+    if (res.kind === 'stale_version') {
+      return { success: false, error: res.message, code: 'STALE_VERSION' }
+    }
+
+    return { success: false, error: res.message }
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Error updating declaration' }
+  }
+}
+
 
 export function decideGroundCrewDeclaration(id: string, decision: 'Confirmed' | 'Rejected', decisionBy: string) {
   declarations = declarations.map((declaration) => declaration.id === id ? { ...declaration, status: decision, decisionAt: new Date().toISOString(), decisionBy } : declaration)

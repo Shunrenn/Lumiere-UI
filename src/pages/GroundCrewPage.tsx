@@ -16,6 +16,11 @@ import {
   Send,
   ShieldCheck,
   UserCircle2,
+  Clock,
+  Edit3,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { usePortal } from '@/lib/store'
@@ -27,10 +32,14 @@ import {
   getApproachingDeclarationsSummary,
   getDeclarationAging,
   submitGroundCrewDeclaration,
+  updateGroundCrewDeclaration,
   useGroundCrewDeclarations,
   type GroundCrewDeclaration,
 } from '@/lib/ground-crew-declarations'
 import { computePhotoSha256, extractPhotoMetadata, type HavaPhotoMetadata } from '@/lib/hava'
+import { getPendingQueue, type QueuedDeclaration } from '@/lib/offlineQueue'
+import { subscribeOfflineSync, triggerOfflineReplay } from '@/lib/offlineReplay'
+import { StatusBadge } from '@/components/StatusBadge'
 import {
   PwaBadge,
   PwaBottomNav,
@@ -42,7 +51,7 @@ import {
   PwaToast,
   type PwaNavItem,
 } from '@/components/pwa'
-import type { GroundCrewSubRole } from '@/lib/types'
+import type { GroundCrewSubRole, HavaDeclarationState, HavaEvidenceStatus } from '@/lib/types'
 
 type Tab = 'home' | 'tasks' | 'calendar' | 'activity' | 'account'
 type AccessLevel = 'Ground Crew / Member' | 'Team Lead / Field Lead' | 'Receiver' | 'Event Admin'
@@ -73,6 +82,15 @@ interface DamageReport {
   location: string
   sha256Hash?: string
   gpsCoordinates?: string
+  condition?: 'Damaged' | 'Missing'
+  declarationState?: HavaDeclarationState
+  evidenceStatus?: HavaEvidenceStatus | string
+  isTemporallyValid?: boolean
+  reviewDeadlineAt?: string
+  version?: number
+  isEditable?: boolean
+  offlineSyncStatus?: 'locally queued' | 'syncing' | 'server accepted' | 'server rejected/conflicted'
+  lastError?: string
 }
 interface CrewRequest {
   id: string
@@ -93,6 +111,9 @@ const SEED_REPORTS: DamageReport[] = [
     photo: '',
     capturedAt: 'Sep 16, 2026 • 09:42',
     location: 'The Peninsula Manila',
+    declarationState: 'Finalized',
+    evidenceStatus: 'Unverifiable',
+    version: 1,
   },
 ]
 const SEED_REQUESTS: CrewRequest[] = [
@@ -162,6 +183,89 @@ export function GroundCrewPage() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const selectedEvent = selectedEventId ? crewEvents.find((event) => event.id === selectedEventId) ?? null : null
   const [reports, setReports] = useState(SEED_REPORTS)
+  const [offlineItems, setOfflineItems] = useState<QueuedDeclaration[]>([])
+  const [isSyncingQueue, setIsSyncingQueue] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    const loadQueue = async () => {
+      try {
+        const q = await getPendingQueue()
+        if (active) setOfflineItems(q)
+      } catch {}
+    }
+    void loadQueue()
+
+    const unsub = subscribeOfflineSync((_count, syncing) => {
+      if (!active) return
+      setIsSyncingQueue(syncing)
+      void loadQueue()
+    })
+
+    return () => {
+      active = false
+      unsub()
+    }
+  }, [])
+
+  const handleTriggerSync = async () => {
+    setIsSyncingQueue(true)
+    try {
+      const res = await triggerOfflineReplay()
+      if (res.syncedCount > 0) {
+        setToast(`Synchronized ${res.syncedCount} queued condition report(s).`)
+      } else if (res.errors > 0) {
+        setToast(`Sync finished: ${res.errors} declaration(s) rejected or conflicted by server.`)
+      } else {
+        setToast('No pending declarations to sync.')
+      }
+      window.setTimeout(() => setToast(''), 4000)
+    } catch (err: any) {
+      setToast(`Sync error: ${err?.message || 'Network error'}`)
+      window.setTimeout(() => setToast(''), 4000)
+    } finally {
+      setIsSyncingQueue(false)
+    }
+  }
+
+  const handleUpdateReport = async (
+    reportId: string,
+    updates: { quantity: number; description?: string; condition?: 'Damaged' | 'Missing'; expectedVersion: number },
+  ): Promise<{ success: boolean; error?: string; code?: string }> => {
+    const res = await updateGroundCrewDeclaration(reportId, updates)
+    if (res.success && res.declaration) {
+      setReports((prev) =>
+        prev.map((r) =>
+          r.id === reportId
+            ? {
+                ...r,
+                quantity: res.declaration!.quantity,
+                description: res.declaration!.description,
+                condition: res.declaration!.condition,
+                declarationState: res.declaration!.declarationState,
+                evidenceStatus: res.declaration!.evidenceStatus,
+                reviewDeadlineAt: res.declaration!.reviewDeadlineAt,
+                version: res.declaration!.version,
+                isEditable: res.declaration!.isEditable,
+              }
+            : r,
+        ),
+      )
+      setToast('Declaration updated within review window.')
+      window.setTimeout(() => setToast(''), 3500)
+      return { success: true }
+    } else {
+      if (res.code === 'DECLARATION_FINALIZED') {
+        setReports((prev) =>
+          prev.map((r) =>
+            r.id === reportId ? { ...r, declarationState: 'Finalized', isEditable: false } : r,
+          ),
+        )
+      }
+      return { success: false, error: res.error, code: res.code }
+    }
+  }
+
   const [requests, setRequests] = useState(SEED_REQUESTS)
   const [showReport, setShowReport] = useState(false)
   const [reportItem, setReportItem] = useState<EventItem['items'][number] | null>(null)
@@ -262,6 +366,7 @@ export function GroundCrewPage() {
           phase: selectedEvent.phase,
           quantity: qty,
           description: desc,
+          condition,
           photo: capture?.photoDataUrl ?? '',
           capturedAt: capture?.meta.capturedAt
             ? new Date(capture.meta.capturedAt).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })
@@ -269,6 +374,15 @@ export function GroundCrewPage() {
           location: selectedEvent.venue,
           sha256Hash: capture?.sha256Hash,
           gpsCoordinates: capture?.meta.gpsCoordinates,
+          declarationState: result.declaration.declarationState || 'Reviewable',
+          evidenceStatus:
+            result.declaration.evidenceStatus ||
+            (noPhotographicEvidence ? 'No Photographic Evidence' : 'Unverifiable'),
+          isTemporallyValid: result.declaration.isTemporallyValid,
+          reviewDeadlineAt: result.declaration.reviewDeadlineAt,
+          version: result.declaration.version || 1,
+          isEditable: result.declaration.isEditable ?? true,
+          offlineSyncStatus: result.queuedOffline ? 'locally queued' : 'server accepted',
         }
 
         setReports((prev) => [newReport, ...prev])
@@ -506,7 +620,17 @@ export function GroundCrewPage() {
           />
         )}
 
-        {tab === 'activity' && <Activity reports={reports} requests={requests} events={crewEvents} />}
+        {tab === 'activity' && (
+          <Activity
+            reports={reports}
+            requests={requests}
+            events={crewEvents}
+            offlineItems={offlineItems}
+            isSyncingQueue={isSyncingQueue}
+            onTriggerSync={handleTriggerSync}
+            onUpdateReport={handleUpdateReport}
+          />
+        )}
 
         {tab === 'account' && (
           <Account
@@ -1173,24 +1297,24 @@ function DamageForm({
         <div className="space-y-2">
           <div className="flex flex-col gap-0.5">
             <label className="block text-xs font-semibold text-foreground">
-              {photoRequired ? 'Condition Verification Photo (Required — SHA-256 Fingerprinted)' : 'Condition Photo (Optional for missing items)'}
+              {photoRequired ? 'Condition Evidence Photo (Required for damage)' : 'Condition Photo (Optional for missing items)'}
             </label>
             <p className="text-[0.62rem] text-muted-foreground leading-normal">
-              For bulk identical assets, 1 or more forensic photos verify damaged condition. Undamaged units in this batch do not require individual photography.
+              Bulk asset condition evidence: 1 or more condition photos establish physical condition. Damaged quantity is declared below; individual photos of undamaged units are not required.
             </p>
           </div>
 
           {photoCount > 0 ? (
-            <div className="space-y-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs">
+            <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-3 text-xs">
               {latestCapture?.photoDataUrl && (
                 <img
                   src={latestCapture.photoDataUrl}
-                  alt="Damage preview"
+                  alt="Damage condition evidence preview"
                   className="h-28 w-full rounded-lg object-cover border border-border"
                 />
               )}
               <div className="flex items-center justify-between">
-                <span className="flex size-6 items-center justify-center rounded bg-emerald-600 font-bold text-white text-[0.65rem]">
+                <span className="flex size-6 items-center justify-center rounded bg-primary font-bold text-primary-foreground text-[0.65rem]">
                   {photoCount}
                 </span>
                 <button
@@ -1199,12 +1323,18 @@ function DamageForm({
                   disabled={isProcessing || isSubmitting}
                   className="text-xs font-semibold text-primary underline hover:opacity-80"
                 >
-                  + Add photo
+                  + Add condition photo
                 </button>
               </div>
-              <div className="break-all rounded-lg bg-background p-2 font-mono text-[0.6rem] text-muted-foreground border border-border">
-                <span className="font-bold text-emerald-600">SHA-256: </span>
-                {latestCapture?.sha256Hash}
+              <div className="rounded-lg bg-background p-2 font-mono text-[0.6rem] text-muted-foreground border border-border space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-foreground">Transport SHA-256 Digest:</span>
+                  <span className="text-[0.55rem] uppercase text-muted-foreground">Byte Integrity Checksum</span>
+                </div>
+                <div className="break-all">{latestCapture?.sha256Hash}</div>
+                <p className="text-[0.55rem] text-muted-foreground normal-case font-sans pt-0.5">
+                  Client transport checksum only; backend independently inspects bytes for temporal validity and metadata.
+                </p>
               </div>
             </div>
           ) : (
@@ -1217,7 +1347,7 @@ function DamageForm({
               icon={<Camera className="size-4" />}
               className="w-full"
             >
-              {isProcessing ? 'Processing HAVA photo...' : 'Capture Photo (Auto-fingerprinted)'}
+              {isProcessing ? 'Processing photo...' : 'Capture Photo (In-System Camera Requested)'}
             </PwaButton>
           )}
         </div>
@@ -1404,29 +1534,316 @@ function Activity({
   reports,
   requests,
   events,
+  offlineItems = [],
+  isSyncingQueue = false,
+  onTriggerSync,
+  onUpdateReport,
 }: {
   reports: DamageReport[]
   requests: CrewRequest[]
   events: EventItem[]
+  offlineItems?: QueuedDeclaration[]
+  isSyncingQueue?: boolean
+  onTriggerSync?: () => void
+  onUpdateReport?: (
+    reportId: string,
+    updates: { quantity: number; description?: string; condition?: 'Damaged' | 'Missing'; expectedVersion: number },
+  ) => Promise<{ success: boolean; error?: string; code?: string }>
 }) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editQty, setEditQty] = useState<number>(1)
+  const [editDesc, setEditDesc] = useState<string>('')
+  const [editCond, setEditCond] = useState<'Damaged' | 'Missing'>('Damaged')
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+
+  const startEdit = (r: DamageReport) => {
+    setEditingId(r.id)
+    setEditQty(r.quantity)
+    setEditDesc(r.description || '')
+    setEditCond(r.condition || 'Damaged')
+    setEditError(null)
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditError(null)
+  }
+
+  const saveEdit = async (r: DamageReport) => {
+    if (!onUpdateReport) return
+    setIsSavingEdit(true)
+    setEditError(null)
+    try {
+      const res = await onUpdateReport(r.id, {
+        quantity: editQty,
+        description: editDesc,
+        condition: editCond,
+        expectedVersion: r.version ?? 1,
+      })
+      if (res.success) {
+        setEditingId(null)
+      } else {
+        if (res.code === 'DECLARATION_FINALIZED') {
+          setEditError('Declaration review window expired on server. Record is now finalized and cannot be edited directly.')
+        } else if (res.code === 'STALE_VERSION') {
+          setEditError('Version conflict: The declaration was modified in another session. Please review current values.')
+        } else {
+          setEditError(res.error || 'Failed to update declaration.')
+        }
+      }
+    } catch (err: any) {
+      setEditError(err?.message || 'Error saving corrections')
+    } finally {
+      setIsSavingEdit(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <PwaCard title="Validation Reports Submitted">
+      {/* Offline Sync Queue */}
+      {offlineItems.length > 0 && (
+        <PwaCard
+          title="Offline Sync Queue"
+          subtitle={`${offlineItems.length} declaration(s) queued locally`}
+          action={
+            <button
+              type="button"
+              onClick={onTriggerSync}
+              disabled={isSyncingQueue}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/20 transition disabled:opacity-50"
+            >
+              <RefreshCw className={`size-3 ${isSyncingQueue ? 'animate-spin' : ''}`} />
+              {isSyncingQueue ? 'Syncing...' : 'Sync Now'}
+            </button>
+          }
+        >
+          <div className="space-y-2 pt-1">
+            {offlineItems.map((item) => (
+              <div key={item.id} className="rounded-xl border border-border bg-muted/30 p-3 text-xs space-y-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-bold text-foreground">{item.itemName}</span>
+                  {item.syncStatus === 'syncing' ? (
+                    <StatusBadge variant="info" icon={<RefreshCw className="size-3 animate-spin" />}>
+                      Syncing...
+                    </StatusBadge>
+                  ) : item.syncStatus === 'server rejected/conflicted' ? (
+                    <StatusBadge variant="destructive" icon={<AlertCircle className="size-3" />}>
+                      Server Rejected / Conflict
+                    </StatusBadge>
+                  ) : (
+                    <StatusBadge variant="warning" icon={<Clock className="size-3" />}>
+                      Locally Queued
+                    </StatusBadge>
+                  )}
+                </div>
+                <p className="text-muted-foreground">{item.eventName} • {item.condition}</p>
+                <p className="text-foreground">{item.quantity} unit(s) declared • {item.description}</p>
+                <div className="flex items-center justify-between text-[0.6rem] text-muted-foreground font-mono">
+                  <span>ID: {item.id}</span>
+                  <span className="truncate max-w-[150px]">Key: {item.idempotencyKey.slice(0, 8)}...</span>
+                </div>
+                {item.lastError && (
+                  <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 p-2 text-[0.65rem] text-rose-800 dark:text-rose-300">
+                    <span className="font-semibold">Rejection reason: </span>
+                    {item.lastError}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </PwaCard>
+      )}
+
+      {/* Authoritative Condition Declarations */}
+      <PwaCard title="Authoritative Condition Declarations">
         {reports.length === 0 ? (
           <PwaEmptyState title="No Reports" description="You have not submitted any damage or condition reports." />
         ) : (
           <div className="space-y-3 pt-1">
-            {reports.map((r) => (
-              <div key={r.id} className="rounded-xl border border-border p-3 text-xs space-y-1">
-                <div className="flex items-start justify-between">
-                  <h4 className="font-bold text-foreground">{r.item}</h4>
-                  <PwaBadge variant="accent" label="Submitted" />
+            {reports.map((r) => {
+              const isReviewable = r.declarationState === 'Reviewable'
+              const isEditing = editingId === r.id
+              const isEditable = r.isEditable !== false && isReviewable
+
+              return (
+                <div key={r.id} className="rounded-xl border border-border p-3 text-xs space-y-2">
+                  <div className="flex flex-wrap items-start justify-between gap-1.5">
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-foreground truncate">{r.item}</h4>
+                      <p className="text-[0.68rem] text-muted-foreground">{r.event} • {r.phase}</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {/* Declaration State Badge */}
+                      {isReviewable ? (
+                        <StatusBadge variant="info" icon={<Clock className="size-3" />}>
+                          Reviewable (Provisional)
+                        </StatusBadge>
+                      ) : (
+                        <StatusBadge variant="neutral" icon={<CheckCircle2 className="size-3" />}>
+                          Finalized
+                        </StatusBadge>
+                      )}
+
+                      {/* Temporal Evidence Badge */}
+                      {r.evidenceStatus === 'Temporally Valid' ? (
+                        <StatusBadge variant="success" icon={<ShieldCheck className="size-3" />}>
+                          Temporally Valid
+                        </StatusBadge>
+                      ) : r.evidenceStatus === 'Temporally Invalid' ? (
+                        <StatusBadge variant="destructive" icon={<AlertCircle className="size-3" />}>
+                          Temporally Invalid
+                        </StatusBadge>
+                      ) : r.evidenceStatus === 'No Photographic Evidence' ? (
+                        <StatusBadge variant="warning" icon={<AlertTriangle className="size-3" />}>
+                          No Photo Evidence
+                        </StatusBadge>
+                      ) : (
+                        <StatusBadge variant="warning" icon={<AlertTriangle className="size-3" />}>
+                          Unverifiable Evidence
+                        </StatusBadge>
+                      )}
+
+                      {/* Offline sync status if applicable */}
+                      {r.offlineSyncStatus === 'locally queued' && (
+                        <StatusBadge variant="warning">Locally Queued</StatusBadge>
+                      )}
+                      {r.offlineSyncStatus === 'server rejected/conflicted' && (
+                        <StatusBadge variant="destructive">Conflict</StatusBadge>
+                      )}
+                    </div>
+                  </div>
+
+                  {!isEditing ? (
+                    <>
+                      <p className="text-foreground">
+                        <span className="font-semibold">{r.quantity} unit(s)</span> affected ({r.condition || 'Damaged'}) • {r.description}
+                      </p>
+                      <p className="text-[0.65rem] text-muted-foreground pt-0.5">
+                        {r.capturedAt} • {r.location}
+                        {r.version ? ` • v${r.version}` : ''}
+                      </p>
+
+                      {/* Review Window Banner */}
+                      {isReviewable && (
+                        <div className="rounded-lg bg-sky-50 dark:bg-sky-950/40 p-2.5 border border-sky-200 dark:border-sky-800 text-[0.65rem] text-sky-900 dark:text-sky-200 space-y-1">
+                          <div className="flex items-center justify-between font-semibold">
+                            <span className="flex items-center gap-1.5">
+                              <Clock className="size-3 text-sky-600 dark:text-sky-400" />
+                              Declaration Review Window Active
+                            </span>
+                            {r.reviewDeadlineAt && (
+                              <span className="font-mono text-[0.6rem]">
+                                Closes {new Date(r.reviewDeadlineAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-muted-foreground text-[0.62rem]">
+                            Saved on server. Corrections permitted during the review window before authoritative finalization.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Edit Button during Review Window */}
+                      {isEditable && onUpdateReport && (
+                        <div className="pt-1 flex items-center justify-end">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(r)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-[0.65rem] font-semibold text-primary hover:bg-muted transition"
+                          >
+                            <Edit3 className="size-3" />
+                            Edit Declaration
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    /* Inline Editing Form */
+                    <div className="mt-2 space-y-3 rounded-lg border border-primary/30 bg-muted/20 p-3">
+                      <div className="flex items-center justify-between text-[0.68rem] font-semibold text-primary">
+                        <span>Edit Reviewable Declaration</span>
+                        <span className="font-mono text-[0.6rem] text-muted-foreground">Version {r.version ?? 1}</span>
+                      </div>
+
+                      {editError && (
+                        <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 p-2 text-[0.65rem] text-rose-800 dark:text-rose-300">
+                          {editError}
+                        </div>
+                      )}
+
+                      <div className="space-y-1">
+                        <label className="block text-[0.65rem] font-semibold text-foreground">
+                          Accountability Quantity
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="10000"
+                          value={editQty}
+                          onChange={(e) => setEditQty(Math.max(1, Number(e.target.value) || 1))}
+                          disabled={isSavingEdit}
+                          className="w-full rounded-lg border border-input bg-background p-2 text-xs focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[0.65rem] font-semibold text-foreground">
+                          Condition
+                        </label>
+                        <select
+                          value={editCond}
+                          onChange={(e) => setEditCond(e.target.value as 'Damaged' | 'Missing')}
+                          disabled={isSavingEdit}
+                          className="w-full rounded-lg border border-input bg-background p-2 text-xs focus:ring-1 focus:ring-primary"
+                        >
+                          <option value="Damaged">Damaged</option>
+                          <option value="Missing">Missing</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[0.65rem] font-semibold text-foreground">
+                          Description
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={editDesc}
+                          onChange={(e) => setEditDesc(e.target.value)}
+                          disabled={isSavingEdit}
+                          className="w-full rounded-lg border border-input bg-background p-2 text-xs focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          disabled={isSavingEdit}
+                          className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => saveEdit(r)}
+                          disabled={isSavingEdit}
+                          className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                        >
+                          {isSavingEdit ? (
+                            <>
+                              <RefreshCw className="size-3 animate-spin" /> Saving...
+                            </>
+                          ) : (
+                            'Save Corrections'
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <p className="text-muted-foreground">{r.event} • {r.phase}</p>
-                <p className="text-foreground">{r.quantity} unit(s) affected • {r.description}</p>
-                <p className="text-[0.65rem] text-muted-foreground pt-1">{r.capturedAt} • {r.location}</p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </PwaCard>

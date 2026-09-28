@@ -339,6 +339,20 @@ export interface DamageSignOff {
   timestamp: string
 }
 
+export type HavaDeclarationState = 'Reviewable' | 'Finalized'
+export type HavaEvidenceStatus = 'Temporally Valid' | 'Temporally Invalid' | 'Unverifiable'
+
+export interface DamageReportAmendment {
+  id: string
+  fromVersion: number
+  toVersion: number
+  reason: string
+  previousValues: string
+  correctedValues: string
+  correctedBy: string
+  correctedAt: string
+}
+
 export interface DamageException {
   id: string
   logId: string
@@ -357,7 +371,8 @@ export interface DamageException {
   gps: string
   capturedAt: string
   exifVerified: boolean
-  evidenceStatus?: string
+  evidenceStatus?: HavaEvidenceStatus | string
+  isTemporallyValid?: boolean
   estimatedCost: number
   notes: string
   status: DamageVerdict
@@ -367,11 +382,25 @@ export interface DamageException {
   custodyMode?: DamageCustodyMode
   unblockMetadata?: SubRoleEmergencyUnblockMetadata
   selfValidation?: DamageSelfValidationRecord
-  // HAVA fields — real photo audit data when captured
+  // HAVA fields — authoritative evidence & lifecycle data
   sha256Hash?: string
   exifMetadata?: string
-  /** Raw GPS string from backend (e.g. "14.5603° N, 121.032° E"), distinct from display gps */
   gpsCoordinates?: string
+  declarationState?: HavaDeclarationState
+  reviewDeadlineAt?: string
+  finalizedAt?: string
+  lastEditedAt?: string
+  isEditable?: boolean
+  version?: number
+  captureTimestamp?: string
+  evidenceProcessedAt?: string
+  evidenceDerivationError?: string
+  captureSource?: string
+  operationalCheckpoint?: string
+  idempotencyKey?: string
+  submittedBy?: string
+  submittedAt?: string
+  amendments?: DamageReportAmendment[]
 }
 
 /* ---------- Inventory / Asset Registry ---------- */

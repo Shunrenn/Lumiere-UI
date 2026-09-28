@@ -1,4 +1,4 @@
-import { getPendingQueue, removeQueuedDeclaration } from './offlineQueue'
+import { getPendingQueue, removeQueuedDeclaration, updateQueuedDeclaration } from './offlineQueue'
 
 type SyncListener = (pendingCount: number, syncing: boolean) => void
 const syncListeners = new Set<SyncListener>()
@@ -35,6 +35,7 @@ export async function triggerOfflineReplay(): Promise<{ syncedCount: number; err
     const { submitDamageReportApi } = await import('./damageApi')
 
     for (const item of pendingItems) {
+      await updateQueuedDeclaration(item.id, { syncStatus: 'syncing' })
       try {
         const result = await submitDamageReportApi({
           assetId: item.assetId,
@@ -54,12 +55,22 @@ export async function triggerOfflineReplay(): Promise<{ syncedCount: number; err
           await removeQueuedDeclaration(item.id)
           syncedCount++
         } else {
-          // 409 (Idempotency conflict) or other failure must NOT be marked as success
-          console.warn(`[offlineReplay] Declaration ${item.id} replay failed:`, result.message)
+          // Server rejected or conflict: record status and error, do NOT report false success
+          console.warn(`[offlineReplay] Declaration ${item.id} replay rejected:`, result.message)
+          await updateQueuedDeclaration(item.id, {
+            syncStatus: 'server rejected/conflicted',
+            lastError: result.message,
+            retryCount: (item.retryCount || 0) + 1,
+          })
           errors++
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn(`[offlineReplay] Failed to replay declaration ${item.id}:`, err)
+        await updateQueuedDeclaration(item.id, {
+          syncStatus: 'server rejected/conflicted',
+          lastError: err?.message || 'Network error during sync',
+          retryCount: (item.retryCount || 0) + 1,
+        })
         errors++
       }
     }
