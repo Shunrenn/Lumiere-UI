@@ -15,7 +15,6 @@ import {
   type ReconciliationRow,
 } from '@/lib/event-detail'
 
-import { updateAssetDispatchStatus } from './dispatchApi'
 
 export interface EventDispatchSummary {
   eventId: string
@@ -233,8 +232,6 @@ export function advanceBatchStage(eventId: string, batchId: string): boolean {
   )
   publish()
 
-  // Asynchronously dispatch asset movement status transition to REST API
-  void updateAssetDispatchStatus(batchId, stage)
 
   return true
 }
@@ -258,7 +255,6 @@ export function markBatchStalled(eventId: string, batchId: string, reason: strin
   )
   publish()
 
-  void updateAssetDispatchStatus(batchId, 'Stalled')
 }
 
 export function resolveBatchStall(eventId: string, batchId: string) {
@@ -273,7 +269,6 @@ export function resolveBatchStall(eventId: string, batchId: string) {
   logActivity(`${target.vehicleType} (${target.plateNumber}) resumed transit after a stall.`, 'info')
   publish()
 
-  void updateAssetDispatchStatus(batchId, target.stage)
 }
 
 export function updateBatchHandoffNote(eventId: string, batchId: string, handoffNote: string) {
