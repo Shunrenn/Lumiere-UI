@@ -6,6 +6,7 @@ import { DeploymentDetailModal } from '@/components/DeploymentDetailModal'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
+import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
 import { cn } from '@/lib/utils'
 import { addDeployment, updateDeployment, useDeployments } from '@/lib/deployments'
 import { usePortal } from '@/lib/store'
@@ -28,10 +29,10 @@ interface Deployment {
   vehicle: string
 }
 
-const statusMeta: Record<DeployStatus, { badge: string; dot: string; bar: string; text: string }> = {
-  'In Progress': { badge: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 dark:border dark:border-amber-800/60', dot: 'bg-amber-500', bar: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400' },
-  'Awaiting Setup': { badge: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground', bar: 'bg-muted-foreground/40', text: 'text-muted-foreground' },
-  Completed: { badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/60', dot: 'bg-emerald-500', bar: 'bg-emerald-600 dark:bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400' },
+const statusMeta: Record<DeployStatus, { variant: StatusVariant; bar: string; text: string }> = {
+  'In Progress': { variant: 'warning', bar: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400' },
+  'Awaiting Setup': { variant: 'neutral', bar: 'bg-muted-foreground/40', text: 'text-muted-foreground' },
+  Completed: { variant: 'success', bar: 'bg-emerald-600 dark:bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400' },
 }
 
 type Filter = 'All Statuses' | DeployStatus
@@ -330,15 +331,9 @@ export function TaskDeploymentsPage() {
                         {d.crewLeads.join(', ')}
                       </td>
                       <td className="px-5 py-4">
-                        <span
-                          className={cn(
-                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.55rem] font-bold uppercase tracking-[0.1em]',
-                            meta.badge,
-                          )}
-                        >
-                          <span className={cn('size-1.5 rounded-full', meta.dot)} />
+                        <StatusBadge variant={meta.variant}>
                           {d.status}
-                        </span>
+                        </StatusBadge>
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">

@@ -3,10 +3,19 @@ import { Search, Download } from 'lucide-react'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
+import { EmptyState } from '@/components/EmptyState'
+import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
+
+const logStatusVariants: Record<string, StatusVariant> = {
+  Success: 'success',
+  Failed: 'destructive',
+  Blocked: 'destructive',
+  Warning: 'warning',
+}
 
 const roleStyles: Record<string, string> = {
   Admin: 'bg-emerald-100 text-emerald-700',
@@ -231,9 +240,15 @@ export function ActivityLogsPage() {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-16 text-center text-xs text-muted-foreground">
-                  No activity recorded yet. Create a user or register an event to populate the
-                  audit trail.
+                <td colSpan={6} className="py-8">
+                  <EmptyState
+                    title="No activity recorded"
+                    message={
+                      query || statusFilter !== 'All' || fromDate || toDate
+                        ? 'No operational logs match your current search query or date filter.'
+                        : 'No activity recorded yet. Operational events and status updates will appear here.'
+                    }
+                  />
                 </td>
               </tr>
             ) : (
@@ -264,9 +279,9 @@ export function ActivityLogsPage() {
                     </p>
                   </td>
                   <td className="px-4 py-4">
-                    <span className="inline-block rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/60 px-2.5 py-1 text-[0.55rem] font-bold uppercase tracking-[0.1em]">
+                    <StatusBadge variant={logStatusVariants[l.status] ?? 'neutral'}>
                       {l.status || 'Success'}
-                    </span>
+                    </StatusBadge>
                   </td>
                 </tr>
               ))

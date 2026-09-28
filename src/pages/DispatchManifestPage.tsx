@@ -3,11 +3,13 @@ import { Search, ClipboardCheck, MapPin, Calendar, Briefcase } from 'lucide-reac
 import { ConsoleLayout } from '@/components/ConsoleLayout'
 import { VerifyHandoffModal } from '@/components/VerifyHandoffModal'
 import { ManifestDetailModal } from '@/components/ManifestDetailModal'
+import { LoadingSkeleton } from '@/components/LoadingSkeleton'
+import { ErrorFallback } from '@/components/ErrorFallback'
+import { EmptyState } from '@/components/EmptyState'
+import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
 import { cn } from '@/lib/utils'
 import { usePortal } from '@/lib/store'
 import { useDispatchStore } from '@/lib/warehouse-dispatch'
-import { LoadingSkeleton } from '@/components/LoadingSkeleton'
-import { ErrorFallback } from '@/components/ErrorFallback'
 
 type HandshakeStatus = 'Pending Verification' | 'In Transit' | 'Completed'
 
@@ -24,10 +26,10 @@ interface Manifest {
   status: HandshakeStatus
 }
 
-const STATUS_META: Record<HandshakeStatus, { badge: string; dot: string }> = {
-  'Pending Verification': { badge: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 dark:border dark:border-amber-800/60', dot: 'bg-amber-500' },
-  'In Transit':           { badge: 'bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300 dark:border dark:border-sky-800/60',    dot: 'bg-sky-500'   },
-  'Completed':            { badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/60', dot: 'bg-emerald-500' },
+const handshakeVariants: Record<HandshakeStatus, StatusVariant> = {
+  'Pending Verification': 'warning',
+  'In Transit': 'info',
+  Completed: 'success',
 }
 
 type Filter = 'All Active' | HandshakeStatus
@@ -289,14 +291,16 @@ export function DispatchManifestPage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center text-xs text-muted-foreground">
-                    No manifests match the current filter.
+                  <td colSpan={7} className="py-8">
+                    <EmptyState
+                      title="No manifests found"
+                      message="No dispatch manifests match your current filter or search criteria."
+                    />
                   </td>
                 </tr>
               ) : (
                 filtered.map((m) => {
                   const [primary] = actionsFor(m.status)
-                  const meta = STATUS_META[m.status]
                   return (
                     <tr key={m.id} className="border-t border-border/60 align-middle">
                       <td className="px-5 py-4 text-xs font-medium text-card-foreground">
@@ -327,15 +331,9 @@ export function DispatchManifestPage() {
                         <p className="text-xs font-medium text-card-foreground">{m.fieldReceiver}</p>
                       </td>
                       <td className="px-5 py-4">
-                        <span
-                          className={cn(
-                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.55rem] font-bold uppercase tracking-[0.1em]',
-                            meta.badge,
-                          )}
-                        >
-                          <span className={cn('size-1.5 rounded-full', meta.dot)} />
+                        <StatusBadge variant={handshakeVariants[m.status]}>
                           {m.status}
-                        </span>
+                        </StatusBadge>
                       </td>
                       <td className="px-5 py-4 text-right">
                         <button

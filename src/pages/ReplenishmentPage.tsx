@@ -3,6 +3,7 @@ import { Search, Download, Plus, Package } from 'lucide-react'
 import { ConsoleLayout } from '@/components/ConsoleLayout'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
+import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
 import { ReorderRequisitionModal } from '@/components/ReorderRequisitionModal'
 import { EditThresholdModal } from '@/components/EditThresholdModal'
 import { ShopForOrderModal } from '@/components/ShopForOrderModal'
@@ -16,10 +17,10 @@ type Filter = 'All' | DeficitStatus
 
 const FILTERS: Filter[] = ['All', 'Not Purchased', 'In Procurement', 'Received']
 
-const statusStyles: Record<DeficitStatus, { badge: string; bar: string }> = {
-  'Not Purchased': { badge: 'bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300 dark:border dark:border-rose-800/60', bar: 'bg-destructive' },
-  'In Procurement': { badge: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 dark:border dark:border-amber-800/60', bar: 'bg-amber-500' },
-  Received: { badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/60', bar: 'bg-emerald-600 dark:bg-emerald-500' },
+const statusConfig: Record<DeficitStatus, { variant: StatusVariant; bar: string }> = {
+  'Not Purchased': { variant: 'destructive', bar: 'bg-destructive' },
+  'In Procurement': { variant: 'warning', bar: 'bg-amber-500' },
+  Received: { variant: 'success', bar: 'bg-emerald-600 dark:bg-emerald-500' },
 }
 
 interface Kpi {
@@ -312,15 +313,15 @@ export function ReplenishmentPage() {
                 filtered.map((p) => {
                   const pct = p.threshold > 0 ? Math.round((p.currentStock / p.threshold) * 100) : 100
                   const isOrder = p.status === 'In Procurement'
-                  const styles = statusStyles[p.status]
+                  const config = statusConfig[p.status]
                   return (
                     <FragmentRow
                       key={p.id}
                       item={p}
                       pct={pct}
                       isOrder={isOrder}
-                      badge={styles.badge}
-                      bar={styles.bar}
+                      variant={config.variant}
+                      bar={config.bar}
                       expanded={trackingId === p.id}
                       onReorder={() => setReorderItem(p)}
                       onEdit={() => setEditItem(p)}
@@ -365,7 +366,7 @@ interface RowProps {
   item: ProcurementItem
   pct: number
   isOrder: boolean
-  badge: string
+  variant: StatusVariant
   bar: string
   expanded: boolean
   onReorder: () => void
@@ -377,7 +378,7 @@ function FragmentRow({
   item,
   pct,
   isOrder,
-  badge,
+  variant,
   bar,
   expanded,
   onReorder,
@@ -417,15 +418,9 @@ function FragmentRow({
           </div>
         </td>
         <td className="px-5 py-4">
-          <span
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.55rem] font-bold uppercase tracking-[0.1em]',
-              badge,
-            )}
-          >
-            <span className="size-1.5 rounded-full bg-current" />
+          <StatusBadge variant={variant}>
             {item.status}
-          </span>
+          </StatusBadge>
         </td>
         <td className="px-5 py-4">
           <div className="flex items-center justify-end gap-3">

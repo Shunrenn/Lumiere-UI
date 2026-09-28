@@ -142,6 +142,13 @@ export function DamageVerdictModal({
     setShowEmergencyModal(false)
     setShowHighFrictionWarning(false)
     setAckChecked(false)
+
+    if (!exception) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeAll()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
   }, [exception])
 
   const showControls = editable
@@ -229,7 +236,7 @@ export function DamageVerdictModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
-      aria-label={`Damage verdict for ${exception.assetName}`}
+      aria-labelledby="damage-verdict-title"
       onClick={closeAll}
     >
       <div
@@ -242,7 +249,7 @@ export function DamageVerdictModal({
             <p className="text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-sidebar-foreground/60">
               Exception {exception.logId} · Visual Verdict
             </p>
-            <h2 className="mt-1 font-serif text-2xl font-medium leading-tight text-sidebar-primary text-balance">
+            <h2 id="damage-verdict-title" className="mt-1 font-serif text-2xl font-medium leading-tight text-sidebar-primary text-balance">
               {exception.assetName}
             </h2>
             <p className="mt-1 text-[0.65rem] uppercase tracking-[0.15em] text-sidebar-foreground/60">
@@ -252,7 +259,7 @@ export function DamageVerdictModal({
           <button
             type="button"
             onClick={closeAll}
-            className="text-sidebar-foreground/70 transition hover:text-sidebar-primary"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-sidebar-foreground/70 transition hover:text-sidebar-primary"
             aria-label="Close"
           >
             <X className="size-5" />

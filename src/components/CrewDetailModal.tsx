@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { X, Mail, Phone, CalendarDays, MapPin, Briefcase, Sparkles } from 'lucide-react'
+import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
 import { cn } from '@/lib/utils'
 
 export type CrewStatus = 'Available' | 'Assigned' | 'On Leave'
@@ -26,10 +28,10 @@ interface Props {
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-const statusBadge: Record<CrewStatus, string> = {
-  Available: 'bg-emerald-100 text-emerald-700',
-  Assigned: 'bg-amber-100 text-amber-800',
-  'On Leave': 'bg-rose-100 text-rose-700',
+const crewStatusVariants: Record<CrewStatus, StatusVariant> = {
+  Available: 'success',
+  Assigned: 'warning',
+  'On Leave': 'destructive',
 }
 
 const dayMeta: Record<'on' | 'off' | 'leave', { dot: string; label: string }> = {
@@ -39,6 +41,15 @@ const dayMeta: Record<'on' | 'off' | 'leave', { dot: string; label: string }> = 
 }
 
 export function CrewDetailModal({ member, onClose }: Props) {
+  useEffect(() => {
+    if (!member) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [member, onClose])
+
   if (!member) return null
 
   const initials = member.name
@@ -55,7 +66,7 @@ export function CrewDetailModal({ member, onClose }: Props) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-700/70 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label={`Crew details for ${member.name}`}
+      aria-labelledby="crew-detail-modal-title"
       onClick={onClose}
     >
       <div
@@ -72,7 +83,7 @@ export function CrewDetailModal({ member, onClose }: Props) {
               <p className="text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-sidebar-foreground/60">
                 {member.employeeId}
               </p>
-              <h2 className="mt-0.5 font-serif text-2xl font-medium leading-tight text-sidebar-primary text-balance">
+              <h2 id="crew-detail-modal-title" className="mt-0.5 font-serif text-2xl font-medium leading-tight text-sidebar-primary text-balance">
                 {member.name}
               </h2>
             </div>
@@ -80,7 +91,7 @@ export function CrewDetailModal({ member, onClose }: Props) {
           <button
             type="button"
             onClick={onClose}
-            className="text-sidebar-foreground/70 transition hover:text-sidebar-primary"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-sidebar-foreground/70 transition hover:text-sidebar-primary"
             aria-label="Close"
           >
             <X className="size-5" />
@@ -93,14 +104,9 @@ export function CrewDetailModal({ member, onClose }: Props) {
             <span className="rounded-full bg-accent px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-accent-foreground">
               {member.role}
             </span>
-            <span
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.55rem] font-bold uppercase tracking-[0.1em]',
-                statusBadge[member.status],
-              )}
-            >
+            <StatusBadge variant={crewStatusVariants[member.status]}>
               {member.status}
-            </span>
+            </StatusBadge>
           </div>
 
           {/* Contact */}

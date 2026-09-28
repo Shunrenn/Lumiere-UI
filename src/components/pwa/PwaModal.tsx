@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -21,21 +21,36 @@ export function PwaModal({
   footer,
   className,
 }: PwaModalProps) {
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 transition-all">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 transition-all"
+      onClick={onClose}
+      role="presentation"
+    >
       <div
         className={cn(
-          'relative flex max-h-[90vh] w-full max-w-[440px] flex-col rounded-t-3xl sm:rounded-3xl border border-border bg-card text-card-foreground shadow-2xl overflow-hidden',
+          'relative flex max-h-[min(92dvh,calc(100dvh-1.5rem))] sm:max-h-[88dvh] w-full max-w-[440px] flex-col rounded-t-3xl sm:rounded-3xl border border-border bg-card text-card-foreground shadow-2xl overflow-hidden',
           className
         )}
         role="dialog"
         aria-modal="true"
+        aria-labelledby="pwa-modal-title"
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-border/80 px-5 py-4">
           <div className="min-w-0 pr-3">
-            <h2 className="font-serif text-lg font-semibold tracking-tight text-foreground">{title}</h2>
+            <h2 id="pwa-modal-title" className="font-serif text-lg font-semibold tracking-tight text-foreground">{title}</h2>
             {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
           </div>
           <button

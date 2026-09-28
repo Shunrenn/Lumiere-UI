@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { AlertTriangle, ShieldCheck, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -26,6 +26,15 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: Props) {
+  useEffect(() => {
+    if (!open) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [open, onCancel])
+
   if (!open) return null
 
   const destructive = tone === 'destructive'
@@ -36,7 +45,7 @@ export function ConfirmDialog({
       className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
-      aria-label={title}
+      aria-labelledby="confirm-dialog-title"
       onClick={onCancel}
     >
       <div
@@ -58,7 +67,7 @@ export function ConfirmDialog({
               <p className="text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 {eyebrow}
               </p>
-              <h2 className="mt-0.5 font-serif text-xl font-medium leading-tight text-card-foreground">
+              <h2 id="confirm-dialog-title" className="mt-0.5 font-serif text-xl font-medium leading-tight text-card-foreground">
                 {title}
               </h2>
             </div>
@@ -66,7 +75,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="text-muted-foreground transition hover:text-foreground"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-muted-foreground transition hover:text-foreground"
             aria-label="Cancel"
           >
             <X className="size-5" />

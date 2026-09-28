@@ -41,6 +41,7 @@ export function PwaBottomNav({
             key={item.id}
             type="button"
             onClick={() => onSelect(item.id)}
+            aria-current={isActive ? 'page' : undefined}
             className={cn(
               'relative flex min-h-[44px] min-w-[44px] flex-1 flex-col items-center justify-center gap-1 rounded-xl px-2 py-1.5 text-xs transition-all active:scale-95',
               isActive

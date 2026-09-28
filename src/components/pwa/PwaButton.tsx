@@ -28,9 +28,9 @@ export function PwaButton({
         variant === 'outline' && 'border border-border bg-card text-foreground hover:bg-accent/50',
         variant === 'ghost' && 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
         variant === 'destructive' && 'bg-destructive text-destructive-foreground hover:opacity-90',
-        size === 'sm' && 'min-h-[38px] px-3 text-[0.65rem]',
-        size === 'md' && 'min-h-[44px] px-4 text-xs',
-        size === 'lg' && 'min-h-[50px] px-5 text-sm',
+        size === 'sm' && 'min-h-[44px] px-3 py-2 text-[0.65rem]',
+        size === 'md' && 'min-h-[44px] px-4 py-2.5 text-xs',
+        size === 'lg' && 'min-h-[50px] px-5 py-3 text-sm',
         className
       )}
       {...props}

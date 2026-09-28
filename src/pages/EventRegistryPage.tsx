@@ -12,17 +12,18 @@ import { cn } from '@/lib/utils'
 import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { ExecutiveSegmentedProgress } from '@/components/executive/ExecutiveSegmentedProgress'
 import { ProjectValuationPanel } from '@/components/executive/ProjectValuationPanel'
+import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
 import type { PortalEvent } from '@/lib/types'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 
-const statusStyles: Record<string, string> = {
-  Initialized: 'text-amber-700',
-  'In Production': 'text-sky-700',
-  Completed: 'text-emerald-700',
-  Settled: 'text-emerald-800 font-semibold',
-  'On Hold': 'text-rose-700',
-  Reserved: 'text-indigo-700',
-  Cancelled: 'text-muted-foreground line-through',
+const eventStatusVariants: Record<string, StatusVariant> = {
+  Initialized: 'warning',
+  'In Production': 'info',
+  Completed: 'success',
+  Settled: 'success',
+  'On Hold': 'destructive',
+  Reserved: 'accent',
+  Cancelled: 'neutral',
 }
 
 function formatDisplayTime(timeOrDate?: string, defaultTime = '06:00 PM'): string {
@@ -281,14 +282,12 @@ export function EventRegistryPage() {
                         {formatDisplayTime(e.eventEnd || e.installationEnd, '11:00 PM')}
                       </td>
                       <td className="px-4 py-4">
-                        <span
-                          className={cn(
-                            'text-[0.6rem] font-bold uppercase tracking-[0.12em]',
-                            statusStyles[e.status],
-                          )}
+                        <StatusBadge
+                          variant={eventStatusVariants[e.status] ?? 'neutral'}
+                          className={e.status === 'Cancelled' ? 'line-through opacity-70' : undefined}
                         >
                           {e.status}
-                        </span>
+                        </StatusBadge>
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">

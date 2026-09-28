@@ -48,6 +48,7 @@ const VALID_ROUTES = new Set<Route>([
   'manning',
   'production-manager',
   'inventory-officer',
+  'project-manager',
 ])
 
 export function parseRouteFromUrl(): Route | null {

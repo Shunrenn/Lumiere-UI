@@ -1100,9 +1100,14 @@ function DamageForm({
       <input type="hidden" name="photoCaptured" value={photoCount > 0 ? '1' : ''} />
 
       <div className="space-y-2">
-        <label className="block text-xs font-semibold text-foreground">
-          {photoRequired ? 'Photos (Required — SHA-256 Fingerprinted)' : 'Photos (Optional for missing items)'}
-        </label>
+        <div className="flex flex-col gap-0.5">
+          <label className="block text-xs font-semibold text-foreground">
+            {photoRequired ? 'Condition Verification Photo (Required — SHA-256 Fingerprinted)' : 'Condition Photo (Optional for missing items)'}
+          </label>
+          <p className="text-[0.62rem] text-muted-foreground leading-normal">
+            For bulk identical assets, 1 or more forensic photos verify damaged condition. Undamaged units in this batch do not require individual photography.
+          </p>
+        </div>
 
         {photoCount > 0 ? (
           <div className="space-y-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs">
@@ -1146,16 +1151,21 @@ function DamageForm({
         )}
       </div>
 
-      <label className="block text-xs font-semibold text-foreground">
-        Quantity Affected
+      <div className="space-y-1">
+        <label className="block text-xs font-semibold text-foreground">
+          Accountability Quantity (Units Affected)
+        </label>
+        <p className="text-[0.62rem] text-muted-foreground leading-normal">
+          Declare the exact numeric count of damaged or missing units in this batch.
+        </p>
         <input
           name="quantity"
           type="number"
           min="1"
           defaultValue="1"
-          className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
         />
-      </label>
+      </div>
 
       <label className="block text-xs font-semibold text-foreground">
         Damage Description

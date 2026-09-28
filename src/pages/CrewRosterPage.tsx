@@ -4,13 +4,14 @@ import { ConsoleLayout } from '@/components/ConsoleLayout'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
 import { CrewDetailModal, type CrewDetail } from '@/components/CrewDetailModal'
+import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
 import { CREW, type CrewStatus } from '@/lib/roster'
 import { cn } from '@/lib/utils'
 
-const statusMeta: Record<CrewStatus, { badge: string; dot: string }> = {
-  Available: { badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/60', dot: 'bg-emerald-500' },
-  Assigned: { badge: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 dark:border dark:border-amber-800/60', dot: 'bg-amber-500' },
-  'On Leave': { badge: 'bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300 dark:border dark:border-rose-800/60', dot: 'bg-rose-400' },
+const crewStatusVariants: Record<CrewStatus, StatusVariant> = {
+  Available: 'success',
+  Assigned: 'warning',
+  'On Leave': 'destructive',
 }
 
 interface Stat {
@@ -259,15 +260,9 @@ export function CrewRosterPage() {
                     )}
                   </td>
                   <td className="px-5 py-4">
-                    <span
-                      className={cn(
-                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.55rem] font-bold uppercase tracking-[0.1em]',
-                        statusMeta[c.status].badge,
-                      )}
-                    >
-                      <span className={cn('size-1.5 rounded-full', statusMeta[c.status].dot)} />
+                    <StatusBadge variant={crewStatusVariants[c.status]}>
                       {c.status}
-                    </span>
+                    </StatusBadge>
                   </td>
                   <td className="px-5 py-4 text-right">
                     <button

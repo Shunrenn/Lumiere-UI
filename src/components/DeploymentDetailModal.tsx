@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { X, MapPin, Briefcase, Users, Truck, Clock, AlertCircle } from 'lucide-react'
+import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
 import { cn } from '@/lib/utils'
 
 interface Deployment {
@@ -21,22 +23,32 @@ interface Props {
   onClose: () => void
 }
 
-const statusMeta = {
-  'In Progress': { color: 'text-amber-700', bg: 'bg-amber-100' },
-  'Awaiting Setup': { color: 'text-muted-foreground', bg: 'bg-muted' },
-  Completed: { color: 'text-emerald-700', bg: 'bg-emerald-100' },
+const deployStatusVariants: Record<'In Progress' | 'Awaiting Setup' | 'Completed', StatusVariant> = {
+  'In Progress': 'warning',
+  'Awaiting Setup': 'neutral',
+  Completed: 'success',
 }
 
 export function DeploymentDetailModal({ deployment, onClose }: Props) {
-  if (!deployment) return null
+  useEffect(() => {
+    if (!deployment) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [deployment, onClose])
 
-  const meta = statusMeta[deployment.status]
+  if (!deployment) return null
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/60 p-4 backdrop-blur-sm sm:items-center"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="deployment-detail-title"
       onClick={onClose}
     >
       <div
@@ -49,7 +61,7 @@ export function DeploymentDetailModal({ deployment, onClose }: Props) {
             <p className="text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Deployment · Event Allocation Brief
             </p>
-            <h2 className="mt-1 font-serif text-2xl font-medium tracking-tight text-card-foreground">
+            <h2 id="deployment-detail-title" className="mt-1 font-serif text-2xl font-medium tracking-tight text-card-foreground">
               {deployment.event}
             </h2>
             <p className="mt-1 font-mono text-[0.6rem] text-muted-foreground">{deployment.deploymentId}</p>
@@ -58,9 +70,9 @@ export function DeploymentDetailModal({ deployment, onClose }: Props) {
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="text-muted-foreground transition hover:text-card-foreground"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-muted-foreground transition hover:text-card-foreground"
           >
-            <X className="size-6" />
+            <X className="size-5" />
           </button>
         </div>
 
@@ -74,10 +86,9 @@ export function DeploymentDetailModal({ deployment, onClose }: Props) {
                   Deployment Status
                 </p>
                 <div className="mt-2 flex items-center gap-2">
-                  <span className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em]', meta.bg, meta.color)}>
-                    <span className="size-2 rounded-full bg-current" />
+                  <StatusBadge variant={deployStatusVariants[deployment.status]} size="md">
                     {deployment.status}
-                  </span>
+                  </StatusBadge>
                 </div>
               </div>
               <div>

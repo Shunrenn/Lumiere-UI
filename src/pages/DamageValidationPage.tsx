@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, CheckCircle2, XCircle, Clock3, Scale, MoreVertical, Wrench, Ban, UserCheck2, AlertTriangle } from 'lucide-react'
+import { Search, CheckCircle2, XCircle, Clock3, Scale, MoreVertical, Wrench, Ban, UserCheck2, AlertTriangle, Camera } from 'lucide-react'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { DamageVerdictModal } from '@/components/DamageVerdictModal'
 import { CompactStatStrip } from '@/components/CompactStatStrip'
@@ -299,7 +299,19 @@ export function DamageValidationPage() {
                   >
                     {/* Preview */}
                     <td className="px-4 py-4">
-                      <div className="size-6 rounded bg-muted" />
+                      {i.imageUrl || (i.images && i.images.length > 0) ? (
+                        <div className="size-7 overflow-hidden rounded border border-border/80 bg-muted">
+                          <img
+                            src={i.imageUrl || i.images![0]}
+                            alt={i.assetName}
+                            className="size-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex size-7 items-center justify-center rounded border border-border/80 bg-muted text-muted-foreground">
+                          <Camera className="size-3.5 opacity-60" />
+                        </div>
+                      )}
                     </td>
                     {/* Log ID */}
                     <td className="px-4 py-4">

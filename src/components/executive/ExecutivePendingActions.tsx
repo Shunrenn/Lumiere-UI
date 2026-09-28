@@ -1,4 +1,5 @@
-import { type LucideIcon } from 'lucide-react'
+import { type LucideIcon, CheckCircle2 } from 'lucide-react'
+import { EmptyState } from '@/components/EmptyState'
 import { cn } from '@/lib/utils'
 
 export interface ExecutivePendingItem {
@@ -31,9 +32,14 @@ export function ExecutivePendingActions({ items }: ExecutivePendingActionsProps)
       </h2>
 
       {isEmpty ? (
-        <p className="mt-4 text-xs italic text-muted-foreground">
-          No pending operational actions — all portfolios and reports clear.
-        </p>
+        <div className="flex flex-1 items-center justify-center">
+          <EmptyState
+            icon={CheckCircle2}
+            title="All Portfolios Clear"
+            message="No pending executive actions — all active portfolios and damage reports are up to date."
+            compact
+          />
+        </div>
       ) : (
         <ul className="mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto">
           {items.map((item) => {
