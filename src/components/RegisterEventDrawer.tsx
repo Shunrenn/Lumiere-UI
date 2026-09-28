@@ -190,8 +190,18 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
     if (!draft.title.trim() || isPastDate) return
     try {
       if (mode === 'edit' && event) {
-        await updateEvent(event.id, draft, adminRole || 'Executive')
-        close()
+        const res = await updateEvent(event.id, draft, adminRole || 'Executive', allowOverride)
+        if (res.conflict) {
+          setServerConflict({
+            message: res.message || 'Venue scheduling conflict detected.',
+            conflictingEvents: res.conflictingEvents || [],
+          })
+        } else if (!res.success) {
+          alert(`Failed to update event: ${res.message || 'Unknown error'}`)
+        } else {
+          setServerConflict(null)
+          close()
+        }
       } else {
         const res = await addEvent(draft, adminRole || 'Executive', allowOverride)
         if (res.conflict) {

@@ -368,25 +368,34 @@ export function DamageVerdictModal({
             </div>
           </div>
 
-          {/* Damage + EXIF banner */}
+          {/* Damage + Evidence banner */}
           <div className="rounded-lg border border-border bg-muted/40 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[0.58rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   Reported Damage
                 </p>
-                <p className="mt-1 text-sm font-semibold text-card-foreground">{exception.damageType}</p>
+                <p className="mt-1 text-sm font-semibold text-card-foreground">
+                  {exception.damageType}
+                  {exception.damagedQuantity !== undefined && (
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      ({exception.damagedQuantity} {exception.damagedQuantity === 1 ? 'unit' : 'units'} affected)
+                    </span>
+                  )}
+                </p>
               </div>
               <span
                 className={cn(
                   'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[0.55rem] font-bold uppercase tracking-[0.1em]',
-                  exception.exifVerified
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : 'bg-amber-100 text-amber-800',
+                  exception.noPhotographicEvidence || (!exception.photoUrl && !exception.sha256Hash)
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+                    : 'bg-muted text-muted-foreground border border-border',
                 )}
               >
                 <ShieldCheck className="size-3" />
-                {exception.exifVerified ? 'EXIF Authenticated' : 'EXIF Unverified'}
+                {exception.noPhotographicEvidence || (!exception.photoUrl && !exception.sha256Hash)
+                  ? 'No Photographic Evidence'
+                  : 'Photo Evidence Attached'}
               </span>
             </div>
 

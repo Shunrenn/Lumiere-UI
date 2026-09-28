@@ -1317,7 +1317,12 @@ interface PortalContextValue {
     initiatorRole?: string,
     allowConflictOverride?: boolean,
   ) => Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }>
-  updateEvent: (id: string, draft: Partial<PortalEvent>, initiatorRole?: string) => Promise<void>
+  updateEvent: (
+    id: string,
+    draft: Partial<PortalEvent>,
+    initiatorRole?: string,
+    allowConflictOverride?: boolean,
+  ) => Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }>
   refreshEvents: () => Promise<PortalEvent[]>
   resolveUserAction: (id: string) => void
   addUserAction: (action: Omit<UserAction, 'id'>) => void
@@ -1548,7 +1553,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(true)
   const [inventory, setInventory] = useState<InventoryItem[]>(seedInventory)
 
-  // Hydrate damage reports across active events from the REST API endpoint
+  // Hydrate damage reports across active events from the REST API endpoint (checkpoint-based synchronization)
   useEffect(() => {
     let active = true
     const loadReports = async () => {
@@ -1563,16 +1568,23 @@ export function PortalProvider({ children }: { children: ReactNode }) {
           setDamageExceptions(reports)
         }
       } catch (err) {
-        console.warn('[v0] Failed to load damage reports from backend:', err)
+        console.warn('[store] Failed to load damage reports from backend:', err)
         if (active) setIsBackendConnected(false)
       }
     }
 
     loadReports()
-    const interval = setInterval(loadReports, 3000)
+
+    const onFocus = () => {
+      void loadReports()
+    }
+    window.addEventListener('focus', onFocus)
+
+    const interval = setInterval(loadReports, 30000)
 
     return () => {
       active = false
+      window.removeEventListener('focus', onFocus)
       clearInterval(interval)
     }
   }, [events])
@@ -1944,7 +1956,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       initiatorRole = 'Executive',
       allowConflictOverride = false,
     ): Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }> => {
-      const token = getAuthToken()
+      const { createEventApi } = await import('@/lib/eventsApi')
 
       const sanitizeToIsoDate = (val?: string): string => {
         if (!val) return ''
@@ -1972,74 +1984,82 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         return t.length === 5 ? `${t}:00` : t
       }
 
-      const backendPayload = {
-        eventName: draft.title,
-        eventVenue: draft.venue || 'Venue Pending',
-        geoClass: draft.geoClass || 'Local',
-        dateOfEvent: dateOfEventIso,
-        ingressDate: ingressDateIso,
-        ingressTime: formatTimeStr(draft.ingressTime, '08:00:00'),
-        fullStop: formatTimeStr(draft.fullStop, '23:00:00'),
+      const result = await createEventApi(
+        {
+          eventName: draft.title,
+          eventVenue: draft.venue || 'Venue Pending',
+          geoClass: draft.geoClass === 'National' ? 'National' : 'Local',
+          dateOfEvent: dateOfEventIso,
+          ingressDate: ingressDateIso,
+          ingressTime: formatTimeStr(draft.ingressTime, '08:00:00'),
+          fullStop: formatTimeStr(draft.fullStop, '23:00:00'),
+          returnDate: draft.installationEnd ? `${sanitizeToIsoDate(draft.installationEnd)}T00:00:00Z` : undefined,
+          notes: draft.moodPlan || undefined,
+          allowConflictOverride,
+        },
         allowConflictOverride,
+      )
+
+      if (result.conflict) {
+        return {
+          success: false,
+          conflict: true,
+          message: result.message || 'Venue scheduling conflict detected.',
+          conflictingEvents: result.conflictingEvents || [],
+        }
       }
 
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/events`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify(backendPayload),
-        })
-
-        if (res.status === 409) {
-          const conflictData = await res.json().catch(() => ({}))
-          console.warn('[store] POST /api/events 409 Conflict:', conflictData)
-          return {
-            success: false,
-            conflict: true,
-            message: conflictData.error || conflictData.message || 'Venue scheduling conflict detected.',
-            conflictingEvents: conflictData.conflictingEvents || [],
-          }
+      if (!result.success || !result.event) {
+        return {
+          success: false,
+          message: result.message || 'Failed to create event',
         }
-
-        if (!res.ok) {
-          const errText = await res.text().catch(() => '')
-          console.warn('[store] POST /api/events non-ok response:', res.status, errText)
-          return { success: false, message: `Failed to create event: ${res.status} ${errText}` }
-        }
-
-        const created = await res.json().catch(() => ({}))
-        const realId = created ? (created.eventId || created.id) : undefined
-
-        // Retrieve authoritative updated event list from backend
-        await loadEvents()
-
-        pushLog({
-          account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
-          initiatorRole,
-          action: 'Event Registry Initialized',
-          detail: `New portfolio "${draft.title}" registered${
-            draft.client ? ` for ${draft.client}` : ''
-          }.${realId ? ` ID: ${realId}.` : ''}${allowConflictOverride ? ' (Conflict Overridden)' : ''}`,
-          ip: randomIp(),
-          status: 'Success',
-        })
-
-        return { success: true }
-      } catch (err: any) {
-        console.warn('[store] POST /api/events failed:', err)
-        return { success: false, message: err?.message || 'Network error creating event' }
       }
+
+      // Retrieve authoritative updated event list from backend
+      await loadEvents()
+
+      pushLog({
+        account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
+        initiatorRole,
+        action: 'Event Registry Initialized',
+        detail: `New portfolio "${draft.title}" registered${
+          draft.client ? ` for ${draft.client}` : ''
+        }. ID: ${result.event.id}.${allowConflictOverride ? ' (Conflict Overridden)' : ''}`,
+        ip: randomIp(),
+        status: 'Success',
+      })
+
+      return { success: true }
     },
     [pushLog, loadEvents],
   )
 
   const updateEvent = useCallback(
-    async (id: string, draft: Partial<PortalEvent>, initiatorRole = 'Executive'): Promise<void> => {
+    async (
+      id: string,
+      draft: Partial<PortalEvent>,
+      initiatorRole = 'Executive',
+      allowConflictOverride = false,
+    ): Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }> => {
       const { updateEventApi } = await import('@/lib/eventsApi')
-      await updateEventApi(id, draft)
+      const result = await updateEventApi(id, draft, allowConflictOverride)
+
+      if (result.conflict) {
+        return {
+          success: false,
+          conflict: true,
+          message: result.message || 'Venue scheduling conflict detected on update.',
+          conflictingEvents: result.conflictingEvents || [],
+        }
+      }
+
+      if (!result.success) {
+        return {
+          success: false,
+          message: result.message || 'Failed to update event',
+        }
+      }
 
       // Retrieve authoritative updated event list from backend
       await loadEvents()
@@ -2048,10 +2068,12 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         account: initiatorRole === 'Executive' ? 'EXEC-ROOT' : 'SYS-ROOT',
         initiatorRole,
         action: 'Event Registry Updated',
-        detail: `Portfolio "${draft.title ?? id}" details were updated.`,
+        detail: `Portfolio "${draft.title ?? id}" details were updated.${allowConflictOverride ? ' (Conflict Overridden)' : ''}`,
         ip: randomIp(),
         status: 'Success',
       })
+
+      return { success: true }
     },
     [pushLog, loadEvents],
   )

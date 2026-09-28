@@ -128,19 +128,22 @@ export function GroundCrewPage() {
 
   const derivedEvents = useMemo<EventItem[]>(() => {
     if (!events || events.length === 0) return []
+    // Match canonical seed assets from backend DbInitializer
+    const defaultItems = [
+      { id: '22222222-2222-2222-2222-222222222222', name: 'Arri SkyPanel S60-C LED Softlight', sku: 'LMR-LGT-S60C', qty: 10, color: 'Blue / Silver' },
+      { id: '22222222-2222-2222-2222-222222222223', name: 'L-Acoustics K2 Line Array Speaker Module', sku: 'LMR-AUD-K2', qty: 16, color: 'Black' },
+      { id: '22222222-2222-2222-2222-222222222224', name: 'Gold Chiavari Chairs', sku: 'LMR-FURN-CH08', qty: 150, color: 'Antique Gold' },
+    ]
+
     return events.map((evt, idx) => ({
-      id: evt.id || `e-${idx + 1}`,
+      id: evt.id,
       name: evt.title,
       date: evt.targetDate,
       venue: evt.venue,
       status: idx === 0 ? 'Current' : 'Upcoming',
       editable: idx === 0,
       phase: 'Dispatch Loading' as CheckpointPhase,
-      items: [
-        { id: `i-${idx}-1`, name: 'Premium Crystal Candelabra', sku: 'LM-0012', qty: 24, color: 'Clear / Gold' },
-        { id: `i-${idx}-2`, name: 'Gold Chiavari Chairs', sku: 'LM-0048', qty: 200, color: 'Antique Gold' },
-        { id: `i-${idx}-3`, name: 'Velvet Drapery Panels', sku: 'LM-0211', qty: 40, color: 'Midnight Blue' },
-      ],
+      items: defaultItems,
     }))
   }, [events])
 
@@ -190,14 +193,19 @@ export function GroundCrewPage() {
   const [requestDate, setRequestDate] = useState('2026-09-25')
   const [requestNote, setRequestNote] = useState('')
 
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false)
+  const [reportError, setReportError] = useState<string | null>(null)
+
   const openReport = (item: EventItem['items'][number]) => {
     setReportItem(item)
+    setReportError(null)
     setShowReport(true)
   }
 
-  const submitReport = (
+  const submitReport = async (
     event: FormEvent<HTMLFormElement>,
-    capture?: { photoDataUrl: string; sha256Hash: string; meta: HavaPhotoMetadata }
+    capture?: { photoDataUrl: string; sha256Hash: string; meta: HavaPhotoMetadata },
+    noPhotographicEvidence = false,
   ) => {
     event.preventDefault()
     if (!reportItem || !selectedEvent) return
@@ -207,53 +215,78 @@ export function GroundCrewPage() {
     const qty = Number(formData.get('quantity') || '1')
     const desc = (formData.get('description') as string) || ''
 
-    if (condition === 'Damaged' && !capture) {
-      setToast('Photo evidence is required for damaged items.')
+    if (condition === 'Damaged' && !capture && !noPhotographicEvidence) {
+      setToast('Photo evidence is required for damaged items, or mark as an exceptional no-photo report.')
       window.setTimeout(() => setToast(''), 3500)
       return
     }
 
-    submitGroundCrewDeclaration({
-      eventId: selectedEvent.id,
-      eventName: selectedEvent.name,
-      item: reportItem.name,
-      quantity: qty,
-      condition,
-      description: desc,
-      submittedBy: adminName || 'Ground Crew Member',
-      submittedAt: new Date().toISOString(),
-      submittedRole:
-        accessLevel === 'Event Admin'
-          ? 'Field Lead'
-          : accessLevel === 'Ground Crew / Member'
-            ? 'Member'
-            : 'Team Lead',
-      sha256Hash: capture?.sha256Hash,
-      gpsCoordinates: capture?.meta.gpsCoordinates,
-      
-    })
+    setIsSubmittingReport(true)
+    setReportError(null)
 
-    const newReport: DamageReport = {
-      id: `r-${Date.now()}`,
-      event: selectedEvent.name,
-      item: reportItem.name,
-      phase: selectedEvent.phase,
-      quantity: qty,
-      description: desc,
-      photo: capture?.photoDataUrl ?? '',
-      capturedAt: capture?.meta.capturedAt
-        ? new Date(capture.meta.capturedAt).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })
-        : 'Just now',
-      location: selectedEvent.venue,
-      sha256Hash: capture?.sha256Hash,
-      gpsCoordinates: capture?.meta.gpsCoordinates,
+    try {
+      const result = await submitGroundCrewDeclaration({
+        eventId: selectedEvent.id,
+        eventName: selectedEvent.name,
+        assetId: reportItem.id,
+        item: reportItem.name,
+        quantity: qty,
+        condition,
+        description: desc,
+        submittedBy: adminName || 'Ground Crew Member',
+        submittedAt: new Date().toISOString(),
+        submittedRole:
+          accessLevel === 'Event Admin'
+            ? 'Field Lead'
+            : accessLevel === 'Ground Crew / Member'
+              ? 'Member'
+              : 'Team Lead',
+        photoUrl: capture?.photoDataUrl,
+        sha256Hash: capture?.sha256Hash,
+        gpsCoordinates: capture?.meta.gpsCoordinates,
+        noPhotographicEvidence,
+      })
+
+      if (result.success) {
+        if (result.queuedOffline) {
+          setToast('Report queued locally for offline sync (not yet confirmed by server).')
+        } else {
+          setToast(`Condition report confirmed by server (ID: ${result.reportId.slice(0, 8)}).`)
+        }
+        window.setTimeout(() => setToast(''), 4000)
+
+        const newReport: DamageReport = {
+          id: result.queuedOffline ? result.declaration.id : result.reportId,
+          event: selectedEvent.name,
+          item: reportItem.name,
+          phase: selectedEvent.phase,
+          quantity: qty,
+          description: desc,
+          photo: capture?.photoDataUrl ?? '',
+          capturedAt: capture?.meta.capturedAt
+            ? new Date(capture.meta.capturedAt).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })
+            : 'Just now',
+          location: selectedEvent.venue,
+          sha256Hash: capture?.sha256Hash,
+          gpsCoordinates: capture?.meta.gpsCoordinates,
+        }
+
+        setReports((prev) => [newReport, ...prev])
+        setShowReport(false)
+        setReportItem(null)
+      } else {
+        setReportError(result.error)
+        setToast(`Submission failed: ${result.error}`)
+        window.setTimeout(() => setToast(''), 4500)
+      }
+    } catch (err: any) {
+      const errMsg = err?.message || 'Unexpected submission error'
+      setReportError(errMsg)
+      setToast(`Submission failed: ${errMsg}`)
+      window.setTimeout(() => setToast(''), 4500)
+    } finally {
+      setIsSubmittingReport(false)
     }
-
-    setReports((prev) => [newReport, ...prev])
-    setShowReport(false)
-    setReportItem(null)
-    setToast('Condition report submitted to Event Admin review queue.')
-    window.setTimeout(() => setToast(''), 3500)
   }
 
   const handleDecision = (declarationId: string, decision: 'Confirmed' | 'Rejected') => {
@@ -496,7 +529,12 @@ export function GroundCrewPage() {
       {showReport && reportItem && selectedEvent && (
         <PwaModal
           isOpen={showReport}
-          onClose={() => setShowReport(false)}
+          onClose={() => {
+            if (!isSubmittingReport) {
+              setShowReport(false)
+              setReportError(null)
+            }
+          }}
           title="Report Item Condition"
           subtitle={`${reportItem.name} • ${selectedEvent.name}`}
         >
@@ -505,6 +543,8 @@ export function GroundCrewPage() {
             event={selectedEvent.name}
             phase={selectedEvent.phase}
             onSubmit={submitReport}
+            isSubmitting={isSubmittingReport}
+            errorMessage={reportError}
           />
         </PwaModal>
       )}
@@ -1023,16 +1063,22 @@ function DamageForm({
   event,
   phase,
   onSubmit,
+  isSubmitting = false,
+  errorMessage = null,
 }: {
   item: EventItem['items'][number]
   event: string
   phase: CheckpointPhase
   onSubmit: (
     e: FormEvent<HTMLFormElement>,
-    capture?: { photoDataUrl: string; sha256Hash: string; meta: HavaPhotoMetadata }
+    capture?: { photoDataUrl: string; sha256Hash: string; meta: HavaPhotoMetadata },
+    noPhotographicEvidence?: boolean,
   ) => void
+  isSubmitting?: boolean
+  errorMessage?: string | null
 }) {
   const [condition, setCondition] = useState<'Damaged' | 'Missing'>('Damaged')
+  const [noPhotoEvidence, setNoPhotoEvidence] = useState(false)
   const [captures, setCaptures] = useState<
     { photoDataUrl: string; sha256Hash: string; meta: HavaPhotoMetadata }[]
   >([])
@@ -1041,7 +1087,7 @@ function DamageForm({
 
   const latestCapture = captures[captures.length - 1]
   const photoCount = captures.length
-  const photoRequired = condition === 'Damaged'
+  const photoRequired = condition === 'Damaged' && !noPhotoEvidence
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -1056,6 +1102,7 @@ function DamageForm({
         reader.readAsDataURL(file)
       })
       setCaptures((prev) => [...prev, { sha256Hash, meta, photoDataUrl }])
+      setNoPhotoEvidence(false)
     } catch (err) {
       console.warn('[HAVA] Failed to process photo:', err)
     } finally {
@@ -1065,7 +1112,7 @@ function DamageForm({
   }
 
   return (
-    <form onSubmit={(e) => onSubmit(e, latestCapture)} className="space-y-4">
+    <form onSubmit={(e) => onSubmit(e, latestCapture, noPhotoEvidence)} className="space-y-4">
       <div>
         <p className="text-[0.68rem] font-bold uppercase tracking-wider text-muted-foreground">{phase} Validation</p>
         <p className="text-xs text-muted-foreground">{item.name} • {event}</p>
@@ -1089,6 +1136,7 @@ function DamageForm({
           onChange={(e) => {
             setCondition(e.target.value as 'Damaged' | 'Missing')
             setCaptures([])
+            setNoPhotoEvidence(false)
           }}
           className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
         >
@@ -1097,59 +1145,83 @@ function DamageForm({
         </select>
       </label>
 
+      {/* Exceptional No-Photo Checkbox */}
+      {condition === 'Damaged' && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-border/80 bg-muted/30 p-3">
+          <input
+            type="checkbox"
+            id="no-photo-toggle"
+            checked={noPhotoEvidence}
+            onChange={(e) => {
+              setNoPhotoEvidence(e.target.checked)
+              if (e.target.checked) setCaptures([])
+            }}
+            className="mt-0.5 size-4 rounded border-input text-primary focus:ring-ring"
+          />
+          <label htmlFor="no-photo-toggle" className="text-xs text-foreground cursor-pointer select-none">
+            <span className="font-semibold block">No photographic evidence available (exceptional field path)</span>
+            <span className="text-[0.62rem] text-muted-foreground block mt-0.5">
+              Use only when physical obstruction or device limitation prevents on-site photography.
+            </span>
+          </label>
+        </div>
+      )}
+
       <input type="hidden" name="photoCaptured" value={photoCount > 0 ? '1' : ''} />
 
-      <div className="space-y-2">
-        <div className="flex flex-col gap-0.5">
-          <label className="block text-xs font-semibold text-foreground">
-            {photoRequired ? 'Condition Verification Photo (Required — SHA-256 Fingerprinted)' : 'Condition Photo (Optional for missing items)'}
-          </label>
-          <p className="text-[0.62rem] text-muted-foreground leading-normal">
-            For bulk identical assets, 1 or more forensic photos verify damaged condition. Undamaged units in this batch do not require individual photography.
-          </p>
-        </div>
-
-        {photoCount > 0 ? (
-          <div className="space-y-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs">
-            {latestCapture?.photoDataUrl && (
-              <img
-                src={latestCapture.photoDataUrl}
-                alt="Damage preview"
-                className="h-28 w-full rounded-lg object-cover border border-border"
-              />
-            )}
-            <div className="flex items-center justify-between">
-              <span className="flex size-6 items-center justify-center rounded bg-emerald-600 font-bold text-white text-[0.65rem]">
-                {photoCount}
-              </span>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isProcessing}
-                className="text-xs font-semibold text-primary underline hover:opacity-80"
-              >
-                + Add photo
-              </button>
-            </div>
-            <div className="break-all rounded-lg bg-background p-2 font-mono text-[0.6rem] text-muted-foreground border border-border">
-              <span className="font-bold text-emerald-600">SHA-256: </span>
-              {latestCapture?.sha256Hash}
-            </div>
+      {!noPhotoEvidence && (
+        <div className="space-y-2">
+          <div className="flex flex-col gap-0.5">
+            <label className="block text-xs font-semibold text-foreground">
+              {photoRequired ? 'Condition Verification Photo (Required — SHA-256 Fingerprinted)' : 'Condition Photo (Optional for missing items)'}
+            </label>
+            <p className="text-[0.62rem] text-muted-foreground leading-normal">
+              For bulk identical assets, 1 or more forensic photos verify damaged condition. Undamaged units in this batch do not require individual photography.
+            </p>
           </div>
-        ) : (
-          <PwaButton
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isProcessing}
-            variant="outline"
-            size="md"
-            icon={<Camera className="size-4" />}
-            className="w-full"
-          >
-            {isProcessing ? 'Processing HAVA photo...' : 'Capture Photo (Auto-fingerprinted)'}
-          </PwaButton>
-        )}
-      </div>
+
+          {photoCount > 0 ? (
+            <div className="space-y-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs">
+              {latestCapture?.photoDataUrl && (
+                <img
+                  src={latestCapture.photoDataUrl}
+                  alt="Damage preview"
+                  className="h-28 w-full rounded-lg object-cover border border-border"
+                />
+              )}
+              <div className="flex items-center justify-between">
+                <span className="flex size-6 items-center justify-center rounded bg-emerald-600 font-bold text-white text-[0.65rem]">
+                  {photoCount}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isProcessing || isSubmitting}
+                  className="text-xs font-semibold text-primary underline hover:opacity-80"
+                >
+                  + Add photo
+                </button>
+              </div>
+              <div className="break-all rounded-lg bg-background p-2 font-mono text-[0.6rem] text-muted-foreground border border-border">
+                <span className="font-bold text-emerald-600">SHA-256: </span>
+                {latestCapture?.sha256Hash}
+              </div>
+            </div>
+          ) : (
+            <PwaButton
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isProcessing || isSubmitting}
+              variant="outline"
+              size="md"
+              icon={<Camera className="size-4" />}
+              className="w-full"
+            >
+              {isProcessing ? 'Processing HAVA photo...' : 'Capture Photo (Auto-fingerprinted)'}
+            </PwaButton>
+          )}
+        </div>
+      )}
 
       <div className="space-y-1">
         <label className="block text-xs font-semibold text-foreground">
@@ -1163,6 +1235,7 @@ function DamageForm({
           type="number"
           min="1"
           defaultValue="1"
+          disabled={isSubmitting}
           className="w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
@@ -1173,13 +1246,20 @@ function DamageForm({
           name="description"
           required
           rows={3}
+          disabled={isSubmitting}
           placeholder="Describe item condition or missing count details..."
           className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </label>
 
-      <PwaButton type="submit" disabled={isProcessing} variant="primary" size="md" className="w-full">
-        Submit Validation Report
+      {errorMessage && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-2.5 text-xs text-destructive">
+          {errorMessage}
+        </div>
+      )}
+
+      <PwaButton type="submit" disabled={isProcessing || isSubmitting} variant="primary" size="md" className="w-full">
+        {isSubmitting ? 'Submitting report to server...' : 'Submit Validation Report'}
       </PwaButton>
     </form>
   )

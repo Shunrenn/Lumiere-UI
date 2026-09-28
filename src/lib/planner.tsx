@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from 'react'
 import { supabase } from '@/lib/supabase'
-import { API_BASE_URL, getAuthToken } from '@/lib/apiConfig'
 import { approveCanvasApi } from '@/lib/canvasApi'
 import { populateWarehouseDispatchFromCanvas } from '@/lib/warehouse-dispatch'
 
@@ -586,58 +585,43 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [eventMaterials, setEventMaterials] = useState<Record<string, MaterialLine[]>>({})
   const [eventChecklist, setEventChecklist] = useState<Record<string, ChecklistItem[]>>({})
 
-  const addPortfolio = useCallback((draft: NewPortfolioDraft) => {
-    const id = `pe-${Date.now()}`
-    const seq = 67 + Math.floor(Math.random() * 30)
-    const newEvent: PipelineEvent = {
-      id,
-      title: draft.title,
-      client: draft.client,
-      tier: draft.tier,
-      phase: 'Concept Definition',
-      status: phaseStatusByPhase['Concept Definition'],
-      date: draft.date || 'TBD',
-      venue: draft.venue || 'Venue pending assignment',
-      recordId: `EVT-2026-${String(seq).padStart(4, '0')}`,
-      galaDate: draft.date || 'TBD',
-      daysRemaining: 120,
-      footprint: 'Pending survey',
-      attendance: 'Pending confirmation',
-      pipelineStage: 'Ideation Phase',
-    }
+  const addPortfolio = useCallback(async (draft: NewPortfolioDraft) => {
+    const { createEventApi } = await import('@/lib/eventsApi')
 
-    setEvents((prev) => [newEvent, ...prev])
-
-    // Asynchronously dispatch event creation to API
-    const token = getAuthToken()
-    const backendPayload = {
+    const dateOfEventIso = draft.date ? `${draft.date}T00:00:00Z` : new Date().toISOString()
+    const result = await createEventApi({
       eventName: draft.title,
       eventVenue: draft.venue || 'Venue Pending',
       geoClass: 'Local',
-      dateOfEvent: draft.date ? `${draft.date}T00:00:00Z` : new Date().toISOString(),
-      ingressDate: draft.date ? `${draft.date}T00:00:00Z` : new Date().toISOString(),
+      dateOfEvent: dateOfEventIso,
+      ingressDate: dateOfEventIso,
       ingressTime: '08:00:00',
       fullStop: '23:00:00',
-    }
-
-    fetch(`${API_BASE_URL}/api/events`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(backendPayload),
     })
-      .then(async (res) => {
-        if (res.ok) {
-          const created = await res.json()
-          const realId = created ? (created.eventId || created.id) : null
-          if (realId) {
-            setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, id: realId } : e)))
-          }
-        }
-      })
-      .catch((err) => console.warn('[planner] POST /api/events skipped/failed:', err))
+
+    if (result.kind === 'success') {
+      const persisted = result.event
+      const newEvent: PipelineEvent = {
+        id: persisted.id,
+        title: persisted.title,
+        client: draft.client,
+        tier: draft.tier,
+        phase: 'Concept Definition',
+        status: phaseStatusByPhase['Concept Definition'],
+        date: persisted.targetDate,
+        venue: persisted.venue,
+        recordId: persisted.refId,
+        galaDate: persisted.targetDate,
+        daysRemaining: 120,
+        footprint: 'Pending survey',
+        attendance: 'Pending confirmation',
+        pipelineStage: 'Ideation Phase',
+      }
+      setEvents((prev) => [newEvent, ...prev])
+    } else {
+      console.warn('[planner] POST /api/events failed:', result.message)
+      throw new Error(`Failed to create portfolio event: ${result.message}`)
+    }
   }, [])
 
   const selectEvent = useCallback((id: string | null) => setSelectedEventId(id), [])

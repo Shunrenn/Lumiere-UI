@@ -1,5 +1,4 @@
 import { getPendingQueue, removeQueuedDeclaration } from './offlineQueue'
-import { API_BASE_URL, getAuthToken } from './apiConfig'
 
 type SyncListener = (pendingCount: number, syncing: boolean) => void
 const syncListeners = new Set<SyncListener>()
@@ -33,31 +32,30 @@ export async function triggerOfflineReplay(): Promise<{ syncedCount: number; err
 
   try {
     const pendingItems = await getPendingQueue()
-    const token = getAuthToken()
+    const { submitDamageReportApi } = await import('./damageApi')
 
     for (const item of pendingItems) {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/damage-reports`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Idempotency-Key': item.idempotencyKey,
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            boundEvent: item.eventName,
-            assetName: item.item,
-            damageType: item.condition === 'Damaged' ? 'Critical' : 'Missing',
-            notes: item.description,
-            reportingOfficer: item.submittedBy,
-          }),
+        const result = await submitDamageReportApi({
+          assetId: item.assetId,
+          eventId: item.eventId,
+          damagedQuantity: item.quantity,
+          noPhotographicEvidence: item.noPhotographicEvidence ?? false,
+          photoUrl: item.photoUrl || '',
+          sha256Hash: item.sha256Hash || '',
+          exifMetadata: item.exifMetadata,
+          gpsCoordinates: item.gpsCoordinates,
+          severity: item.condition === 'Damaged' ? 'Critical' : 'Missing',
+          idempotencyKey: item.idempotencyKey,
         })
 
-        // HTTP 200, 201 or 409 (already processed idempotently) count as successful sync
-        if (response.ok || response.status === 409) {
+        // HTTP 201 (Created) or 200 (Exact idempotent replay) count as successful sync
+        if (result.kind === 'created' || result.kind === 'replayed') {
           await removeQueuedDeclaration(item.id)
           syncedCount++
         } else {
+          // 409 (Idempotency conflict) or other failure must NOT be marked as success
+          console.warn(`[offlineReplay] Declaration ${item.id} replay failed:`, result.message)
           errors++
         }
       } catch (err) {

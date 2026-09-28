@@ -6,6 +6,7 @@ export interface GroundCrewDeclaration {
   id: string
   eventId: string
   eventName: string
+  assetId?: string
   item: string
   condition: 'Damaged' | 'Missing'
   quantity: number
@@ -17,11 +18,20 @@ export interface GroundCrewDeclaration {
   decisionAt?: string
   decisionBy?: string
   demoLabel?: string
-  // HAVA fields — populated when a real photo is captured
+  photoUrl?: string
+  noPhotographicEvidence?: boolean
+  isOfflineQueued?: boolean
+  idempotencyKey?: string
+  // Forensic capture fields (neutral evidence display without claiming verified validity)
   sha256Hash?: string
   exifMetadata?: string
   gpsCoordinates?: string
 }
+
+export type SubmitDeclarationResult =
+  | { success: true; queuedOffline: false; reportId: string; declaration: GroundCrewDeclaration }
+  | { success: true; queuedOffline: true; declaration: GroundCrewDeclaration }
+  | { success: false; error: string }
 
 type Listener = () => void
 const listeners = new Set<Listener>()
@@ -64,39 +74,90 @@ export function useGroundCrewDeclarations() {
   return useSyncExternalStore((listener) => { listeners.add(listener); return () => listeners.delete(listener) }, () => declarations, () => declarations)
 }
 
-export function submitGroundCrewDeclaration(input: Omit<GroundCrewDeclaration, 'id' | 'status' | 'decisionAt' | 'decisionBy'>) {
-  const newDecl: GroundCrewDeclaration = { ...input, id: `decl-${Date.now()}`, status: 'Pending Event Admin' }
-  declarations = [newDecl, ...declarations]
-  emit()
+export async function submitGroundCrewDeclaration(
+  input: Omit<GroundCrewDeclaration, 'id' | 'status' | 'decisionAt' | 'decisionBy' | 'isOfflineQueued'>,
+): Promise<SubmitDeclarationResult> {
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine
 
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+  if (isOffline) {
     // Offline: Enqueue to IndexedDB for automatic background replay on reconnect
-    import('./offlineQueue').then(({ enqueueDeclaration }) => {
-      enqueueDeclaration({
+    try {
+      const { enqueueDeclaration } = await import('./offlineQueue')
+      const queued = await enqueueDeclaration({
+        eventId: input.eventId,
         eventName: input.eventName,
-        item: input.item,
+        assetId: input.assetId || '',
+        itemName: input.item,
         condition: input.condition,
         quantity: input.quantity,
         description: input.description,
         submittedBy: input.submittedBy,
-      }).catch((err) => console.warn('[ground-crew-declarations] Failed to enqueue offline declaration:', err))
-    })
-  } else {
-    // Online: Post directly to backend API endpoint
-    import('./damageApi').then(({ createDamageReport }) => {
-      createDamageReport({
-        boundEvent: input.eventName,
-        assetName: input.item,
-        damageType: input.condition === 'Damaged' ? 'Critical' : 'Missing',
-        notes: input.description,
-        reportingOfficer: input.submittedBy,
+        photoUrl: input.photoUrl,
         sha256Hash: input.sha256Hash,
         exifMetadata: input.exifMetadata,
         gpsCoordinates: input.gpsCoordinates,
-      }).catch((err) => {
-        console.warn('[ground-crew-declarations] Backend damage report submit skipped/failed:', err)
+        noPhotographicEvidence: input.noPhotographicEvidence,
       })
+
+      const queuedDecl: GroundCrewDeclaration = {
+        ...input,
+        id: queued.id,
+        status: 'Pending Event Admin',
+        isOfflineQueued: true,
+      }
+      declarations = [queuedDecl, ...declarations]
+      emit()
+      return { success: true, queuedOffline: true, declaration: queuedDecl }
+    } catch (err: any) {
+      console.warn('[ground-crew-declarations] Failed to enqueue offline declaration:', err)
+      return { success: false, error: err?.message || 'Failed to enqueue offline condition report.' }
+    }
+  }
+
+  // Online: Submit to authoritative backend REST API
+  try {
+    const { submitDamageReportApi } = await import('./damageApi')
+    const res = await submitDamageReportApi({
+      assetId: input.assetId || '',
+      eventId: input.eventId,
+      damagedQuantity: input.quantity,
+      noPhotographicEvidence: input.noPhotographicEvidence ?? (input.condition !== 'Damaged' || !input.photoUrl),
+      photoUrl: input.photoUrl || '',
+      sha256Hash: input.sha256Hash || '',
+      exifMetadata: input.exifMetadata,
+      gpsCoordinates: input.gpsCoordinates,
+      severity: input.condition === 'Damaged' ? 'Critical' : 'Minor',
+      idempotencyKey: input.idempotencyKey,
     })
+
+    if (res.kind === 'created' || res.kind === 'replayed') {
+      const persistedDecl: GroundCrewDeclaration = {
+        ...input,
+        id: res.report.id,
+        status: 'Pending Event Admin',
+        isOfflineQueued: false,
+      }
+      declarations = [persistedDecl, ...declarations]
+      emit()
+      return {
+        success: true,
+        queuedOffline: false,
+        reportId: res.report.id,
+        declaration: persistedDecl,
+      }
+    }
+
+    // Explicit error from server: Never create optimistic success record
+    return {
+      success: false,
+      error: res.message || 'Damage report rejected by server.',
+    }
+  } catch (err: any) {
+    console.warn('[ground-crew-declarations] Backend damage report submit error:', err)
+    return {
+      success: false,
+      error: err?.message || 'Network error submitting damage report to server.',
+    }
   }
 }
 

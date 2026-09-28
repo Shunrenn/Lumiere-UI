@@ -354,6 +354,7 @@ export function DamageValidationPage() {
                     <td className="px-4 py-4 font-mono text-[0.65rem] leading-relaxed text-muted-foreground">
                       <p>GPS: {i.gps}</p>
                       <p>{i.capturedAt}</p>
+                      {i.damagedQuantity !== undefined && <p>Qty: {i.damagedQuantity}</p>}
                     </td>
                     {/* Status */}
                     <td className="px-4 py-4">

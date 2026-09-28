@@ -1,12 +1,19 @@
 export interface QueuedDeclaration {
   id: string
   idempotencyKey: string
+  eventId: string // Canonical Event GUID
   eventName: string
-  item: string
+  assetId: string // Canonical Asset GUID
+  itemName: string
   condition: 'Damaged' | 'Missing'
   quantity: number
   description: string
   submittedBy: string
+  photoUrl?: string
+  sha256Hash?: string
+  exifMetadata?: string
+  gpsCoordinates?: string
+  noPhotographicEvidence?: boolean
   timestamp: string
   retryCount: number
 }

@@ -342,17 +342,22 @@ export interface DamageSignOff {
 export interface DamageException {
   id: string
   logId: string
+  eventId?: string
+  assetId?: string
   boundEvent: string
   reportingOfficer: string
   officerRole: string
   assetName: string
   assetSku: string
   damageType: string
+  damagedQuantity?: number
+  photoUrl?: string
   imageUrl: string
   images?: string[]
   gps: string
   capturedAt: string
   exifVerified: boolean
+  evidenceStatus?: string
   estimatedCost: number
   notes: string
   status: DamageVerdict
