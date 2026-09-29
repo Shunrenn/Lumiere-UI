@@ -115,11 +115,11 @@ export function WorkforceTable({
                   )}
                 >
                   <td className="px-4 py-3.5 font-mono text-xs text-muted-foreground">
-                    {s.employeeId}
+                    {s.employeeId ? s.employeeId : '—'}
                   </td>
                   <td className="px-4 py-3.5">
                     <p className="text-sm font-medium text-card-foreground">
-                      {s.firstName} {s.surname}
+                      {s.fullName || `${s.firstName} ${s.surname}`.trim() || '—'}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {isRecord ? (s.employmentType ?? 'Employee Record') : s.email}

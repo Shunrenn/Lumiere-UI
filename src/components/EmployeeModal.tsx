@@ -71,7 +71,12 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
     setDraft((prev) => ({ ...prev, [key]: value }))
   }
 
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
   const close = () => {
+    setError(null)
+    setIsSubmitting(false)
     setStep('form')
     setDraft(emptyDraft)
     setShowPwd(false)
@@ -101,16 +106,24 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
     draft.role
 
   const commit = async () => {
-    await addStaff(draft)
-    if (actionId) {
-      resolveUserAction(actionId)
-    } else if (draft.email) {
-      const match = (userActions || []).find(
-        (a: any) => (a.email === draft.email || a.user === draft.email) && a.status === 'pending'
-      )
-      if (match) resolveUserAction(match.id)
+    try {
+      setIsSubmitting(true)
+      setError(null)
+      await addStaff(draft)
+      if (actionId) {
+        resolveUserAction(actionId)
+      } else if (draft.email) {
+        const match = (userActions || []).find(
+          (a: any) => (a.email === draft.email || a.user === draft.email) && a.status === 'pending'
+        )
+        if (match) resolveUserAction(match.id)
+      }
+      close()
+    } catch (err: any) {
+      setError(err?.message || 'Failed to create employee profile. Please check the details and try again.')
+    } finally {
+      setIsSubmitting(false)
     }
-    close()
   }
 
   return (
@@ -342,7 +355,16 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
             </div>
           </div>
         ) : (
-          <VerifyStep draft={draft} onReturn={() => setStep('form')} onConfirm={commit} />
+          <VerifyStep
+            draft={draft}
+            onReturn={() => {
+              setError(null)
+              setStep('form')
+            }}
+            onConfirm={commit}
+            error={error}
+            isSubmitting={isSubmitting}
+          />
         )}
       </div>
     </div>
@@ -353,10 +375,14 @@ function VerifyStep({
   draft,
   onReturn,
   onConfirm,
+  error,
+  isSubmitting,
 }: {
   draft: NewStaffDraft
   onReturn: () => void
   onConfirm: () => void
+  error: string | null
+  isSubmitting: boolean
 }) {
   const Row = ({ label, value }: { label: string; value: string }) => (
     <div>
@@ -369,6 +395,11 @@ function VerifyStep({
 
   return (
     <div className="px-6 py-6">
+      {error && (
+        <div className="mb-5 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+          {error}
+        </div>
+      )}
       <div className="space-y-5">
         <Row label="Employee ID:" value={draft.employeeId} />
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
@@ -393,16 +424,18 @@ function VerifyStep({
         <button
           type="button"
           onClick={onReturn}
-          className="rounded-md border border-input bg-background px-8 py-3 text-xs font-bold uppercase tracking-[0.15em] text-foreground transition hover:bg-muted"
+          disabled={isSubmitting}
+          className="rounded-md border border-input bg-background px-8 py-3 text-xs font-bold uppercase tracking-[0.15em] text-foreground transition hover:bg-muted disabled:opacity-50"
         >
           Return
         </button>
         <button
           type="button"
           onClick={onConfirm}
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-xs font-bold uppercase tracking-[0.15em] text-primary-foreground transition hover:opacity-90"
+          disabled={isSubmitting}
+          className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-xs font-bold uppercase tracking-[0.15em] text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Add New Employee →
+          {isSubmitting ? 'Creating Profile...' : 'Add New Employee →'}
         </button>
       </div>
     </div>

@@ -129,7 +129,12 @@ export const STAFF_ROLES = [
   'Admin',
   'Executive',
   'Project Manager',
+  'Warehouse Operations Manager',
   'Warehouse Manager',
+  'Inventory Officer',
+  'Manning Officer',
+  'Production Manager',
+  'Purchasing Officer',
   'Event Planner',
   'Ground Crew',
   'Event Admin',
@@ -137,7 +142,7 @@ export const STAFF_ROLES = [
   'Warehouse Member',
 ] as const
 
-export type StaffRole = (typeof STAFF_ROLES)[number]
+export type StaffRole = (typeof STAFF_ROLES)[number] | 'Unassigned' | (string & {})
 
 export type SessionStatus =
   | 'Active Session'
@@ -160,6 +165,7 @@ export interface Staff {
   surname: string
   firstName: string
   middleName?: string
+  fullName?: string
   email: string
   contact: string
   role: StaffRole

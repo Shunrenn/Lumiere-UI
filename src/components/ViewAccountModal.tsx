@@ -11,7 +11,7 @@ interface Props {
   onClose: () => void
   // When true, every field is editable (used by the "Edit" action).
   editable?: boolean
-  onSave?: (staff: Staff) => void
+  onSave?: (staff: Staff) => Promise<void> | void
 }
 
 const inputClass =
@@ -28,11 +28,15 @@ export function ViewAccountModal({
 }: Props) {
   const [showPwd, setShowPwd] = useState(false)
   const [draft, setDraft] = useState<Staff | null>(staff)
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Reset the editable draft whenever a different account is opened.
   useEffect(() => {
     setDraft(staff)
-  }, [staff])
+    setError(null)
+    setIsSaving(false)
+  }, [staff, open])
 
   if (!open || !staff || !draft) return null
 
@@ -58,7 +62,7 @@ export function ViewAccountModal({
               {editable ? 'Edit Account' : 'Account Details'}
             </h2>
             <p className="mt-1 text-[0.65rem] text-primary-foreground/80">
-              {staff.firstName} {staff.surname}
+              {staff.fullName || `${staff.firstName} ${staff.surname}`.trim() || staff.email}
             </p>
           </div>
           <button
@@ -79,7 +83,7 @@ export function ViewAccountModal({
               <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
                 Employee ID:
               </label>
-              {readField(staff.employeeId)}
+              {readField(staff.employeeId || '—')}
             </div>
 
             {/* Full Name */}
@@ -96,7 +100,7 @@ export function ViewAccountModal({
                     className={inputClass}
                   />
                 ) : (
-                  readField(staff.firstName)
+                  readField(staff.firstName || staff.fullName || '—')
                 )}
               </div>
               <div>
@@ -111,7 +115,7 @@ export function ViewAccountModal({
                     className={inputClass}
                   />
                 ) : (
-                  readField(staff.surname)
+                  readField(staff.surname || '—')
                 )}
               </div>
             </div>
@@ -181,6 +185,11 @@ export function ViewAccountModal({
                   }}
                   className={`${inputClass} appearance-none`}
                 >
+                  {!SELECTABLE_STAFF_ROLES.includes(draft.role as any) && (
+                    <option key={draft.role} value={draft.role}>
+                      {draft.role}
+                    </option>
+                  )}
                   {SELECTABLE_STAFF_ROLES.map((r) => (
                     <option key={r} value={r}>
                       {r}
@@ -281,31 +290,48 @@ export function ViewAccountModal({
             </div>
           </div>
 
+          {error && (
+            <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+              {error}
+            </div>
+          )}
+
           {/* Footer */}
           <div className="mt-8 flex justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md border border-input bg-background px-5 py-2.5 text-xs font-bold uppercase tracking-[0.15em] text-foreground transition hover:bg-muted"
+              disabled={isSaving}
+              className="rounded-md border border-input bg-background px-5 py-2.5 text-xs font-bold uppercase tracking-[0.15em] text-foreground transition hover:bg-muted disabled:opacity-50"
             >
               {editable ? 'Cancel' : 'Close'}
             </button>
             {editable && (
               <button
                 type="button"
-                onClick={() => {
-                  if (draft) {
+                disabled={isSaving}
+                onClick={async () => {
+                  if (!draft) return
+                  setError(null)
+                  setIsSaving(true)
+                  try {
                     const finalPwd = tempPassword.trim() || draft.tempPassword?.trim() || generateRandomPassword(8)
-                    onSave?.({
+                    const updatedFullName = `${draft.firstName} ${draft.middleName ? draft.middleName + ' ' : ''}${draft.surname}`.trim()
+                    await onSave?.({
                       ...draft,
+                      fullName: updatedFullName || draft.fullName,
                       tempPassword: finalPwd,
                     })
+                    onClose()
+                  } catch (err: any) {
+                    setError(err?.message || 'Failed to update employee details. Please try again.')
+                  } finally {
+                    setIsSaving(false)
                   }
-                  onClose()
                 }}
-                className="rounded-md bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-[0.15em] text-primary-foreground transition hover:opacity-90"
+                className="rounded-md bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-[0.15em] text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Save Changes
+                {isSaving ? 'Saving...' : 'Save Changes'}
               </button>
             )}
           </div>

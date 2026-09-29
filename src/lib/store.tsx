@@ -53,36 +53,70 @@ import {
   type SubRoleNode,
 } from '@/lib/rbac'
 
+function splitFullName(fullName: string): { firstName: string; surname: string; middleName?: string } {
+  if (!fullName) return { firstName: '', surname: '' }
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return { firstName: '', surname: '' }
+  if (parts.length === 1) return { firstName: parts[0], surname: '' }
+  if (parts.length === 2) return { firstName: parts[0], surname: parts[1] }
+  return {
+    firstName: parts[0],
+    middleName: parts.slice(1, -1).join(' '),
+    surname: parts[parts.length - 1],
+  }
+}
+
 // Map a backend user / workforce DTO row into the directory Staff shape used by the UI.
 function rowToStaff(row: any): Staff {
-  const sessionStatus = (row.session_status ?? 'Offline Session') as Staff['sessionStatus']
-  const unclaimedTemp = !!row.temporary_password
-  // A suspended session outranks everything; an unclaimed temp password means
-  // the account is still pending first login; otherwise it is active. Locked is
-  // layered on at display time from open account-locked requests.
+  const rawFullName = (row.fullName ?? row.full_name ?? '').toString().trim()
+  const nameParts = splitFullName(rawFullName)
+  const firstName = (row.firstName ?? row.first_name ?? nameParts.firstName ?? '').toString().trim()
+  const surname = (row.surname ?? row.last_name ?? nameParts.surname ?? '').toString().trim()
+  const middleName = (row.middleName ?? row.middle_name ?? nameParts.middleName ?? '').toString().trim() || undefined
+  const fullName = rawFullName || `${firstName} ${surname}`.trim()
+
+  const rawRole = (row.roleName ?? row.role_name ?? row.role ?? '').toString().trim()
+  // An unknown or missing role must remain visibly unassigned or preserve its semantic identity without forcing Ground Crew.
+  const role: StaffRole = rawRole ? (rawRole as StaffRole) : 'Unassigned'
+
+  const employeeId = (row.employeeId ?? row.employee_id ?? '')?.toString().trim()
+  const contact = (row.contactNumber ?? row.contact_number ?? row.contact ?? '')?.toString().trim()
+  const subRole = (row.subRole ?? row.sub_role ?? '')?.toString().trim() || undefined
+
+  const isActive = row.isActive !== false && row.is_active !== false
+  const sessionStatus: Staff['sessionStatus'] = !isActive
+    ? 'Suspended'
+    : ((row.session_status ?? row.sessionStatus ?? 'Offline Session') as Staff['sessionStatus'])
+
+  const unclaimedTemp = Boolean(row.temporaryPassword ?? row.temporary_password)
   const accountStatus: AccountStatus =
     sessionStatus === 'Suspended' ? 'Suspended' : unclaimedTemp ? 'Pending' : 'Active'
+
+  const rawDate = row.updatedAt ?? row.updated_at ?? row.createdAt ?? row.created_at
+  const lastAccess = rawDate
+    ? new Date(rawDate).toLocaleDateString('en-US', {
+        month: 'short',
+        day: '2-digit',
+        year: 'numeric',
+      })
+    : '—'
+
   return {
-    id: row.id,
-    employeeId: row.employee_id ?? '',
-    surname: row.surname ?? '',
-    firstName: row.first_name ?? '',
-    middleName: row.middle_name ?? '',
-    email: row.email,
-    contact: row.contact ?? '',
-    role: (row.role ?? 'Ground Crew') as StaffRole,
-    subRole: row.sub_role || row.subRole || undefined,
+    id: String(row.id),
+    employeeId,
+    surname,
+    firstName,
+    middleName,
+    fullName,
+    email: (row.email ?? '').toString().trim(),
+    contact,
+    role,
+    subRole,
     sessionStatus,
-    lastAccess: row.updated_at
-      ? new Date(row.updated_at).toLocaleDateString('en-US', {
-          month: 'short',
-          day: '2-digit',
-          year: 'numeric',
-        })
-      : '—',
+    lastAccess,
     recordKind: 'full-account',
     accountStatus,
-    tempPassword: unclaimedTemp ? (row.password_hash ?? undefined) : undefined,
+    tempPassword: unclaimedTemp ? (row.password_hash ?? row.tempPassword ?? undefined) : undefined,
   }
 }
 
@@ -1344,7 +1378,7 @@ interface PortalContextValue {
   addEmployeeRecord: (draft: NewEmployeeRecordDraft) => void
   removeStaff: (id: string) => Promise<void>
   toggleSuspend: (id: string) => Promise<void>
-  updateStaff: (staff: Staff) => void
+  updateStaff: (staff: Staff) => Promise<void>
   forceLogout: (id: string) => void
   addEvent: (
     draft: NewEventDraft,
@@ -1471,52 +1505,54 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   }, [loadEvents])
 
   // Hydrate the staff directory from the C# REST API (/api/workforce is the source of truth).
+  const loadStaff = useCallback(async (): Promise<void> => {
+    try {
+      const token = getAuthToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const res = await fetch(`${API_BASE_URL}/api/workforce`, { headers })
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data)) {
+          setStaff((prev) => {
+            const records = prev.filter((s) => s.recordKind === 'employee-record')
+            const updated = [...data.map(rowToStaff), ...records]
+            try {
+              localStorage.setItem('_lumiere_cached_staff', JSON.stringify(updated))
+            } catch {}
+            return updated
+          })
+        }
+      }
+    } catch (err) {
+      console.warn('[Workforce] GET /api/workforce fetch error:', err)
+    }
+  }, [])
+
   useEffect(() => {
     let active = true
 
-    const loadStaff = async () => {
-      try {
-        const token = getAuthToken()
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
-
-        const res = await fetch(`${API_BASE_URL}/api/workforce`, { headers })
-        if (!active) return
-        if (res.ok) {
-          const data = await res.json()
-          if (Array.isArray(data)) {
-            setStaff((prev) => {
-              const records = prev.filter((s) => s.recordKind === 'employee-record')
-              const updated = [...data.map(rowToStaff), ...records]
-              try {
-                localStorage.setItem('_lumiere_cached_staff', JSON.stringify(updated))
-              } catch {}
-              return updated
-            })
-          }
-        }
-      } catch (err) {
-        console.warn('[Workforce] GET /api/workforce fetch error:', err)
-      }
+    const syncStaff = () => {
+      if (!active) return
+      void loadStaff()
     }
 
-    loadStaff()
+    syncStaff()
 
     const onFocus = () => {
-      void loadStaff()
+      syncStaff()
     }
     window.addEventListener('focus', onFocus)
 
-    const interval = setInterval(() => {
-      void loadStaff()
-    }, 30000)
+    const interval = setInterval(syncStaff, 30000)
 
     return () => {
       active = false
       window.removeEventListener('focus', onFocus)
       clearInterval(interval)
     }
-  }, [])
+  }, [loadStaff])
   const [logs, setLogs] = useState<ActivityLog[]>(seedLogs)
   const [userActions, setUserActions] = useState<UserAction[]>(seedUserActions)
 
@@ -1723,74 +1759,52 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
   const addStaff = useCallback(
     async (draft: NewStaffDraft) => {
-      const role = (draft.role || 'Ground Crew') as StaffRole
-      const hasSubroleScope = role === 'Warehouse Manager' || (role as string) === 'Ground Crew' || (role as string) === 'Ground Crew'
-      const subRole = hasSubroleScope ? draft.subRole : ''
-      const tempPassword = draft.tempPassword?.trim() || generateRandomPassword(8)
+      const role = draft.role?.trim() || ''
+      const hasSubroleScope = role === 'Warehouse Manager' || (role as string) === 'Ground Crew'
+      const subRole = hasSubroleScope ? draft.subRole?.trim() || null : null
       const fullName = `${draft.firstName} ${draft.surname}`.trim()
       const email = draft.email.trim().toLowerCase()
+      const contactNumber = draft.contact?.trim() || null
+      const employeeId = draft.employeeId?.trim() || null
 
-      const localStaff: Staff = {
-        id: `s-${Date.now()}`,
-        employeeId: draft.employeeId,
-        surname: draft.surname,
-        firstName: draft.firstName,
-        middleName: draft.middleName,
+      const token = getAuthToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const payload = {
         email,
-        contact: draft.contact,
-        role,
+        fullName,
+        roleName: role,
+        contactNumber,
+        employeeId,
         subRole,
-        sessionStatus: 'Offline Session',
-        lastAccess: '—',
-        recordKind: 'full-account',
-        accountStatus: 'Pending',
-        tempPassword,
       }
 
-      setStaff((prev) => [...prev, localStaff])
+      const res = await fetch(`${API_BASE_URL}/api/workforce`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      })
 
-      // Always save to local storage cache so offline / local auth fallbacks can log in
-      try {
-        const existing = JSON.parse(localStorage.getItem('_lumiere_added_staff') || '[]')
-        const filtered = existing.filter((s: any) => s.email !== email)
-        localStorage.setItem('_lumiere_added_staff', JSON.stringify([...filtered, localStaff]))
-      } catch {}
-
-      // Persist the account to the database via REST API
-      try {
-        const token = getAuthToken()
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
-
-        await fetch(`${API_BASE_URL}/api/workforce`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            email,
-            fullName,
-            role,
-            subRole: subRole || null,
-            surname: draft.surname,
-            firstName: draft.firstName,
-            middleName: draft.middleName,
-            contact: draft.contact,
-            tempPassword,
-          }),
-        })
-      } catch (err) {
-        console.warn('[Workforce] Backend create failed, created locally:', err)
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null)
+        const errMsg = errJson?.error || errJson?.message || `Account creation failed (HTTP ${res.status})`
+        throw new Error(errMsg)
       }
+
+      // Success confirmed by server: hydrate authoritative state from server
+      await loadStaff()
 
       pushLog({
-        account: draft.employeeId,
+        account: employeeId || email,
         initiatorRole: 'Admin',
         action: 'New Employee Profile Created',
-        detail: `Provisioned account for ${fullName} (${role}). Account saved to directory; temporary password set.`,
+        detail: `Provisioned account for ${fullName} (${role}). Account saved to directory.`,
         ip: randomIp(),
         status: 'Success',
       })
     },
-    [pushLog],
+    [loadStaff, pushLog],
   )
 
   const removeStaff = useCallback(
@@ -1938,42 +1952,37 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         tempPassword: sanitizedTempPwd,
       }
 
-      setStaff((prev) => prev.map((s) => (s.id === sanitizedStaff.id ? sanitizedStaff : s)))
+      const token = getAuthToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
 
-      try {
-        const existing = JSON.parse(localStorage.getItem('_lumiere_added_staff') || '[]')
-        const filtered = existing.filter(
-          (s: any) => s.id !== sanitizedStaff.id && s.email !== sanitizedStaff.email,
-        )
-        localStorage.setItem('_lumiere_added_staff', JSON.stringify([...filtered, sanitizedStaff]))
-      } catch {}
+      const res = await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(sanitizedStaff.id)}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          firstName: sanitizedStaff.firstName,
+          surname: sanitizedStaff.surname,
+          middleName: sanitizedStaff.middleName,
+          contact: sanitizedStaff.contact,
+          email: sanitizedStaff.email,
+          role: sanitizedStaff.role,
+          subRole: sanitizedStaff.subRole || null,
+          tempPassword: sanitizedStaff.tempPassword,
+          accountStatus: sanitizedStaff.accountStatus,
+        }),
+      })
 
-      try {
-        const token = getAuthToken()
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
-
-        await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(sanitizedStaff.id)}`, {
-          method: 'PUT',
-          headers,
-          body: JSON.stringify({
-            firstName: sanitizedStaff.firstName,
-            surname: sanitizedStaff.surname,
-            middleName: sanitizedStaff.middleName,
-            contact: sanitizedStaff.contact,
-            email: sanitizedStaff.email,
-            role: sanitizedStaff.role,
-            subRole: sanitizedStaff.subRole || null,
-            tempPassword: sanitizedStaff.tempPassword,
-            accountStatus: sanitizedStaff.accountStatus,
-          }),
-        })
-      } catch (err) {
-        console.warn('[Workforce] Backend update failed, updated locally:', err)
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null)
+        const errMsg = errJson?.error || errJson?.message || `Failed to update employee (HTTP ${res.status})`
+        throw new Error(errMsg)
       }
 
+      // Authoritative reload of workforce after successful update
+      await loadStaff()
+
       pushLog({
-        account: sanitizedStaff.employeeId,
+        account: sanitizedStaff.employeeId || sanitizedStaff.email,
         initiatorRole: 'Admin',
         action: 'Employee Profile Updated',
         detail: `Profile details for ${sanitizedStaff.firstName} ${sanitizedStaff.surname} (${sanitizedStaff.role}) were edited.`,
@@ -1981,7 +1990,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         status: 'Success',
       })
     },
-    [pushLog],
+    [loadStaff, pushLog],
   )
 
   const forceLogout = useCallback(

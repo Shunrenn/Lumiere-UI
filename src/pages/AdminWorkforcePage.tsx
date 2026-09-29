@@ -124,16 +124,29 @@ export function AdminWorkforcePage() {
 
   const rows = useMemo(() => {
     const filtered = staff.filter((s) => {
-      const text = `${s.firstName} ${s.surname} ${s.employeeId} ${s.email}`.toLowerCase()
+      const displayName = s.fullName || `${s.firstName} ${s.surname}`.trim()
+      const text = `${displayName} ${s.employeeId} ${s.email}`.toLowerCase()
       return (!query || text.includes(query.toLowerCase())) && (role === 'All Roles' || s.role === role) && (status === 'All' || statusFor(s, lockedIds) === status)
     })
     const sorted = [...filtered]
-    if (sort === 'A-Z') sorted.sort((a, b) => `${a.firstName} ${a.surname}`.localeCompare(`${b.firstName} ${b.surname}`))
-    else if (sort === 'Z-A') sorted.sort((a, b) => `${b.firstName} ${b.surname}`.localeCompare(`${a.firstName} ${a.surname}`))
-    else sorted.sort((a, b) => parseDateAdded(b.dateAdded) - parseDateAdded(a.dateAdded)) // Month & Year: most recent first
+    if (sort === 'A-Z') {
+      sorted.sort((a, b) => {
+        const nameA = a.fullName || `${a.firstName} ${a.surname}`.trim()
+        const nameB = b.fullName || `${b.firstName} ${b.surname}`.trim()
+        return nameA.localeCompare(nameB)
+      })
+    } else if (sort === 'Z-A') {
+      sorted.sort((a, b) => {
+        const nameA = a.fullName || `${a.firstName} ${a.surname}`.trim()
+        const nameB = b.fullName || `${b.firstName} ${b.surname}`.trim()
+        return nameB.localeCompare(nameA)
+      })
+    } else {
+      sorted.sort((a, b) => parseDateAdded(b.dateAdded) - parseDateAdded(a.dateAdded)) // Month & Year: most recent first
+    }
     return sorted
   }, [staff, query, role, status, sort, lockedIds])
-  const roles = [...new Set(staff.map((s) => s.role))]
+  const roles = [...new Set(staff.map((s) => s.role))].filter(Boolean)
 
   // These three figures mirror the System Dashboard's stats (minus System Health), but
   // render as a compact inline strip in the table header rather than standalone cards —
@@ -216,7 +229,7 @@ export function AdminWorkforcePage() {
         actionId={prefillActionId}
       />
       <EmployeeRecordModal open={createRecordOpen} onClose={() => setCreateRecordOpen(false)} onCreate={addEmployeeRecord} />
-      <ViewAccountModal open={!!selected} staff={selected} tempPassword={tempPassword} onTempPasswordChange={setTempPassword} onClose={() => setSelected(null)} editable={editMode} onSave={(s) => { updateStaff({ ...s, tempPassword }); setSelected(null) }} />
+      <ViewAccountModal open={!!selected} staff={selected} tempPassword={tempPassword} onTempPasswordChange={setTempPassword} onClose={() => setSelected(null)} editable={editMode} onSave={async (s) => { await updateStaff({ ...s, tempPassword }); setSelected(null) }} />
     </AdminShell>
   )
 }
