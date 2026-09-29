@@ -34,14 +34,9 @@ export function ActivityLogsPage() {
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
 
-  // Filter out system security check logs for Executive operational view
+  // System Audit Trail & Security Logs backed by real audit authority (/api/audit-logs)
   const logs = useMemo(() => {
-    return storeLogs.filter(
-      (l) =>
-        !l.action.includes('Authentication') &&
-        !l.action.includes('Checksum') &&
-        !l.action.includes('Session Authenticated'),
-    )
+    return storeLogs
   }, [storeLogs])
 
   const statusOptions = useMemo(() => {
@@ -91,7 +86,7 @@ export function ActivityLogsPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'lumiere-operational-audit-logs.csv'
+    a.download = 'lumiere-system-audit-trail-and-security-logs.csv'
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -102,10 +97,10 @@ export function ActivityLogsPage() {
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <h1 className="font-serif text-3xl font-medium tracking-tight text-foreground lg:text-4xl">
-          Operational Audit Logs
+          System Audit Trail &amp; Security Logs
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Cross-portfolio operational events, status updates, damage filings, and milestone audit log trail.
+          System-wide security events, cross-portfolio operational actions, access verifications, and audit trails.
         </p>
       </div>
       <div className="relative">

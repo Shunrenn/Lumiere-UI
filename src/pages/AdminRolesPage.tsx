@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import { ChevronDown, Folder, FolderOpen, Lock, Plus, ShieldCheck, Trash2, UserRound } from 'lucide-react'
 import { AdminShell } from '@/components/admin/AdminShell'
 import { MaskedPinInput } from '@/components/admin/MaskedPinInput'
@@ -7,6 +7,11 @@ import { ErrorFallback } from '@/components/ErrorFallback'
 import { useNav } from '@/lib/nav'
 import { useAuth } from '@/lib/auth'
 import { usePortal } from '@/lib/store'
+import {
+  fetchAdminRolePermissions,
+  updateRoleAssetCapability,
+  extractExecutiveAssetCapability,
+} from '@/lib/adminPermissionsApi'
 import { cn } from '@/lib/utils'
 import type { AdminDestinationId } from '@/lib/admin-destinations'
 import {
@@ -79,7 +84,7 @@ interface TreeAckAction extends AckChangeSummary {
 
 export function AdminRolesPage() {
   const { navigate, intent } = useNav()
-  const { hasConfirmationPin, verifyConfirmationPin } = useAuth()
+  const { hasConfirmationPin, verifyConfirmationPin, refreshCapabilities } = useAuth()
 
   // Flat, single-company enablement of toggleable sub-roles, seeded from
   // defaults. This platform serves one company only — there is no
@@ -100,6 +105,69 @@ export function AdminRolesPage() {
     loadPostEgressPolicy,
     updatePostEgressPolicy,
   } = usePortal()
+
+  // Authoritative Executive Asset Inventory capability state (backed by backend RBAC contract)
+  const [execCapability, setExecCapability] = useState<boolean>(false)
+  const [loadingExecCapability, setLoadingExecCapability] = useState<boolean>(true)
+  const [mutatingExecCapability, setMutatingExecCapability] = useState<boolean>(false)
+  const [execCapabilityError, setExecCapabilityError] = useState<string | null>(null)
+
+  const loadExecCapability = useCallback(async () => {
+    setLoadingExecCapability(true)
+    setExecCapabilityError(null)
+    try {
+      const res = await fetchAdminRolePermissions()
+      if (res.success && res.data) {
+        const capabilityEnabled = extractExecutiveAssetCapability(res.data)
+        setExecCapability(capabilityEnabled ?? false)
+      } else {
+        // Safe closed default: denied if response unsuccessful
+        setExecCapability(false)
+        if (!res.success) {
+          setExecCapabilityError(res.error || 'Unable to fetch role permissions from backend authority.')
+        }
+      }
+    } catch (err) {
+      setExecCapability(false)
+      setExecCapabilityError(err instanceof Error ? err.message : 'Network failure loading permissions.')
+    } finally {
+      setLoadingExecCapability(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadExecCapability()
+  }, [loadExecCapability])
+
+  const handleToggleExecutiveAssetCapability = async () => {
+    if (mutatingExecCapability || loadingExecCapability) return
+    const nextState = !execCapability
+    setMutatingExecCapability(true)
+    setExecCapabilityError(null)
+    try {
+      const res = await updateRoleAssetCapability('Executive', nextState)
+      if (res.success) {
+        setExecCapability(nextState)
+        showToast(`Executive Asset Inventory & Allocation capability ${nextState ? 'enabled' : 'disabled'}.`)
+        // Reconcile authoritative state after mutation
+        await loadExecCapability()
+        // Refresh session capabilities if current user is affected
+        if (refreshCapabilities) {
+          void refreshCapabilities()
+        }
+      } else {
+        const errMsg = res.error || 'Server rejected capability update.'
+        setExecCapabilityError(errMsg)
+        showToast(`Failed to update Executive capability: ${errMsg}`)
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Network error updating capability.'
+      setExecCapabilityError(errMsg)
+      showToast(`Failed to update Executive capability: ${errMsg}`)
+    } finally {
+      setMutatingExecCapability(false)
+    }
+  }
 
   const [expanded, setExpanded] = useState<string | null>(null)
 
@@ -839,38 +907,113 @@ export function AdminRolesPage() {
           </div>
 
           <div className="overflow-hidden rounded-xl border border-border bg-card">
-            {STRUCTURAL_ROLES.map((role, index) => (
-              <div
-                key={role.id}
-                className={cn(
-                  'flex items-center gap-4 px-4 py-3.5 sm:px-5',
-                  index !== 0 && 'border-t border-border/60',
-                )}
-              >
-                {/* Alignment spacer to match sub-role rows' chevron column */}
-                <ShieldCheck
-                  className="size-4 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-card-foreground">{role.name}</p>
-                    <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[0.55rem] font-semibold uppercase tracking-[0.1em] text-primary">
-                      {role.scope}
-                    </span>
+            {STRUCTURAL_ROLES.map((role, index) => {
+              const isExec = role.id === 'executive'
+              const isPM = role.id === 'project-manager'
+              return (
+                <div
+                  key={role.id}
+                  className={cn(
+                    'flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3.5 sm:px-5',
+                    index !== 0 && 'border-t border-border/60',
+                  )}
+                >
+                  <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                    <ShieldCheck
+                      className="size-4 shrink-0 text-muted-foreground mt-0.5 sm:mt-0"
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-card-foreground">{role.name}</p>
+                        <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[0.55rem] font-semibold uppercase tracking-[0.1em] text-primary">
+                          {role.scope}
+                        </span>
+                        {isExec && (
+                          <span className="rounded-full bg-amber-500/15 text-amber-500 ring-1 ring-inset ring-amber-500/30 px-2 py-0.5 text-[0.52rem] font-bold uppercase tracking-wider">
+                            Configurable Permission
+                          </span>
+                        )}
+                        {isPM && (
+                          <span className="rounded-full bg-emerald-500/15 text-emerald-500 ring-1 ring-inset ring-emerald-500/30 px-2 py-0.5 text-[0.52rem] font-bold uppercase tracking-wider">
+                            Core Authority
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+                        {role.description}
+                      </p>
+                      {isExec && (
+                        <div className="mt-1 space-y-0.5">
+                          <p className="text-[0.7rem] text-primary font-medium">
+                            Asset Inventory &amp; Allocation:{' '}
+                            {loadingExecCapability
+                              ? 'Checking authoritative server state...'
+                              : execCapability
+                              ? 'Granted (Visible in sidebar, direct route permitted, allocation operations authorized)'
+                              : 'Revoked (Hidden in sidebar, direct route blocked, allocation operations denied)'}
+                          </p>
+                          {execCapabilityError && (
+                            <p className="text-[0.65rem] text-amber-500/90 font-medium">
+                              Server sync notice: {execCapabilityError}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      {isPM && (
+                        <p className="mt-1 text-[0.7rem] text-muted-foreground">
+                          Asset Inventory and event lifecycle management are core to Project Manager and unaffected by Executive configuration.
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {role.description}
-                  </p>
-                </div>
 
-                {/* Static, non-toggleable indicator (replaces the on/off switch) */}
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-muted/60 px-2.5 py-1 text-[0.55rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                  <Lock className="size-2.5" aria-hidden="true" />
-                  Fixed
-                </span>
-              </div>
-            ))}
+                  <div className="shrink-0 flex items-center gap-2 self-end sm:self-center">
+                    {isExec ? (
+                      <button
+                        type="button"
+                        disabled={loadingExecCapability || mutatingExecCapability}
+                        onClick={handleToggleExecutiveAssetCapability}
+                        className={cn(
+                          'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition shadow-sm border',
+                          execCapability
+                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25'
+                            : 'bg-muted border-border text-muted-foreground hover:bg-muted/80',
+                          (loadingExecCapability || mutatingExecCapability) && 'opacity-60 cursor-not-allowed',
+                        )}
+                        aria-pressed={execCapability}
+                        aria-busy={loadingExecCapability || mutatingExecCapability}
+                      >
+                        <span
+                          className={cn(
+                            'size-2 rounded-full transition-colors',
+                            loadingExecCapability || mutatingExecCapability
+                              ? 'bg-amber-400 animate-pulse'
+                              : execCapability
+                              ? 'bg-emerald-500'
+                              : 'bg-muted-foreground',
+                          )}
+                        />
+                        <span>
+                          {loadingExecCapability
+                            ? 'Asset Inventory: Syncing...'
+                            : mutatingExecCapability
+                            ? 'Asset Inventory: Saving...'
+                            : execCapability
+                            ? 'Asset Inventory: ON'
+                            : 'Asset Inventory: OFF'}
+                        </span>
+                      </button>
+                    ) : (
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-muted/60 px-2.5 py-1 text-[0.55rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+                        <Lock className="size-2.5" aria-hidden="true" />
+                        Fixed
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </section>
 

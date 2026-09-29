@@ -20,6 +20,7 @@ export type AuditActionType =
   | 'EXECUTIVE_SIGNOFF'
   | 'DISPUTED_CONFIRMATION'
   | 'ASSIGNMENT_AUTO_RELEASED'
+  | 'CAPABILITY_TOGGLE'
 
 export interface AuditLogEntry {
   id: string

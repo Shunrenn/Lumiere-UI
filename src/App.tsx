@@ -46,6 +46,7 @@ const ManningPage = lazy(() => import('@/pages/ManningPage').then((m) => ({ defa
 const ProductionManagerPage = lazy(() => import('@/pages/ProductionManagerPage').then((m) => ({ default: m.ProductionManagerPage })))
 const InventoryOfficerPage = lazy(() => import('@/pages/InventoryOfficerPage').then((m) => ({ default: m.InventoryOfficerPage })))
 const ProjectManagerDashboardPage = lazy(() => import('@/pages/ProjectManagerDashboardPage').then((m) => ({ default: m.ProjectManagerDashboardPage })))
+const ExecutiveAssetInventoryPage = lazy(() => import('@/pages/ExecutiveAssetInventoryPage').then((m) => ({ default: m.ExecutiveAssetInventoryPage })))
 
 function PortalAccessError({ portal }: { portal: 'web' | 'pwa' }) {
   const { logout } = useAuth()
@@ -66,7 +67,7 @@ function PortalAccessError({ portal }: { portal: 'web' | 'pwa' }) {
 
 function Router() {
   const { route } = useNav()
-  const { portal, isWarehouse, isAdmin, isProjectManager, isProductionManager, isInventoryOfficer, hasFullWarehouseAccess } = useAuth()
+  const { portal, isWarehouse, isAdmin, isExecutive, isProjectManager, isProductionManager, isInventoryOfficer, hasFullWarehouseAccess, canAccessAssetInventory } = useAuth()
   // The Production Manager WOM sub-role gets its own mobile PWA page (matching
   // the Ground Crew / Warehouse Lead / Warehouse Member mobile accounts)
   // instead of the desktop sidebar shell — but only when scoped to that single
@@ -105,6 +106,9 @@ function Router() {
     case 'damage':
       return <DamageValidationPage />
     case 'inventory':
+      if (isExecutive) {
+        return canAccessAssetInventory ? <ExecutiveAssetInventoryPage /> : <EventDashboardPage />
+      }
       return <InventoryStockPage />
     case 'warehouse-logs':
       return <WarehouseLogsPage />
@@ -161,7 +165,7 @@ function Router() {
 }
 
 function Gate() {
-  const { isAuthenticated, isTempPassword, hasConfirmationPin, isWarehouse, isWarehouseLead, isWarehouseMember, isPlanner, isProjectManager, isGroundCrew, isExecutive, isProductionManager, isInventoryOfficer, isManningOfficer, hasFullWarehouseAccess } = useAuth()
+  const { isAuthenticated, isTempPassword, hasConfirmationPin, isWarehouse, isWarehouseLead, isWarehouseMember, isPlanner, isProjectManager, isGroundCrew, isExecutive, isProductionManager, isInventoryOfficer, isManningOfficer, hasFullWarehouseAccess, canAccessAssetInventory } = useAuth()
   const [portal, setPortal] = useState<'staff' | 'crew'>('staff')
   const isMobileProductionManager = isProductionManager && !hasFullWarehouseAccess
   const isMobileInventoryOfficer = isInventoryOfficer && !hasFullWarehouseAccess
@@ -191,9 +195,10 @@ function Gate() {
   const validRoutes = new Set(['dashboard', 'registry', 'replenishment', 'logs', 'damage', 'inventory', 'warehouse-logs', 'crew', 'deployments', 'dispatch', 'event-detail', 'canvas', 'canvas-workspace', 'field-ops', 'warehouse-lead', 'warehouse-member', 'manning', 'production-manager', 'inventory-officer', 'workforce', 'security-audit', 'rbac', 'overview', 'project-manager'])
   const targetUrlRoute = urlParamRoute && validRoutes.has(urlParamRoute) ? urlParamRoute : null
 
-  // PM allowed routes protection in URL resolution
+  // PM and Executive allowed routes protection in URL resolution
   const pmAllowedRoutes = new Set<Route>(['project-manager', 'canvas', 'canvas-workspace'])
-  const resolvedTargetRoute = targetUrlRoute && (!isProjectManager || pmAllowedRoutes.has(targetUrlRoute))
+  const isDeniedExecutiveInventory = isExecutive && targetUrlRoute === 'inventory' && !canAccessAssetInventory
+  const resolvedTargetRoute = targetUrlRoute && (!isProjectManager || pmAllowedRoutes.has(targetUrlRoute)) && !isDeniedExecutiveInventory
     ? targetUrlRoute
     : null
 

@@ -11,6 +11,7 @@ import { womModuleAccessLevel } from './rbac'
 import { type GroundCrewSubRole, normalizeGroundCrewSubRole } from './types'
 import { API_BASE_URL } from './apiConfig'
 import { useIdleTimeout } from './useIdleTimeout'
+import { fetchAuthCapabilities } from './adminPermissionsApi'
 
 export type WomSubRole =
   | 'Manning Officer'
@@ -54,6 +55,7 @@ export interface PortalAccount {
   fullWarehouseAccess?: boolean
   temporaryPassword: boolean
   token?: string
+  canAccessAssetInventoryAndAllocation?: boolean
 }
 
 export function mapBackendUserToPortalAccount(data: {
@@ -65,12 +67,20 @@ export function mapBackendUserToPortalAccount(data: {
   groundCrewSubRole?: string
   token?: string
   temporaryPassword?: boolean
+  canAccessAssetInventoryAndAllocation?: boolean
+  CanAccessAssetInventoryAndAllocation?: boolean
+  allowAssetInventoryAndAllocation?: boolean
 }): PortalAccount {
   const payload = data.token ? parseJwtPayload(data.token) : null
   const jwtGcSubRole = payload?.ground_crew_subrole || payload?.groundCrewSubRole
   const canonicalGcSubRole = normalizeGroundCrewSubRole(jwtGcSubRole || data.groundCrewSubRole || data.subRole)
   const rawRole = data.role.trim()
   const isTemp = Boolean(data.temporaryPassword ?? data.email?.toLowerCase().includes('temp'))
+  const canAccessAssetInventoryAndAllocation = Boolean(
+    data.canAccessAssetInventoryAndAllocation ??
+    data.CanAccessAssetInventoryAndAllocation ??
+    data.allowAssetInventoryAndAllocation
+  )
 
   if (rawRole === 'Warehouse Operations Manager') {
     return {
@@ -83,6 +93,7 @@ export function mapBackendUserToPortalAccount(data: {
       portal: 'web',
       temporaryPassword: isTemp,
       token: data.token,
+      canAccessAssetInventoryAndAllocation,
     }
   }
 
@@ -105,6 +116,7 @@ export function mapBackendUserToPortalAccount(data: {
       portal: womSubRoles[rawRole],
       temporaryPassword: isTemp,
       token: data.token,
+      canAccessAssetInventoryAndAllocation,
     }
   }
 
@@ -121,6 +133,7 @@ export function mapBackendUserToPortalAccount(data: {
     portal,
     temporaryPassword: isTemp,
     token: data.token,
+    canAccessAssetInventoryAndAllocation,
   }
 }
 
@@ -203,6 +216,8 @@ interface AuthContextValue {
   setConfirmationPin: (pin: string) => Promise<boolean>
   verifyPassword: (password: string) => Promise<boolean>
   refetchHasPin: () => Promise<boolean>
+  canAccessAssetInventory: boolean
+  refreshCapabilities: (tokenOverride?: string) => Promise<boolean>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -228,12 +243,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<PortalAccount | null>(null)
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [hasConfirmationPin, setHasConfirmationPin] = useState<boolean>(getInitialHasPin)
+  // Authoritative backend capability state for Executive.
+  // Defaults to false (safe denied) until authoritatively known from backend.
+  const [backendAssetCapability, setBackendAssetCapability] = useState<boolean>(false)
+
+  const refreshCapabilities = useCallback(async (tokenOverride?: string): Promise<boolean> => {
+    const t = tokenOverride || getStoredAuth().rawToken || currentUser?.token
+    if (!t) {
+      setBackendAssetCapability(false)
+      return false
+    }
+    const result = await fetchAuthCapabilities(t)
+    if (result) {
+      setBackendAssetCapability(result.canAccessAssetInventoryAndAllocation)
+      return result.canAccessAssetInventoryAndAllocation
+    } else {
+      // Safe denied state if API returns non-200 or network failure
+      setBackendAssetCapability(false)
+      return false
+    }
+  }, [currentUser?.token])
 
   const logout = useCallback(() => {
     clearStoredAuth()
     setCurrentUser(null)
     setConfirmLogout(false)
     setHasConfirmationPin(false)
+    setBackendAssetCapability(false)
   }, [])
 
   useIdleTimeout(logout, Boolean(currentUser))
@@ -287,6 +323,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.warn('[Auth] JWT token is expired on mount. Clearing auth state.')
           clearStoredAuth()
           setCurrentUser(null)
+          setBackendAssetCapability(false)
           return
         }
 
@@ -299,6 +336,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         storage.setItem('_lumiere_auth_user', JSON.stringify(normalized))
         storage.setItem('_lumiere_auth_portal', normalized.portal)
 
+        // Authoritative reload refresh: stale browser state cannot become permission authority
+        if (token) {
+          void refreshCapabilities(token)
+        } else {
+          setBackendAssetCapability(false)
+        }
+
         const emailKey = normalized.email.trim().toLowerCase()
         if (emailKey && localStorage.getItem(`_lumiere_has_pin_${emailKey}`) === 'true') {
           setHasConfirmationPin(true)
@@ -310,9 +354,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         clearStoredAuth()
         setCurrentUser(null)
+        setBackendAssetCapability(false)
       }
     }
-  }, [checkHasPin])
+  }, [checkHasPin, refreshCapabilities])
 
   const login = useCallback(
     async (
@@ -331,7 +376,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
 
         if (res.ok) {
-          const data = (await res.json()) as { token: string; fullName: string; email: string; userId: string; role: string }
+          const data = (await res.json()) as {
+            token: string
+            fullName: string
+            email: string
+            userId: string
+            role: string
+            canAccessAssetInventoryAndAllocation?: boolean
+            CanAccessAssetInventoryAndAllocation?: boolean
+            allowAssetInventoryAndAllocation?: boolean
+          }
           const account = mapBackendUserToPortalAccount(data)
 
           if (portal && account.portal !== portal) {
@@ -344,6 +398,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           }
 
+          // Authoritative capability consumed directly from login response
+          setBackendAssetCapability(Boolean(account.canAccessAssetInventoryAndAllocation))
           setCurrentUser(account)
           const storage = remember ? localStorage : sessionStorage
           const otherStorage = remember ? sessionStorage : localStorage
@@ -570,6 +626,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isManningOfficer: currentUser?.subRole === MANNING_OFFICER_SUBROLE,
       isProductionManager: currentUser?.subRole === 'Production Manager',
       isInventoryOfficer: currentUser?.subRole === 'Inventory Officer',
+      canAccessAssetInventory:
+        currentUser?.role === 'Executive'
+          ? backendAssetCapability
+          : Boolean(
+              currentUser?.role === 'Admin' ||
+                currentUser?.role === 'Project Manager' ||
+                currentUser?.role === 'Warehouse Manager' ||
+                currentUser?.fullWarehouseAccess ||
+                currentUser?.role === 'Event Planner',
+            ),
       canModifyModule: (moduleId: string) => {
         if (currentUser?.fullWarehouseAccess) return true
         if (!currentUser?.subRole) return false
@@ -586,6 +652,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setConfirmationPin,
       verifyPassword,
       refetchHasPin: checkHasPin,
+      refreshCapabilities,
     }),
     [
       currentUser,
@@ -598,6 +665,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setConfirmationPin,
       verifyPassword,
       checkHasPin,
+      backendAssetCapability,
+      refreshCapabilities,
     ],
   )
 
