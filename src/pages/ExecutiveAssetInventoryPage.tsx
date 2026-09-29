@@ -6,6 +6,7 @@ import { useCatalogAssets } from '@/lib/warehouse-catalog'
 import { useNav } from '@/lib/nav'
 import { useAuth } from '@/lib/auth'
 import { ShieldAlert } from 'lucide-react'
+import { ExecutiveLiteAssetAllocation } from '@/components/executive-lite/ExecutiveLiteAssetAllocation'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 
 // Executive Asset Inventory & Allocation page.
@@ -14,7 +15,12 @@ import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 // search filtering, and allocation oversight backed by real authority.
 export function ExecutiveAssetInventoryPage() {
   const { navigate } = useNav()
-  const { canAccessAssetInventory } = useAuth()
+  const { canAccessAssetInventory, isExecutiveLite } = useAuth()
+
+  if (isExecutiveLite) {
+    return <ExecutiveLiteAssetAllocation />
+  }
+
   const assets = useCatalogAssets()
 
   const destination = (id: ExecutiveDestinationId) => navigate(id)

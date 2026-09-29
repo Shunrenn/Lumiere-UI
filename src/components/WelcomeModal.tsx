@@ -16,6 +16,7 @@ export function WelcomeModal() {
     adminEmail,
     isAdmin,
     isExecutive,
+    isExecutiveLite,
     isPlanner,
     isGroundCrew,
     isWarehouseLead,
@@ -71,6 +72,24 @@ export function WelcomeModal() {
         {
           title: 'Security Audit Logs',
           desc: 'Inspect cross-account authentication logs and lockouts under Security Audit.',
+        },
+      ],
+    }
+  } else if (isExecutiveLite) {
+    content = {
+      badge: 'Executive Oversight',
+      title: 'Welcome to Executive Operations',
+      description:
+        'Your console provides high-level oversight for Lumière event portfolios, master scheduling, and asset inventory. Review event progress and coordinate asset allocations.',
+      icon: LayoutGrid,
+      shortcuts: [
+        {
+          title: 'Executive Dashboard',
+          desc: 'Review upcoming event schedules, portfolio metrics, and active client bookings.',
+        },
+        {
+          title: 'Asset Allocation',
+          desc: 'Explore luxury decor inventory, available stock counts, and element specifications.',
         },
       ],
     }

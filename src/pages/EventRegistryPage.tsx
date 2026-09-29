@@ -13,6 +13,7 @@ import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { ExecutiveSegmentedProgress } from '@/components/executive/ExecutiveSegmentedProgress'
 import { ProjectValuationPanel } from '@/components/executive/ProjectValuationPanel'
 import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
+import { ExecutiveLiteEventOperations } from '@/components/executive-lite/ExecutiveLiteEventOperations'
 import type { PortalEvent } from '@/lib/types'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 
@@ -41,11 +42,17 @@ function formatDisplayTime(timeOrDate?: string, defaultTime = '06:00 PM'): strin
 }
 
 export function EventRegistryPage() {
+  const { isExecutiveLite } = useAuth()
+
+  if (isExecutiveLite) {
+    return <ExecutiveLiteEventOperations />
+  }
+
   const { events } = usePortal()
   // Admin and Executive have read-only oversight; Project Managers and Executive Lite manage the event lifecycle.
-  const { isAdmin, isExecutive, isExecutiveLite } = useAuth()
+  const { isAdmin, isExecutive } = useAuth()
   const { intent, clearIntent, navigate } = useNav()
-  const readOnly = (isAdmin || isExecutive) && !isExecutiveLite
+  const readOnly = isAdmin || isExecutive
   // A single drawer instance serves create / view / edit.
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerMode, setDrawerMode] = useState<'create' | 'view' | 'edit'>('create')

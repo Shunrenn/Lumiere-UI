@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { PanelLeft, Sun, Moon, LogOut, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EXECUTIVE_DESTINATIONS, type ExecutiveDestinationId } from '@/lib/executive-destinations'
@@ -50,43 +50,56 @@ export function ExecutiveRail({
     }
   }
 
-  // Filter destinations based on RBAC authority (Asset Inventory is conditional for Executive, Logs excluded for Executive Lite)
-  const visibleDestinations = EXECUTIVE_DESTINATIONS.filter((destination) => {
-    if (isExecutiveLite && destination.id === 'logs') {
-      return false
+  // Order and filter destinations based on role:
+  // For Executive Lite: 1. Dashboard, 2. Event Operations, 3. Asset Allocation
+  // For Full Executive: Preserve existing EXECUTIVE_DESTINATIONS order and capabilities
+  const visibleDestinations = useMemo(() => {
+    if (isExecutiveLite) {
+      const liteOrder: ExecutiveDestinationId[] = ['dashboard', 'registry', 'inventory']
+      return liteOrder
+        .map((id) => EXECUTIVE_DESTINATIONS.find((d) => d.id === id)!)
+        .filter((destination) => {
+          if (destination.id === 'inventory') return canAccessAssetInventory
+          return Boolean(destination)
+        })
     }
-    if (destination.id === 'inventory') {
-      return canAccessAssetInventory
-    }
-    return true
-  })
+    return EXECUTIVE_DESTINATIONS.filter((destination) => {
+      if (destination.id === 'inventory') return canAccessAssetInventory
+      return true
+    })
+  }, [isExecutiveLite, canAccessAssetInventory])
+
+  // Executive Lite uses a fixed compact dark rail per client references
+  const effectiveCollapsed = isExecutiveLite ? true : isCollapsed
 
   return (
     <aside
       className={cn(
         'flex h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-in-out select-none z-30',
-        isCollapsed ? 'w-16 items-center py-4 px-2' : 'w-64 py-4 px-3',
+        effectiveCollapsed ? 'w-16 items-center py-4 px-2' : 'w-64 py-4 px-3',
       )}
       aria-label="Executive Navigation Sidebar"
     >
       {/* Brand & Toggle header */}
-      {isCollapsed ? (
+      {effectiveCollapsed ? (
         <div className="flex flex-col items-center gap-3">
           <span
-            className="flex size-8 items-center justify-center rounded-md bg-sidebar-primary/10 font-serif text-lg font-medium leading-none text-sidebar-primary"
+            className="flex size-9 items-center justify-center rounded-lg bg-amber-500/10 font-serif text-xl font-bold leading-none text-amber-600 dark:text-amber-400 shadow-sm ring-1 ring-amber-500/20"
             aria-hidden="true"
           >
             L
           </span>
-          <button
-            type="button"
-            onClick={handleToggle}
-            aria-label="Expand sidebar"
-            title="Expand sidebar"
-            className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <PanelLeft className="size-4" aria-hidden="true" />
-          </button>
+          {!isExecutiveLite && (
+            <button
+              type="button"
+              onClick={handleToggle}
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
+              className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            >
+              <PanelLeft className="size-4" aria-hidden="true" />
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex items-center justify-between px-2 pb-1">
@@ -113,7 +126,7 @@ export function ExecutiveRail({
         </div>
       )}
 
-      <div className={cn('my-3 h-px bg-sidebar-border', isCollapsed ? 'w-8' : 'w-full')} aria-hidden="true" />
+      <div className={cn('my-3 h-px bg-sidebar-border', effectiveCollapsed ? 'w-8' : 'w-full')} aria-hidden="true" />
 
       {/* Nav destinations */}
       <nav className="flex flex-1 flex-col gap-1.5 overflow-y-auto overflow-x-hidden" aria-label="Executive destinations">
@@ -121,7 +134,7 @@ export function ExecutiveRail({
           const Icon = destination.icon
           const active = destination.id === activeId
 
-          if (isCollapsed) {
+          if (effectiveCollapsed) {
             return (
               <button
                 key={destination.id}
@@ -133,7 +146,9 @@ export function ExecutiveRail({
                 className={cn(
                   'flex size-10 items-center justify-center rounded-lg transition-colors',
                   active
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
+                    ? isExecutiveLite
+                      ? 'bg-amber-200 text-neutral-950 font-bold dark:bg-amber-400 dark:text-neutral-950 shadow-md ring-1 ring-amber-500/30'
+                      : 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
                     : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                 )}
               >
@@ -164,9 +179,9 @@ export function ExecutiveRail({
       </nav>
 
       {/* Bottom Profile, Theme & Logout Region */}
-      <div className={cn('pt-2 border-t border-sidebar-border flex flex-col gap-1', isCollapsed ? 'items-center' : '')}>
+      <div className={cn('pt-2 border-t border-sidebar-border flex flex-col gap-1', effectiveCollapsed ? 'items-center' : '')}>
         {/* Expanded Profile Info */}
-        {!isCollapsed && (
+        {!effectiveCollapsed && (
           <div className="flex items-center gap-2.5 px-2 py-2 mb-1 rounded-lg bg-sidebar-accent/40">
             <div className="flex size-7 items-center justify-center rounded-full bg-sidebar-primary/15 text-sidebar-primary shrink-0">
               <User className="size-3.5" aria-hidden="true" />
@@ -179,7 +194,7 @@ export function ExecutiveRail({
         )}
 
         {/* Theme Toggle */}
-        {isCollapsed ? (
+        {effectiveCollapsed ? (
           <button
             type="button"
             onClick={toggleTheme}
@@ -201,7 +216,7 @@ export function ExecutiveRail({
         )}
 
         {/* Sign Out */}
-        {isCollapsed ? (
+        {effectiveCollapsed ? (
           <button
             type="button"
             onClick={() => setConfirmLogout(true)}

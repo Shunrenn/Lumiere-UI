@@ -15,6 +15,7 @@ import { useNav } from '@/lib/nav'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
 import { cn } from '@/lib/utils'
+import { ExecutiveLiteDashboard } from '@/components/executive-lite/ExecutiveLiteDashboard'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 
 type DashboardMetricMode = 'events' | 'reports'
@@ -22,6 +23,11 @@ type DashboardMetricMode = 'events' | 'reports'
 export function EventDashboardPage() {
   const { navigate } = useNav()
   const { isExecutiveLite } = useAuth()
+
+  if (isExecutiveLite) {
+    return <ExecutiveLiteDashboard />
+  }
+
   const { events, damageExceptions } = usePortal()
   const [metricMode, setMetricMode] = useState<DashboardMetricMode>('events')
 
