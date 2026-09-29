@@ -1,114 +1,82 @@
 import { useState, useMemo } from 'react'
-import { Search, ChevronDown, Grid2X2, List, ShieldAlert } from 'lucide-react'
+import { Search, Grid2X2, List, ShieldAlert } from 'lucide-react'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
-import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { AssetInformationModal } from '@/components/AssetInformationModal'
 import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
-import { useInventoryOps } from '@/lib/inventory-ops'
 import { cn } from '@/lib/utils'
-import { ASSET_CATEGORIES, type InventoryItem, type StockStatus } from '@/lib/types'
+import type { InventoryItem } from '@/lib/types'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
-
-const statusMeta: Record<StockStatus, { badge: string; dot: string; bar: string }> = {
-  Available: {
-    badge: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
-    dot: 'bg-emerald-500',
-    bar: 'bg-emerald-500',
-  },
-  'Low Stock': {
-    badge: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
-    dot: 'bg-amber-500',
-    bar: 'bg-amber-500',
-  },
-  'Critical Deficit': {
-    badge: 'bg-rose-500/15 text-rose-400 border border-rose-500/30',
-    dot: 'bg-rose-500',
-    bar: 'bg-rose-500',
-  },
-  'Order Placed': {
-    badge: 'bg-sky-500/15 text-sky-400 border border-sky-500/30',
-    dot: 'bg-sky-500',
-    bar: 'bg-sky-500',
-  },
-  Depleted: {
-    badge: 'bg-muted text-muted-foreground border border-border',
-    dot: 'bg-muted-foreground',
-    bar: 'bg-muted-foreground',
-  },
-  'In Maintenance': {
-    badge: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
-    dot: 'bg-amber-500',
-    bar: 'bg-amber-500',
-  },
-}
-
-const FILTER_STATES: StockStatus[] = [
-  'Available',
-  'Low Stock',
-  'Critical Deficit',
-  'In Maintenance',
-]
-
-const SORT_OPTIONS = [
-  { label: 'Asset ID ↑', value: 'id-asc' },
-  { label: 'Asset ID ↓', value: 'id-desc' },
-  { label: 'Name A–Z', value: 'name-asc' },
-  { label: 'Name Z–A', value: 'name-desc' },
-  { label: 'Stock: High → Low', value: 'stock-desc' },
-  { label: 'Stock: Low → High', value: 'stock-asc' },
-]
 
 export function ExecutiveLiteAssetAllocation() {
   const { navigate } = useNav()
   const { canAccessAssetInventory } = useAuth()
   const { inventory: items } = usePortal()
-  const liveOps = useInventoryOps()
 
   const [query, setQuery] = useState('')
-  const [stateFilter, setStateFilter] = useState<StockStatus | 'All'>('All')
-  const [categoryFilter, setCategoryFilter] = useState('')
-  const [sortBy, setSortBy] = useState('id-asc')
+  const [selectedCategory, setSelectedCategory] = useState<string>('All')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [selectedAsset, setSelectedAsset] = useState<InventoryItem | null>(null)
 
   const destination = (id: ExecutiveDestinationId) => navigate(id)
 
-  const metrics = useMemo(
-    () => ({
-      total: items.length,
-      available: items.filter((i) => i.status === 'Available').length,
-      maintenance: items.filter((i) => i.status === 'In Maintenance').length,
-      restock: items.filter((i) => i.status === 'Low Stock' || i.status === 'Critical Deficit')
-        .length,
-    }),
-    [items],
-  )
+  // Derive dynamic classification list from real canonical asset data
+  const classifications = useMemo(() => {
+    const catMap = new Map<string, { count: number; image?: string }>()
+    for (const item of items) {
+      const cat = item.category || 'General'
+      const existing = catMap.get(cat)
+      if (existing) {
+        existing.count += 1
+        if (!existing.image && item.image) existing.image = item.image
+      } else {
+        catMap.set(cat, {
+          count: 1,
+          image: item.image,
+        })
+      }
+    }
 
-  const filtered = useMemo(() => {
+    const firstImage = items.find((i) => i.image)?.image || '/images/decor/tiffany-chair.png'
+
+    const list: { id: string; name: string; count: number; image: string }[] = [
+      {
+        id: 'All',
+        name: 'All',
+        count: items.length,
+        image: firstImage,
+      },
+    ]
+
+    Array.from(catMap.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .forEach(([name, data]) => {
+        list.push({
+          id: name,
+          name,
+          count: data.count,
+          image: data.image || '/images/decor/tiffany-chair.png',
+        })
+      })
+
+    return list
+  }, [items])
+
+  // Real data filtering by selected classification and query
+  const filteredAssets = useMemo(() => {
     const q = query.toLowerCase().trim()
-    let result = items.filter((i) => {
-      const matchesState = stateFilter === 'All' || i.status === stateFilter
-      const matchesCategory = !categoryFilter || i.category === categoryFilter
+    return items.filter((item) => {
+      const matchesCategory =
+        selectedCategory === 'All' || !selectedCategory || item.category === selectedCategory
       const matchesQuery =
         !q ||
-        i.name.toLowerCase().includes(q) ||
-        i.assetId.toLowerCase().includes(q) ||
-        i.category.toLowerCase().includes(q)
-      return matchesState && matchesCategory && matchesQuery
+        item.name.toLowerCase().includes(q) ||
+        item.assetId.toLowerCase().includes(q) ||
+        (item.category && item.category.toLowerCase().includes(q))
+      return matchesCategory && matchesQuery
     })
-    result = [...result].sort((a, b) => {
-      if (sortBy === 'id-asc') return a.assetId.localeCompare(b.assetId)
-      if (sortBy === 'id-desc') return b.assetId.localeCompare(a.assetId)
-      if (sortBy === 'name-asc') return a.name.localeCompare(b.name)
-      if (sortBy === 'name-desc') return b.name.localeCompare(a.name)
-      if (sortBy === 'stock-desc') return b.stock - a.stock
-      if (sortBy === 'stock-asc') return a.stock - b.stock
-      return 0
-    })
-    return result
-  }, [query, stateFilter, categoryFilter, sortBy, items])
+  }, [items, selectedCategory, query])
 
   // Direct RBAC Capability Guard
   if (!canAccessAssetInventory) {
@@ -135,45 +103,28 @@ export function ExecutiveLiteAssetAllocation() {
   }
 
   const stickyHeader = (
-    <div>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <p className="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">
-            ASSET KIOSK · CLIENT PORTFOLIO
-          </p>
-          <h1 className="mt-1 font-serif text-3xl font-medium tracking-tight text-foreground lg:text-4xl">
-            Asset Allocation
-          </h1>
-          <p className="mt-1.5 text-sm normal-case tracking-normal text-muted-foreground">
-            Registry oversight — asset stock levels, maintenance state, and allocation readiness.
-          </p>
-          <div className="mt-3 inline-flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs text-muted-foreground">
-            <span className="size-1.5 rounded-full bg-primary" />
-            Live field sync: {liveOps.inventory.length} operational items · {liveOps.orders.filter((order) => order.status !== 'Received').length} open orders · {liveOps.batches.filter((batch) => batch.status === 'In Transit').length} in transit
-          </div>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name, ID, category…"
-              className="w-full rounded-md border border-input bg-card py-2.5 pl-9 pr-3 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30 sm:w-72"
-            />
-          </div>
-        </div>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <span className="inline-flex items-center gap-1.5 rounded px-2.5 py-0.5 text-[0.62rem] font-bold uppercase tracking-[0.18em] bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
+          ASSET KIOSK
+        </span>
+        <h1 className="mt-2 font-serif text-3xl font-normal tracking-tight text-foreground sm:text-4xl">
+          Asset Allocation
+        </h1>
+        <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
+          Client-facing luxury inventory allocation, event styling collections, and element availability.
+        </p>
       </div>
 
-      {/* Stat Ribbon */}
-      <div className="mt-5 overflow-hidden rounded-lg border border-border bg-card">
-        <CompactStatStrip
-          stats={[
-            { label: 'Total Assets', value: metrics.total },
-            { label: 'Available', value: metrics.available },
-            { label: 'In Maintenance', value: metrics.maintenance },
-            { label: 'Restock Needed', value: metrics.restock },
-          ]}
+      {/* Large search field aligned toward upper-right */}
+      <div className="relative w-full sm:w-80">
+        <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search asset collection…"
+          className="w-full rounded-lg border border-border/80 bg-background/90 py-2.5 pl-10 pr-4 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-xs"
         />
       </div>
     </div>
@@ -182,327 +133,318 @@ export function ExecutiveLiteAssetAllocation() {
   return (
     <>
       <ExecutiveShell activeId="inventory" onSelect={destination} stickyHeader={stickyHeader}>
-        {/* Controls row matching Reference 2 */}
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-wrap gap-3">
-            {/* Category filter */}
-            <div className="relative">
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="w-full appearance-none rounded-md border border-border bg-card py-2 pl-4 pr-9 text-xs font-medium text-muted-foreground outline-none transition hover:bg-muted focus:border-primary focus:ring-2 focus:ring-ring/30 sm:w-auto"
-              >
-                <option value="">Filter: Category</option>
-                {ASSET_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    Filter: {c}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        {/* Main Content: Two-column layout */}
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+          {/* LEFT: CLASSIFICATIONS browser */}
+          <div className="lg:col-span-4 xl:col-span-3">
+            <div className="flex items-center justify-between pb-3 px-1">
+              <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground">
+                Classifications
+              </h3>
+              <span className="font-mono text-xs font-medium text-muted-foreground">
+                {classifications.length - 1}
+              </span>
             </div>
 
-            {/* Sort */}
-            <div className="relative">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="w-full appearance-none rounded-md border border-border bg-card py-2 pl-4 pr-9 text-xs font-medium text-muted-foreground outline-none transition hover:bg-muted focus:border-primary focus:ring-2 focus:ring-ring/30 sm:w-auto"
-              >
-                {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    Sort: {opt.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            </div>
-          </div>
-
-          {/* Right side: Filter Pills + Grid/List Controls */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                onClick={() => setStateFilter('All')}
-                className={cn(
-                  'rounded-full px-3 py-1 text-[0.62rem] font-bold uppercase tracking-[0.1em] transition',
-                  stateFilter === 'All'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-              >
-                All ({metrics.total})
-              </button>
-              {FILTER_STATES.map((state) => {
-                const count = items.filter((i) => i.status === state).length
-                const active = stateFilter === state
+            <div className="flex flex-col gap-2.5">
+              {classifications.map((cat) => {
+                const isSelected = selectedCategory === cat.id
                 return (
                   <button
-                    key={state}
+                    key={cat.id}
                     type="button"
-                    onClick={() => setStateFilter(state)}
+                    onClick={() => setSelectedCategory(cat.id)}
                     className={cn(
-                      'rounded-full px-3 py-1 text-[0.62rem] font-bold uppercase tracking-[0.1em] transition',
-                      active
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
+                      'group flex w-full items-center gap-3.5 rounded-xl p-3 text-left transition-all border shadow-xs',
+                      isSelected
+                        ? 'bg-[#8B5E3C] text-white border-[#7A5032] shadow-sm dark:bg-amber-600 dark:text-neutral-950 dark:border-amber-500'
+                        : 'bg-[#F9F7F2] hover:bg-[#F2ECE1] text-foreground border-[#E8E2D7] dark:bg-card/70 dark:hover:bg-card dark:border-border/60'
                     )}
                   >
-                    {state} ({count})
+                    {/* Thumbnail */}
+                    <div
+                      className={cn(
+                        'relative size-12 shrink-0 overflow-hidden rounded-lg border',
+                        isSelected
+                          ? 'border-white/30 bg-black/20'
+                          : 'border-border/50 bg-muted/40'
+                      )}
+                    >
+                      <img
+                        src={cat.image}
+                        alt={cat.name}
+                        className="size-full object-cover transition-transform group-hover:scale-105"
+                        onError={(e) => {
+                          ;(e.target as HTMLImageElement).src = '/images/decor/tiffany-chair.png'
+                        }}
+                      />
+                    </div>
+
+                    {/* Details */}
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={cn(
+                          'font-serif text-sm font-medium tracking-tight truncate',
+                          isSelected ? 'text-white dark:text-neutral-950' : 'text-foreground'
+                        )}
+                      >
+                        {cat.name}
+                      </p>
+                      <p
+                        className={cn(
+                          'text-[0.68rem] tracking-wide',
+                          isSelected
+                            ? 'text-white/80 dark:text-neutral-900/80 font-normal'
+                            : 'text-muted-foreground'
+                        )}
+                      >
+                        Browse collection
+                      </p>
+                    </div>
+
+                    {/* Count Badge */}
+                    <span
+                      className={cn(
+                        'shrink-0 font-mono text-xs font-semibold px-2 py-0.5 rounded-full',
+                        isSelected
+                          ? 'bg-white/20 text-white dark:bg-neutral-900/20 dark:text-neutral-950'
+                          : 'bg-muted/60 text-muted-foreground'
+                      )}
+                    >
+                      {cat.count}
+                    </span>
                   </button>
                 )
               })}
             </div>
-
-            {/* Grid / List View Toggle */}
-            <div className="flex items-center rounded-lg border border-border bg-card p-1">
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                className={cn(
-                  'rounded p-1.5 transition',
-                  viewMode === 'grid'
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-                aria-label="Grid view"
-                title="Grid view"
-              >
-                <Grid2X2 className="size-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('list')}
-                className={cn(
-                  'rounded p-1.5 transition',
-                  viewMode === 'list'
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-                aria-label="List view"
-                title="List view"
-              >
-                <List className="size-4" />
-              </button>
-            </div>
           </div>
-        </div>
 
-        {/* Content Display: Grid vs List */}
-        {filtered.length === 0 ? (
-          <div className="mt-8 flex min-h-[18rem] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card p-8 text-center">
-            <p className="font-serif text-base font-medium text-foreground">No assets match criteria</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Try adjusting your search query, status pills, or category filter.
-            </p>
-          </div>
-        ) : viewMode === 'grid' ? (
-          <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-            {filtered.map((item) => {
-              const meta = statusMeta[item.status] || statusMeta['Available']
-              const pct = item.capacity > 0 ? Math.min(100, Math.round((item.stock / item.capacity) * 100)) : 100
+          {/* RIGHT: ASSET GALLERY */}
+          <div className="lg:col-span-8 xl:col-span-9">
+            {/* Header row with Title and Grid/List toggle */}
+            <div className="flex items-center justify-between pb-4 pt-1 border-b border-border/40">
+              <div className="flex items-baseline gap-3">
+                <h2 className="font-serif text-2xl font-medium tracking-tight text-foreground">
+                  {selectedCategory === 'All' || !selectedCategory ? 'All Assets' : selectedCategory}
+                </h2>
+                <span className="text-xs text-muted-foreground font-mono">
+                  {filteredAssets.length} {filteredAssets.length === 1 ? 'item' : 'items'}
+                </span>
+              </div>
 
-              return (
-                <div
-                  key={item.id}
-                  className="group flex flex-col justify-between overflow-hidden rounded-xl border border-border bg-card transition-all hover:border-primary/40 hover:shadow-lg"
+              {/* Grid / List toggle */}
+              <div className="flex items-center rounded-lg border border-border/80 bg-background/80 p-0.5 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  title="Grid View"
+                  className={cn(
+                    'rounded-md p-1.5 transition-colors',
+                    viewMode === 'grid'
+                      ? 'bg-amber-600 text-white shadow-xs dark:bg-amber-500 dark:text-neutral-950'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
                 >
-                  <div>
-                    {/* Image frame */}
-                    <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted/40">
-                      {item.image ? (
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="flex size-full items-center justify-center text-muted-foreground/50">
-                          <span className="font-serif text-2xl font-light">L</span>
-                        </div>
-                      )}
-                      {/* Status badge top-left */}
-                      <div className="absolute left-3 top-3">
-                        <span
-                          className={cn(
-                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[0.55rem] font-bold uppercase tracking-[0.1em] backdrop-blur-md',
-                            meta.badge,
-                          )}
-                        >
-                          <span className={cn('size-1.5 rounded-full', meta.dot)} />
-                          {item.status}
-                        </span>
-                      </div>
-                      {/* Asset ID badge top-right */}
-                      <div className="absolute right-3 top-3">
-                        <span className="rounded bg-black/60 px-2 py-0.5 font-mono text-[0.6rem] font-bold text-white backdrop-blur-md">
-                          {item.assetId}
-                        </span>
-                      </div>
+                  <Grid2X2 className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  title="List View"
+                  className={cn(
+                    'rounded-md p-1.5 transition-colors',
+                    viewMode === 'list'
+                      ? 'bg-amber-600 text-white shadow-xs dark:bg-amber-500 dark:text-neutral-950'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <List className="size-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Visual Asset Gallery */}
+            {filteredAssets.length === 0 ? (
+              <div className="mt-8 flex min-h-[300px] flex-col items-center justify-center rounded-xl border border-dashed border-border/80 p-8 text-center bg-[#FAF7F2]/50 dark:bg-card/40">
+                <p className="font-serif text-lg text-foreground">No assets found</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  No luxury assets match your current classification filter or search query.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory('All')
+                    setQuery('')
+                  }}
+                  className="mt-4 rounded-md bg-amber-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-amber-700 transition"
+                >
+                  Reset Filters
+                </button>
+              </div>
+            ) : viewMode === 'grid' ? (
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+                {filteredAssets.map((asset) => (
+                  <div
+                    key={asset.id}
+                    onClick={() => setSelectedAsset(asset)}
+                    className="group flex flex-col rounded-xl overflow-hidden bg-[#FAF7F2] dark:bg-card border border-[#E8E2D7] dark:border-border/70 shadow-xs hover:shadow-md hover:border-amber-600/40 dark:hover:border-amber-500/40 transition-all duration-200 cursor-pointer"
+                  >
+                    {/* Large image occupying most of card height */}
+                    <div className="relative aspect-[4/3] w-full overflow-hidden bg-[#EFEAE1]/50 dark:bg-muted/20">
+                      <img
+                        src={asset.image || '/images/decor/tiffany-chair.png'}
+                        alt={asset.name}
+                        className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        onError={(e) => {
+                          ;(e.target as HTMLImageElement).src = '/images/decor/tiffany-chair.png'
+                        }}
+                      />
                     </div>
 
-                    {/* Card Content */}
-                    <div className="p-4">
-                      <p className="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-muted-foreground">
-                        {item.category}
-                      </p>
-                      <h3 className="mt-1 font-serif text-base font-medium text-foreground line-clamp-1 group-hover:text-primary transition-colors">
-                        {item.name}
-                      </h3>
-
-                      {/* Stock level bar */}
-                      <div className="mt-4">
-                        <div className="flex items-center justify-between text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground">
-                          <span>STOCK LEVEL</span>
-                          <span className="text-foreground">
-                            {item.stock} / {item.capacity} {item.unit || 'PCS'}
+                    {/* Content */}
+                    <div className="flex flex-1 flex-col justify-between p-4">
+                      <div>
+                        <h3 className="font-serif text-base font-medium tracking-tight text-foreground line-clamp-1 group-hover:text-amber-800 dark:group-hover:text-amber-300 transition-colors">
+                          {asset.name}
+                        </h3>
+                        <div className="mt-1.5 flex items-center justify-between text-xs">
+                          <span className="font-medium text-foreground">
+                            {asset.stock} Available
                           </span>
-                        </div>
-                        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                          <div
-                            className={cn('h-full transition-all duration-300', meta.bar)}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card Footer */}
-                  <div className="flex items-center justify-between border-t border-border/60 px-4 py-3 bg-muted/10 text-xs">
-                    <span className="text-[0.62rem] text-muted-foreground">
-                      {item.updated || 'Active'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedAsset(item)}
-                      className="text-[0.65rem] font-bold uppercase tracking-wider text-primary hover:underline transition-colors"
-                    >
-                      VIEW ITEM
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-left">
-                <thead>
-                  <tr className="border-b border-border bg-muted/40">
-                    <th className="px-4 py-3 text-[0.6rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                      ASSET ID
-                    </th>
-                    <th className="px-4 py-3 text-[0.6rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                      NAME
-                    </th>
-                    <th className="px-4 py-3 text-[0.6rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                      CATEGORY
-                    </th>
-                    <th className="px-4 py-3 text-[0.6rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                      STOCK LEVEL
-                    </th>
-                    <th className="px-4 py-3 text-[0.6rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                      STATUS
-                    </th>
-                    <th className="px-4 py-3 text-right text-[0.6rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                      ACTION
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filtered.map((item) => {
-                    const meta = statusMeta[item.status] || statusMeta['Available']
-                    return (
-                      <tr key={item.id} className="hover:bg-muted/20 transition-colors">
-                        <td className="px-4 py-3 font-mono text-xs font-semibold text-foreground">
-                          {item.assetId}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            {item.image && (
-                              <img
-                                src={item.image}
-                                alt={item.name}
-                                className="size-8 rounded object-cover"
-                              />
-                            )}
-                            <span className="font-serif text-sm font-medium text-foreground">
-                              {item.name}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">
-                          {item.category}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-foreground font-mono">
-                          {item.stock} / {item.capacity} {item.unit || 'PCS'}
-                        </td>
-                        <td className="px-4 py-3">
                           <span
                             className={cn(
-                              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[0.55rem] font-bold uppercase tracking-[0.1em]',
-                              meta.badge,
+                              'text-[0.68rem] font-medium tracking-wide',
+                              asset.status === 'Available'
+                                ? 'text-emerald-700 dark:text-emerald-400'
+                                : asset.status === 'Low Stock'
+                                ? 'text-amber-700 dark:text-amber-400'
+                                : asset.status === 'In Maintenance'
+                                ? 'text-indigo-700 dark:text-indigo-400'
+                                : 'text-muted-foreground'
                             )}
                           >
-                            <span className={cn('size-1.5 rounded-full', meta.dot)} />
-                            {item.status}
+                            {asset.status}
                           </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedAsset(item)}
-                            className="text-[0.65rem] font-bold uppercase tracking-wider text-primary hover:underline"
-                          >
-                            VIEW ITEM
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        </div>
+                      </div>
+
+                      {/* Restrained stock/progress indicator */}
+                      {asset.capacity > 0 && (
+                        <div className="mt-3">
+                          <div className="h-1 w-full rounded-full bg-muted/60 dark:bg-muted/40 overflow-hidden">
+                            <div
+                              className={cn(
+                                'h-full rounded-full transition-all duration-500',
+                                asset.status === 'Available'
+                                  ? 'bg-emerald-600 dark:bg-emerald-500'
+                                  : asset.status === 'Low Stock'
+                                  ? 'bg-amber-600 dark:bg-amber-500'
+                                  : asset.status === 'In Maintenance'
+                                  ? 'bg-indigo-600 dark:bg-indigo-500'
+                                  : 'bg-rose-600 dark:bg-rose-500'
+                              )}
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  Math.round((asset.stock / asset.capacity) * 100)
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-6 divide-y divide-border/60 rounded-xl border border-[#E8E2D7] dark:border-border/70 overflow-hidden bg-[#FAF7F2] dark:bg-card">
+                {filteredAssets.map((asset) => (
+                  <div
+                    key={asset.id}
+                    onClick={() => setSelectedAsset(asset)}
+                    className="group flex items-center justify-between p-4 hover:bg-muted/30 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="size-16 shrink-0 rounded-lg overflow-hidden border border-border/50 bg-[#EFEAE1]/50 dark:bg-muted/20">
+                        <img
+                          src={asset.image || '/images/decor/tiffany-chair.png'}
+                          alt={asset.name}
+                          className="size-full object-cover transition-transform group-hover:scale-105"
+                          onError={(e) => {
+                            ;(e.target as HTMLImageElement).src = '/images/decor/tiffany-chair.png'
+                          }}
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-serif text-base font-medium text-foreground truncate group-hover:text-amber-800 dark:group-hover:text-amber-300">
+                          {asset.name}
+                        </h4>
+                        <p className="text-xs text-muted-foreground truncate">{asset.category}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-6 shrink-0">
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-foreground">{asset.stock} Available</p>
+                        <p className="text-xs text-muted-foreground">Capacity: {asset.capacity}</p>
+                      </div>
+                      <span
+                        className={cn(
+                          'text-xs font-medium px-2.5 py-1 rounded-full',
+                          asset.status === 'Available'
+                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                            : asset.status === 'Low Stock'
+                            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+                            : 'bg-muted text-muted-foreground'
+                        )}
+                      >
+                        {asset.status}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-xs font-bold uppercase tracking-wider text-amber-700 hover:text-amber-800 dark:text-amber-400"
+                      >
+                        View Details
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </ExecutiveShell>
 
       {/* Read-Only Asset Information Modal */}
-      <AssetInformationModal
-        asset={
-          selectedAsset
-            ? {
-                id: selectedAsset.id,
-                name: selectedAsset.name,
-                description: selectedAsset.description || `${selectedAsset.name} luxury event decor specification.`,
-                assetId: selectedAsset.assetId,
-                dateAdded: selectedAsset.dateAdded || '2026-09-01',
-                store: selectedAsset.store || 'Main Facility',
-                representative: selectedAsset.representative || 'Warehouse Ops',
-                contact: selectedAsset.contact || '+63 900 000 0000',
-                height: selectedAsset.height || '—',
-                width: selectedAsset.width || '—',
-                weight: selectedAsset.weight || '—',
-                category: selectedAsset.category,
-                tier: 'Standard',
-                fragile: selectedAsset.fragile ?? false,
-                quantity: selectedAsset.stock,
-                unit: selectedAsset.unit ?? 'pcs',
-                cost: selectedAsset.cost ?? 0,
-                costPerUnit: selectedAsset.costPerUnit ?? 0,
-                image: selectedAsset.image,
-              }
-            : null
-        }
-        onClose={() => setSelectedAsset(null)}
-        readOnly={true}
-      />
+      {selectedAsset && (
+        <AssetInformationModal
+          asset={{
+            id: selectedAsset.id,
+            name: selectedAsset.name,
+            description:
+              selectedAsset.description || `${selectedAsset.name} luxury event decor specification.`,
+            assetId: selectedAsset.assetId,
+            dateAdded: selectedAsset.dateAdded || '2026-09-01',
+            store: selectedAsset.store || 'Main Facility',
+            representative: selectedAsset.representative || 'Warehouse Ops',
+            contact: selectedAsset.contact || '+63 900 000 0000',
+            height: selectedAsset.height || '—',
+            width: selectedAsset.width || '—',
+            weight: selectedAsset.weight || '—',
+            category: selectedAsset.category,
+            tier: 'Standard Luxury',
+            fragile: Boolean(selectedAsset.fragile),
+            quantity: selectedAsset.stock,
+            unit: selectedAsset.unit || 'units',
+            cost: selectedAsset.cost || 0,
+            costPerUnit: selectedAsset.costPerUnit || 0,
+            image: selectedAsset.image || '/images/decor/tiffany-chair.png',
+          }}
+          onClose={() => setSelectedAsset(null)}
+          readOnly={true}
+        />
+      )}
     </>
   )
 }
-
-export default ExecutiveLiteAssetAllocation
