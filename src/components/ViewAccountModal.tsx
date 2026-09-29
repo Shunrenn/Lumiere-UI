@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react'
-import { X, Eye, EyeOff } from 'lucide-react'
+import { X, KeyRound, Copy, Check, ShieldAlert } from 'lucide-react'
 import { SELECTABLE_STAFF_ROLES, type Staff } from '@/lib/types'
-import { generateRandomPassword } from '@/lib/utils'
+import { usePortal } from '@/lib/store'
 
 interface Props {
   open: boolean
   staff: Staff | null
-  tempPassword: string
-  onTempPasswordChange: (value: string) => void
   onClose: () => void
   // When true, every field is editable (used by the "Edit" action).
   editable?: boolean
@@ -20,23 +18,57 @@ const inputClass =
 export function ViewAccountModal({
   open,
   staff,
-  tempPassword,
-  onTempPasswordChange,
   onClose,
   editable = false,
   onSave,
 }: Props) {
-  const [showPwd, setShowPwd] = useState(false)
+  const { resetStaffPassword } = usePortal()
   const [draft, setDraft] = useState<Staff | null>(staff)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Dedicated credential reset states
+  const [isResetting, setIsResetting] = useState(false)
+  const [showConfirmReset, setShowConfirmReset] = useState(false)
+  const [resetResult, setResetResult] = useState<{ tempPassword: string } | null>(null)
+  const [copied, setCopied] = useState(false)
 
   // Reset the editable draft whenever a different account is opened.
   useEffect(() => {
     setDraft(staff)
     setError(null)
     setIsSaving(false)
+    setIsResetting(false)
+    setShowConfirmReset(false)
+    setResetResult(null)
+    setCopied(false)
   }, [staff, open])
+
+  const handleResetPassword = async () => {
+    if (!staff?.id) return
+    setIsResetting(true)
+    setError(null)
+    try {
+      const res = await resetStaffPassword(staff.id)
+      setShowConfirmReset(false)
+      setResetResult({ tempPassword: res.tempPassword })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reset password')
+    } finally {
+      setIsResetting(false)
+    }
+  }
+
+  const copyToClipboard = async () => {
+    if (!resetResult?.tempPassword) return
+    try {
+      await navigator.clipboard.writeText(resetResult.tempPassword)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // fallback
+    }
+  }
 
   if (!open || !staff || !draft) return null
 
@@ -77,12 +109,86 @@ export function ViewAccountModal({
 
         {/* Body */}
         <div className="max-h-[70vh] overflow-y-auto px-6 py-6">
-          <div className="space-y-4">
-            {/* Employee ID (always read-only) */}
-            <div>
-              <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                Employee ID:
-              </label>
+          {resetResult ? (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-800 dark:text-amber-300">
+                <ShieldAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                <div className="space-y-1">
+                  <p className="font-bold uppercase tracking-wider">New Temporary Password Generated</p>
+                  <p>
+                    All existing sessions for <strong>{staff.fullName || staff.email}</strong> have been invalidated. Provide this password securely to the user. It is displayed once and will not be stored in plaintext.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-md border border-border/60 bg-muted/20 p-4">
+                <span className="text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
+                  Temporary Password:
+                </span>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <code className="flex-1 rounded-md border border-border bg-background px-3 py-2 font-mono text-sm font-bold tracking-wide text-foreground">
+                    {resetResult.tempPassword}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={copyToClipboard}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-muted"
+                  >
+                    {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setResetResult(null)}
+                  className="rounded-md bg-primary px-6 py-2.5 text-xs font-bold uppercase tracking-[0.15em] text-primary-foreground transition hover:opacity-90"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          ) : showConfirmReset ? (
+            <div className="space-y-4">
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-xs text-destructive">
+                <p className="font-bold uppercase tracking-wider">Confirm Password Reset</p>
+                <p className="mt-1 text-foreground">
+                  Are you sure you want to generate a new temporary password for <strong>{staff.fullName || staff.email}</strong>?
+                </p>
+                <p className="mt-1 text-muted-foreground">
+                  This will immediately terminate any active sessions and require the user to configure a new password upon their next login.
+                </p>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmReset(false)}
+                  disabled={isResetting}
+                  className="rounded-md border border-input bg-background px-4 py-2 text-xs font-semibold uppercase tracking-wider text-foreground hover:bg-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetPassword}
+                  disabled={isResetting}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-destructive px-5 py-2 text-xs font-bold uppercase tracking-wider text-destructive-foreground hover:opacity-90 disabled:opacity-50"
+                >
+                  {isResetting ? 'Resetting...' : 'Confirm Reset'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-4">
+                {/* Employee ID (always read-only) */}
+                <div>
+                  <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
+                    Employee ID:
+                  </label>
               {readField(staff.employeeId || '—')}
             </div>
 
@@ -263,30 +369,26 @@ export function ViewAccountModal({
               {readField(staff.lastAccess)}
             </div>
 
-            {/* Password */}
-            <div>
-              <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                <span className="text-destructive mr-0.5">*</span>Temporary Password:
-              </label>
-              <div className="relative">
-                <input
-                  type={showPwd ? 'text' : 'password'}
-                  value={tempPassword}
-                  onChange={(e) => onTempPasswordChange(e.target.value)}
-                  className={inputClass}
-                />
+            {/* Credential Management */}
+            <div className="rounded-md border border-border/70 bg-muted/20 p-3.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
+                    Account Credentials
+                  </span>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Passwords are not stored in plaintext. To issue new access credentials, trigger a temporary password reset.
+                  </p>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setShowPwd((v) => !v)}
-                  className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground"
-                  aria-label={showPwd ? 'Hide password' : 'Show password'}
+                  onClick={() => setShowConfirmReset(true)}
+                  className="ml-4 inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-muted"
                 >
-                  {showPwd ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  <KeyRound className="size-3.5" />
+                  Reset Temporary Password
                 </button>
               </div>
-              <p className="mt-1.5 text-[0.65rem] italic text-muted-foreground">
-                User will be prompted to change password upon first login.
-              </p>
             </div>
           </div>
 
@@ -296,45 +398,45 @@ export function ViewAccountModal({
             </div>
           )}
 
-          {/* Footer */}
-          <div className="mt-8 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSaving}
-              className="rounded-md border border-input bg-background px-5 py-2.5 text-xs font-bold uppercase tracking-[0.15em] text-foreground transition hover:bg-muted disabled:opacity-50"
-            >
-              {editable ? 'Cancel' : 'Close'}
-            </button>
-            {editable && (
-              <button
-                type="button"
-                disabled={isSaving}
-                onClick={async () => {
-                  if (!draft) return
-                  setError(null)
-                  setIsSaving(true)
-                  try {
-                    const finalPwd = tempPassword.trim() || draft.tempPassword?.trim() || generateRandomPassword(8)
-                    const updatedFullName = `${draft.firstName} ${draft.middleName ? draft.middleName + ' ' : ''}${draft.surname}`.trim()
-                    await onSave?.({
-                      ...draft,
-                      fullName: updatedFullName || draft.fullName,
-                      tempPassword: finalPwd,
-                    })
-                    onClose()
-                  } catch (err: any) {
-                    setError(err?.message || 'Failed to update employee details. Please try again.')
-                  } finally {
-                    setIsSaving(false)
-                  }
-                }}
-                className="rounded-md bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-[0.15em] text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isSaving ? 'Saving...' : 'Save Changes'}
-              </button>
-            )}
-          </div>
+              {/* Footer */}
+              <div className="mt-8 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={isSaving}
+                  className="rounded-md border border-input bg-background px-5 py-2.5 text-xs font-bold uppercase tracking-[0.15em] text-foreground transition hover:bg-muted disabled:opacity-50"
+                >
+                  {editable ? 'Cancel' : 'Close'}
+                </button>
+                {editable && (
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={async () => {
+                      if (!draft) return
+                      setError(null)
+                      setIsSaving(true)
+                      try {
+                        const updatedFullName = `${draft.firstName} ${draft.middleName ? draft.middleName + ' ' : ''}${draft.surname}`.trim()
+                        await onSave?.({
+                          ...draft,
+                          fullName: updatedFullName || draft.fullName,
+                        })
+                        onClose()
+                      } catch (err: any) {
+                        setError(err?.message || 'Failed to update employee details. Please try again.')
+                      } finally {
+                        setIsSaving(false)
+                      }
+                    }}
+                    className="rounded-md bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-[0.15em] text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSaving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

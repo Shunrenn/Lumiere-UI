@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { X, Eye, EyeOff } from 'lucide-react'
+import { X, Copy, Check, ShieldAlert } from 'lucide-react'
 import { SELECTABLE_STAFF_ROLES, type NewStaffDraft, type StaffRole } from '@/lib/types'
 import { usePortal } from '@/lib/store'
-import { generateRandomPassword } from '@/lib/utils'
 
 interface Props {
   open: boolean
@@ -20,7 +19,6 @@ const emptyDraft: NewStaffDraft = {
   contact: '',
   role: '',
   subRole: '',
-  tempPassword: '',
 }
 
 const WOM_SUBROLES = [
@@ -46,24 +44,16 @@ const inputClass =
 
 export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) {
   const { addStaff, staff, resolveUserAction, userActions } = usePortal()
-  const [step, setStep] = useState<'form' | 'verify'>('form')
+  const [step, setStep] = useState<'form' | 'verify' | 'created'>('form')
   const [draft, setDraft] = useState<NewStaffDraft>(emptyDraft)
-  const [showPwd, setShowPwd] = useState(false)
-
-  useEffect(() => {
-    if (open && prefillEmail && !draft.email) {
-      setDraft((prev) => ({
-        ...prev,
-        email: prefillEmail,
-      }))
-    }
-  }, [open, prefillEmail, draft.email])
-
-  if (!open) return null
+  const [createdPassword, setCreatedPassword] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Generate auto employee ID based on current staff count
   const generateEmployeeId = () => {
-    const nextId = (staff.length + 1).toString().padStart(4, '0')
+    const nextId = ((staff?.length || 0) + 1).toString().padStart(4, '0')
     return `LM-${nextId}`
   }
 
@@ -71,26 +61,32 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
     setDraft((prev) => ({ ...prev, [key]: value }))
   }
 
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
   const close = () => {
     setError(null)
     setIsSubmitting(false)
     setStep('form')
     setDraft(emptyDraft)
-    setShowPwd(false)
+    setCreatedPassword(null)
+    setCopied(false)
     onClose()
   }
 
-  // Initialize with an auto-generated employee ID and a generated 8-char temp password.
-  if (draft.employeeId === '' && draft.firstName === '') {
-    setDraft((prev) => ({
-      ...prev,
-      employeeId: generateEmployeeId(),
-      tempPassword: prev.tempPassword || generateRandomPassword(8),
-    }))
-  }
+  useEffect(() => {
+    if (open) {
+      setStep('form')
+      setCreatedPassword(null)
+      setCopied(false)
+      setIsSubmitting(false)
+      setError(null)
+      setDraft({
+        ...emptyDraft,
+        employeeId: generateEmployeeId(),
+        email: prefillEmail || '',
+      })
+    }
+  }, [open, prefillEmail, staff?.length])
+
+  if (!open) return null
 
   const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())
   const isValidContact = draft.contact.length === 11
@@ -109,7 +105,7 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
     try {
       setIsSubmitting(true)
       setError(null)
-      await addStaff(draft)
+      const res = await addStaff(draft)
       if (actionId) {
         resolveUserAction(actionId)
       } else if (draft.email) {
@@ -118,12 +114,27 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
         )
         if (match) resolveUserAction(match.id)
       }
-      close()
+
+      if (res?.tempPassword) {
+        setCreatedPassword(res.tempPassword)
+        setStep('created')
+      } else {
+        close()
+      }
     } catch (err: any) {
       setError(err?.message || 'Failed to create employee profile. Please check the details and try again.')
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const copyToClipboard = async () => {
+    if (!createdPassword) return
+    try {
+      await navigator.clipboard.writeText(createdPassword)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {}
   }
 
   return (
@@ -317,30 +328,8 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
               )
             })()}
 
-            <div className="mt-4">
-              <label className={labelClass} htmlFor="tempPassword">
-                <span className="text-destructive mr-0.5">*</span>Temporary Password:
-              </label>
-              <div className="relative">
-                <input
-                  id="tempPassword"
-                  type={showPwd ? 'text' : 'password'}
-                  className={inputClass}
-                  value={draft.tempPassword}
-                  onChange={(e) => set('tempPassword', e.target.value)}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPwd((v) => !v)}
-                  className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground"
-                  aria-label={showPwd ? 'Hide password' : 'Show password'}
-                >
-                  {showPwd ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
-              <p className="mt-1.5 text-[0.65rem] italic text-muted-foreground">
-                User will be prompted to change password upon first login.
-              </p>
+            <div className="mt-4 rounded-md border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">Secure Credentials:</span> A 14-character CSPRNG temporary password will be generated automatically by the server upon profile creation and displayed once for distribution.
             </div>
 
             <div className="mt-6 flex justify-end">
@@ -350,11 +339,11 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
                 onClick={() => setStep('verify')}
                 className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-xs font-bold uppercase tracking-[0.15em] text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Add New Employee →
+                Continue to Verification →
               </button>
             </div>
           </div>
-        ) : (
+        ) : step === 'verify' ? (
           <VerifyStep
             draft={draft}
             onReturn={() => {
@@ -364,6 +353,14 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
             onConfirm={commit}
             error={error}
             isSubmitting={isSubmitting}
+          />
+        ) : (
+          <CreatedStep
+            draft={draft}
+            tempPassword={createdPassword ?? ''}
+            copied={copied}
+            onCopy={copyToClipboard}
+            onClose={close}
           />
         )}
       </div>
@@ -412,11 +409,10 @@ function VerifyStep({
           <Row label="Contact:" value={draft.contact} />
         </div>
         <Row label="Role:" value={draft.role} />
-        <div>
-          <Row label="Temporary Password:" value={draft.tempPassword} />
-          <p className="mt-1.5 text-[0.65rem] italic text-muted-foreground">
-            User will be prompted to change password upon first login.
-          </p>
+        {draft.subRole && <Row label="Subrole:" value={draft.subRole} />}
+        <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
+          <p className="font-semibold text-foreground">Next Step:</p>
+          <p className="mt-1">The server will provision this account, generate a secure temporary password, and display it once for secure handoff.</p>
         </div>
       </div>
 
@@ -435,7 +431,84 @@ function VerifyStep({
           disabled={isSubmitting}
           className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-xs font-bold uppercase tracking-[0.15em] text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isSubmitting ? 'Creating Profile...' : 'Add New Employee →'}
+          {isSubmitting ? 'Creating Profile...' : 'Confirm & Create Account →'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function CreatedStep({
+  draft,
+  tempPassword,
+  copied,
+  onCopy,
+  onClose,
+}: {
+  draft: NewStaffDraft
+  tempPassword: string
+  copied: boolean
+  onCopy: () => void
+  onClose: () => void
+}) {
+  return (
+    <div className="px-6 py-6">
+      <div className="mb-5 flex items-start gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-800 dark:text-amber-300">
+        <ShieldAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="space-y-1">
+          <p className="font-bold uppercase tracking-wider">Authoritative Temporary Credential</p>
+          <p>
+            This server-generated password will only be displayed <strong>once</strong>. Copy and securely provide it to the employee. It will not be stored in plaintext or redisplayed.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-4 rounded-md border border-border/60 bg-muted/20 p-4">
+        <div>
+          <span className="text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
+            Account Name:
+          </span>
+          <p className="mt-0.5 text-sm font-medium text-foreground">
+            {draft.firstName} {draft.surname} ({draft.role})
+          </p>
+        </div>
+        <div>
+          <span className="text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
+            Login Email:
+          </span>
+          <p className="mt-0.5 text-sm font-medium text-foreground">{draft.email}</p>
+        </div>
+        <div>
+          <span className="text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
+            Temporary Password:
+          </span>
+          <div className="mt-1.5 flex items-center gap-2">
+            <code className="flex-1 rounded-md border border-border bg-background px-3 py-2 font-mono text-sm font-bold tracking-wide text-foreground">
+              {tempPassword}
+            </code>
+            <button
+              type="button"
+              onClick={onCopy}
+              className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-muted"
+            >
+              {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-4 text-[0.7rem] text-muted-foreground">
+        Upon first login, the employee will be required to configure their permanent password.
+      </p>
+
+      <div className="mt-6 flex justify-end">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md bg-primary px-6 py-2.5 text-xs font-bold uppercase tracking-[0.15em] text-primary-foreground transition hover:opacity-90"
+        >
+          Dismiss & Complete
         </button>
       </div>
     </div>

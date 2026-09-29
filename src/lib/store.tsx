@@ -43,7 +43,6 @@ import type {
   Vendor,
 } from '@/lib/types'
 import { supabase } from '@/lib/supabase'
-import { generateRandomPassword } from '@/lib/utils'
 import {
   GROUND_CREW_TREE_SEED,
   PARENT_ROLES,
@@ -116,7 +115,7 @@ function rowToStaff(row: any): Staff {
     lastAccess,
     recordKind: 'full-account',
     accountStatus,
-    tempPassword: unclaimedTemp ? (row.password_hash ?? row.tempPassword ?? undefined) : undefined,
+    tempPassword: undefined,
   }
 }
 
@@ -1374,7 +1373,8 @@ interface PortalContextValue {
   // Newly created sub-roles that still need their permission table saved at
   // least once, for the System Dashboard's Pending Actions panel.
   pendingSubRoleSetups: { id: string; parentId: string; parentName: string; subRoleId: string; name: string }[]
-  addStaff: (draft: NewStaffDraft) => Promise<void>
+  addStaff: (draft: NewStaffDraft) => Promise<{ tempPassword?: string }>
+  resetStaffPassword: (id: string) => Promise<{ tempPassword: string; employeeId?: string; email?: string }>
   addEmployeeRecord: (draft: NewEmployeeRecordDraft) => void
   removeStaff: (id: string) => Promise<void>
   toggleSuspend: (id: string) => Promise<void>
@@ -1758,7 +1758,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   )
 
   const addStaff = useCallback(
-    async (draft: NewStaffDraft) => {
+    async (draft: NewStaffDraft): Promise<{ tempPassword?: string }> => {
       const role = draft.role?.trim() || ''
       const hasSubroleScope = role === 'Warehouse Manager' || (role as string) === 'Ground Crew'
       const subRole = hasSubroleScope ? draft.subRole?.trim() || null : null
@@ -1792,6 +1792,9 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         throw new Error(errMsg)
       }
 
+      const responseData = await res.json().catch(() => null)
+      const serverTempPassword = responseData?.tempPassword || responseData?.generatedTempPassword
+
       // Success confirmed by server: hydrate authoritative state from server
       await loadStaff()
 
@@ -1803,6 +1806,8 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         ip: randomIp(),
         status: 'Success',
       })
+
+      return { tempPassword: serverTempPassword }
     },
     [loadStaff, pushLog],
   )
@@ -1945,11 +1950,9 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       const hasSubroleScope =
         updated.role === 'Warehouse Manager' ||
         (updated.role as string) === 'Ground Crew'
-      const sanitizedTempPwd = updated.tempPassword?.trim() || generateRandomPassword(8)
       const sanitizedStaff: Staff = {
         ...updated,
         subRole: hasSubroleScope ? updated.subRole : '',
-        tempPassword: sanitizedTempPwd,
       }
 
       const token = getAuthToken()
@@ -1967,7 +1970,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
           email: sanitizedStaff.email,
           role: sanitizedStaff.role,
           subRole: sanitizedStaff.subRole || null,
-          tempPassword: sanitizedStaff.tempPassword,
           accountStatus: sanitizedStaff.accountStatus,
         }),
       })
@@ -1991,6 +1993,48 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       })
     },
     [loadStaff, pushLog],
+  )
+
+  const resetStaffPassword = useCallback(
+    async (id: string): Promise<{ tempPassword: string; employeeId?: string; email?: string }> => {
+      const target = staff.find((s) => s.id === id)
+      const token = getAuthToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const res = await fetch(`${API_BASE_URL}/api/workforce/${encodeURIComponent(id)}/reset-password`, {
+        method: 'POST',
+        headers,
+      })
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null)
+        const errMsg = errJson?.error || errJson?.message || `Failed to reset password (HTTP ${res.status})`
+        throw new Error(errMsg)
+      }
+
+      const data = await res.json().catch(() => ({}))
+      const tempPassword = data.tempPassword || data.generatedTempPassword
+
+      // Refresh staff so accountStatus / flags match server
+      await loadStaff()
+
+      pushLog({
+        account: target?.employeeId || target?.email || id,
+        initiatorRole: 'Admin',
+        action: 'Temporary Password Reset',
+        detail: `Administrator generated a new temporary password for ${target?.fullName || target?.email || id}. Existing sessions invalidated.`,
+        ip: randomIp(),
+        status: 'Success',
+      })
+
+      return {
+        tempPassword,
+        employeeId: data.employeeId || target?.employeeId,
+        email: data.email || target?.email,
+      }
+    },
+    [loadStaff, pushLog, staff],
   )
 
   const forceLogout = useCallback(
@@ -2814,6 +2858,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       setGroundCrewTree,
       pendingSubRoleSetups,
       addStaff,
+      resetStaffPassword,
       addEmployeeRecord,
       removeStaff,
       toggleSuspend,
@@ -2863,6 +2908,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       setGroundCrewTree,
       pendingSubRoleSetups,
       addStaff,
+      resetStaffPassword,
       addEmployeeRecord,
       removeStaff,
       toggleSuspend,

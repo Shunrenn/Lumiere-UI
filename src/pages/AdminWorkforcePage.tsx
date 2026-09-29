@@ -47,7 +47,6 @@ export function AdminWorkforcePage() {
   const [createRecordOpen, setCreateRecordOpen] = useState(false)
   const [selected, setSelected] = useState<Staff | null>(null)
   const [editMode, setEditMode] = useState(false)
-  const [tempPassword, setTempPassword] = useState('')
   const addMenuRef = useRef<HTMLDivElement | null>(null)
 
   const lockedIds = useMemo(() => new Set(userActions.filter((a) => a.type === 'account-locked' && a.status === 'pending').map((a) => a.user)), [userActions])
@@ -62,7 +61,6 @@ export function AdminWorkforcePage() {
       if (target) {
         setSelected(target)
         setEditMode(false)
-        setTempPassword(target.tempPassword ?? '')
       }
       clearIntent()
     } else if (intent?.kind === 'add-user') {
@@ -219,7 +217,7 @@ export function AdminWorkforcePage() {
           </label>
         </div>
         <p className="text-xs text-muted-foreground">Showing {rows.length} of {staff.length} directory entries. Click a row to view details.</p>
-        <WorkforceTable rows={rows} resolveStatus={(s) => statusFor(s, lockedIds)} onRowClick={(s) => { setSelected(s); setEditMode(false); setTempPassword(s.tempPassword ?? '') }} onSuspend={(s) => void toggleSuspend(s.id)} onForceLogout={(s) => forceLogout(s.id)} onEdit={(s) => { setSelected(s); setEditMode(true); setTempPassword(s.tempPassword ?? '') }} highlightId={highlightId} stats={tableStats} />
+        <WorkforceTable rows={rows} resolveStatus={(s) => statusFor(s, lockedIds)} onRowClick={(s) => { setSelected(s); setEditMode(false); }} onSuspend={(s) => void toggleSuspend(s.id)} onForceLogout={(s) => forceLogout(s.id)} onEdit={(s) => { setSelected(s); setEditMode(true); }} highlightId={highlightId} stats={tableStats} />
       </div>
       )}
       <EmployeeModal 
@@ -229,7 +227,7 @@ export function AdminWorkforcePage() {
         actionId={prefillActionId}
       />
       <EmployeeRecordModal open={createRecordOpen} onClose={() => setCreateRecordOpen(false)} onCreate={addEmployeeRecord} />
-      <ViewAccountModal open={!!selected} staff={selected} tempPassword={tempPassword} onTempPasswordChange={setTempPassword} onClose={() => setSelected(null)} editable={editMode} onSave={async (s) => { await updateStaff({ ...s, tempPassword }); setSelected(null) }} />
+      <ViewAccountModal open={!!selected} staff={selected} onClose={() => setSelected(null)} editable={editMode} onSave={async (s) => { await updateStaff(s); setSelected(null) }} />
     </AdminShell>
   )
 }

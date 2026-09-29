@@ -195,7 +195,7 @@ export interface NewStaffDraft {
   contact: string
   role: StaffRole | ''
   subRole?: string
-  tempPassword: string
+  tempPassword?: string
 }
 
 // Employee record has no login credentials — no email, password, or role prompt.
