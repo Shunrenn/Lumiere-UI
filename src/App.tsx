@@ -241,6 +241,7 @@ function Router() {
 function Gate() {
   const {
     isAuthenticated,
+    portal: userPortal,
     isTempPassword,
     hasConfirmationPin,
     isWarehouse,
@@ -289,13 +290,16 @@ function Gate() {
   const targetUrlRoute = urlParamRoute && validRoutes.has(urlParamRoute) ? urlParamRoute : null
 
   // Scoped-role route whitelists
+  const pwaAllowedRoutes = new Set<Route>(['field-ops', 'warehouse-lead', 'warehouse-member', 'manning', 'production-manager', 'inventory-officer'])
   const executiveLiteAllowedRoutes = new Set<Route>(['dashboard', 'inventory', 'registry'])
   const pmLiteAllowedRoutes = new Set<Route>(['project-manager', 'registry', 'event-detail'])
   const warehouseAssociateAllowedRoutes = new Set<Route>(['overview', 'inventory', 'replenishment', 'vendors', 'dispatch'])
   const pmAllowedRoutes = new Set<Route>(['project-manager', 'canvas', 'canvas-workspace'])
 
   let isAllowed = true
-  if (isExecutiveLite) {
+  if (userPortal === 'pwa') {
+    isAllowed = targetUrlRoute ? pwaAllowedRoutes.has(targetUrlRoute) : true
+  } else if (isExecutiveLite) {
     isAllowed = targetUrlRoute ? executiveLiteAllowedRoutes.has(targetUrlRoute) : true
     if (targetUrlRoute === 'inventory' && !canAccessAssetInventory) isAllowed = false
   } else if (isProjectManagerLite) {
