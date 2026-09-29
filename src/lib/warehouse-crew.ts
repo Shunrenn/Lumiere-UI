@@ -1,12 +1,10 @@
-// Deterministic seed + derivation layer for Manpower & Crew.
-// Event Schedule rows are derived from the live staff roster + event list
-// (mirroring the Crew Roster page's shape); Daily-Weekly Ops is a separate,
-// non-event-bound shift grid for warehouse staffing that exists independent
-// of any specific event.
+// Canonical derivation layer for Manpower & Crew.
+// Maintains genuine database-backed staff roster. Eliminates synthetic hashOf shift/status generation.
 import { useSyncExternalStore } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { PortalEvent, Staff } from '@/lib/types'
 import { expandDateRange, handleCrewLeaveAutoRelease } from '@/lib/manning'
+import { logAuditEvent } from '@/lib/audit-logger'
 
 export type CrewRowStatus = 'Available' | 'Assigned' | 'On Leave'
 
@@ -36,6 +34,8 @@ export interface DailyDutyAssignment {
   noShowReason?: string
 }
 
+let localDailyDuties: DailyDutyAssignment[] = []
+
 export function updateDailyDutyAttendance(
   id: string,
   attendanceStatus: 'present' | 'absent_approved' | 'no_show',
@@ -45,10 +45,8 @@ export function updateDailyDutyAttendance(
   const existing = localDailyDuties.find((d) => d.id === id)
   if (existing && existing.attendanceStatus) {
     if (existing.attendanceStatus === attendanceStatus) {
-      // Matching outcome: First commit retained, silent no-op (no dispute log needed)
       return
     }
-    // Differing outcome: First-Commit-Wins tie-breaker intercepted write
     const actor = flaggedBy || 'Team Lead'
     void logAuditEvent({
       actor_id: actor,
@@ -96,12 +94,10 @@ export function updateDailyDutyAttendance(
   })
 
   if (existing && attendanceStatus === 'absent_approved') {
-    // Sync shift grid cell to 'OFF' for this crew member & date
     const key = cellKey(existing.staffId, existing.date)
     grid = { ...grid, [key]: 'OFF' }
     publish()
 
-    // Trigger auto-release for committed event assignments on this date
     void handleCrewLeaveAutoRelease(
       existing.staffId,
       existing.staffName,
@@ -151,46 +147,6 @@ export interface PresetSquad {
 
 export type AssignMode = 'fifo' | 'manual' | 'preset'
 
-function hashOf(value: string) {
-  return Math.abs(value.split('').reduce((sum, char) => sum + char.charCodeAt(0) * 31, 7))
-}
-
-const FIELD_TASKS = [
-  'Load-in & setup',
-  'Décor styling',
-  'Floral install',
-  'Load-out & strike',
-  'Vehicle marshaling',
-  'Client liaison',
-  'Rigging & lighting',
-  'Site supervision',
-]
-
-// ─── Daily Duty Local Store & Handlers ───
-let localDailyDuties: DailyDutyAssignment[] = [
-  {
-    id: 'duty-preset-1',
-    date: '2026-08-20',
-    staffId: 's-8',
-    staffName: 'David Thompson',
-    dutyCategory: 'Warehouse',
-    zone: 'Logistics & Movement',
-    isTeamLeadToday: true,
-    assignedBy: 'Preset Example',
-    assignedAt: '2026-08-20T08:00:00.000Z',
-  },
-  {
-    id: 'duty-preset-2',
-    date: '2026-08-20',
-    staffId: 's-14',
-    staffName: 'Amara Okafor',
-    dutyCategory: 'Production',
-    isTeamLeadToday: false,
-    assignedBy: 'Preset Example',
-    assignedAt: '2026-08-20T08:00:00.000Z',
-  },
-]
-
 export function getDailyDutyAssignments(date?: string): DailyDutyAssignment[] {
   if (!date) return localDailyDuties
   return localDailyDuties.filter((d) => d.date === date)
@@ -205,7 +161,6 @@ export function assignDailyDuty(duty: Omit<DailyDutyAssignment, 'id' | 'assigned
   localDailyDuties = [newDuty, ...localDailyDuties.filter((d) => !(d.staffId === duty.staffId && d.date === duty.date))]
   return newDuty
 }
-
 
 export function isTeamLeadToday(staffId: string, date?: string): boolean {
   if (!date) return false
@@ -313,52 +268,18 @@ export function useCrewRows(staff: Staff[], events: PortalEvent[]): CrewRow[] {
   return applyOverlay(base)
 }
 
-export function getCrewRows(staff: Staff[], events: PortalEvent[]): CrewRow[] {
+export function getCrewRows(staff: Staff[], events: PortalEvent[] = []): CrewRow[] {
   const key = `${staff.map((s) => s.id).join(',')}|${events.map((e) => e.id).join(',')}`
   if (cache && cache.key === key) return cache.rows
 
   const pool = getCrewPool(staff)
-  const rows: CrewRow[] = pool.map((member, index) => {
-    const seed = hashOf(member.id)
-    const isOnLeave = seed % 9 === 0
-    const isAssigned = !isOnLeave && seed % 3 !== 0 && events.length > 0
-
-    if (isOnLeave) {
-      return {
-        id: `crew-${member.id}`,
-        staffId: member.id,
-        name: `${member.firstName} ${member.surname}`,
-        role: member.role,
-        status: 'On Leave',
-      }
-    }
-
-    if (isAssigned) {
-      const event = events[(seed + index) % events.length]
-      return {
-        id: `crew-${member.id}`,
-        staffId: member.id,
-        name: `${member.firstName} ${member.surname}`,
-        role: member.role,
-        status: 'Assigned',
-        allocation: {
-          eventId: event.id,
-          event: event.title,
-          venue: event.venue,
-          date: event.targetDate,
-          task: FIELD_TASKS[(seed + index * 3) % FIELD_TASKS.length],
-        },
-      }
-    }
-
-    return {
-      id: `crew-${member.id}`,
-      staffId: member.id,
-      name: `${member.firstName} ${member.surname}`,
-      role: member.role,
-      status: 'Available',
-    }
-  })
+  const rows: CrewRow[] = pool.map((member) => ({
+    id: `crew-${member.id}`,
+    staffId: member.id,
+    name: member.fullName || `${member.firstName} ${member.surname}`.trim(),
+    role: member.role,
+    status: 'Available',
+  }))
 
   cache = { key, rows }
   return rows
@@ -412,13 +333,11 @@ export async function fetchPresetSquads(staff: Staff[]): Promise<PresetSquad[]> 
       return localPresetSquads
     }
   } catch (e) {
-    console.warn('[v0] Supabase preset squads unavailable; using local cache/defaults.', e)
+    console.warn('[warehouse-crew] Supabase preset squads unavailable; using local cache/defaults.', e)
   }
 
   return getPresetSquads(staff)
 }
-
-import { logAuditEvent } from '@/lib/audit-logger'
 
 export async function savePresetSquad(
   squad: PresetSquad,
@@ -436,7 +355,7 @@ export async function savePresetSquad(
     }
     await supabase.from('manning_preset_squads').upsert(payload)
   } catch (e) {
-    console.warn('[v0] Failed to save preset squad to Supabase; using local store.', e)
+    console.warn('[warehouse-crew] Failed to save preset squad to Supabase; using local store.', e)
   }
 
   const idx = localPresetSquads.findIndex((s) => s.id === squad.id)
@@ -469,7 +388,7 @@ export async function deletePresetSquad(
   try {
     await supabase.from('manning_preset_squads').delete().eq('id', squadId)
   } catch (e) {
-    console.warn('[v0] Failed to delete preset squad from Supabase; using local store.', e)
+    console.warn('[warehouse-crew] Failed to delete preset squad from Supabase; using local store.', e)
   }
 
   localPresetSquads = localPresetSquads.filter((s) => s.id !== squadId)
@@ -509,25 +428,20 @@ export function isTeamLead(
 ): boolean {
   if (!row) return false
 
-  // Tier 1: Check Daily Duty Team Lead designation if date is provided
   if (date && isTeamLeadToday(row.staffId, date)) {
     return true
   }
 
-  // Tier 2: Static Role & Declaration Fallback
   const staffMember = staffList.find((s) => s.id === row.staffId)
 
-  // 1. Check explicit staff role (exact match)
   if (staffMember && QUALIFIED_LEAD_ROLES.includes(staffMember.role as any)) {
     return true
   }
 
-  // 2. Check CrewRow role text (exact match against fixed list)
   if (QUALIFIED_LEAD_ROLES.includes(row.role.trim() as any)) {
     return true
   }
 
-  // 3. Check recent Ground Crew Declarations (recency window: <= 7 days)
   const now = Date.now()
   const recentDecl = declarations.find((d) => {
     if (d.submittedRole !== 'Team Lead' && d.submittedRole !== 'Field Lead') return false
@@ -566,26 +480,14 @@ function cellKey(staffId: string, date: string) {
   return `${staffId}__${date}`
 }
 
-function seedGrid(staff: Staff[], dates: string[]) {
-  const pool = getCrewPool(staff)
-  pool.forEach((member) => {
-    dates.forEach((date) => {
-      const key = cellKey(member.id, date)
-      if (grid[key]) return
-      const seed = hashOf(`${member.id}-${date}`)
-      grid[key] = seed % 5 === 0 ? 'OFF' : seed % 2 === 0 ? 'AM' : 'PM'
-    })
-  })
-  globalStore[shiftStoreKey] = grid
-}
-
 function publish() {
   globalStore[shiftStoreKey] = grid
   listeners.forEach((listener) => listener())
 }
 
 export function useShiftGrid(staff: Staff[], dates: string[]) {
-  seedGrid(staff, dates)
+  void staff
+  void dates
   return useSyncExternalStore(
     (listener) => {
       listeners.add(listener)
@@ -596,11 +498,9 @@ export function useShiftGrid(staff: Staff[], dates: string[]) {
   )
 }
 
-export function getShift(staffId: string, date: string): ShiftCode {
-  return grid[cellKey(staffId, date)] ?? 'OFF'
+export function getShift(staffId: string, date: string): ShiftCode | undefined {
+  return grid[cellKey(staffId, date)]
 }
-
-const CYCLE: ShiftCode[] = ['AM', 'PM', 'OFF']
 
 function triggerAutoReleaseIfOff(staffId: string, date: string, shift: ShiftCode, staffName?: string) {
   if (shift !== 'OFF') return
@@ -610,8 +510,8 @@ function triggerAutoReleaseIfOff(staffId: string, date: string, shift: ShiftCode
 
 export function cycleShift(staffId: string, date: string, staffName?: string) {
   const key = cellKey(staffId, date)
-  const current = grid[key] ?? 'OFF'
-  const next = CYCLE[(CYCLE.indexOf(current) + 1) % CYCLE.length]
+  const current = grid[key]
+  const next = !current ? 'AM' : current === 'AM' ? 'PM' : current === 'PM' ? 'OFF' : 'AM'
   grid = { ...grid, [key]: next }
   publish()
 

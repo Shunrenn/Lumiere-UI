@@ -1,18 +1,25 @@
-// Deterministic seed + derivation layer for the Asset Catalog module.
-// Every asset carries a universal lifecycle `status` (used by the shared
-// status filter pills) plus category-specific fields that drive the
-// stock-display line on each card — the two are intentionally decoupled so
-// "Deployed" reads sensibly whether the underlying item is a stockroom SKU
-// or a one-off bespoke build.
-import { useSyncExternalStore } from 'react'
-import { getWarehouseVendors } from '@/lib/warehouse-vendors'
-import { createAssetApi, updateAssetApi } from './assetsApi'
+// Canonical data layer for the Asset Catalog module.
+// Renders authoritative backend/database-backed asset records.
+// Fallback state preserves only the 3 canonical DB assets with zero synthesized fixture state.
+import { useEffect, useSyncExternalStore } from 'react'
+import { createAssetApi, fetchAssetsApi, updateAssetApi } from './assetsApi'
 
 import type { WarehouseZone } from '@/lib/warehouse-crew'
 
-export type AssetCategory = 'Event Assets' | 'Production Assets' | 'Stockroom Assets' | 'Rental Assets' | 'Administrative Assets'
+export type AssetCategory =
+  | 'Event Assets'
+  | 'Production Assets'
+  | 'Stockroom Assets'
+  | 'Rental Assets'
+  | 'Administrative Assets'
 
-export type AssetStatus = 'Available' | 'Low Stock' | 'Critical Deficit' | 'Deployed' | 'Lost In Action' | 'In Maintenance'
+export type AssetStatus =
+  | 'Available'
+  | 'Low Stock'
+  | 'Critical Deficit'
+  | 'Deployed'
+  | 'Lost In Action'
+  | 'In Maintenance'
 
 export type BespokeStage = 'Unprepped' | 'Prepping' | 'Ready'
 
@@ -144,10 +151,10 @@ export interface CatalogAsset {
   finishTimeMinutes?: number
   revisionTimeMinutes?: number
 
-  // Bespoke Simulation State (Asset Registry Part A)
-  simulationHeadcount?: number // Default baseline: 1 worker
+  // Bespoke Simulation State
+  simulationHeadcount?: number
   simulationAttempts?: BespokeSimulationAttempt[]
-  baseSingleWorkerTimeMinutes?: number // Auto-computed arithmetic mean of attempts
+  baseSingleWorkerTimeMinutes?: number
 
   // Stockroom Specific
   criticalThreshold?: number
@@ -170,423 +177,98 @@ export interface CatalogAsset {
   deviceSpecs?: string
 }
 
-function hashOf(value: string) {
-  return Math.abs(value.split('').reduce((sum, char) => sum + char.charCodeAt(0) * 31, 7))
-}
-
-const DECOR_IMAGES = [
-  '/images/decor/tiffany-chair.png',
-  '/images/decor/crystal-chandelier.png',
-  '/images/decor/dinner-table.png',
-  '/images/decor/gold-charger.png',
-  '/images/decor/silk-runner.png',
-  '/images/decor/pillar-candles.png',
-  '/images/decor/floral-arch.png',
-  '/images/decor/glassware.png',
-  '/images/decor/candelabra.png',
-  '/images/decor/velvet-sofa.png',
-  '/images/decor/string-lights.png',
-  '/images/decor/silver-flatware.png',
-  '/images/decor/uplighting.png',
-  '/images/decor/silk-napkin.png',
-  '/images/decor/minimalist-table.png',
-]
-
-interface SeedRow {
-  name: string
-  itemCallName: string
-  category: AssetCategory
-  subCategory: string
-  unit: string
-  material: string
-  colorType: 'mono' | 'multi' | 'changeable'
-  colorPrimary: string
-  colorSecondary?: string[]
-  tags: string[]
-  is_circular?: boolean
-  shape?: string
-  circumference?: string
-}
-
-const SEED_ROWS: SeedRow[] = [
-  // Event Asset — reservable stock, deployed per event
+/**
+ * Authoritative 3 canonical database-backed asset rows.
+ * Real inventory records from baseline database schema.
+ */
+export const CANONICAL_CATALOG_ASSETS: CatalogAsset[] = [
   {
-    name: 'Tiffany Ceremony Chair',
-    itemCallName: 'Tiffany Chair',
-    category: 'Event Assets',
-    subCategory: 'Furniture / Seating',
-    unit: 'pcs',
-    material: 'Resin & Hardwood',
-    colorType: 'mono',
-    colorPrimary: 'Metallic Gold',
-    tags: ['Ceremony', 'Seating', 'Gala'],
-  },
-  {
-    name: 'Gold Charger Plate Set',
-    itemCallName: 'Gold Charger',
-    category: 'Event Assets',
-    subCategory: 'Tableware / Chargers',
-    unit: 'sets',
-    material: 'Lacquered Glass',
-    colorType: 'mono',
-    colorPrimary: 'Polished Gold',
-    tags: ['Dining', 'Tableware'],
-    is_circular: true,
-    shape: 'Circular',
-    circumference: '103 cm',
-  },
-  {
-    name: 'Silk Table Runner — Ivory',
-    itemCallName: 'Ivory Runner',
-    category: 'Event Assets',
-    subCategory: 'Linens / Textiles',
-    unit: 'pcs',
-    material: '100% Mulberry Silk',
-    colorType: 'mono',
-    colorPrimary: 'Ivory Cream',
-    tags: ['Tablescape', 'Linens'],
-  },
-  {
-    name: 'Crystal Votive Candle Holder',
-    itemCallName: 'Crystal Votive',
-    category: 'Event Assets',
-    subCategory: 'Lighting / Accents',
-    unit: 'pcs',
-    material: 'Leaded Crystal Glass',
-    colorType: 'mono',
-    colorPrimary: 'Clear Crystal',
-    tags: ['Centerpiece', 'Candlelit'],
-    is_circular: true,
-    shape: 'Cylindrical',
-    circumference: '25 cm',
-  },
-  {
-    name: 'Uplighting Fixture — Warm Amber',
-    itemCallName: 'Amber Uplight',
-    category: 'Event Assets',
-    subCategory: 'AV & Lighting',
-    unit: 'units',
-    material: 'Aluminum Casing',
-    colorType: 'changeable',
-    colorPrimary: 'Warm Amber',
-    colorSecondary: ['RGBW Spectrum'],
-    tags: ['Stage', 'Ambience'],
-  },
-  {
-    name: 'Floral Arch Frame — Round',
-    itemCallName: 'Round Arch',
-    category: 'Event Assets',
-    subCategory: 'Structures / Arches',
-    unit: 'units',
-    material: 'Wrought Iron',
-    colorType: 'mono',
-    colorPrimary: 'Matte Brass',
-    tags: ['Photo Op', 'Stage Arch'],
-    is_circular: true,
-    shape: 'Circular Arch',
-    circumference: '754 cm',
-  },
-
-  // Bespoke — custom fabrication builds
-  {
-    name: 'Custom Monogram Backdrop',
-    itemCallName: 'Monogram Wall',
-    category: 'Production Assets',
-    subCategory: 'Fabrication / Backdrops',
-    unit: 'build',
-    material: 'Plywood & Acrylic',
-    colorType: 'multi',
-    colorPrimary: 'Gilded Gold',
-    colorSecondary: ['Matte White', 'Navy Accent'],
-    tags: ['Stage', 'Custom Build'],
-  },
-  {
-    name: 'Bespoke Ceiling Canopy Installation',
-    itemCallName: 'Ceiling Canopy',
-    category: 'Production Assets',
-    subCategory: 'Fabrication / Hanging Decor',
-    unit: 'build',
-    material: 'Organza & Micro-LEDs',
-    colorType: 'changeable',
-    colorPrimary: 'Champagne Gold',
-    tags: ['Hanging', 'Illuminated'],
-  },
-  {
-    name: 'Client Crest Stage Panel',
-    itemCallName: 'Crest Panel',
-    category: 'Production Assets',
-    subCategory: 'Fabrication / Stagecraft',
-    unit: 'build',
-    material: 'CNC Engraved MDF',
-    colorType: 'mono',
-    colorPrimary: 'Polished Brass',
-    tags: ['Stagecraft', 'VIP Branding'],
-  },
-  {
-    name: 'Bespoke Welcome Signage Stand',
-    itemCallName: 'Welcome Stand',
-    category: 'Production Assets',
-    subCategory: 'Fabrication / Signage',
-    unit: 'build',
-    material: 'Frosted Acrylic & Steel',
-    colorType: 'mono',
-    colorPrimary: 'Rose Gold',
-    tags: ['Entrance', 'Signage'],
-  },
-  {
-    name: 'Custom Dessert Table Facade',
-    itemCallName: 'Dessert Facade',
-    category: 'Production Assets',
-    subCategory: 'Fabrication / Furniture',
-    unit: 'build',
-    material: 'Fluted Molding & Marble Top',
-    colorType: 'multi',
-    colorPrimary: 'Parchment White',
-    colorSecondary: ['Gold Fluting'],
-    tags: ['Station', 'Custom Facade'],
-  },
-
-  // Stockroom — general consumable / reusable stock
-  {
-    name: 'Silver Flatware Set',
-    itemCallName: 'Silver Flatware',
+    id: 'mat-inv-1',
+    assetId: 'LM-MAT-001',
+    name: 'Plywood sheet 4x8',
+    itemCallName: 'Plywood Sheet',
     category: 'Stockroom Assets',
-    subCategory: 'Consumables / Cutlery',
-    unit: 'sets',
-    material: 'Sterling Silver Plate',
+    subCategory: 'Raw Materials & Hardware',
+    description: '3/4 inch exterior grade hardwood plywood sheet',
+    status: 'Available',
+    image: '',
+    unit: 'sheets',
+    dimensions: { height: '244 cm', width: '122 cm', depth: '1.9 cm', weight: '25.0 kg' },
+    material: 'Hardwood Plywood',
     colorType: 'mono',
-    colorPrimary: 'Polished Silver',
-    tags: ['Dining', 'Cutlery'],
+    colorPrimary: 'Natural Wood',
+    tags: ['Raw Materials', 'Carpentry', 'Stockroom'],
+    purchaseCost: 45000,
+    costPerUnit: 1800,
+    dateAdded: '2026-01-10',
+    primaryVendorId: 'ven-01',
+    currentStock: 25,
+    threshold: 50,
+    criticalThreshold: 20,
+    ceilingCap: 50,
   },
   {
-    name: 'Glassware — Coupe Set',
-    itemCallName: 'Coupe Glassware',
+    id: 'mat-inv-2',
+    assetId: 'LM-MAT-002',
+    name: 'Steel frame tubing',
+    itemCallName: 'Steel Tubing',
     category: 'Stockroom Assets',
-    subCategory: 'Consumables / Glassware',
-    unit: 'sets',
-    material: 'Hand-blown Crystal',
+    subCategory: 'Raw Materials & Hardware',
+    description: 'Square hollow steel tubing 2x2 inch',
+    status: 'Available',
+    image: '',
+    unit: 'meters',
+    dimensions: { height: '600 cm', width: '5 cm', depth: '5 cm', weight: '12.0 kg' },
+    material: 'Steel',
     colorType: 'mono',
-    colorPrimary: 'Crystal Clear',
-    tags: ['Barware', 'Toast'],
-    is_circular: true,
-    shape: 'Circular Rim',
-    circumference: '28 cm',
+    colorPrimary: 'Raw Steel',
+    tags: ['Raw Materials', 'Metalwork', 'Stockroom'],
+    purchaseCost: 36000,
+    costPerUnit: 1200,
+    dateAdded: '2026-01-10',
+    primaryVendorId: 'ven-02',
+    currentStock: 30,
+    threshold: 60,
+    criticalThreshold: 25,
+    ceilingCap: 60,
   },
   {
-    name: 'Pillar Candle — Unscented',
-    itemCallName: 'Pillar Candle',
+    id: 'mat-inv-3',
+    assetId: 'LM-MAT-003',
+    name: 'Acrylic panel — clear',
+    itemCallName: 'Acrylic Panel',
     category: 'Stockroom Assets',
-    subCategory: 'Consumables / Candles',
-    unit: 'pcs',
-    material: 'Paraffin & Soy Wax',
+    subCategory: 'Raw Materials & Hardware',
+    description: '4mm clear cast acrylic panel 4x8',
+    status: 'Available',
+    image: '',
+    unit: 'panels',
+    dimensions: { height: '244 cm', width: '122 cm', depth: '0.4 cm', weight: '14.0 kg' },
+    material: 'Cast Acrylic',
     colorType: 'mono',
-    colorPrimary: 'Pure Ivory',
-    tags: ['Ambience', 'Consumable'],
-    is_circular: true,
-    shape: 'Cylindrical',
-    circumference: '22 cm',
-  },
-  {
-    name: 'Silk Napkin — Champagne',
-    itemCallName: 'Silk Napkin',
-    category: 'Stockroom Assets',
-    subCategory: 'Consumables / Napkins',
-    unit: 'pcs',
-    material: 'Satin Silk',
-    colorType: 'mono',
-    colorPrimary: 'Champagne Satin',
-    tags: ['Dining', 'Textile'],
-  },
-  {
-    name: 'String Lights — Warm White 10m',
-    itemCallName: 'String Lights',
-    category: 'Stockroom Assets',
-    subCategory: 'Consumables / Wiring',
-    unit: 'coils',
-    material: 'Copper & PVC Wiring',
-    colorType: 'changeable',
-    colorPrimary: 'Warm Yellow',
-    tags: ['Lighting', 'Wiring'],
+    colorPrimary: 'Clear',
+    tags: ['Raw Materials', 'Signage', 'Stockroom'],
+    purchaseCost: 52500,
+    costPerUnit: 3500,
+    dateAdded: '2026-01-10',
+    primaryVendorId: 'ven-03',
+    currentStock: 15,
+    threshold: 30,
+    criticalThreshold: 10,
+    ceilingCap: 30,
   },
 ]
-
-const CUSTODIANS = ['Marco Villareal', 'Dennis Pineda', 'Joy ABREGO', 'Trisha Domingo', 'Warehouse Pool']
-const CREW_LEADS = ['Fab Team — Ronnie', 'Fab Team — Iris', 'Fab Team — Kean', 'Fab Team — Marge']
-const DECLARANTS = ['Marco Villareal', 'Dennis Pineda', 'Joy Abrego', 'Trisha Domingo', 'Ronnie Cabrera', 'Iris Manalo']
-
-function statusFor(category: AssetCategory, seed: number): AssetStatus {
-  const roll = seed % 10
-  if (category === 'Production Assets') {
-    return roll < 6 ? 'Available' : roll < 9 ? 'Deployed' : 'Lost In Action'
-  }
-  if (category === 'Rental Assets') {
-    return roll < 5 ? 'Deployed' : roll < 9 ? 'Available' : 'Lost In Action'
-  }
-  if (category === 'Administrative Assets') {
-    return roll < 7 ? 'Available' : roll < 9 ? 'Deployed' : 'Lost In Action'
-  }
-  // Event Asset / Stockroom — driven by stock ratio, computed by caller
-  if (roll < 5) return 'Available'
-  if (roll < 8) return 'Low Stock'
-  return 'Critical Deficit'
-}
-
-function dimsFor(seed: number): AssetDimensions {
-  const h = 20 + (seed % 160)
-  const w = 15 + ((seed >> 2) % 140)
-  const d = 10 + ((seed >> 4) % 90)
-  const weight = 1 + ((seed >> 3) % 45)
-  return { height: `${h} cm`, width: `${w} cm`, depth: `${d} cm`, weight: `${weight} kg` }
-}
-
-function dateFromSeed(seed: number, offsetDays = 0) {
-  const base = new Date(2025, 0, 1)
-  base.setDate(base.getDate() + (seed % 300) + offsetDays)
-  return base.toISOString().slice(0, 10)
-}
 
 let cachedCatalog: CatalogAsset[] | null = null
 
 export function getCatalogAssets(): CatalogAsset[] {
   if (cachedCatalog) return cachedCatalog
-  const vendors = getWarehouseVendors()
-
-  cachedCatalog = SEED_ROWS.map((row, index) => {
-    const seed = hashOf(`${row.name}-${index}`)
-    const image = DECOR_IMAGES[seed % DECOR_IMAGES.length]
-    const primaryVendor = vendors[seed % vendors.length]
-    const backupVendor = vendors[(seed + 3) % vendors.length]
-    const assetId = `LM-${row.category.slice(0, 2).toUpperCase()}-${1000 + index}`
-
-    const base: CatalogAsset = {
-      id: `cat-${index}`,
-      assetId,
-      name: row.name,
-      itemCallName: row.itemCallName,
-      category: row.category,
-      subCategory: row.subCategory,
-      description: `Premium ${row.material.toLowerCase()} piece curated for high-profile luxury event staging.`,
-      status: 'Available',
-      image,
-      unit: row.unit,
-      dimensions: dimsFor(seed),
-      is_circular: row.is_circular,
-      shape: row.shape,
-      circumference: row.circumference,
-      material: row.material,
-      colorType: row.colorType,
-      colorPrimary: row.colorPrimary,
-      colorSecondary: row.colorSecondary,
-      tags: row.tags,
-      purchaseCost: 4500 + ((seed * 37) % 60000),
-      costPerUnit: 150 + ((seed * 11) % 3200),
-      dateAdded: dateFromSeed(seed, -200),
-      primaryVendorId: primaryVendor.id,
-      backupVendorId: backupVendor.id !== primaryVendor.id ? backupVendor.id : undefined,
-    }
-
-    if (row.category === 'Event Assets') {
-      const threshold = 40 + (seed % 160)
-      const ratioRoll = seed % 10
-      const ratio = ratioRoll < 5 ? 0.6 + ((seed % 40) / 100) : ratioRoll < 8 ? 0.25 + ((seed % 20) / 100) : (seed % 12) / 100
-      const currentStock = Math.max(0, Math.round(threshold * ratio))
-      const status: AssetStatus = currentStock === 0 ? 'Critical Deficit' : currentStock / threshold < 0.2 ? 'Critical Deficit' : currentStock / threshold < 0.5 ? 'Low Stock' : 'Available'
-      return {
-        ...base,
-        currentStock,
-        threshold,
-        status,
-        lifeSpan: `${3 + (seed % 4)} Years`,
-        damageReplacementCost: Math.round(base.costPerUnit * 1.4),
-      }
-    }
-
-    if (row.category === 'Stockroom Assets') {
-      const criticalThreshold = 30 + (seed % 50)
-      const ceilingCap = 180 + (seed % 120)
-      const roll = seed % 10
-      const currentStock = roll < 3 ? criticalThreshold - 12 : roll < 7 ? criticalThreshold + 40 : ceilingCap + 35
-      const status: AssetStatus = currentStock < criticalThreshold ? 'Low Stock' : 'Available'
-      return {
-        ...base,
-        currentStock,
-        criticalThreshold,
-        ceilingCap,
-        threshold: criticalThreshold,
-        status,
-        pricePerPack: Math.round(base.costPerUnit * 12),
-        lifeSpan: '24 Months',
-      }
-    }
-
-    if (row.category === 'Production Assets') {
-      const stages: BespokeStage[] = ['Unprepped', 'Prepping', 'Ready']
-      const status = statusFor(row.category, seed)
-      const bespokeStage: BespokeStage = status === 'Deployed' ? 'Ready' : stages[seed % stages.length]
-      const finishTimeMinutes = 45 + ((seed * 17) % 3600) // Ranges from 45 mins to ~60 hours
-      const revisionTimeMinutes = 15 + ((seed * 7) % 180)
-
-      // Seed initial 5 simulation attempts with baseline headcount = 1
-      const baseSeedMinutes = [42, 50, 45, 55, 48].map((m) => Math.round(m * (1 + (seed % 5) * 0.08)))
-      const simulationAttempts: BespokeSimulationAttempt[] = baseSeedMinutes.map((dur, i) => ({
-        id: `att-${seed}-${i + 1}`,
-        attemptNumber: i + 1,
-        durationMinutes: dur,
-        rawInput: `${dur} min`,
-        loggedAt: dateFromSeed(seed, -(20 - i * 3)),
-        loggedBy: CREW_LEADS[(seed + i) % CREW_LEADS.length],
-      }))
-      const meanTime = Math.round(
-        simulationAttempts.reduce((acc, curr) => acc + curr.durationMinutes, 0) / simulationAttempts.length,
-      )
-
-      return {
-        ...base,
-        status,
-        bespokeStage,
-        bespokeCrew: CREW_LEADS[seed % CREW_LEADS.length],
-        rawMaterials: ['Plywood 3/4"', 'Acrylic Panel', 'Gold Leaf Coating', 'Steel Bracing'],
-        manCount: 2 + (seed % 5),
-        finishTimeMinutes,
-        revisionTimeMinutes,
-        simulationHeadcount: 1,
-        simulationAttempts,
-        baseSingleWorkerTimeMinutes: meanTime,
-      }
-    }
-
-    if (row.category === 'Rental Assets') {
-      const status = statusFor(row.category, seed)
-      const dueDate = dateFromSeed(seed, 5 + (seed % 25))
-      return {
-        ...base,
-        status,
-        onLoanDueDate: status === 'Deployed' ? dueDate : undefined,
-        rentalVendorName: primaryVendor.name,
-        supplierDetails: `${primaryVendor.name} (Acct Ref: SUP-${1000 + (seed % 800)})`,
-        supplierContact: primaryVendor.contactName || primaryVendor.phone || 'Vendor Rep',
-        lengthOfRent: `${7 + (seed % 14)} Days`,
-        overduePenaltyFee: 1500 + ((seed * 23) % 4000),
-      }
-    }
-
-    // Office Asset
-    const status = statusFor(row.category, seed)
-    const assigned = seed % 3 !== 0
-    return {
-      ...base,
-      status,
-      custodian: assigned ? CUSTODIANS[seed % CUSTODIANS.length] : undefined,
-      vendorDetails: `${primaryVendor.name} — Direct Purchase`,
-      lifeSpan: '5 Years Warranty',
-    }
-  })
-
+  cachedCatalog = [...CANONICAL_CATALOG_ASSETS]
   return cachedCatalog
 }
 
 export function getCatalogAssetById(id: string): CatalogAsset | undefined {
-  return getCatalogAssets().find((asset) => asset.id === id)
+  return getCatalogAssets().find((asset) => asset.id === id || asset.assetId === id)
 }
 
 // ---------- Live catalog store ----------
@@ -597,14 +279,47 @@ function publishCatalog() {
 }
 
 export function useCatalogAssets(): CatalogAsset[] {
-  getCatalogAssets()
+  useEffect(() => {
+    let active = true
+    fetchAssetsApi().then((items) => {
+      if (!active || !items.length) return
+      const mapped: CatalogAsset[] = items.map((raw, idx) => ({
+        id: raw.id || `cat-${idx}`,
+        assetId: raw.assetId || `LM-AST-${1000 + idx}`,
+        name: raw.name || 'Unnamed Asset',
+        itemCallName: raw.itemCallName || raw.name || 'Asset',
+        category: (raw.category as AssetCategory) || 'Stockroom Assets',
+        subCategory: raw.subCategory || 'General',
+        description: raw.description || '',
+        status: (raw.status as AssetStatus) || 'Available',
+        image: raw.image || '',
+        unit: raw.unit || 'pcs',
+        dimensions: raw.dimensions || { height: '—', width: '—', depth: '—', weight: '—' },
+        material: raw.material || 'Standard',
+        purchaseCost: raw.purchaseCost || 0,
+        costPerUnit: raw.costPerUnit || 0,
+        dateAdded: raw.dateAdded || new Date().toISOString().slice(0, 10),
+        primaryVendorId: raw.primaryVendorId || '',
+        currentStock: raw.currentStock,
+        threshold: raw.threshold,
+        criticalThreshold: raw.criticalThreshold,
+        ceilingCap: raw.ceilingCap,
+      }))
+      cachedCatalog = mapped
+      publishCatalog()
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
   return useSyncExternalStore(
     (listener) => {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
-    () => cachedCatalog ?? [],
-    () => cachedCatalog ?? [],
+    () => getCatalogAssets(),
+    () => getCatalogAssets(),
   )
 }
 
@@ -618,7 +333,7 @@ export function addCatalogAsset(asset: CatalogAsset): CatalogAsset {
 
 export function updateCatalogAsset(id: string, changes: Partial<Omit<CatalogAsset, 'id'>>) {
   const existing = getCatalogAssets()
-  cachedCatalog = existing.map((asset) => (asset.id === id ? { ...asset, ...changes } : asset))
+  cachedCatalog = existing.map((asset) => (asset.id === id || asset.assetId === id ? { ...asset, ...changes } : asset))
   publishCatalog()
   void updateAssetApi(id, changes)
 }
@@ -634,62 +349,9 @@ export function getLowStockAssets(assets: CatalogAsset[] = getCatalogAssets()): 
   )
 }
 
-const LEDGER_SEQUENCE: LedgerEntryType[] = [
-  'Registered',
-  'Reserved',
-  'Packed',
-  'Dispatched',
-  'Returned',
-  'Reconciled',
-]
-
 export function getAssetLedger(asset: CatalogAsset): CatalogLedgerEntry[] {
-  const seed = hashOf(asset.id)
-  const entryCount = 3 + (seed % 4)
-  const entries: CatalogLedgerEntry[] = []
-  for (let i = 0; i < entryCount; i += 1) {
-    const type = LEDGER_SEQUENCE[(seed + i) % LEDGER_SEQUENCE.length]
-    const declaredBy = DECLARANTS[(seed + i * 7) % DECLARANTS.length]
-    const variant = (seed + i * 5) % 6
-    const reconciliationTag: ReconciliationTag | undefined =
-      type === 'Reconciled' ? (variant === 0 ? 'Short' : variant === 1 ? 'Pahabol' : 'Matched') : undefined
-    entries.push({
-      id: `${asset.id}-ledger-${i}`,
-      timestamp: dateFromSeed(seed, i * 11),
-      type,
-      declaredBy,
-      linkedBatchRef: type === 'Dispatched' || type === 'Returned' ? `BATCH-${100 + ((seed + i) % 900)}` : undefined,
-      reconciliationTag,
-      note: noteFor(type, asset),
-    })
-  }
-  // Reverse-chronological — newest first, treating index order as time order.
-  return entries.reverse()
-}
-
-function noteFor(type: LedgerEntryType, asset: CatalogAsset): string {
-  switch (type) {
-    case 'Registered':
-      return `Added to the ${asset.category} registry.`
-    case 'Reserved':
-      return 'Reserved against an upcoming event allocation.'
-    case 'Packed':
-      return 'Packed into an outbound dispatch batch.'
-    case 'Dispatched':
-      return 'Left the warehouse on an outbound batch.'
-    case 'Returned':
-      return 'Returned from site and logged back into stock.'
-    case 'Damaged':
-      return 'Flagged with visible damage during intake inspection.'
-    case 'Repaired':
-      return 'Repaired and cleared for redeployment.'
-    case 'Reconciled':
-      return 'Counted against the dispatch manifest during reconciliation.'
-    case 'Retired':
-      return 'Retired from active circulation.'
-    default:
-      return ''
-  }
+  void asset
+  return []
 }
 
 export const DEFAULT_BESPOKE_SUBCATEGORY_CONFIGS: Record<string, BespokeSubCategoryConfig> = {
@@ -736,8 +398,6 @@ export function updateBespokeSubCategoryConfig(subCategory: string, maxParallelW
     },
   }
 }
-
-
 
 export function updateAssetSimulation(
   assetId: string,

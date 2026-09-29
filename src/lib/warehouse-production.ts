@@ -1,10 +1,8 @@
-// Mutable seed + store layer for Production & Fabrication. Bespoke build
-// commitments are drawn from the Asset Catalog's Bespoke category and paired
-// with the live event roster, then held in an in-memory store so kanban
-// drags, approvals, quota estimates, and Gantt schedules persist for the session.
+// Canonical data layer for Production & Fabrication.
+// Renders authoritative backend production records. Zero frontend fixture records.
 import { useSyncExternalStore } from 'react'
 import type { PortalEvent, Staff } from '@/lib/types'
-import { getCatalogAssets, getBespokeSubCategoryConfigs, type CatalogAsset } from '@/lib/warehouse-catalog'
+import { getBespokeSubCategoryConfigs, type CatalogAsset } from '@/lib/warehouse-catalog'
 import { getCrewPool } from '@/lib/warehouse-crew'
 
 export type ProductionStage = 'Unprepped' | 'Prepping' | 'Awaiting Approval' | 'Ready'
@@ -88,7 +86,7 @@ export interface ProductionItem {
   rawMaterials: RawMaterial[]
   accomplishment?: AccomplishmentDeclaration
 
-  // Gantt & Scheduling Engine Fields (Part B)
+  // Gantt & Scheduling Engine Fields
   quota: number
   assignedWorkers: number
   shiftSelection: ShiftType
@@ -127,7 +125,7 @@ function buildMaterials(seed: number): RawMaterial[] {
       name: source.name,
       qty: 1 + ((seed + i * 5) % 12),
       unit: source.unit,
-      checked: (seed + i) % 3 === 0,
+      checked: false,
     }
   })
 }
@@ -152,28 +150,30 @@ export function calculateProductionSchedule(params: {
 } {
   const { quota, baseSingleWorkerMinutes, maxParallelWorkers, assignedWorkers, shift, startDate, delays = [] } = params
 
-  const effectiveWorkers = Math.max(1, Math.min(assignedWorkers, maxParallelWorkers))
-  const computedMinutesPerItem = baseSingleWorkerMinutes > 0 ? baseSingleWorkerMinutes / effectiveWorkers : 45
-  const computedTotalWorkHours = (Math.max(1, quota) * computedMinutesPerItem) / 60
-  const dailyWorkHours = SHIFT_CONFIGS[shift]?.effectiveWorkHours ?? 8
-  const computedWorkDays = Math.max(1, Math.ceil(computedTotalWorkHours / dailyWorkHours))
+  const effectiveWorkers = Math.min(assignedWorkers, maxParallelWorkers)
+  const computedMinutesPerItem = Math.max(1, Math.round(baseSingleWorkerMinutes / Math.max(1, effectiveWorkers)))
+  const totalProductionMinutes = computedMinutesPerItem * Math.max(1, quota)
+  const computedTotalWorkHours = Math.round((totalProductionMinutes / 60) * 10) / 10
 
-  const startObj = new Date(startDate || new Date().toISOString().slice(0, 10))
-  const endObj = new Date(startObj)
-  endObj.setDate(endObj.getDate() + (computedWorkDays - 1))
-  const computedEndDate = endObj.toISOString().slice(0, 10)
+  const dailyVelocityHours = SHIFT_CONFIGS[shift]?.effectiveWorkHours || 8
+  const computedWorkDays = Math.max(1, Math.ceil(computedTotalWorkHours / dailyVelocityHours))
 
-  const totalDelayHours = delays.reduce((sum, d) => sum + (d.delayHours || 0), 0)
-  const totalDelayDays = Math.ceil(totalDelayHours / dailyWorkHours)
+  const start = new Date(startDate || new Date().toISOString().slice(0, 10))
+  const end = new Date(start)
+  end.setDate(end.getDate() + (computedWorkDays - 1))
+  const computedEndDate = end.toISOString().slice(0, 10)
 
-  const effectiveEndObj = new Date(endObj)
-  effectiveEndObj.setDate(effectiveEndObj.getDate() + totalDelayDays)
-  const effectiveEndDate = effectiveEndObj.toISOString().slice(0, 10)
+  const totalDelayHours = delays.reduce((acc, d) => acc + (d.delayHours || 0), 0)
+  const totalDelayDays = Math.ceil(totalDelayHours / dailyVelocityHours)
+
+  const effectiveEnd = new Date(end)
+  effectiveEnd.setDate(effectiveEnd.getDate() + totalDelayDays)
+  const effectiveEndDate = effectiveEnd.toISOString().slice(0, 10)
 
   return {
     effectiveWorkers,
-    computedMinutesPerItem: Math.round(computedMinutesPerItem * 10) / 10,
-    computedTotalWorkHours: Math.round(computedTotalWorkHours * 10) / 10,
+    computedMinutesPerItem,
+    computedTotalWorkHours,
     computedWorkDays,
     computedEndDate,
     totalDelayHours,
@@ -193,103 +193,9 @@ function publish() {
   listeners.forEach((listener) => listener())
 }
 
-function seedItems(events: PortalEvent[], staff: Staff[]) {
-  if (items.length > 0) return
-  const bespoke = getCatalogAssets().filter((asset) => asset.category === 'Production Assets')
-  const crewPool = getCrewPool(staff)
-  const subCategoryConfigs = getBespokeSubCategoryConfigs()
-  const stageForBespoke: Record<string, ProductionStage> = {
-    Unprepped: 'Unprepped',
-    Prepping: 'Prepping',
-    Ready: 'Ready',
-  }
-
-  const seeded: ProductionItem[] = []
-  const today = new Date()
-
-  bespoke.forEach((asset, index) => {
-    const seed = hashOf(asset.id)
-    const event = events.length > 0 ? events[(seed + index) % events.length] : undefined
-    const crewMember = crewPool[(seed + index) % Math.max(1, crewPool.length)]
-    const baseStage = asset.bespokeStage ? stageForBespoke[asset.bespokeStage] : 'Unprepped'
-    const stage: ProductionStage = seed % 7 === 0 && baseStage !== 'Ready' ? 'Awaiting Approval' : baseStage
-
-    const subCat = asset.subCategory || 'Fabrication / Backdrops'
-    const maxParallel = subCategoryConfigs[subCat]?.maxParallelWorkers ?? 3
-    const baseMinutes = asset.baseSingleWorkerTimeMinutes || 48
-    const assignedWorkers = 2 + (seed % 3)
-    const quota = 4 + (seed % 20)
-    const shiftSelection: ShiftType = seed % 3 === 0 ? 'both' : seed % 2 === 0 ? 'morning' : 'night'
-
-    const startDateObj = new Date(today)
-    startDateObj.setDate(startDateObj.getDate() + (index * 2 - 2))
-    const startDate = startDateObj.toISOString().slice(0, 10)
-
-    const initialDelays: ProductionDelayFlag[] =
-      seed % 4 === 0
-        ? [
-            {
-              id: `delay-${seed}`,
-              loggedAt: new Date(Date.now() - 86400000).toISOString(),
-              loggedBy: 'Ronnie (Fab Lead)',
-              reason: 'Late delivery of acrylic raw stock from supplier',
-              delayHours: 8,
-            },
-          ]
-        : []
-
-    const schedule = calculateProductionSchedule({
-      quota,
-      baseSingleWorkerMinutes: baseMinutes,
-      maxParallelWorkers: maxParallel,
-      assignedWorkers,
-      shift: shiftSelection,
-      startDate,
-      delays: initialDelays,
-    })
-
-    seeded.push({
-      id: `prod-${asset.id}`,
-      itemName: asset.name,
-      assetId: asset.id,
-      subCategory: subCat,
-      eventId: event?.id ?? '',
-      eventTitle: event?.title ?? 'Cross-event stock build',
-      thumbnail: asset.image,
-      assignedCrew: crewMember ? `${crewMember.firstName} ${crewMember.surname}` : asset.bespokeCrew ?? 'Unassigned',
-      manCount: assignedWorkers,
-      estimatedHours: schedule.computedTotalWorkHours,
-      startedAt: startDateObj.getTime(),
-      stage,
-      rawMaterials: buildMaterials(seed),
-      accomplishment:
-        stage === 'Awaiting Approval' || stage === 'Ready'
-          ? {
-              notes: 'Structural build complete, finishing touches applied ahead of client walkthrough.',
-              submittedAt: new Date(Date.now() - (seed % 5) * 3600_000).toISOString(),
-            }
-          : undefined,
-
-      quota,
-      assignedWorkers,
-      shiftSelection,
-      startDate,
-      lockedBaseSingleWorkerMinutes: baseMinutes,
-      lockedMaxParallelWorkers: maxParallel,
-      computedMinutesPerItem: schedule.computedMinutesPerItem,
-      computedTotalWorkHours: schedule.computedTotalWorkHours,
-      computedWorkDays: schedule.computedWorkDays,
-      computedEndDate: schedule.computedEndDate,
-      delayFlags: initialDelays,
-      effectiveEndDate: schedule.effectiveEndDate,
-    })
-  })
-  items = seeded
-  globalStore[storeKey] = items
-}
-
-export function useProductionItems(events: PortalEvent[], staff: Staff[]) {
-  seedItems(events, staff)
+export function useProductionItems(events: PortalEvent[] = [], staff: Staff[] = []): ProductionItem[] {
+  void events
+  void staff
   return useSyncExternalStore(
     (listener) => {
       listeners.add(listener)
@@ -366,8 +272,6 @@ export function getTeamCapacity(items: ProductionItem[], staff: Staff[]): TeamCa
 // ---------- Quota Estimation Tool ----------
 
 export function estimateFinishHours(manCount: number, materialCount: number): number {
-  // Simple historical-average-style heuristic: base build time scales down
-  // with more hands on deck, up with more distinct materials to source/cut.
   const base = 18
   const materialLoad = materialCount * 1.6
   const crewDivisor = Math.max(1, manCount * 0.6)

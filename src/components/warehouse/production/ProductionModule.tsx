@@ -314,7 +314,11 @@ function CrossEventWorkloadTable({
   onOpenItem: (item: ProductionItem) => void
 }) {
   if (items.length === 0) {
-    return <p className="text-sm text-muted-foreground">No bespoke commitments match the current search.</p>
+    return (
+      <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center text-sm text-muted-foreground">
+        No bespoke production jobs scheduled.
+      </div>
+    )
   }
   return (
     <div className="overflow-x-auto rounded-xl border border-border bg-card">

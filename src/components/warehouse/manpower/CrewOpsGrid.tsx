@@ -11,13 +11,12 @@ import {
 } from '@/lib/warehouse-crew'
 import { cn } from '@/lib/utils'
 
-const SHIFT_STYLE: Record<ShiftCode, string> = {
+const SHIFT_STYLE: Record<string, string> = {
   AM: 'bg-primary/15 text-primary',
   PM: 'bg-accent text-accent-foreground',
   OFF: 'bg-muted text-muted-foreground',
+  '—': 'bg-muted/30 text-muted-foreground/50 hover:bg-muted/60 font-normal',
 }
-
-const CYCLE: ShiftCode[] = ['AM', 'PM', 'OFF']
 
 function Avatar({ name }: { name: string }) {
   const initials = name
@@ -50,14 +49,20 @@ export function CrewOpsGrid({ staff }: CrewOpsGridProps) {
 
   // Calculate actual pending changes where draft value differs from persisted grid value
   const pendingChanges = Object.entries(draftGrid).filter(
-    ([key, draftShift]) => (grid[key] ?? 'OFF') !== draftShift,
+    ([key, draftShift]) => grid[key] !== draftShift,
   )
   const pendingCount = pendingChanges.length
 
   const handleCellClick = (staffId: string, date: string) => {
     const key = `${staffId}__${date}`
-    const currentShift = draftGrid[key] ?? grid[key] ?? 'OFF'
-    const nextShift = CYCLE[(CYCLE.indexOf(currentShift) + 1) % CYCLE.length]
+    const currentShift = draftGrid[key] ?? grid[key]
+    const nextShift: ShiftCode = !currentShift
+      ? 'AM'
+      : currentShift === 'AM'
+        ? 'PM'
+        : currentShift === 'PM'
+          ? 'OFF'
+          : 'AM'
     setDraftGrid((prev) => ({ ...prev, [key]: nextShift }))
   }
 
@@ -177,8 +182,9 @@ export function CrewOpsGrid({ staff }: CrewOpsGridProps) {
                   </td>
                   {dates.map((date) => {
                     const key = `${member.id}__${date}`
-                    const persistedShift = grid[key] ?? 'OFF'
+                    const persistedShift = grid[key]
                     const currentShift = draftGrid[key] ?? persistedShift
+                    const displayShift = currentShift || '—'
                     const isDraft = key in draftGrid && draftGrid[key] !== persistedShift
 
                     return (
@@ -186,14 +192,14 @@ export function CrewOpsGrid({ staff }: CrewOpsGridProps) {
                         <button
                           type="button"
                           onClick={() => handleCellClick(member.id, date)}
-                          aria-label={`Cycle shift for ${member.firstName} ${member.surname} on ${dayLabel(date)}, currently ${currentShift}`}
+                          aria-label={`Cycle shift for ${member.firstName} ${member.surname} on ${dayLabel(date)}, currently ${displayShift}`}
                           className={cn(
                             'relative w-full rounded-md px-2 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.06em] transition',
-                            SHIFT_STYLE[currentShift],
+                            SHIFT_STYLE[displayShift],
                             isDraft && 'ring-2 ring-amber-500/90 ring-offset-1 font-extrabold shadow-xs',
                           )}
                         >
-                          {currentShift}
+                          {displayShift}
                           {isDraft && (
                             <span className="absolute -top-1 -right-1 flex size-2.5 items-center justify-center rounded-full bg-amber-500 text-white font-mono text-[0.45rem]">
                               •

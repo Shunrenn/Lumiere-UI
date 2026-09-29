@@ -228,7 +228,12 @@ export function ProductionGanttView({ items, onOpenItem, onFlagDelay }: Producti
           </div>
 
           {/* Job Rows Grouped by Event */}
-          {groupedSections.map((section) => (
+          {items.length === 0 ? (
+            <div className="p-12 text-center text-sm text-muted-foreground">
+              No bespoke production jobs scheduled.
+            </div>
+          ) : (
+            groupedSections.map((section) => (
             <div key={section.eventId} className="border-b border-border/60 last:border-b-0">
               {viewMode === 'grouped' && (
                 <div className="bg-muted/40 px-4 py-2 text-xs font-bold text-foreground border-b border-border/40 flex items-center justify-between">
@@ -381,7 +386,7 @@ export function ProductionGanttView({ items, onOpenItem, onFlagDelay }: Producti
                 })
               )}
             </div>
-          ))}
+          )))}
         </div>
       </div>
     </div>

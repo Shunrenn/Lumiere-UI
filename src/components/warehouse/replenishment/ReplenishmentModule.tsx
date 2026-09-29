@@ -296,7 +296,9 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
         ) : (
           <div className="flex flex-col gap-6">
             {grouped.groups.length === 0 && grouped.general.length === 0 && (
-              <p className="text-sm text-muted-foreground">No deficit lines match the current search.</p>
+              <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center text-sm text-muted-foreground">
+                No deficit records found.
+              </div>
             )}
             {grouped.groups.map(([eventId, group]) => {
               const activeLines = group.lines.filter((l) => l.status !== 'Received')
