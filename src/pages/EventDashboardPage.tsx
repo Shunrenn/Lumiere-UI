@@ -9,7 +9,6 @@ import {
 } from '@/components/executive/ExecutiveAnalytics'
 import { ExecutiveLiveFeed } from '@/components/executive/ExecutiveLiveFeed'
 import { ExecutivePendingActions, type ExecutivePendingItem } from '@/components/executive/ExecutivePendingActions'
-import { PortfolioHealthMethodologyModal } from '@/components/executive/PortfolioHealthMethodologyModal'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
@@ -23,7 +22,6 @@ export function EventDashboardPage() {
   const { navigate } = useNav()
   const { events, damageExceptions } = usePortal()
   const [metricMode, setMetricMode] = useState<DashboardMetricMode>('events')
-  const [healthModalOpen, setHealthModalOpen] = useState(false)
 
   // Event metrics
   const totalEvents = events.length
@@ -213,10 +211,10 @@ export function EventDashboardPage() {
                 <>
                   <ExecutiveStatCard
                     agentSelector="data-agent-portfolio-health"
-                    label="Portfolio Health"
-                    value="98.5%"
-                    caption="30-day operational readiness"
-                    onSelect={() => setHealthModalOpen(true)}
+                    label="In Production"
+                    value={String(eventCounts['In Production'] ?? 0)}
+                    caption="Active staging & execution"
+                    onSelect={() => navigate('registry')}
                   />
                   <ExecutiveStatCard
                     agentSelector="data-agent-total-events"
@@ -244,10 +242,10 @@ export function EventDashboardPage() {
                 <>
                   <ExecutiveStatCard
                     agentSelector="data-agent-portfolio-health"
-                    label="Portfolio Health"
-                    value="98.5%"
-                    caption="30-day operational readiness"
-                    onSelect={() => setHealthModalOpen(true)}
+                    label="Audit Exceptions"
+                    value={String((reportCounts['Held for Audit'] ?? 0) + (reportCounts['Second Sign-off'] ?? 0))}
+                    caption="Held for audit review"
+                    onSelect={() => navigate('damage')}
                   />
                   <ExecutiveStatCard
                     agentSelector="data-agent-total-reports"
@@ -308,11 +306,6 @@ export function EventDashboardPage() {
         </div>
         )}
       </ExecutiveShell>
-
-      <PortfolioHealthMethodologyModal
-        open={healthModalOpen}
-        onClose={() => setHealthModalOpen(false)}
-      />
     </>
   )
 }

@@ -199,8 +199,8 @@ export function EventRegistryPage() {
                     className={cn(
                       'rounded-full px-3 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.12em] transition',
                       statusFilter === status
-                        ? 'bg-neutral-900 text-white'
-                        : 'border border-border bg-card text-muted-foreground hover:bg-muted',
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
                     )}
                   >
                     {status} ({count})
@@ -212,7 +212,7 @@ export function EventRegistryPage() {
               <button
                 type="button"
                 onClick={openCreate}
-                className="rounded-md bg-neutral-900 px-5 py-2.5 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-neutral-800"
+                className="rounded-md bg-primary px-4 py-2 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-primary-foreground transition hover:bg-primary/90 shadow-sm"
               >
                 Register New Event
               </button>

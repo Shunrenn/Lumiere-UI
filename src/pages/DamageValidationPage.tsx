@@ -200,52 +200,50 @@ export function DamageValidationPage() {
       ) : (
         <>
           {!isBackendConnected && (
-        <div
-          role="alert"
-          className="mt-4 flex items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-5 py-4 text-amber-800 dark:text-amber-200 shadow-sm"
-        >
-          <AlertTriangle className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.12em]">
-              ⚠ Offline Mode — Backend Unreachable
-            </p>
-            <p className="mt-0.5 text-xs opacity-90">
-              Showing local seed data (Server connection lost at {API_BASE_URL || 'backend REST API'}). Changes will not persist to backend REST API.
-            </p>
-          </div>
-        </div>
-      )}
-      {/* Filter tabs */}
-      <div className="mt-6 flex flex-wrap items-center gap-1.5">
-        {filters.map((f) => {
-          const count =
-            f === 'All'
-              ? items.length
-              : f === 'Reviewable'
-                ? stats.reviewable
-                : f === 'Pending'
-                  ? stats.pending
-                  : items.filter((i) => i.status === f).length
-          return (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.12em] transition',
-                filter === f
-                  ? 'bg-neutral-900 text-white'
-                  : 'border border-border text-muted-foreground hover:bg-muted',
-              )}
+            <div
+              role="alert"
+              className="mt-4 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-amber-800 dark:text-amber-200 text-xs shadow-sm"
             >
-              {f}
-              <span className={filter === f ? 'text-white/70' : 'text-muted-foreground'}>
-                {count}
-              </span>
-            </button>
-          )
-        })}
-      </div>
+              <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div>
+                <span className="font-semibold uppercase tracking-wider">Offline State:</span>{' '}
+                <span className="opacity-90">
+                  Operating on verified local records ({API_BASE_URL || 'backend API'} unreachable). New declarations queued locally.
+                </span>
+              </div>
+            </div>
+          )}
+          {/* Filter tabs */}
+          <div className="mt-6 flex flex-wrap items-center gap-1.5">
+            {filters.map((f) => {
+              const count =
+                f === 'All'
+                  ? items.length
+                  : f === 'Reviewable'
+                    ? stats.reviewable
+                    : f === 'Pending'
+                      ? stats.pending
+                      : items.filter((i) => i.status === f).length
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFilter(f)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.12em] transition',
+                    filter === f
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )}
+                >
+                  {f}
+                  <span className={filter === f ? 'text-primary-foreground/75' : 'text-muted-foreground'}>
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
 
       {/* Table */}
       <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card">

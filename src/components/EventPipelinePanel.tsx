@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import {
-  Satellite,
   Check,
   FileText,
   PenTool,
@@ -142,26 +141,27 @@ export function EventPipelinePanel({
 
       {tab === 'overview' && (
         <div className={gap}>
-          <div className={cn('flex flex-col gap-3 rounded-xl bg-primary text-primary-foreground', compact ? 'px-4 py-4' : 'px-6 py-5 sm:flex-row sm:items-center sm:justify-between')}>
-            <div className="flex items-start gap-3">
-              <Satellite className="mt-0.5 size-5 shrink-0" />
+          <div className={cn('flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between', compact && 'p-3')}>
+            <div className="flex items-center gap-3">
+              <span className="flex size-2 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20" />
               <div>
-                <p className="text-sm font-semibold">Record Active — Pipeline Broadcasting</p>
-                <p className="mt-0.5 text-xs text-primary-foreground/80">
-                  All connected team members have been notified. Logistics, creative, and warehouse streams are live.
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-foreground">
+                  Active Operational Pipeline
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Synchronized with logistics, creative planning, and warehouse manifests.
                 </p>
               </div>
             </div>
-            <span className="shrink-0 self-start rounded-full bg-primary-foreground/15 px-3 py-1 text-[0.62rem] font-semibold sm:self-auto">
-              12 Members Notified
+            <span className="shrink-0 self-start rounded border border-border bg-card px-2.5 py-1 text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground sm:self-auto">
+              ID: {event.recordId}
             </span>
           </div>
 
           <section className={cn('rounded-xl border border-border bg-card', compact ? 'mt-4 p-4' : 'mt-6 p-6')}>
             <div className="flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-[0.62rem] font-bold uppercase tracking-[0.16em] text-card-foreground">
-                <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[0.6rem] text-primary-foreground">I</span>
-                Core Meta-Data
+              <h2 className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-card-foreground">
+                Core Event Metadata
               </h2>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-[0.55rem] font-semibold uppercase tracking-[0.1em] text-emerald-700">
                 <Check className="size-3" /> Confirmed
@@ -184,9 +184,8 @@ export function EventPipelinePanel({
           </section>
 
           <section className={cn('rounded-xl border border-border bg-card', compact ? 'mt-4 p-4' : 'mt-6 p-6')}>
-            <h2 className="flex items-center gap-2 text-[0.62rem] font-bold uppercase tracking-[0.16em] text-card-foreground">
-              <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[0.6rem] text-primary-foreground">II</span>
-              Production Pipeline Status
+            <h2 className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-card-foreground">
+              Production Pipeline Milestones
             </h2>
             <div className={cn('mt-5 grid grid-cols-2 gap-2', compact ? 'sm:grid-cols-2' : 'sm:grid-cols-4 lg:grid-cols-7')}>
               {PIPELINE_STEPS.map((step) => (
@@ -221,9 +220,8 @@ export function EventPipelinePanel({
 
           {/* Event Settlement Enforcement Section */}
           <section className="mt-6 rounded-xl border border-border bg-card p-6">
-            <h2 className="flex items-center gap-2 text-[0.62rem] font-bold uppercase tracking-[0.16em] text-card-foreground">
-              <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[0.6rem] text-primary-foreground">III</span>
-              Event Settlement & Financial Ledger Closure
+            <h2 className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-card-foreground">
+              Event Settlement & Ledger Closure
             </h2>
 
             {isSettled ? (

@@ -164,8 +164,8 @@ export function ActivityLogsPage() {
               className={cn(
                 'rounded-full px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] transition',
                 statusFilter === status
-                  ? 'bg-neutral-900 text-white'
-                  : 'border border-border bg-card text-muted-foreground hover:bg-muted',
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
               {status} ({statusCounts[status] ?? 0})
@@ -207,7 +207,7 @@ export function ActivityLogsPage() {
           <button
             type="button"
             onClick={exportCsv}
-            className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-5 py-2 text-[0.62rem] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-neutral-800"
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-[0.62rem] font-bold uppercase tracking-[0.12em] text-primary-foreground transition hover:bg-primary/90 shadow-sm"
           >
             <Download className="size-3.5" />
             Export CSV

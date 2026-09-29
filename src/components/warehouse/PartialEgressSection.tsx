@@ -287,9 +287,6 @@ export function PartialEgressSection({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-border/70 pb-4">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
-            <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[0.6rem] font-bold text-primary-foreground">
-              IV
-            </span>
             <h2 className="text-sm font-semibold tracking-wide text-card-foreground">
               Post-Event Partial Egress Accountability
               {eventTitle && <span className="text-muted-foreground ml-1.5 font-normal">· {eventTitle}</span>}

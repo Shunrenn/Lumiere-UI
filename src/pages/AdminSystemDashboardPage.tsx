@@ -89,7 +89,7 @@ function AdminPlaceholder({ id }: { id: AdminDestinationId }) {
 
 export function AdminSystemDashboardPage() {
   const { navigate } = useNav()
-  const { staff, userActions, resolveUserAction, pendingSubRoleSetups } = usePortal()
+  const { staff, userActions, resolveUserAction, pendingSubRoleSetups, isBackendConnected } = usePortal()
   const { openGrowthSummary } = useGrowthSummary()
   const [activeId, setActiveId] = useState<AdminDestinationId>('system-dashboard')
   const [drillDownCategory, setDrillDownCategory] = useState<string | null>(null)
@@ -208,9 +208,9 @@ export function AdminSystemDashboardPage() {
               />
               <StatCard
                 agentSelector="data-agent-system-health"
-                label="System Health"
-                value="99.9%"
-                caption="30-day API & gateway uptime"
+                label="Gateway Connection"
+                value={isBackendConnected ? 'Connected' : 'Offline'}
+                caption={isBackendConnected ? 'Production API gateway active' : 'Offline / local cached mode'}
                 onSelect={() => navigate('security-audit')}
               />
               <StatCard

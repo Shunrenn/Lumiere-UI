@@ -109,7 +109,7 @@ function roleToSegment(role: string): string {
 
 export function OverviewPage() {
   const { navigate } = useNav()
-  const { staff, userActions } = usePortal()
+  const { staff, userActions, isBackendConnected } = usePortal()
   const [chartMode, setChartMode] = useState('users')
 
   const totalUsers = staff.length
@@ -176,7 +176,11 @@ export function OverviewPage() {
           value={String(pendingActivations)}
           caption="Access & password requests"
         />
-        <MetricCard label="System Health" value="99.9%" caption="All audit nodes nominal" />
+        <MetricCard
+          label="Gateway Connection"
+          value={isBackendConnected ? 'Connected' : 'Offline'}
+          caption={isBackendConnected ? 'Production API gateway active' : 'Offline / local cached mode'}
+        />
       </div>
 
       {/* Row 2: Pending Actions + Live Security Feed (side-by-side) */}

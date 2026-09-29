@@ -291,8 +291,8 @@ export function InventoryStockPage() {
             className={cn(
               'rounded-full px-3 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.12em] transition',
               stateFilter === 'All'
-                ? 'bg-neutral-900 text-white'
-                : 'border border-border bg-card text-muted-foreground hover:bg-muted',
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
             )}
           >
             All ({items.length})
@@ -306,8 +306,8 @@ export function InventoryStockPage() {
               className={cn(
                 'rounded-full px-3 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.12em] transition',
                 stateFilter === s
-                  ? 'bg-neutral-900 text-white'
-                  : 'border border-border bg-card text-muted-foreground hover:bg-muted',
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
               {s} ({counts[s] ?? 0})

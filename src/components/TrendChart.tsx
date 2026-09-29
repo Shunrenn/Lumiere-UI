@@ -89,7 +89,7 @@ export function TrendChart({ mode, onModeChange, options }: Props) {
               className={cn(
                 'rounded px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] transition',
                 mode === opt.value
-                  ? 'bg-neutral-900 text-white'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >

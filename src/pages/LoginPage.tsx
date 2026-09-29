@@ -110,7 +110,7 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
           <ThemeToggle mode={themeMode} onChange={setThemeMode} />
         </div>
         <div className="flex min-h-full items-center justify-center px-6 py-10">
-          <div className="flex w-full max-w-2xl flex-col rounded-2xl bg-muted/60 px-10 py-14 lg:px-16 lg:py-16">
+          <div className="flex w-full max-w-xl flex-col rounded-xl border border-border/80 bg-card/95 p-8 sm:p-12 shadow-sm backdrop-blur-sm">
           {view === 'signin' && (
             <SignInView
               email={email}
@@ -179,14 +179,19 @@ function SignInView(props: {
 }) {
   return (
     <form onSubmit={props.onSubmit} className="flex flex-col">
-      <h2 className="text-center font-serif text-4xl font-medium tracking-[0.25em] text-foreground">
-        WELCOME BACK
-      </h2>
-      <p className="mt-4 text-center text-base text-muted-foreground">
-        Sign in to illuminate your event vision.
-      </p>
+      <div className="flex flex-col items-center text-center">
+        <span className="text-[0.62rem] font-bold uppercase tracking-[0.25em] text-primary">
+          Operations Portal
+        </span>
+        <h2 className="mt-2 font-serif text-3xl font-medium tracking-[0.2em] text-foreground sm:text-4xl">
+          LUMIÈRE
+        </h2>
+        <p className="mt-1.5 text-xs text-muted-foreground sm:text-sm">
+          Event production, resource logistics, and operational accountability.
+        </p>
+      </div>
 
-      <div className="mt-12 flex flex-col gap-6">
+      <div className="mt-8 flex flex-col gap-4">
         <Field label="EMAIL">
           <InputWrap>
             <User className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -234,17 +239,17 @@ function SignInView(props: {
         </p>
       )}
 
-      <div className="mt-7 flex items-center justify-between text-sm">
-        <label className="flex cursor-pointer items-center gap-2.5 text-foreground/80">
+      <div className="mt-6 flex items-center justify-between text-xs sm:text-sm">
+        <label className="flex cursor-pointer items-center gap-2 text-foreground/80">
           <input
             type="checkbox"
             checked={props.remember}
             onChange={props.onRemember}
-            className="size-4 accent-sidebar"
+            className="size-4 accent-primary"
           />
           Remember me
         </label>
-        <div className="flex items-center gap-4 text-foreground/80">
+        <div className="flex items-center gap-3 text-foreground/80">
           <button
             type="button"
             onClick={props.onForgot}
@@ -263,14 +268,14 @@ function SignInView(props: {
         </div>
       </div>
 
-      <SubmitButton className="mt-10" disabled={props.signingIn}>
+      <SubmitButton className="mt-8" disabled={props.signingIn}>
         {props.signingIn ? 'SIGNING IN...' : 'ENTER PORTAL'}
       </SubmitButton>
 
       <button
         type="button"
         onClick={props.onCrewPortal}
-        className="mt-6 inline-flex items-center justify-center gap-2 self-center text-sm font-medium uppercase tracking-[0.15em] text-foreground/70 transition-colors hover:text-foreground"
+        className="mt-6 inline-flex items-center justify-center gap-2 self-center text-xs font-semibold uppercase tracking-[0.15em] text-foreground/70 transition-colors hover:text-foreground"
       >
         <HardHat className="size-4" aria-hidden="true" />
         Ground Crew? Field Login
@@ -311,16 +316,16 @@ function RequestView(props: {
   const isForgot = props.type === 'forgot-password'
   return (
     <form onSubmit={props.onSubmit} className="flex flex-col">
-      <h2 className="text-center font-serif text-4xl font-medium tracking-[0.2em] text-foreground">
-        {isForgot ? 'FORGOT PASSWORD' : 'REQUEST LOG-IN ACCESS'}
+      <h2 className="text-center font-serif text-2xl font-medium tracking-[0.2em] text-foreground sm:text-3xl">
+        {isForgot ? 'FORGOT PASSWORD' : 'REQUEST ACCESS'}
       </h2>
-      <p className="mx-auto mt-4 max-w-md text-center text-base text-muted-foreground text-pretty">
+      <p className="mx-auto mt-2 max-w-md text-center text-xs text-muted-foreground sm:text-sm text-pretty">
         {isForgot
-          ? 'Enter your email below. An administrator will review your request and issue a new temporary password.'
-          : 'Enter your email below. An administrator will verify your account and provide a temporary password.'}
+          ? 'Enter your email below. An administrator will review your request and issue a temporary recovery password.'
+          : 'Enter your email below. An administrator will verify your account and provide credentials.'}
       </p>
 
-      <div className="mt-12">
+      <div className="mt-8">
         <Field label="EMAIL">
           <InputWrap>
             <User className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -343,14 +348,14 @@ function RequestView(props: {
         </p>
       )}
 
-      <SubmitButton className="mt-10" disabled={props.submitting}>
+      <SubmitButton className="mt-8" disabled={props.submitting}>
         {props.submitting ? 'SENDING...' : 'SEND REQUEST'}
       </SubmitButton>
 
       <button
         type="button"
         onClick={props.onBack}
-        className="mt-10 self-start text-base text-foreground/80 transition-colors hover:text-foreground"
+        className="mt-6 self-start text-xs font-semibold uppercase tracking-wider text-foreground/80 transition-colors hover:text-foreground"
       >
         {'< Back to Sign-In'}
       </button>
@@ -362,19 +367,19 @@ function RequestView(props: {
 
 function SentView(props: { onReturn: () => void }) {
   return (
-    <div className="flex flex-col">
-      <h2 className="text-center font-serif text-4xl font-medium tracking-[0.25em] text-foreground">
-        REQUEST SENT
+    <div className="flex flex-col text-center">
+      <h2 className="font-serif text-2xl font-medium tracking-[0.2em] text-foreground sm:text-3xl">
+        REQUEST TRANSMITTED
       </h2>
-      <p className="mx-auto mt-4 max-w-md text-center text-base text-muted-foreground text-pretty">
-        Your access request has been sent to the system administrator.
+      <p className="mx-auto mt-2 max-w-md text-xs text-muted-foreground sm:text-sm text-pretty">
+        Your access request has been routed to the system administrator queue.
       </p>
-      <p className="mx-auto mt-10 max-w-md text-center text-base text-muted-foreground text-pretty">
+      <p className="mx-auto mt-6 max-w-md text-xs text-muted-foreground sm:text-sm text-pretty">
         Please check your direct messages or corporate email for your temporary password. Once
         received, return to the portal to log in.
       </p>
 
-      <SubmitButton className="mt-12" onClick={props.onReturn}>
+      <SubmitButton className="mt-8" onClick={props.onReturn}>
         RETURN TO PORTAL
       </SubmitButton>
     </div>
@@ -422,8 +427,8 @@ function ThemeToggle({ mode, onChange }: { mode: ThemeMode; onChange: (mode: The
 
 function Field({ label, children, required = true }: { label: string; children: ReactNode; required?: boolean }) {
   return (
-    <div className="flex flex-col gap-2.5">
-      <span className="text-sm font-semibold uppercase tracking-[0.15em] text-foreground/70">
+    <div className="flex flex-col gap-2">
+      <span className="text-xs font-semibold uppercase tracking-[0.14em] text-foreground/80">
         {required && <span className="text-destructive mr-0.5">*</span>}
         {label}
       </span>
@@ -434,7 +439,7 @@ function Field({ label, children, required = true }: { label: string; children: 
 
 function InputWrap({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-center gap-3 rounded-md border border-border bg-card px-5 py-4 shadow-sm focus-within:border-sidebar">
+    <div className="flex items-center gap-3 rounded-md border border-border bg-card px-4 py-3 shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20">
       {children}
     </div>
   )
@@ -456,7 +461,7 @@ function SubmitButton({
       type={onClick ? 'button' : 'submit'}
       onClick={onClick}
       disabled={disabled}
-      className={`w-full rounded-md border-2 border-foreground bg-transparent py-5 text-center text-base font-medium uppercase tracking-[0.3em] text-foreground transition-colors hover:bg-foreground hover:text-background disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`w-full rounded-md border-2 border-foreground bg-foreground py-3.5 text-center text-xs sm:text-sm font-semibold uppercase tracking-[0.25em] text-background transition-colors hover:bg-transparent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
       {children}
     </button>
