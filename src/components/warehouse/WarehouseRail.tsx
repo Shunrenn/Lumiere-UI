@@ -1,6 +1,7 @@
 import { ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WAREHOUSE_MODULES, type WarehouseModuleId } from '@/lib/warehouse-modules'
+import { useAuth } from '@/lib/auth'
 
 interface WarehouseRailProps {
   activeModuleId: WarehouseModuleId
@@ -9,6 +10,14 @@ interface WarehouseRailProps {
 }
 
 export function WarehouseRail({ activeModuleId, onSelectModule, onExit }: WarehouseRailProps) {
+  const { isWarehouseAssociate } = useAuth()
+
+  const modules = isWarehouseAssociate
+    ? WAREHOUSE_MODULES.filter((m) =>
+        m.id === 'assets' || m.id === 'replenishment' || m.id === 'vendors' || m.id === 'dispatch',
+      ).map((m) => (m.id === 'assets' ? { ...m, label: 'Inventory' } : m))
+    : WAREHOUSE_MODULES
+
   return (
     <aside className="flex h-full w-16 shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar py-4">
       <span
@@ -31,7 +40,7 @@ export function WarehouseRail({ activeModuleId, onSelectModule, onExit }: Wareho
       <div className="my-3 h-px w-8 bg-sidebar-border" aria-hidden="true" />
 
       <nav className="flex flex-col items-center gap-2" aria-label="Warehouse modules">
-        {WAREHOUSE_MODULES.map((module) => {
+        {modules.map((module) => {
           const Icon = module.icon
           const active = module.id === activeModuleId
           return (

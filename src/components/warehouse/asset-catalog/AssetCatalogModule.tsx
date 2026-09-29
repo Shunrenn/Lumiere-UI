@@ -13,6 +13,7 @@ import { AddAssetModal, type NewAssetDraft } from '@/components/warehouse/asset-
 import { GridRevealContainer } from '@/components/GridRevealContainer'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/auth'
 
 const FIXED_TIER_ORDER: AssetCategory[] = [
   'Event Assets',
@@ -51,6 +52,8 @@ interface AssetCatalogModuleProps {
 }
 
 export function AssetCatalogModule({ onClose, readOnly = false, embedded = false }: AssetCatalogModuleProps) {
+  const { isWarehouseAssociate } = useAuth()
+  const effectiveReadOnly = readOnly || isWarehouseAssociate
   const assets = useCatalogAssets()
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<AssetCategory | 'All'>('All')
@@ -161,7 +164,7 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[0.56rem] font-bold uppercase tracking-[0.24em] text-primary">Warehouse module</p>
-              <h1 className="font-serif text-lg font-medium leading-tight text-foreground">Asset Catalog</h1>
+              <h1 className="font-serif text-lg font-medium leading-tight text-foreground">{isWarehouseAssociate ? 'Inventory' : 'Asset Catalog'}</h1>
             </div>
             {onClose && (
               <button
@@ -207,7 +210,7 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
                 <List className="size-3.5" />
               </button>
             </div>
-            {!readOnly && (
+            {!effectiveReadOnly && (
               <button
                 type="button"
                 onClick={() => setAddOpen(true)}
@@ -360,14 +363,16 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
       </div>
 
       {/* Floating Add Item FAB */}
-      <button
-        type="button"
-        onClick={() => setAddOpen(true)}
-        aria-label="Add item"
-        className="fixed bottom-8 right-8 z-30 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:opacity-90"
-      >
-        <Plus className="size-6" aria-hidden="true" />
-      </button>
+      {!effectiveReadOnly && (
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          aria-label="Add item"
+          className="fixed bottom-8 right-8 z-30 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:opacity-90"
+        >
+          <Plus className="size-6" aria-hidden="true" />
+        </button>
+      )}
 
       {selectedAsset && <AssetDetailModal asset={selectedAsset} onClose={() => setSelectedAsset(null)} />}
       {addOpen && <AddAssetModal onClose={() => setAddOpen(false)} onCreate={handleCreate} />}

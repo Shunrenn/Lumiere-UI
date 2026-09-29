@@ -1,13 +1,23 @@
 import { WAREHOUSE_MODULES, type WarehouseModuleId } from '@/lib/warehouse-modules'
+import { useAuth } from '@/lib/auth'
+import { cn } from '@/lib/utils'
 
 interface ModuleEntryRowProps {
   onOpenModule: (id: WarehouseModuleId) => void
 }
 
 export function ModuleEntryRow({ onOpenModule }: ModuleEntryRowProps) {
+  const { isWarehouseAssociate } = useAuth()
+
+  const modules = isWarehouseAssociate
+    ? WAREHOUSE_MODULES.filter((m) =>
+        m.id === 'assets' || m.id === 'replenishment' || m.id === 'vendors' || m.id === 'dispatch',
+      ).map((m) => (m.id === 'assets' ? { ...m, label: 'Inventory' } : m))
+    : WAREHOUSE_MODULES
+
   return (
-    <div className="grid grid-cols-7 gap-2.5 sm:gap-3.5 w-full">
-      {WAREHOUSE_MODULES.map((module) => {
+    <div className={cn('grid gap-2.5 sm:gap-3.5 w-full', isWarehouseAssociate ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-7')}>
+      {modules.map((module) => {
         const Icon = module.icon
         return (
           <button

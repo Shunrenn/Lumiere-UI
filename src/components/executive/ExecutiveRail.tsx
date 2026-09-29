@@ -22,7 +22,7 @@ export function ExecutiveRail({
   collapsed: externalCollapsed,
   onToggleCollapse: externalToggleCollapse,
 }: ExecutiveRailProps) {
-  const { canAccessAssetInventory, adminName, adminRole, setConfirmLogout } = useAuth()
+  const { canAccessAssetInventory, isExecutiveLite, adminName, adminRole, setConfirmLogout } = useAuth()
   const { dark, toggle: toggleTheme } = useDarkMode()
 
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
@@ -50,8 +50,11 @@ export function ExecutiveRail({
     }
   }
 
-  // Filter destinations based on RBAC authority (Asset Inventory is conditional for Executive)
+  // Filter destinations based on RBAC authority (Asset Inventory is conditional for Executive, Logs excluded for Executive Lite)
   const visibleDestinations = EXECUTIVE_DESTINATIONS.filter((destination) => {
+    if (isExecutiveLite && destination.id === 'logs') {
+      return false
+    }
     if (destination.id === 'inventory') {
       return canAccessAssetInventory
     }

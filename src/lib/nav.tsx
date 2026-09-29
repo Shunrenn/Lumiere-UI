@@ -39,6 +39,7 @@ const VALID_ROUTES = new Set<Route>([
   'crew',
   'deployments',
   'dispatch',
+  'vendors',
   'event-detail',
   'canvas',
   'canvas-workspace',

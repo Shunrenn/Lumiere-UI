@@ -10,6 +10,7 @@ import { ProjectManagerActionRequired } from '@/components/project-manager/Proje
 import { ProjectManagerPitchingSummary } from '@/components/project-manager/ProjectManagerPitchingSummary'
 import { ProjectManagerPitchModal } from '@/components/project-manager/ProjectManagerPitchModal'
 import { ProjectManagerEventWorkspace } from '@/components/project-manager/ProjectManagerEventWorkspace'
+import { ProjectManagerLiteEventDetail } from '@/components/project-manager/ProjectManagerLiteEventDetail'
 import { RegisterEventDrawer } from '@/components/RegisterEventDrawer'
 import { OfflineBanner } from '@/components/OfflineBanner'
 import type { PortalEvent } from '@/lib/types'
@@ -17,7 +18,7 @@ import { CheckCircle2, Clock, Sparkles, Layers, AlertCircle, AlertTriangle, Info
 
 export function ProjectManagerDashboardPage() {
   const { events, staff, procurement, damageExceptions, refreshEvents } = usePortal()
-  const { adminName, adminEmail } = useAuth()
+  const { adminName, adminEmail, isProjectManagerLite } = useAuth()
   const { navigate } = useNav()
   const {
     pitches,
@@ -107,6 +108,35 @@ export function ProjectManagerDashboardPage() {
 
   // If inside an event, render the dedicated Event Workspace
   if (activeEvent) {
+    if (isProjectManagerLite) {
+      return (
+        <div className="min-h-screen bg-background text-foreground">
+          <OfflineBanner />
+          <ProjectManagerLiteEventDetail
+            event={activeEvent}
+            staff={staff}
+            procurement={procurement}
+            onBack={() => setSelectedEventId(null)}
+            onEditEvent={() => {
+              setActiveRegisterEvent(activeEvent)
+              setRegisterDrawerMode('edit')
+              setRegisterDrawerOpen(true)
+            }}
+          />
+
+          <RegisterEventDrawer
+            open={registerDrawerOpen}
+            onClose={() => {
+              setRegisterDrawerOpen(false)
+              setActiveRegisterEvent(null)
+            }}
+            event={activeRegisterEvent}
+            mode={registerDrawerMode}
+          />
+        </div>
+      )
+    }
+
     return (
       <div className="min-h-screen bg-background text-foreground">
         <OfflineBanner />
@@ -188,18 +218,33 @@ export function ProjectManagerDashboardPage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
-            <span className="text-[0.65rem] font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
-              <Sparkles className="size-3.5" />
-              Client Pitches
-            </span>
-            <div className="text-2xl font-bold text-foreground mt-1">
-              {pitchesLoading ? '...' : pitches.length}
+          {isProjectManagerLite ? (
+            <div className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
+              <span className="text-[0.65rem] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                <Clock className="size-3.5" />
+                Reserved / Initialized
+              </span>
+              <div className="text-2xl font-bold text-foreground mt-1">
+                {events.filter((e) => e.status === 'Reserved' || e.status === 'Initialized').length}
+              </div>
+              <p className="text-[0.68rem] text-muted-foreground mt-0.5">
+                Events pending production & asset allocations
+              </p>
             </div>
-            <p className="text-[0.68rem] text-muted-foreground mt-0.5">
-              Proposals in draft, presentation, or revision
-            </p>
-          </div>
+          ) : (
+            <div className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
+              <span className="text-[0.65rem] font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
+                <Sparkles className="size-3.5" />
+                Client Pitches
+              </span>
+              <div className="text-2xl font-bold text-foreground mt-1">
+                {pitchesLoading ? '...' : pitches.length}
+              </div>
+              <p className="text-[0.68rem] text-muted-foreground mt-0.5">
+                Proposals in draft, presentation, or revision
+              </p>
+            </div>
+          )}
 
           <div className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
             <span className="text-[0.65rem] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
@@ -221,7 +266,7 @@ export function ProjectManagerDashboardPage() {
           staff={staff}
           procurement={procurement}
           damageExceptions={damageExceptions}
-          pitches={pitches}
+          pitches={isProjectManagerLite ? [] : pitches}
           onOpenEvent={(id) => setSelectedEventId(id)}
           onOpenPitch={(pitchId) => {
             const p = pitches.find((item) => item.id === pitchId)
@@ -251,65 +296,71 @@ export function ProjectManagerDashboardPage() {
         />
 
         {/* Client Pitching Summary Section */}
-        {pitchesError && (
-          <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-xs font-semibold text-rose-700 dark:text-rose-300 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="size-4 shrink-0" />
-              <span>Could not load pitches: {pitchesError}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => refreshPitches()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-700"
-            >
-              <RefreshCw className="size-3.5" />
-              Retry
-            </button>
-          </div>
-        )}
+        {!isProjectManagerLite && (
+          <>
+            {pitchesError && (
+              <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-xs font-semibold text-rose-700 dark:text-rose-300 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="size-4 shrink-0" />
+                  <span>Could not load pitches: {pitchesError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => refreshPitches()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-700"
+                >
+                  <RefreshCw className="size-3.5" />
+                  Retry
+                </button>
+              </div>
+            )}
 
-        <ProjectManagerPitchingSummary
-          pitches={pitches}
-          onNewPitch={() => {
-            setEditingPitch(null)
-            setPitchModalOpen(true)
-          }}
-          onOpenPitch={(pitch) => {
-            setEditingPitch(pitch)
-            setPitchModalOpen(true)
-          }}
-          onConvertToEvent={handleConvertToEvent}
-        />
+            <ProjectManagerPitchingSummary
+              pitches={pitches}
+              onNewPitch={() => {
+                setEditingPitch(null)
+                setPitchModalOpen(true)
+              }}
+              onOpenPitch={(pitch) => {
+                setEditingPitch(pitch)
+                setPitchModalOpen(true)
+              }}
+              onConvertToEvent={handleConvertToEvent}
+            />
+          </>
+        )}
       </main>
 
       {/* Client Pitch Modal */}
-      <ProjectManagerPitchModal
-        open={pitchModalOpen}
-        onClose={() => {
-          setPitchModalOpen(false)
-          setEditingPitch(null)
-        }}
-        pitch={editingPitch}
-        onSave={async (saved) => {
-          if (editingPitch) {
-            await updatePitch(saved.id, saved)
-          } else {
-            await addPitch(saved)
-          }
-        }}
-        onAddFeedback={async (pitchId, notes, author, newStatus) => {
-          await addFeedback(pitchId, notes, author, newStatus)
-        }}
-        onConvertToEvent={async (p) => {
-          setPitchModalOpen(false)
-          await handleConvertToEvent(p)
-        }}
-        currentUserEmail={adminEmail || 'projectmanager@lumiere.com'}
-        currentUserName={adminName || 'Project Manager'}
-      />
+      {!isProjectManagerLite && (
+        <ProjectManagerPitchModal
+          open={pitchModalOpen}
+          onClose={() => {
+            setPitchModalOpen(false)
+            setEditingPitch(null)
+          }}
+          pitch={editingPitch}
+          onSave={async (saved) => {
+            if (editingPitch) {
+              await updatePitch(saved.id, saved)
+            } else {
+              await addPitch(saved)
+            }
+          }}
+          onAddFeedback={async (pitchId, notes, author, newStatus) => {
+            await addFeedback(pitchId, notes, author, newStatus)
+          }}
+          onConvertToEvent={async (p) => {
+            setPitchModalOpen(false)
+            await handleConvertToEvent(p)
+          }}
+          currentUserEmail={adminEmail || 'projectmanager@lumiere.com'}
+          currentUserName={adminName || 'Project Manager'}
+        />
+      )}
 
       {/* 409 Venue Scheduling Conflict Review & Override Modal */}
-      {conversionConflict && (
+      {!isProjectManagerLite && conversionConflict && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg rounded-xl border border-rose-500/30 bg-card p-6 shadow-2xl space-y-4 animate-in fade-in-0 zoom-in-95">
             <div className="flex items-start gap-3">

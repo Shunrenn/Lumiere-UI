@@ -16,6 +16,7 @@ export type Route =
   | 'crew'
   | 'deployments'
   | 'dispatch'
+  | 'vendors'
   // Event planner console
   | 'event-detail'
   | 'canvas'
@@ -117,8 +118,11 @@ export function normalizeGroundCrewSubRole(rawRole?: string): GroundCrewSubRole 
 export const SELECTABLE_STAFF_ROLES = [
   'Admin',
   'Executive',
+  'Executive Lite',
   'Project Manager',
+  'Project Manager Lite',
   'Warehouse Manager',
+  'Warehouse Associate',
   'Event Planner',
   'Ground Crew',
 ] as const
@@ -128,9 +132,12 @@ export type SelectableStaffRole = (typeof SELECTABLE_STAFF_ROLES)[number]
 export const STAFF_ROLES = [
   'Admin',
   'Executive',
+  'Executive Lite',
   'Project Manager',
+  'Project Manager Lite',
   'Warehouse Operations Manager',
   'Warehouse Manager',
+  'Warehouse Associate',
   'Inventory Officer',
   'Manning Officer',
   'Production Manager',

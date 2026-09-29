@@ -204,6 +204,9 @@ interface AuthContextValue {
   isManningOfficer: boolean
   isProductionManager: boolean
   isInventoryOfficer: boolean
+  isExecutiveLite: boolean
+  isProjectManagerLite: boolean
+  isWarehouseAssociate: boolean
   canModifyModule: (moduleId: string) => boolean
   isTempPassword: boolean
   login: (email: string, password: string, portal?: PortalKind, remember?: boolean) => Promise<LoginResult>
@@ -626,13 +629,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isManningOfficer: currentUser?.subRole === MANNING_OFFICER_SUBROLE,
       isProductionManager: currentUser?.subRole === 'Production Manager',
       isInventoryOfficer: currentUser?.subRole === 'Inventory Officer',
+      isExecutiveLite: currentUser?.role === 'Executive Lite',
+      isProjectManagerLite: currentUser?.role === 'Project Manager Lite',
+      isWarehouseAssociate: currentUser?.role === 'Warehouse Associate',
       canAccessAssetInventory:
-        currentUser?.role === 'Executive'
+        currentUser?.role === 'Executive' || currentUser?.role === 'Executive Lite'
           ? backendAssetCapability
           : Boolean(
               currentUser?.role === 'Admin' ||
                 currentUser?.role === 'Project Manager' ||
                 currentUser?.role === 'Warehouse Manager' ||
+                currentUser?.role === 'Warehouse Associate' ||
                 currentUser?.fullWarehouseAccess ||
                 currentUser?.role === 'Event Planner',
             ),

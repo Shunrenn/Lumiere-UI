@@ -47,6 +47,8 @@ const ProductionManagerPage = lazy(() => import('@/pages/ProductionManagerPage')
 const InventoryOfficerPage = lazy(() => import('@/pages/InventoryOfficerPage').then((m) => ({ default: m.InventoryOfficerPage })))
 const ProjectManagerDashboardPage = lazy(() => import('@/pages/ProjectManagerDashboardPage').then((m) => ({ default: m.ProjectManagerDashboardPage })))
 const ExecutiveAssetInventoryPage = lazy(() => import('@/pages/ExecutiveAssetInventoryPage').then((m) => ({ default: m.ExecutiveAssetInventoryPage })))
+const WarehouseDrilldown = lazy(() => import('@/components/warehouse/WarehouseDrilldown').then((m) => ({ default: m.WarehouseDrilldown })))
+import type { WarehouseModuleId } from '@/lib/warehouse-modules'
 
 function PortalAccessError({ portal }: { portal: 'web' | 'pwa' }) {
   const { logout } = useAuth()
@@ -66,8 +68,21 @@ function PortalAccessError({ portal }: { portal: 'web' | 'pwa' }) {
 }
 
 function Router() {
-  const { route } = useNav()
-  const { portal, isWarehouse, isAdmin, isExecutive, isProjectManager, isProductionManager, isInventoryOfficer, hasFullWarehouseAccess, canAccessAssetInventory } = useAuth()
+  const { route, navigate } = useNav()
+  const {
+    portal,
+    isWarehouse,
+    isAdmin,
+    isExecutive,
+    isExecutiveLite,
+    isProjectManager,
+    isProjectManagerLite,
+    isWarehouseAssociate,
+    isProductionManager,
+    isInventoryOfficer,
+    hasFullWarehouseAccess,
+    canAccessAssetInventory,
+  } = useAuth()
   // The Production Manager WOM sub-role gets its own mobile PWA page (matching
   // the Ground Crew / Warehouse Lead / Warehouse Member mobile accounts)
   // instead of the desktop sidebar shell — but only when scoped to that single
@@ -78,6 +93,58 @@ function Router() {
   const pwaRoutes = new Set(['field-ops', 'warehouse-lead', 'warehouse-member', 'manning', 'production-manager', 'inventory-officer'])
   const isPwaRoute = pwaRoutes.has(route)
   if (portal && ((portal === 'pwa') !== isPwaRoute)) return <PortalAccessError portal={portal} />
+
+  // Client-side scoped role guard for Executive Lite:
+  // Allowed client routes: dashboard, inventory (conditional), registry.
+  // Fails closed to EventDashboardPage.
+  if (isExecutiveLite) {
+    switch (route) {
+      case 'dashboard':
+        return <EventDashboardPage />
+      case 'inventory':
+        return canAccessAssetInventory ? <ExecutiveAssetInventoryPage /> : <EventDashboardPage />
+      case 'registry':
+        return <EventRegistryPage />
+      default:
+        return <EventDashboardPage />
+    }
+  }
+
+  // Client-side scoped role guard for Project Manager Lite:
+  // PM Lite is restricted to event management and read-only event-scoped allocation visibility.
+  // Explicitly denied: Canvas, Canvas Workspace, Manning, Production, Workforce, Admin governance.
+  if (isProjectManagerLite) {
+    switch (route) {
+      case 'registry':
+        return <EventRegistryPage />
+      case 'project-manager':
+      default:
+        return <ProjectManagerDashboardPage />
+    }
+  }
+
+  // Client-side scoped role guard for Warehouse Associate:
+  // Allowed client routes: overview (dashboard), inventory (assets), replenishment, vendors, dispatch.
+  // Explicitly denied: Manning, Production, Workforce, Logs, full WOM super-role admin.
+  if (isWarehouseAssociate) {
+    switch (route) {
+      case 'inventory':
+      case 'replenishment':
+      case 'vendors':
+      case 'dispatch': {
+        const modId = route === 'inventory' ? 'assets' : (route as WarehouseModuleId)
+        return (
+          <WarehouseDrilldown
+            entry={{ kind: 'module', moduleId: modId }}
+            onExit={() => navigate('overview')}
+          />
+        )
+      }
+      case 'overview':
+      default:
+        return <WarehouseHomePage />
+    }
+  }
 
   // Client-side role guard for Project Manager:
   // PM is restricted to project manager dashboard and design canvas oversight surfaces.
@@ -118,6 +185,13 @@ function Router() {
       return <TaskDeploymentsPage />
     case 'dispatch':
       return <DispatchManifestPage />
+    case 'vendors':
+      return (
+        <WarehouseDrilldown
+          entry={{ kind: 'module', moduleId: 'vendors' }}
+          onExit={() => navigate('overview')}
+        />
+      )
     case 'event-detail':
       return <EventDetailPage />
     case 'canvas':
@@ -165,7 +239,26 @@ function Router() {
 }
 
 function Gate() {
-  const { isAuthenticated, isTempPassword, hasConfirmationPin, isWarehouse, isWarehouseLead, isWarehouseMember, isPlanner, isProjectManager, isGroundCrew, isExecutive, isProductionManager, isInventoryOfficer, isManningOfficer, hasFullWarehouseAccess, canAccessAssetInventory } = useAuth()
+  const {
+    isAuthenticated,
+    isTempPassword,
+    hasConfirmationPin,
+    isWarehouse,
+    isWarehouseLead,
+    isWarehouseMember,
+    isPlanner,
+    isProjectManager,
+    isProjectManagerLite,
+    isGroundCrew,
+    isExecutive,
+    isExecutiveLite,
+    isWarehouseAssociate,
+    isProductionManager,
+    isInventoryOfficer,
+    isManningOfficer,
+    hasFullWarehouseAccess,
+    canAccessAssetInventory,
+  } = useAuth()
   const [portal, setPortal] = useState<'staff' | 'crew'>('staff')
   const isMobileProductionManager = isProductionManager && !hasFullWarehouseAccess
   const isMobileInventoryOfficer = isInventoryOfficer && !hasFullWarehouseAccess
@@ -192,39 +285,61 @@ function Gate() {
   const hasWorkforceHighlight =
     new URLSearchParams(window.location.search).has('highlight') || Boolean(window.history.state?.highlight)
   const urlParamRoute = (new URLSearchParams(window.location.search).get('route') || window.location.pathname.replace('/', '')) as Route | null
-  const validRoutes = new Set(['dashboard', 'registry', 'replenishment', 'logs', 'damage', 'inventory', 'warehouse-logs', 'crew', 'deployments', 'dispatch', 'event-detail', 'canvas', 'canvas-workspace', 'field-ops', 'warehouse-lead', 'warehouse-member', 'manning', 'production-manager', 'inventory-officer', 'workforce', 'security-audit', 'rbac', 'overview', 'project-manager'])
+  const validRoutes = new Set(['dashboard', 'registry', 'replenishment', 'logs', 'damage', 'inventory', 'warehouse-logs', 'crew', 'deployments', 'dispatch', 'vendors', 'event-detail', 'canvas', 'canvas-workspace', 'field-ops', 'warehouse-lead', 'warehouse-member', 'manning', 'production-manager', 'inventory-officer', 'workforce', 'security-audit', 'rbac', 'overview', 'project-manager'])
   const targetUrlRoute = urlParamRoute && validRoutes.has(urlParamRoute) ? urlParamRoute : null
 
-  // PM and Executive allowed routes protection in URL resolution
+  // Scoped-role route whitelists
+  const executiveLiteAllowedRoutes = new Set<Route>(['dashboard', 'inventory', 'registry'])
+  const pmLiteAllowedRoutes = new Set<Route>(['project-manager', 'registry', 'event-detail'])
+  const warehouseAssociateAllowedRoutes = new Set<Route>(['overview', 'inventory', 'replenishment', 'vendors', 'dispatch'])
   const pmAllowedRoutes = new Set<Route>(['project-manager', 'canvas', 'canvas-workspace'])
-  const isDeniedExecutiveInventory = isExecutive && targetUrlRoute === 'inventory' && !canAccessAssetInventory
-  const resolvedTargetRoute = targetUrlRoute && (!isProjectManager || pmAllowedRoutes.has(targetUrlRoute)) && !isDeniedExecutiveInventory
-    ? targetUrlRoute
-    : null
 
-  const initialRoute = resolvedTargetRoute || (isManningOfficer
-    ? 'manning'
-    : isGroundCrew
-    ? 'field-ops'
-    : isWarehouseLead
+  let isAllowed = true
+  if (isExecutiveLite) {
+    isAllowed = targetUrlRoute ? executiveLiteAllowedRoutes.has(targetUrlRoute) : true
+    if (targetUrlRoute === 'inventory' && !canAccessAssetInventory) isAllowed = false
+  } else if (isProjectManagerLite) {
+    isAllowed = targetUrlRoute ? pmLiteAllowedRoutes.has(targetUrlRoute) : true
+  } else if (isWarehouseAssociate) {
+    isAllowed = targetUrlRoute ? warehouseAssociateAllowedRoutes.has(targetUrlRoute) : true
+  } else if (isProjectManager) {
+    isAllowed = targetUrlRoute ? pmAllowedRoutes.has(targetUrlRoute) : true
+  } else if (isExecutive) {
+    if (targetUrlRoute === 'inventory' && !canAccessAssetInventory) isAllowed = false
+  }
+
+  const resolvedTargetRoute = targetUrlRoute && isAllowed ? targetUrlRoute : null
+
+  const initialRoute = resolvedTargetRoute || (
+    isExecutiveLite
+      ? 'dashboard'
+      : isProjectManagerLite
+      ? 'project-manager'
+      : isWarehouseAssociate
+      ? 'overview'
+      : isManningOfficer
+      ? 'manning'
+      : isGroundCrew
+      ? 'field-ops'
+      : isWarehouseLead
       ? 'warehouse-lead'
       : isWarehouseMember
-        ? 'warehouse-member'
-        : isMobileProductionManager
-          ? 'production-manager'
-          : isMobileInventoryOfficer
-            ? 'inventory-officer'
-            : isPlanner
-            ? 'canvas'
-            : isProjectManager
-            ? 'project-manager'
-            : isWarehouse
-              ? 'overview'
-              : hasWorkforceHighlight
-                ? 'workforce'
-                : isExecutive
-                  ? 'dashboard'
-                  : 'overview')
+      ? 'warehouse-member'
+      : isMobileProductionManager
+      ? 'production-manager'
+      : isMobileInventoryOfficer
+      ? 'inventory-officer'
+      : isPlanner
+      ? 'canvas'
+      : isProjectManager
+      ? 'project-manager'
+      : isWarehouse
+      ? 'overview'
+      : hasWorkforceHighlight
+      ? 'workforce'
+      : isExecutive
+      ? 'dashboard'
+      : 'overview')
 
   return (
     <NavProvider initialRoute={initialRoute}>

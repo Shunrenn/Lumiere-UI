@@ -10,6 +10,7 @@ import {
 import { ExecutiveLiveFeed } from '@/components/executive/ExecutiveLiveFeed'
 import { ExecutivePendingActions, type ExecutivePendingItem } from '@/components/executive/ExecutivePendingActions'
 import { usePortal } from '@/lib/store'
+import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
@@ -20,6 +21,7 @@ type DashboardMetricMode = 'events' | 'reports'
 
 export function EventDashboardPage() {
   const { navigate } = useNav()
+  const { isExecutiveLite } = useAuth()
   const { events, damageExceptions } = usePortal()
   const [metricMode, setMetricMode] = useState<DashboardMetricMode>('events')
 
@@ -290,7 +292,7 @@ export function EventDashboardPage() {
                 />
               )}
 
-              <ExecutiveLiveFeed onViewLogs={() => navigate('logs')} />
+              <ExecutiveLiveFeed onViewLogs={isExecutiveLite ? undefined : () => navigate('logs')} />
             </div>
           </div>
 

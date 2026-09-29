@@ -8,17 +8,24 @@ import { DispatchModule } from '@/components/warehouse/dispatch/DispatchModule'
 import { ProductionModule } from '@/components/warehouse/production/ProductionModule'
 import { IncidentReportingModule } from '@/components/warehouse/incidents/IncidentReportingModule'
 
+import { useAuth } from '@/lib/auth'
+
 interface CompanionPanelProps {
   moduleId: WarehouseModuleId
   onClose: () => void
 }
 
 export function CompanionPanel({ moduleId, onClose }: CompanionPanelProps) {
+  const { isWarehouseAssociate } = useAuth()
   const module = getWarehouseModule(moduleId)
   if (!module) return null
 
+  if (isWarehouseAssociate && (moduleId === 'manning' || moduleId === 'production' || moduleId === 'incidents')) {
+    return null
+  }
+
   if (moduleId === 'assets') {
-    return <AssetCatalogModule onClose={onClose} />
+    return <AssetCatalogModule readOnly={isWarehouseAssociate} onClose={onClose} />
   }
 
   if (moduleId === 'replenishment') {

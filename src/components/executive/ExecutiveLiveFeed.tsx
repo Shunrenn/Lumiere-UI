@@ -21,27 +21,33 @@ const feedDetails: Record<string, string> = {
 }
 
 interface ExecutiveLiveFeedProps {
-  onViewLogs: () => void
+  onViewLogs?: () => void
 }
 
 export function ExecutiveLiveFeed({ onViewLogs }: ExecutiveLiveFeedProps) {
   const { eventUpdates } = usePortal()
   const [expanded, setExpanded] = useState<string | null>(null)
-  const { flashing, trigger } = useClickFlash(onViewLogs)
+  const noop = () => {}
+  const { flashing, trigger } = useClickFlash(onViewLogs || noop)
 
   return (
     <section
-      role="button"
-      tabIndex={0}
-      onClick={trigger}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          trigger()
-        }
-      }}
+      role={onViewLogs ? 'button' : undefined}
+      tabIndex={onViewLogs ? 0 : undefined}
+      onClick={onViewLogs ? trigger : undefined}
+      onKeyDown={
+        onViewLogs
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                trigger()
+              }
+            }
+          : undefined
+      }
       className={cn(
-        'flex h-full min-h-0 min-w-0 cursor-pointer flex-col rounded-xl border border-border bg-card p-4 text-card-foreground transition hover:border-primary/40 hover:bg-muted/40',
+        'flex h-full min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card p-4 text-card-foreground transition',
+        onViewLogs && 'cursor-pointer hover:border-primary/40 hover:bg-muted/40',
         flashing && 'ring-2 ring-primary/60 border-primary/60',
       )}
     >
