@@ -1,25 +1,13 @@
-import { useState, useMemo } from 'react'
-import { Search, Plus, MoreVertical, Edit3 } from 'lucide-react'
+import { useState, useMemo, useEffect } from 'react'
+import { Search, MoreVertical, Edit3 } from 'lucide-react'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
-import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { RegisterEventDrawer } from '@/components/RegisterEventDrawer'
-import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/EmptyState'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import type { PortalEvent, EventStatus } from '@/lib/types'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
-
-const eventStatusVariants: Record<string, StatusVariant> = {
-  Initialized: 'warning',
-  'In Production': 'info',
-  Reserved: 'accent',
-  'On Hold': 'warning',
-  Completed: 'success',
-  Settled: 'success',
-  Cancelled: 'neutral',
-}
 
 const statuses: (EventStatus | 'All')[] = [
   'All',
@@ -33,17 +21,17 @@ const statuses: (EventStatus | 'All')[] = [
 // Derive a representative progress percentage for an event based on its lifecycle status
 function calculateEventProgress(event: PortalEvent): number {
   switch (event.status) {
-    case 'Initialized':
-      return 15
-    case 'Reserved':
-      return 35
-    case 'In Production':
-      return 65
-    case 'On Hold':
-      return 45
     case 'Completed':
     case 'Settled':
       return 100
+    case 'In Production':
+      return 65
+    case 'Reserved':
+      return 45
+    case 'On Hold':
+      return 35
+    case 'Initialized':
+      return 25
     case 'Cancelled':
       return 0
     default:
@@ -51,10 +39,12 @@ function calculateEventProgress(event: PortalEvent): number {
   }
 }
 
-function formatDisplayTime(timeStr?: string, fallback = '09:00 AM'): string {
-  if (!timeStr) return fallback
-  if (/^\d{1,2}:\d{2}\s*(AM|PM)?$/i.test(timeStr.trim())) return timeStr.trim()
-  return timeStr
+function formatDateOrTime(rawDateOrTime?: string, fallbackDate?: string): string {
+  if (!rawDateOrTime) return fallbackDate || '—'
+  if (rawDateOrTime.includes('T')) {
+    return rawDateOrTime.split('T')[0]
+  }
+  return rawDateOrTime
 }
 
 export function ExecutiveLiteEventOperations() {
@@ -71,6 +61,14 @@ export function ExecutiveLiteEventOperations() {
   const [selectedEvent, setSelectedEvent] = useState<PortalEvent | null>(null)
 
   const destination = (id: ExecutiveDestinationId) => navigate(id)
+
+  // Close actions menu when clicking outside
+  useEffect(() => {
+    if (!openMenuId) return
+    const handleClickOutside = () => setOpenMenuId(null)
+    window.addEventListener('click', handleClickOutside)
+    return () => window.removeEventListener('click', handleClickOutside)
+  }, [openMenuId])
 
   const metrics = useMemo(
     () => ({
@@ -96,11 +94,9 @@ export function ExecutiveLiteEventOperations() {
     })
   }, [events, query, statusFilter])
 
-  // Active events for the operational progress area (top 4-5 items)
+  // Active events for the operational progress area (top 4 items matching reference)
   const activeProgressEvents = useMemo(() => {
-    return events
-      .filter((e) => e.status !== 'Cancelled')
-      .slice(0, 4)
+    return events.filter((e) => e.status !== 'Cancelled').slice(0, 4)
   }, [events])
 
   const openCreate = () => {
@@ -122,25 +118,25 @@ export function ExecutiveLiteEventOperations() {
   }
 
   const stickyHeader = (
-    <div>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
-            Event Operations
-          </h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            Register and orchestrate event portfolios across venues, timelines, and production stages.
-          </p>
-        </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search title, client, ref ID, venue..."
-            className="w-full rounded-md border border-input bg-card py-2 pl-9 pr-3 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30 sm:w-72"
-          />
-        </div>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-neutral-900 dark:text-foreground">
+          Event Operations
+        </h1>
+        <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-muted-foreground">
+          Register and orchestrate event portfolios across venues, timelines, and production stages.
+        </p>
+      </div>
+
+      {/* Search field positioned toward upper-right matching Reference 3 */}
+      <div className="relative w-full sm:w-80">
+        <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search title, client, ref ID, venue..."
+          className="w-full rounded-lg border border-[#DDD7CD] bg-white/80 dark:bg-card/80 py-2.5 pl-10 pr-4 text-xs text-neutral-800 dark:text-foreground placeholder:text-neutral-400 outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
+        />
       </div>
     </div>
   )
@@ -151,25 +147,25 @@ export function ExecutiveLiteEventOperations() {
         <div className="flex flex-col gap-6">
           {/* Operational Progress / Summary Area matching Reference 3 */}
           {activeProgressEvents.length > 0 && (
-            <div className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-4">
+            <div className="rounded-xl border border-[#E6DFD5] bg-[#F7F4EE] dark:bg-card/70 dark:border-border/70 p-5 space-y-4 shadow-2xs">
               {activeProgressEvents.map((ev) => {
                 const pct = calculateEventProgress(ev)
                 const isComplete = pct === 100
                 return (
                   <div key={ev.id} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-serif font-medium text-foreground tracking-wide truncate pr-4">
+                    <div className="flex items-center justify-between text-xs sm:text-sm">
+                      <span className="font-normal text-neutral-800 dark:text-neutral-200 truncate pr-4">
                         {ev.title}
                       </span>
-                      <span className="font-mono text-[0.7rem] font-bold text-muted-foreground shrink-0">
+                      <span className="font-mono text-xs text-neutral-500 dark:text-neutral-400 shrink-0">
                         {pct}%
                       </span>
                     </div>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-[#E5DFD4] dark:bg-muted/40">
                       <div
                         className={cn(
-                          'h-full transition-all duration-500',
-                          isComplete ? 'bg-emerald-500' : 'bg-sky-500',
+                          'h-full rounded-full transition-all duration-500',
+                          isComplete ? 'bg-[#00B050]' : 'bg-[#0088FF]',
                         )}
                         style={{ width: `${pct}%` }}
                       />
@@ -181,8 +177,8 @@ export function ExecutiveLiteEventOperations() {
           )}
 
           {/* Filter Bar with Status Pills & REGISTER NEW EVENT Button */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
               {statuses.map((status) => {
                 const count =
                   status === 'All'
@@ -195,13 +191,13 @@ export function ExecutiveLiteEventOperations() {
                     type="button"
                     onClick={() => setStatusFilter(status)}
                     className={cn(
-                      'rounded-full px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.12em] transition',
+                      'rounded-full px-3.5 py-1.5 text-[0.68rem] font-bold uppercase tracking-wider transition-colors',
                       active
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
+                        ? 'bg-[#1A1A1A] text-white dark:bg-white dark:text-neutral-950 shadow-xs'
+                        : 'border border-[#DDD7CD] bg-[#EFECE6] text-neutral-700 hover:bg-[#E5E0D5] dark:border-border/60 dark:bg-muted/40 dark:text-neutral-300 dark:hover:bg-muted',
                     )}
                   >
-                    {status} ({count})
+                    {status.toUpperCase()} ({count})
                   </button>
                 )
               })}
@@ -210,28 +206,58 @@ export function ExecutiveLiteEventOperations() {
             <button
               type="button"
               onClick={openCreate}
-              className="inline-flex items-center gap-2 rounded-md bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-950 px-5 py-2 text-[0.65rem] font-bold uppercase tracking-[0.14em] shadow-sm transition hover:opacity-90 self-start sm:self-auto"
+              className="rounded-lg bg-[#1A1A1A] hover:bg-black text-white dark:bg-neutral-100 dark:text-neutral-950 px-5 py-2.5 text-xs font-bold uppercase tracking-widest shadow-xs transition-colors shrink-0 self-start sm:self-auto"
             >
-              <Plus className="size-3.5" />
               REGISTER NEW EVENT
             </button>
           </div>
 
-          {/* Table Container */}
-          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-            <CompactStatStrip
-              stats={[
-                { label: 'Total Events', value: metrics.total },
-                { label: 'Total Executed', value: metrics.executed },
-                { label: 'Total Reserved', value: metrics.reserved },
-                { label: 'Total Cancelled', value: metrics.cancelled },
-              ]}
-            />
+          {/* Event Table Container with Quick Stats Ribbon matching Reference 3 */}
+          <div className="rounded-xl border border-[#E6DFD5] bg-[#FAF8F4] dark:bg-card/70 dark:border-border/70 overflow-hidden shadow-2xs">
+            {/* Quick Stats Ribbon */}
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6 px-5 py-3 border-b border-[#E6DFD5] dark:border-border/60 text-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-neutral-900 dark:text-foreground text-sm font-mono">
+                  {metrics.total}
+                </span>
+                <span className="text-[0.65rem] font-bold uppercase tracking-widest text-neutral-500">
+                  TOTAL EVENTS
+                </span>
+              </div>
+              <span className="text-neutral-300 dark:text-neutral-700">|</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-neutral-900 dark:text-foreground text-sm font-mono">
+                  {metrics.executed}
+                </span>
+                <span className="text-[0.65rem] font-bold uppercase tracking-widest text-neutral-500">
+                  TOTAL EXECUTED
+                </span>
+              </div>
+              <span className="text-neutral-300 dark:text-neutral-700">|</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-neutral-900 dark:text-foreground text-sm font-mono">
+                  {metrics.reserved}
+                </span>
+                <span className="text-[0.65rem] font-bold uppercase tracking-widest text-neutral-500">
+                  TOTAL RESERVED
+                </span>
+              </div>
+              <span className="text-neutral-300 dark:text-neutral-700">|</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-neutral-900 dark:text-foreground text-sm font-mono">
+                  {metrics.cancelled}
+                </span>
+                <span className="text-[0.65rem] font-bold uppercase tracking-widest text-neutral-500">
+                  TOTAL CANCELLED
+                </span>
+              </div>
+            </div>
 
+            {/* Event List Table */}
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[920px] text-left">
+              <table className="w-full min-w-[960px] text-left">
                 <thead>
-                  <tr className="border-b border-border bg-muted/40">
+                  <tr className="border-b border-[#E6DFD5] dark:border-border/60">
                     {[
                       'REFERENCE ID',
                       'EVENT TITLE',
@@ -245,87 +271,120 @@ export function ExecutiveLiteEventOperations() {
                     ].map((h) => (
                       <th
                         key={h}
-                        className="px-4 py-3 text-[0.58rem] font-bold uppercase tracking-[0.12em] text-muted-foreground"
+                        className="px-5 py-3.5 text-[0.65rem] font-bold uppercase tracking-wider text-neutral-500"
                       >
                         {h}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border">
+                <tbody className="divide-y divide-[#E6DFD5]/70 dark:divide-border/50">
                   {filtered.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="py-12">
                         <EmptyState
                           title="No events found"
-                          message="No registered events match your search query or status filters."
-                          actionLabel="Register New Event"
-                          onAction={openCreate}
+                          message={
+                            query || statusFilter !== 'All'
+                              ? 'No events match your current search and filter selections.'
+                              : 'No event records are currently registered in the system.'
+                          }
                         />
                       </td>
                     </tr>
                   ) : (
                     filtered.map((e) => (
-                      <tr key={e.id} className="hover:bg-muted/20 transition-colors">
-                        <td className="px-4 py-4 font-mono text-xs font-semibold text-foreground">
-                          {e.refId || 'PRT-PENDING'}
+                      <tr
+                        key={e.id}
+                        className="hover:bg-[#F2ECE1]/40 dark:hover:bg-muted/20 transition-colors"
+                      >
+                        <td className="px-5 py-4 text-xs font-mono text-neutral-700 dark:text-neutral-300">
+                          {e.refId}
                         </td>
-                        <td className="px-4 py-4 font-serif text-sm font-medium text-foreground">
+                        <td className="px-5 py-4 text-sm font-medium text-neutral-900 dark:text-foreground">
                           {e.title}
                         </td>
-                        <td className="px-4 py-4 text-xs text-muted-foreground">
-                          {e.client}
+                        <td className="px-5 py-4 text-xs text-neutral-600 dark:text-neutral-400">
+                          {e.client || '—'}
                         </td>
-                        <td className="px-4 py-4 text-xs text-muted-foreground">
-                          {e.venue}
+                        <td className="px-5 py-4 text-xs text-neutral-600 dark:text-neutral-400">
+                          {e.venue || '—'}
                         </td>
-                        <td className="px-4 py-4 text-xs font-mono text-muted-foreground">
-                          {e.targetDate}
+                        <td className="px-5 py-4 text-xs font-mono text-neutral-600 dark:text-neutral-400">
+                          {e.targetDate || '—'}
                         </td>
-                        <td className="px-4 py-4 text-xs font-mono text-muted-foreground">
-                          {formatDisplayTime(e.eventStart || e.installationStart, '09:00 AM')}
+                        <td className="px-5 py-4 text-xs font-mono text-neutral-600 dark:text-neutral-400">
+                          {formatDateOrTime(e.eventStart || e.installationStart, e.targetDate)}
                         </td>
-                        <td className="px-4 py-4 text-xs font-mono text-muted-foreground">
-                          {formatDisplayTime(e.eventEnd || e.installationEnd, '11:00 PM')}
+                        <td className="px-5 py-4 text-xs font-mono text-neutral-600 dark:text-neutral-400">
+                          {formatDateOrTime(e.eventEnd || e.installationEnd, e.targetDate)}
                         </td>
-                        <td className="px-4 py-4">
-                          <StatusBadge
-                            variant={eventStatusVariants[e.status] ?? 'neutral'}
-                            className={e.status === 'Cancelled' ? 'line-through opacity-70' : undefined}
+                        <td className="px-5 py-4">
+                          <span
+                            className={cn(
+                              'font-bold text-xs uppercase tracking-wide leading-tight inline-block',
+                              e.status === 'In Production'
+                                ? 'text-[#0070BA] dark:text-sky-400'
+                                : e.status === 'Completed' || e.status === 'Settled'
+                                ? 'text-[#00B050] dark:text-emerald-400'
+                                : e.status === 'Initialized'
+                                ? 'text-amber-600 dark:text-amber-400'
+                                : e.status === 'On Hold'
+                                ? 'text-amber-700 dark:text-amber-500'
+                                : e.status === 'Cancelled'
+                                ? 'text-neutral-400 line-through'
+                                : 'text-indigo-600 dark:text-indigo-400',
+                            )}
                           >
-                            {e.status}
-                          </StatusBadge>
+                            {e.status === 'In Production' ? (
+                              <>
+                                IN<br />PRODUCTION
+                              </>
+                            ) : (
+                              e.status
+                            )}
+                          </span>
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
                             <button
                               type="button"
                               onClick={() => openView(e)}
-                              className="text-[0.62rem] font-bold uppercase tracking-[0.1em] text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors"
+                              className="text-xs font-bold uppercase tracking-wider text-[#A07040] hover:text-[#805020] dark:text-amber-400 dark:hover:text-amber-300 transition-colors"
                             >
                               VIEW EVENT
                             </button>
-                            <div className="relative">
+                            <div className="relative" onClick={(ev) => ev.stopPropagation()}>
                               <button
                                 type="button"
                                 onClick={() => setOpenMenuId(openMenuId === e.id ? null : e.id)}
-                                className="rounded p-1 text-muted-foreground hover:bg-muted"
-                                aria-label="More actions"
+                                className="p-1 rounded text-neutral-400 hover:text-neutral-700 hover:bg-neutral-200/50 dark:hover:bg-muted dark:hover:text-foreground transition-colors"
+                                title="More actions"
                               >
                                 <MoreVertical className="size-4" />
                               </button>
                               {openMenuId === e.id && (
-                                <div className="absolute right-0 z-20 w-32 rounded-md border border-border bg-card shadow-lg py-1">
+                                <div className="absolute right-0 top-full mt-1 z-30 w-36 rounded-lg border border-border bg-card p-1 shadow-lg text-xs">
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      openEdit(e)
                                       setOpenMenuId(null)
+                                      openEdit(e)
                                     }}
-                                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-foreground hover:bg-muted font-medium"
+                                    className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left font-medium text-foreground hover:bg-muted transition"
                                   >
-                                    <Edit3 className="size-3.5" />
+                                    <Edit3 className="size-3.5 text-muted-foreground" />
                                     Edit Event
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenMenuId(null)
+                                      openView(e)
+                                    }}
+                                    className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left font-medium text-foreground hover:bg-muted transition"
+                                  >
+                                    View Details
                                   </button>
                                 </div>
                               )}
@@ -342,15 +401,16 @@ export function ExecutiveLiteEventOperations() {
         </div>
       </ExecutiveShell>
 
-      {/* Drawer bound to real events and store */}
+      {/* Canonical Register / View / Edit Drawer Modal */}
       <RegisterEventDrawer
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        event={selectedEvent}
+        onClose={() => {
+          setDrawerOpen(false)
+          setSelectedEvent(null)
+        }}
         mode={drawerMode}
+        event={selectedEvent}
       />
     </>
   )
 }
-
-export default ExecutiveLiteEventOperations
