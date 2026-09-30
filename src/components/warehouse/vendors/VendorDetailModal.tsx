@@ -16,14 +16,14 @@ interface VendorDetailModalProps {
 
 export function VendorDetailModal({ vendor, onClose, onSaveNotes, onSaveContact, onDeactivate }: VendorDetailModalProps) {
   const [editing, setEditing] = useState(false)
-  const [notes, setNotes] = useState(vendor.performanceNotes)
+  const [notes, setNotes] = useState(vendor.performanceNotes || '')
   const [editingContact, setEditingContact] = useState(false)
-  const [contactName, setContactName] = useState(vendor.contactName)
-  const [email, setEmail] = useState(vendor.email)
-  const [phone, setPhone] = useState(vendor.phone)
+  const [contactName, setContactName] = useState(vendor.contactName || '')
+  const [email, setEmail] = useState(vendor.email || '')
+  const [phone, setPhone] = useState(vendor.phone || '')
 
-  const taggedItems = getCatalogAssets().filter(
-    (asset) => asset.primaryVendorId === vendor.id || asset.backupVendorId === vendor.id,
+  const taggedItems = (getCatalogAssets() || []).filter(
+    (asset) => asset && (asset.primaryVendorId === vendor?.id || asset.backupVendorId === vendor?.id),
   )
 
   const handleSave = () => {
@@ -45,11 +45,11 @@ export function VendorDetailModal({ vendor, onClose, onSaveNotes, onSaveContact,
         <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
           <div>
             <p className="text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              {vendor.specialty}
+              {vendor.specialty || 'General Supplier'}
             </p>
-            <h2 className="mt-1 font-serif text-xl font-medium text-card-foreground">{vendor.name}</h2>
+            <h2 className="mt-1 font-serif text-xl font-medium text-card-foreground">{vendor.name || 'Unnamed Vendor'}</h2>
             <div className="mt-2">
-              <Pill tone={VENDOR_STATUS_TONE[vendor.status]}>{vendor.status}</Pill>
+              <Pill tone={VENDOR_STATUS_TONE[vendor.status] || 'positive'}>{vendor.status || 'Active'}</Pill>
             </div>
           </div>
           <button
@@ -93,9 +93,9 @@ export function VendorDetailModal({ vendor, onClose, onSaveNotes, onSaveContact,
                 <button
                   type="button"
                   onClick={() => {
-                    setContactName(vendor.contactName)
-                    setEmail(vendor.email)
-                    setPhone(vendor.phone)
+                    setContactName(vendor.contactName || '')
+                    setEmail(vendor.email || '')
+                    setPhone(vendor.phone || '')
                     setEditingContact(false)
                   }}
                   className="rounded-md border border-border px-3 py-2 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition-colors hover:bg-accent"
@@ -116,9 +116,9 @@ export function VendorDetailModal({ vendor, onClose, onSaveNotes, onSaveContact,
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <InfoField label="Contact" value={vendor.contactName} />
-              <InfoField label="Email" value={vendor.email} />
-              <InfoField label="Phone" value={vendor.phone} />
+              <InfoField label="Contact" value={vendor.contactName || 'Primary Contact'} />
+              <InfoField label="Email" value={vendor.email || '—'} />
+              <InfoField label="Phone" value={vendor.phone || '—'} />
             </div>
           )}
 
@@ -170,13 +170,13 @@ export function VendorDetailModal({ vendor, onClose, onSaveNotes, onSaveContact,
                       </td>
                     </tr>
                   )}
-                  {(vendor.orderHistory ?? []).map((order) => (
-                    <tr key={order.id} className="border-t border-border bg-card">
-                      <td className="px-3.5 py-2.5 text-xs text-muted-foreground">{order.date}</td>
-                      <td className="px-3.5 py-2.5 text-sm text-card-foreground">{order.itemName}</td>
-                      <td className="px-3.5 py-2.5 text-xs text-muted-foreground">{order.quantity}</td>
-                      <td className="px-3.5 py-2.5 text-xs text-muted-foreground">₱{order.cost.toLocaleString()}</td>
-                      <td className="px-3.5 py-2.5 text-xs text-muted-foreground">{order.status}</td>
+                  {(vendor.orderHistory ?? []).map((order, idx) => (
+                    <tr key={order.id || `order-${idx}`} className="border-t border-border bg-card">
+                      <td className="px-3.5 py-2.5 text-xs text-muted-foreground">{order.date || '—'}</td>
+                      <td className="px-3.5 py-2.5 text-sm text-card-foreground">{order.itemName || 'Item'}</td>
+                      <td className="px-3.5 py-2.5 text-xs text-muted-foreground">{order.quantity ?? 0}</td>
+                      <td className="px-3.5 py-2.5 text-xs text-muted-foreground">₱{(order.cost ?? 0).toLocaleString()}</td>
+                      <td className="px-3.5 py-2.5 text-xs text-muted-foreground">{order.status || 'Delivered'}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -41,7 +41,13 @@ export function WarehouseHomePage() {
   const { events } = usePortal()
   const { isWarehouseAssociate } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
-  const [drilldown, setDrilldown] = useState<DrilldownEntry | null>(null)
+  const [drilldown, setDrilldown] = useState<DrilldownEntry | null>(() => {
+    const modId = parseWarehouseModuleFromUrl()
+    if (modId && isModuleAllowedForRole(modId, isWarehouseAssociate)) {
+      return { kind: 'module', moduleId: modId }
+    }
+    return null
+  })
   const [summaryEvent, setSummaryEvent] = useState<PortalEvent | null>(null)
   const [isLoading] = useState(false)
   const [isError, setIsError] = useState(false)
@@ -94,7 +100,7 @@ export function WarehouseHomePage() {
   }
 
   if (drilldown?.kind === 'module') {
-    return <WarehouseDrilldown entry={drilldown} onExit={handleCloseDrilldown} />
+    return <WarehouseDrilldown entry={drilldown} onExit={handleCloseDrilldown} onSelectModule={openModule} />
   }
 
   if (isError) {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Search } from 'lucide-react'
-import { updateVendor, useWarehouseVendors, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
+import { normalizeVendorStatus, updateVendor, useWarehouseVendors, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
 import { fetchVendorsApi } from '@/lib/vendorApi'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { VENDOR_STATUS_TONE } from '@/components/warehouse/replenishment/tone'
@@ -18,19 +18,31 @@ export function VendorManagementModule() {
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
 
+  // Keep vendors in sync with initialVendors from useWarehouseVendors store
+  useEffect(() => {
+    if (initialVendors.length > 0) {
+      setVendors((prev) => {
+        const ids = new Set(prev.map((item) => item.id))
+        const newItems = initialVendors.filter((item) => !ids.has(item.id))
+        if (newItems.length === 0 && prev.length === initialVendors.length) return prev
+        return [...newItems, ...prev]
+      })
+    }
+  }, [initialVendors])
+
   useEffect(() => {
     let active = true
     fetchVendorsApi().then((apiVendors) => {
       if (!active || !apiVendors.length) return
-      const mapped: WarehouseVendor[] = apiVendors.map((v) => ({
-        id: v.vendorId,
-        name: v.name,
+      const mapped: WarehouseVendor[] = apiVendors.map((v, idx) => ({
+        id: v.vendorId || (v as any).id || `ven-api-${idx}-${Date.now()}`,
+        name: v.name || 'Unnamed Vendor',
         contactName: v.contactName || 'Primary Contact',
         email: v.email || 'vendor@lumiere.com',
-        phone: v.phone || '+1 555-0192',
+        phone: v.phone || '—',
         specialty: v.specialty || 'General Supplier',
         leadTimeHours: 24,
-        status: (v.status as VendorStatus) || 'Active',
+        status: normalizeVendorStatus(v.status),
         performanceNotes: 'Registered via API.',
         orderHistory: [],
       }))
@@ -47,13 +59,14 @@ export function VendorManagementModule() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return vendors.filter((vendor) => {
+    return (vendors || []).filter((vendor) => {
+      if (!vendor) return false
       const matchesStatus = statusFilter === 'All' || vendor.status === statusFilter
       const matchesQuery =
         q.length === 0 ||
-        vendor.name.toLowerCase().includes(q) ||
-        vendor.specialty.toLowerCase().includes(q) ||
-        vendor.contactName.toLowerCase().includes(q)
+        (vendor.name || '').toLowerCase().includes(q) ||
+        (vendor.specialty || '').toLowerCase().includes(q) ||
+        (vendor.contactName || '').toLowerCase().includes(q)
       return matchesStatus && matchesQuery
     })
   }, [vendors, query, statusFilter])
@@ -155,7 +168,7 @@ export function VendorManagementModule() {
                 </td>
                 <td className="px-4 py-3.5 text-sm text-muted-foreground">{vendor.leadTimeHours}h</td>
                 <td className="px-4 py-3.5">
-                  <Pill tone={VENDOR_STATUS_TONE[vendor.status]}>{vendor.status}</Pill>
+                  <Pill tone={VENDOR_STATUS_TONE[vendor.status] || 'positive'}>{vendor.status || 'Active'}</Pill>
                 </td>
               </tr>
             ))}

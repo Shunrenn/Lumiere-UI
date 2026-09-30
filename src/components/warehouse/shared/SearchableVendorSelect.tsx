@@ -38,11 +38,12 @@ export function SearchableVendorSelect({
   const filteredVendors = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return vendors
-    return vendors.filter(
+    return (vendors || []).filter(
       (v) =>
-        v.name.toLowerCase().includes(q) ||
-        v.specialty.toLowerCase().includes(q) ||
-        v.contactName.toLowerCase().includes(q),
+        v &&
+        ((v.name || '').toLowerCase().includes(q) ||
+          (v.specialty || '').toLowerCase().includes(q) ||
+          (v.contactName || '').toLowerCase().includes(q)),
     )
   }, [vendors, search])
 

@@ -48,20 +48,28 @@ export function getWarehouseVendors(): WarehouseVendor[] {
   return cachedVendors
 }
 
+export function normalizeVendorStatus(rawStatus?: string): VendorStatus {
+  if (!rawStatus) return 'Active'
+  const s = String(rawStatus).trim().toLowerCase()
+  if (s === 'on hold' || s === 'onhold' || s === 'hold') return 'On Hold'
+  if (s === 'inactive' || s === 'disabled') return 'Inactive'
+  return 'Active'
+}
+
 export function useWarehouseVendors(): WarehouseVendor[] {
   useEffect(() => {
     let active = true
     fetchVendorsApi().then((apiVendors) => {
       if (!active) return
-      const mapped: WarehouseVendor[] = apiVendors.map((v) => ({
-        id: v.vendorId,
-        name: v.name,
+      const mapped: WarehouseVendor[] = apiVendors.map((v, idx) => ({
+        id: v.vendorId || (v as any).id || `ven-api-${idx}-${Date.now()}`,
+        name: v.name || 'Unnamed Vendor',
         contactName: v.contactName || 'Primary Contact',
         email: v.email || 'vendor@lumiere.com',
         phone: v.phone || '—',
         specialty: v.specialty || 'General Supplier',
         leadTimeHours: 24,
-        status: (v.status as VendorStatus) || 'Active',
+        status: normalizeVendorStatus(v.status),
         performanceNotes: 'Registered vendor.',
         orderHistory: [],
       }))
