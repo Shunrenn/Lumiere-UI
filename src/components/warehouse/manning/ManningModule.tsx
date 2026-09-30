@@ -88,7 +88,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
   const [directoryStatusFilter, setDirectoryStatusFilter] = useState<'All' | 'Available' | 'Assigned' | 'On Leave'>('All')
 
   // Modal / Drawer States
-  const [rosterOpen, setRosterOpen] = useState(true)
+  const [rosterOpen, setRosterOpen] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
   const [fullRosterModalOpen, setFullRosterModalOpen] = useState(false)
   const [slaModuleOpen, setSlaModuleOpen] = useState(false)
@@ -307,7 +307,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                   eventSubTab === 'assignments' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
                 )}
               >
-                Assignments ({assignments.length})
+                Assignments
               </button>
               <button
                 type="button"
@@ -318,7 +318,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                   eventSubTab === 'tasks' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
                 )}
               >
-                48h Task Confirmations ({tasks.length})
+                Task Confirmations
               </button>
             </div>
           </div>
@@ -425,13 +425,89 @@ export function ManningModule({ onClose }: ManningModuleProps) {
           )
         ) : (
           <div className="flex flex-col gap-5">
-            {/* SUB-TAB: ASSIGNMENTS / EVENT SCHEDULE */}
-            {(eventSubTab === 'assignments' || eventSubTab === 'schedule') && (
+            {/* SUB-TAB: EVENT SCHEDULE */}
+            {eventSubTab === 'schedule' && (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-sm font-bold text-foreground">Event Manning &amp; Crew Roster</h2>
-                    <p className="text-xs text-muted-foreground">Active and upcoming ground crew deployment records per event.</p>
+                    <h2 className="text-sm font-bold text-foreground">Event Schedule &amp; Manning Requirement</h2>
+                    <p className="text-xs text-muted-foreground">Event-centric schedule of upcoming events and ground crew manning status.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {events.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border bg-card p-6 text-center text-xs text-muted-foreground">
+                      No active events scheduled in the pipeline.
+                    </div>
+                  ) : (
+                    events.map((event) => {
+                      const matchedAssignments = assignments.filter(
+                        (a) => a.event_name.toLowerCase() === event.title.toLowerCase() || a.deployment_ref === event.id,
+                      )
+                      const activeAssignment = matchedAssignments.find((a) => a.status === 'Active') || matchedAssignments[0]
+                      return (
+                        <div
+                          key={event.id}
+                          className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-foreground text-sm">{event.title}</span>
+                                <span className="rounded bg-muted px-2 py-0.5 text-[0.6rem] font-mono text-muted-foreground">
+                                  {event.id}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Target Date: <span className="font-medium text-foreground">{event.targetDate || 'TBD'}</span> · Venue:{' '}
+                                <span className="font-medium text-foreground">{event.venue || 'TBD'}</span>
+                              </p>
+                            </div>
+                            <span
+                              className={cn(
+                                'rounded px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wider',
+                                event.status === 'In Production' || event.status === 'Initialized'
+                                  ? 'bg-emerald-500/15 text-emerald-600'
+                                  : 'bg-muted text-muted-foreground',
+                              )}
+                            >
+                              {event.status || 'Active'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between border-t border-border/60 pt-3 text-xs">
+                            <span className="text-muted-foreground">
+                              {activeAssignment ? (
+                                <>
+                                  Assigned Lead: <strong className="text-foreground">{activeAssignment.lead_name}</strong> ({activeAssignment.member_names.length} crew)
+                                </>
+                              ) : (
+                                <span className="text-amber-600 dark:text-amber-400 font-semibold">No Ground Crew Deployment Assigned Yet</span>
+                              )}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setAssignOpen(true)}
+                              className="rounded border border-border bg-background px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wider text-primary hover:bg-accent"
+                            >
+                              Assign Crew
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* SUB-TAB: ASSIGNMENTS */}
+            {eventSubTab === 'assignments' && (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-bold text-foreground">Ground Crew Deployment Roster</h2>
+                    <p className="text-xs text-muted-foreground">Active ground crew deployment records per event.</p>
                   </div>
                 </div>
 
