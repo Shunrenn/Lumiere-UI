@@ -67,7 +67,7 @@ interface EventItem {
   venue: string
   status: EventStatus
   editable: boolean
-  phase: CheckpointPhase
+  phase: CheckpointPhase | null  // null = no canonical dispatch phase assigned
   items: { id: string; name: string; sku: string; qty: number; color: string }[]
 }
 interface DamageReport {
@@ -133,6 +133,7 @@ export function GroundCrewPage() {
     if (!events || events.length === 0) return []
     // Manifest items are not fabricated — they are provided by canonical dispatch data only.
     // Items start empty until a real dispatch batch populates them from the backend.
+    // Phase is null: no canonical dispatch/checkpoint authority has established an operational phase.
     return events.map((evt, idx) => ({
       id: evt.id,
       name: evt.title,
@@ -140,7 +141,7 @@ export function GroundCrewPage() {
       venue: evt.venue,
       status: idx === 0 ? 'Current' : 'Upcoming',
       editable: idx === 0,
-      phase: 'Dispatch Loading' as CheckpointPhase,
+      phase: null,
       items: [],
     }))
   }, [events])
@@ -346,7 +347,7 @@ export function GroundCrewPage() {
           id: result.queuedOffline ? result.declaration.id : result.reportId,
           event: selectedEvent.name,
           item: reportItem.name,
-          phase: selectedEvent.phase,
+          phase: selectedEvent.phase ?? 'Pre-Event Setup',
           quantity: qty,
           description: desc,
           condition,
@@ -396,9 +397,10 @@ export function GroundCrewPage() {
     setCrewEvents((prev) =>
       prev.map((item) => {
         if (item.id !== eventId) return item
+        if (!item.phase) return item  // no canonical phase — cannot advance
         const order: CheckpointPhase[] = ['Dispatch Loading', 'Venue Arrival', 'Pre-Event Setup', 'Post-Event Egress']
         const idx = order.indexOf(item.phase)
-        if (idx < order.length - 1) {
+        if (idx >= 0 && idx < order.length - 1) {
           return { ...item, phase: order[idx + 1] }
         }
         return item
@@ -667,7 +669,7 @@ export function GroundCrewPage() {
           <DamageForm
             item={reportItem}
             event={selectedEvent.name}
-            phase={selectedEvent.phase}
+            phase={selectedEvent.phase ?? 'Pre-Event Setup'}
             onSubmit={submitReport}
             isSubmitting={isSubmittingReport}
             errorMessage={reportError}
@@ -728,7 +730,7 @@ function Home({
         <PwaCard
           title="Active Shift Context"
           subtitle="Primary operational focus for today"
-          action={<PwaBadge subRole={currentEvent.phase === 'Dispatch Loading' ? 'Field' : 'Warehouse'} label={currentEvent.phase} />}
+          action={currentEvent.phase ? <PwaBadge subRole={currentEvent.phase === 'Dispatch Loading' ? 'Field' : 'Warehouse'} label={currentEvent.phase} /> : undefined}
         >
           <div className="mt-1 space-y-3">
             <div>
@@ -744,12 +746,14 @@ function Home({
               </div>
             </div>
 
-            <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-xs">
-              <span className="font-bold text-foreground uppercase tracking-wider text-[0.625rem]">Manifest Items: </span>
-              <span className="text-muted-foreground">
-                {currentEvent.items.map((i) => `${i.qty}x ${i.name}`).join(', ')}
-              </span>
-            </div>
+            {currentEvent.items.length > 0 && (
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-xs">
+                <span className="font-bold text-foreground uppercase tracking-wider text-[0.625rem]">Manifest Items: </span>
+                <span className="text-muted-foreground">
+                  {currentEvent.items.map((i) => `${i.qty}x ${i.name}`).join(', ')}
+                </span>
+              </div>
+            )}
 
             <PwaButton onClick={() => onOpen(currentEvent)} variant="primary" size="md" className="w-full">
               Open Event Console
@@ -773,7 +777,7 @@ function Home({
                     <h4 className="font-serif text-sm font-bold text-foreground">{evt.name}</h4>
                     <p className="mt-0.5 text-xs text-muted-foreground">{evt.venue} • {dateLabel(evt.date)}</p>
                   </div>
-                  <PwaBadge variant="neutral" label={evt.phase} />
+                  {evt.phase && <PwaBadge variant="neutral" label={evt.phase} />}
                 </div>
                 <div className="mt-3 flex items-center justify-end">
                   <PwaButton onClick={() => onOpen(evt)} variant="outline" size="sm">
@@ -928,7 +932,8 @@ function DecisionMode({
   )
 }
 
-function PhaseMap({ phase }: { phase: CheckpointPhase }) {
+function PhaseMap({ phase }: { phase: CheckpointPhase | null }) {
+  if (!phase) return null  // no canonical dispatch phase — do not render stepper
   const order: CheckpointPhase[] = ['Dispatch Loading', 'Venue Arrival', 'Pre-Event Setup', 'Post-Event Egress']
   const activeIndex = order.indexOf(phase)
   return (
@@ -1507,7 +1512,7 @@ function CalendarView({
           <div className="space-y-2 pt-1">
             {entries.map((entry) => (
               <div key={entry.id} className="rounded-xl border border-border p-3">
-                <PwaBadge variant="subrole" subRole="Field" label={entry.phase} />
+                {entry.phase && <PwaBadge variant="subrole" subRole="Field" label={entry.phase} />}
                 <h4 className="mt-1 font-serif text-sm font-bold text-foreground">{entry.name}</h4>
                 <p className="text-xs text-muted-foreground">{entry.venue}</p>
               </div>
