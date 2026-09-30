@@ -53,7 +53,7 @@ interface AssetCatalogModuleProps {
 
 export function AssetCatalogModule({ onClose, readOnly = false, embedded = false }: AssetCatalogModuleProps) {
   const { isWarehouseAssociate } = useAuth()
-  const effectiveReadOnly = readOnly || isWarehouseAssociate
+  const effectiveReadOnly = readOnly
   const assets = useCatalogAssets()
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<AssetCategory | 'All'>('All')

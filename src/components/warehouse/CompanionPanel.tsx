@@ -25,7 +25,7 @@ export function CompanionPanel({ moduleId, onClose }: CompanionPanelProps) {
   }
 
   if (moduleId === 'assets') {
-    return <AssetCatalogModule readOnly={isWarehouseAssociate} onClose={onClose} />
+    return <AssetCatalogModule onClose={onClose} />
   }
 
   if (moduleId === 'replenishment') {

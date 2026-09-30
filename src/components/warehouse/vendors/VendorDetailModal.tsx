@@ -163,7 +163,14 @@ export function VendorDetailModal({ vendor, onClose, onSaveNotes, onSaveContact,
                   </tr>
                 </thead>
                 <tbody>
-                  {vendor.orderHistory.map((order) => (
+                  {(vendor.orderHistory ?? []).length === 0 && (
+                    <tr className="border-t border-border bg-card">
+                      <td colSpan={5} className="px-3.5 py-4 text-center text-xs text-muted-foreground">
+                        No order history records.
+                      </td>
+                    </tr>
+                  )}
+                  {(vendor.orderHistory ?? []).map((order) => (
                     <tr key={order.id} className="border-t border-border bg-card">
                       <td className="px-3.5 py-2.5 text-xs text-muted-foreground">{order.date}</td>
                       <td className="px-3.5 py-2.5 text-sm text-card-foreground">{order.itemName}</td>
