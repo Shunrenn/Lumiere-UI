@@ -1,7 +1,35 @@
 // Canonical data layer for the Vendor Management module.
 // Renders authoritative backend vendor records only. Zero frontend fixture records.
 import { useEffect, useSyncExternalStore } from 'react'
-import { createVendorApi, fetchVendorsApi } from './vendorApi'
+import { createVendorApi, fetchVendorsApi, type VendorDto } from './vendorApi'
+
+export function deriveContactName(v: VendorDto): string {
+  if (v.contactName && v.contactName.trim()) return v.contactName.trim()
+  if (Array.isArray(v.representatives) && v.representatives.length > 0) {
+    const rep = v.representatives[0]
+    const first = rep?.firstName?.trim() || ''
+    const last = rep?.lastName?.trim() || ''
+    const fullName = `${first} ${last}`.trim()
+    if (fullName) return fullName
+  }
+  return 'No representative assigned'
+}
+
+export function mapVendorDtoToWarehouseVendor(v: VendorDto): WarehouseVendor {
+  const canonicalId = v.id || v.vendorId || ''
+  return {
+    id: canonicalId,
+    name: v.name || 'Unnamed Vendor',
+    contactName: deriveContactName(v),
+    email: v.email || '—',
+    phone: v.phone || '—',
+    specialty: v.specialty || 'General Supplier',
+    leadTimeHours: 24,
+    status: normalizeVendorStatus(v.status),
+    performanceNotes: v.address ? `Address: ${v.address}` : '',
+    orderHistory: [],
+  }
+}
 
 export type VendorStatus = 'Active' | 'On Hold' | 'Inactive'
 
@@ -61,18 +89,7 @@ export function useWarehouseVendors(): WarehouseVendor[] {
     let active = true
     fetchVendorsApi().then((apiVendors) => {
       if (!active) return
-      const mapped: WarehouseVendor[] = apiVendors.map((v, idx) => ({
-        id: v.vendorId || (v as any).id || `ven-api-${idx}-${Date.now()}`,
-        name: v.name || 'Unnamed Vendor',
-        contactName: v.contactName || 'Primary Contact',
-        email: v.email || 'vendor@lumiere.com',
-        phone: v.phone || '—',
-        specialty: v.specialty || 'General Supplier',
-        leadTimeHours: 24,
-        status: normalizeVendorStatus(v.status),
-        performanceNotes: 'Registered vendor.',
-        orderHistory: [],
-      }))
+      const mapped: WarehouseVendor[] = apiVendors.map((v) => mapVendorDtoToWarehouseVendor(v))
       cachedVendors = mapped
       publish()
     })

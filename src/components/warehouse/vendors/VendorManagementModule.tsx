@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Plus, Search } from 'lucide-react'
-import { normalizeVendorStatus, updateVendor, useWarehouseVendors, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
-import { fetchVendorsApi } from '@/lib/vendorApi'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AlertTriangle, Lock, Plus, RefreshCw, Search } from 'lucide-react'
+import { mapVendorDtoToWarehouseVendor, updateVendor, useWarehouseVendors, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
+import { fetchVendorsResultApi } from '@/lib/vendorApi'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { VENDOR_STATUS_TONE } from '@/components/warehouse/replenishment/tone'
 import { VendorDetailModal } from '@/components/warehouse/vendors/VendorDetailModal'
@@ -10,6 +10,12 @@ import { cn } from '@/lib/utils'
 
 const STATUS_FILTERS: Array<VendorStatus | 'All'> = ['All', 'Active', 'On Hold', 'Inactive']
 
+type FetchState =
+  | { status: 'loading' }
+  | { status: 'success' }
+  | { status: 'auth-error'; message: string }
+  | { status: 'request-error'; message: string }
+
 export function VendorManagementModule() {
   const initialVendors = useWarehouseVendors()
   const [vendors, setVendors] = useState<WarehouseVendor[]>(initialVendors)
@@ -17,6 +23,7 @@ export function VendorManagementModule() {
   const [statusFilter, setStatusFilter] = useState<VendorStatus | 'All'>('All')
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [fetchState, setFetchState] = useState<FetchState>({ status: 'loading' })
 
   // Keep vendors in sync with initialVendors from useWarehouseVendors store
   useEffect(() => {
@@ -30,32 +37,27 @@ export function VendorManagementModule() {
     }
   }, [initialVendors])
 
-  useEffect(() => {
-    let active = true
-    fetchVendorsApi().then((apiVendors) => {
-      if (!active || !apiVendors.length) return
-      const mapped: WarehouseVendor[] = apiVendors.map((v, idx) => ({
-        id: v.vendorId || (v as any).id || `ven-api-${idx}-${Date.now()}`,
-        name: v.name || 'Unnamed Vendor',
-        contactName: v.contactName || 'Primary Contact',
-        email: v.email || 'vendor@lumiere.com',
-        phone: v.phone || '—',
-        specialty: v.specialty || 'General Supplier',
-        leadTimeHours: 24,
-        status: normalizeVendorStatus(v.status),
-        performanceNotes: 'Registered via API.',
-        orderHistory: [],
-      }))
+  const loadVendors = useCallback(async () => {
+    setFetchState({ status: 'loading' })
+    const result = await fetchVendorsResultApi()
+    if (result.kind === 'success') {
+      const mapped = result.vendors.map((v) => mapVendorDtoToWarehouseVendor(v))
       setVendors((prev) => {
         const ids = new Set(prev.map((item) => item.id))
         const newVendors = mapped.filter((item) => !ids.has(item.id))
         return [...newVendors, ...prev]
       })
-    })
-    return () => {
-      active = false
+      setFetchState({ status: 'success' })
+    } else if (result.kind === 'auth-error') {
+      setFetchState({ status: 'auth-error', message: result.message })
+    } else {
+      setFetchState({ status: 'request-error', message: result.message })
     }
   }, [])
+
+  useEffect(() => {
+    loadVendors()
+  }, [loadVendors])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -147,7 +149,46 @@ export function VendorManagementModule() {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                  {query ? 'No vendors match this search.' : 'No registered vendors found.'}
+                  {fetchState.status === 'loading' && vendors.length === 0 ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <RefreshCw className="size-4 animate-spin text-primary" />
+                      <span>Loading canonical vendor records…</span>
+                    </div>
+                  ) : fetchState.status === 'auth-error' && vendors.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="flex size-10 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                        <Lock className="size-5" />
+                      </div>
+                      <p className="font-medium text-foreground">Authentication Required</p>
+                      <p className="max-w-md text-xs text-muted-foreground">{fetchState.message}</p>
+                      <button
+                        type="button"
+                        onClick={() => loadVendors()}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold text-card-foreground transition hover:bg-accent"
+                      >
+                        <RefreshCw className="size-3.5" />
+                        Retry authentication
+                      </button>
+                    </div>
+                  ) : fetchState.status === 'request-error' && vendors.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="flex size-10 items-center justify-center rounded-full bg-amber-500/10 text-amber-600">
+                        <AlertTriangle className="size-5" />
+                      </div>
+                      <p className="font-medium text-foreground">Vendor Registry Unavailable</p>
+                      <p className="max-w-md text-xs text-muted-foreground">{fetchState.message}</p>
+                      <button
+                        type="button"
+                        onClick={() => loadVendors()}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold text-card-foreground transition hover:bg-accent"
+                      >
+                        <RefreshCw className="size-3.5" />
+                        Retry request
+                      </button>
+                    </div>
+                  ) : (
+                    <span>{query ? 'No vendors match this search.' : 'No vendors registered.'}</span>
+                  )}
                 </td>
               </tr>
             )}

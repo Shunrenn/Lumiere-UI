@@ -1,13 +1,27 @@
 import { API_BASE_URL, getAuthToken } from './apiConfig'
 
+export interface RepresentativeDto {
+  id?: string
+  representativeId?: string
+  vendorId?: string
+  firstName: string
+  lastName: string
+  email?: string
+  phone?: string
+  title?: string
+}
+
 export interface VendorDto {
-  vendorId: string
+  id?: string
+  vendorId?: string
   name: string
+  address?: string | null
   contactName?: string
   email?: string
   phone?: string
   specialty?: string
   status?: string
+  representatives?: RepresentativeDto[]
 }
 
 export interface CreateVendorRequestDto {
@@ -16,16 +30,6 @@ export interface CreateVendorRequestDto {
   email?: string
   phone?: string
   specialty?: string
-}
-
-export interface RepresentativeDto {
-  representativeId: string
-  vendorId: string
-  firstName: string
-  lastName: string
-  email?: string
-  phone?: string
-  title?: string
 }
 
 export interface CreateRepresentativeRequestDto {
@@ -47,24 +51,58 @@ function getHeaders(): HeadersInit {
   return headers
 }
 
+export type VendorFetchResult =
+  | { kind: 'success'; status: number; vendors: VendorDto[] }
+  | { kind: 'auth-error'; status: number; message: string }
+  | { kind: 'request-error'; status: number; message: string }
+
 /**
- * GET /api/vendors
+ * GET /api/vendors with structured status result
  */
-export async function fetchVendorsApi(): Promise<VendorDto[]> {
+export async function fetchVendorsResultApi(): Promise<VendorFetchResult> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/vendors`, {
       headers: getHeaders(),
     })
+    if (res.status === 401 || res.status === 403) {
+      console.warn(`[vendorApi] GET /api/vendors returned HTTP ${res.status}`)
+      return {
+        kind: 'auth-error',
+        status: res.status,
+        message: res.status === 401 ? 'Authentication required.' : 'Access denied.',
+      }
+    }
     if (!res.ok) {
       console.warn(`[vendorApi] GET /api/vendors returned HTTP ${res.status}`)
-      return []
+      return {
+        kind: 'request-error',
+        status: res.status,
+        message: `Vendor service returned HTTP ${res.status}`,
+      }
     }
     const data = await res.json()
-    return Array.isArray(data) ? data : []
+    const vendors = Array.isArray(data) ? data : []
+    return {
+      kind: 'success',
+      status: res.status,
+      vendors,
+    }
   } catch (err) {
-    console.warn('[vendorApi] GET /api/vendors failed:', err)
-    return []
+    console.warn('[vendorApi] GET /api/vendors network error:', err)
+    return {
+      kind: 'request-error',
+      status: 0,
+      message: 'Network connection failed.',
+    }
   }
+}
+
+/**
+ * GET /api/vendors
+ */
+export async function fetchVendorsApi(): Promise<VendorDto[]> {
+  const result = await fetchVendorsResultApi()
+  return result.kind === 'success' ? result.vendors : []
 }
 
 /**
