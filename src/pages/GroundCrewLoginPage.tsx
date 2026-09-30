@@ -65,7 +65,7 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
             Ground Crew Console
           </h1>
           <p className="mt-1.5 text-pretty text-sm leading-relaxed text-sidebar-foreground/75">
-            Clock in to run your on-site chain of custody.
+          Sign in to access your operational console.
           </p>
 
           {/* Status strip */}
@@ -134,7 +134,7 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
               className="mt-1 inline-flex h-13 w-full items-center justify-center gap-2.5 rounded-xl bg-primary text-sm font-bold uppercase tracking-[0.18em] text-primary-foreground shadow-sm transition-opacity hover:opacity-90 active:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
               style={{ height: '3.25rem' }}
             >
-              {signingIn ? 'CLOCKING IN...' : 'Clock In'}
+              {signingIn ? 'SIGNING IN...' : 'Sign In'}
               {!signingIn && <ArrowRight className="size-4" aria-hidden="true" />}
             </button>
           </form>

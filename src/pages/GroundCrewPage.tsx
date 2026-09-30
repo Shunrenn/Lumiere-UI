@@ -101,26 +101,7 @@ interface CrewRequest {
   status: RequestStatus
 }
 
-const SEED_REPORTS: DamageReport[] = [
-  {
-    id: 'r1',
-    event: 'Solstice Motors Electric SUV Reveal',
-    item: 'Gold Chiavari Chairs',
-    phase: 'Pre-Event Setup',
-    quantity: 2,
-    description: 'Light scratches on back rail',
-    photo: '',
-    capturedAt: 'Sep 16, 2026 • 09:42',
-    location: 'The Peninsula Manila',
-    declarationState: 'Finalized',
-    evidenceStatus: 'Unverifiable',
-    version: 1,
-  },
-]
-const SEED_REQUESTS: CrewRequest[] = [
-  { id: 'q1', type: 'Personal leave', date: '2026-09-22', note: 'Family commitment', status: 'Approved' },
-  { id: 'q2', type: 'Schedule request', date: '2026-09-28', note: 'Request earlier call time', status: 'Pending' },
-]
+// No fixture/seed data — all operational state derives from canonical backend or starts empty
 
 function dateLabel(date: string) {
   return new Date(`${date}T12:00:00`).toLocaleDateString('en-US', {
@@ -144,19 +125,14 @@ export function GroundCrewPage() {
   const accessLevel: AccessLevel =
     effectiveRole === 'Event Admin' || effectiveRole === 'Admin'
       ? 'Event Admin'
-      : effectiveRole === 'Warehouse Lead' || effectiveRole === 'Ground Crew'
+      : effectiveRole === 'Warehouse Lead'
         ? 'Team Lead / Field Lead'
         : 'Ground Crew / Member'
 
   const derivedEvents = useMemo<EventItem[]>(() => {
     if (!events || events.length === 0) return []
-    // Match canonical seed assets from backend DbInitializer
-    const defaultItems = [
-      { id: '22222222-2222-2222-2222-222222222222', name: 'Arri SkyPanel S60-C LED Softlight', sku: 'LMR-LGT-S60C', qty: 10, color: 'Blue / Silver' },
-      { id: '22222222-2222-2222-2222-222222222223', name: 'L-Acoustics K2 Line Array Speaker Module', sku: 'LMR-AUD-K2', qty: 16, color: 'Black' },
-      { id: '22222222-2222-2222-2222-222222222224', name: 'Gold Chiavari Chairs', sku: 'LMR-FURN-CH08', qty: 150, color: 'Antique Gold' },
-    ]
-
+    // Manifest items are not fabricated — they are provided by canonical dispatch data only.
+    // Items start empty until a real dispatch batch populates them from the backend.
     return events.map((evt, idx) => ({
       id: evt.id,
       name: evt.title,
@@ -165,7 +141,7 @@ export function GroundCrewPage() {
       status: idx === 0 ? 'Current' : 'Upcoming',
       editable: idx === 0,
       phase: 'Dispatch Loading' as CheckpointPhase,
-      items: defaultItems,
+      items: [],
     }))
   }, [events])
 
@@ -183,7 +159,7 @@ export function GroundCrewPage() {
 
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const selectedEvent = selectedEventId ? crewEvents.find((event) => event.id === selectedEventId) ?? null : null
-  const [reports, setReports] = useState(SEED_REPORTS)
+  const [reports, setReports] = useState<DamageReport[]>([])
   const [offlineItems, setOfflineItems] = useState<QueuedDeclaration[]>([])
   const [isSyncingQueue, setIsSyncingQueue] = useState(false)
 
@@ -267,11 +243,17 @@ export function GroundCrewPage() {
     }
   }
 
-  const [requests, setRequests] = useState(SEED_REQUESTS)
+  const [requests] = useState<CrewRequest[]>([])
   const [showReport, setShowReport] = useState(false)
   const [reportItem, setReportItem] = useState<EventItem['items'][number] | null>(null)
   const [toast, setToast] = useState('')
-  const [selectedDate, setSelectedDate] = useState('2026-08-20')
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const now = new Date()
+    const y = now.getFullYear()
+    const m = String(now.getMonth() + 1).padStart(2, '0')
+    const d = String(now.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  })
   const [notes, setNotes] = useState<Record<string, string>>(() => {
     if (typeof window === 'undefined') return {}
     try {
@@ -491,21 +473,12 @@ export function GroundCrewPage() {
 
   const submitRequest = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!requestNote.trim()) return
-
-    const newReq: CrewRequest = {
-      id: `q-${Date.now()}`,
-      type: requestType,
-      date: requestDate,
-      note: requestNote.trim(),
-      status: 'Pending',
-    }
-
-    setRequests((prev) => [newReq, ...prev])
+    // No backend HR/workforce-request endpoint exists. This action does not persist data.
+    // Display a clear notice instead of a fake success state.
     setRequestOpen(false)
     setRequestNote('')
-    setToast('Request submitted to Workforce Admin review queue.')
-    window.setTimeout(() => setToast(''), 3500)
+    setToast('Workforce requests are not yet supported in this version. Contact your Workforce Admin directly.')
+    window.setTimeout(() => setToast(''), 5000)
   }
 
   const pendingDeclarationsForCurrentAdmin = declarations.filter(
@@ -1458,7 +1431,8 @@ function CalendarView({
       const [y, m] = selectedDate.trim().split('-').map(Number)
       return { year: y, month: m - 1 }
     }
-    return { year: 2026, month: 7 }
+    const now = new Date()
+    return { year: now.getFullYear(), month: now.getMonth() }
   })
 
   const MONTH_NAMES = [
@@ -1882,18 +1856,25 @@ function Activity({
       </PwaCard>
 
       <PwaCard title="Workforce Requests">
-        {requests.map((q) => (
-          <div key={q.id} className="flex items-center justify-between border-b border-border/60 py-2.5 text-xs">
-            <div>
-              <p className="font-bold text-foreground">{q.type}</p>
-              <p className="text-muted-foreground">{dateLabel(q.date)} • {q.note}</p>
+        {requests.length === 0 ? (
+          <PwaEmptyState
+            title="No Requests"
+            description="No workforce requests on record. Contact your Workforce Admin to submit leave or schedule requests."
+          />
+        ) : (
+          requests.map((q) => (
+            <div key={q.id} className="flex items-center justify-between border-b border-border/60 py-2.5 text-xs">
+              <div>
+                <p className="font-bold text-foreground">{q.type}</p>
+                <p className="text-muted-foreground">{dateLabel(q.date)} • {q.note}</p>
+              </div>
+              <PwaBadge
+                variant={q.status === 'Approved' ? 'subrole' : q.status === 'Denied' ? 'destructive' : 'neutral'}
+                label={q.status}
+              />
             </div>
-            <PwaBadge
-              variant={q.status === 'Approved' ? 'subrole' : q.status === 'Denied' ? 'destructive' : 'neutral'}
-              label={q.status}
-            />
-          </div>
-        ))}
+          ))
+        )}
       </PwaCard>
 
       <PwaCard title="Completed Events">
@@ -1943,15 +1924,19 @@ function Account({
           </div>
 
           <div className="divide-y divide-border/60">
-            {requests.slice(0, 3).map((req) => (
-              <div key={req.id} className="flex items-center justify-between py-2 text-xs">
-                <span>{req.type} ({dateLabel(req.date)})</span>
-                <PwaBadge
-                  variant={req.status === 'Approved' ? 'subrole' : req.status === 'Denied' ? 'destructive' : 'neutral'}
-                  label={req.status}
-                />
-              </div>
-            ))}
+            {requests.length === 0 ? (
+              <p className="py-2 text-xs text-muted-foreground">No leave or schedule requests on record.</p>
+            ) : (
+              requests.slice(0, 3).map((req) => (
+                <div key={req.id} className="flex items-center justify-between py-2 text-xs">
+                  <span>{req.type} ({dateLabel(req.date)})</span>
+                  <PwaBadge
+                    variant={req.status === 'Approved' ? 'subrole' : req.status === 'Denied' ? 'destructive' : 'neutral'}
+                    label={req.status}
+                  />
+                </div>
+              ))
+            )}
           </div>
         </div>
       </PwaCard>
