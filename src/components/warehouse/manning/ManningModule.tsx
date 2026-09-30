@@ -32,18 +32,11 @@ import { AssignCrewModal } from '@/components/warehouse/manpower/AssignCrewModal
 import { PARENT_ROLES } from '@/lib/rbac'
 import {
   closeAssignment,
-  confirmTask,
-  formatSlaCountdown,
-  isSlaOverdue,
-  rejectTask,
-  slaRemainingMs,
   useManningData,
   type ManningAssignment,
-  type ManningTask,
 } from '@/lib/manning'
 import { cn } from '@/lib/utils'
 import { exportCrewRosterPdf } from '@/lib/pdf-exporter'
-import { ManningSlaModule } from '@/components/warehouse/manning-sla/ManningSlaModule'
 
 function Avatar({ name }: { name: string }) {
   const initials = name
@@ -59,7 +52,7 @@ function Avatar({ name }: { name: string }) {
 }
 
 type TopLevelTab = 'daily' | 'event'
-type EventSubTab = 'schedule' | 'assignments' | 'tasks'
+type EventSubTab = 'schedule' | 'assignments'
 
 interface ManningModuleProps {
   onClose: () => void
@@ -67,15 +60,13 @@ interface ManningModuleProps {
 
 export function ManningModule({ onClose }: ManningModuleProps) {
   const { staff, events } = usePortal()
-  const { adminName, adminEmail } = useAuth()
-  const actor = adminName || adminEmail || 'WOM'
 
   // Shared Crew Data
   const crewRows = useCrewRows(staff, events)
   const presetSquads = useMemo(() => getPresetSquads(staff), [staff])
 
   // Manning Delegation Data
-  const { assignments, tasks, reload } = useManningData()
+  const { assignments, reload } = useManningData()
   const declarations = useGroundCrewDeclarations()
 
   // Navigation State
@@ -91,18 +82,9 @@ export function ManningModule({ onClose }: ManningModuleProps) {
   const [rosterOpen, setRosterOpen] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
   const [fullRosterModalOpen, setFullRosterModalOpen] = useState(false)
-  const [slaModuleOpen, setSlaModuleOpen] = useState(false)
 
   // Card Click Inspection Detail Modals
   const [selectedAssignment, setSelectedAssignment] = useState<ManningAssignment | null>(null)
-  const [selectedTask, setSelectedTask] = useState<ManningTask | null>(null)
-
-  // Real-time clock tick for task countdown displays
-  const [now, setNow] = useState<Date>(() => new Date())
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(id)
-  }, [])
 
   useEffect(() => {
     reconcileExpiredDeclarations()
@@ -169,7 +151,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
             <p className="text-[0.6rem] font-bold uppercase tracking-[0.24em] text-primary">Warehouse module</p>
             <h1 className="mt-1 font-serif text-2xl font-medium text-foreground">Manning Delegation</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Ground crew scheduling, 48h task confirmations, and warning enforcement.
+              Ground crew scheduling, event deployments, and zone duty rosters.
             </p>
           </div>
           <button
@@ -216,15 +198,6 @@ export function ManningModule({ onClose }: ManningModuleProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSlaModuleOpen(true)}
-              className="inline-flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[0.65rem] font-bold uppercase tracking-[0.1em] text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition"
-            >
-              <Clock className="size-3.5" />
-              SLA & Disputed Confirmations
-            </button>
-
             <button
               type="button"
               onClick={() => setRosterOpen((prev) => !prev)}
@@ -308,17 +281,6 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                 )}
               >
                 Assignments
-              </button>
-              <button
-                type="button"
-                onClick={() => setEventSubTab('tasks')}
-                aria-pressed={eventSubTab === 'tasks'}
-                className={cn(
-                  'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
-                  eventSubTab === 'tasks' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
-                )}
-              >
-                Task Confirmations
               </button>
             </div>
           </div>
@@ -571,95 +533,6 @@ export function ManningModule({ onClose }: ManningModuleProps) {
               </div>
             )}
 
-            {/* SUB-TAB: TASKS */}
-            {eventSubTab === 'tasks' && (
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-bold text-foreground">48h Task Confirmations</h2>
-                    <p className="text-xs text-muted-foreground">Tasks requiring lead confirmation within the 48-hour window.</p>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {tasks.map((task) => {
-                    const overdue = isSlaOverdue(task, now)
-                    const remMs = slaRemainingMs(task, now)
-                    return (
-                      <div
-                        key={task.id}
-                        onClick={() => setSelectedTask(task)}
-                        className={cn(
-                          'rounded-xl border bg-card p-4 shadow-sm transition-all cursor-pointer hover:border-primary/50 hover:bg-accent/40',
-                          overdue ? 'border-destructive/60 bg-destructive/5' : 'border-border',
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <h3 className="font-semibold text-foreground text-sm">{task.title}</h3>
-                            <p className="mt-1 text-xs text-muted-foreground">{task.description}</p>
-                            <p className="mt-2 text-[0.65rem] text-muted-foreground">
-                              Lead: <span className="font-semibold text-foreground">{task.lead_name}</span>
-                              {task.assignee_name && <> · Assignee: <span className="font-semibold text-foreground">{task.assignee_name}</span></>}
-                            </p>
-                          </div>
-                          <div className="flex flex-col items-end gap-1.5">
-                            <span
-                              className={cn(
-                                'rounded px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wider',
-                                task.status === 'Submitted'
-                                  ? 'bg-amber-500/15 text-amber-600'
-                                  : task.status === 'Confirmed'
-                                    ? 'bg-emerald-500/15 text-emerald-600'
-                                    : 'bg-muted text-muted-foreground',
-                              )}
-                            >
-                              {task.status}
-                            </span>
-                            {remMs !== null && overdue && (
-                              <span
-                                className={cn(
-                                  'text-[0.62rem] font-mono font-semibold text-destructive',
-                                )}
-                              >
-                                {formatSlaCountdown(remMs).replace('overdue', 'Confirmation Overdue')}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {task.status === 'Submitted' && (
-                          <div className="mt-3 flex items-center justify-end gap-2 border-t border-border/60 pt-3">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                rejectTask(task.id)
-                                reload()
-                              }}
-                              className="rounded-md border border-destructive/40 px-3 py-1 text-[0.62rem] font-semibold text-destructive hover:bg-destructive/10"
-                            >
-                              Reject
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                confirmTask(task.id, actor)
-                                reload()
-                              }}
-                              className="rounded-md bg-emerald-600 px-3 py-1 text-[0.62rem] font-bold uppercase tracking-wider text-white hover:bg-emerald-700"
-                            >
-                              Confirm Task
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -694,23 +567,6 @@ export function ManningModule({ onClose }: ManningModuleProps) {
           onAssignmentClosed={reload}
         />
       )}
-
-      {selectedTask && (
-        <TaskDetailModal
-          task={selectedTask}
-          onClose={() => setSelectedTask(null)}
-          onReject={() => {
-            rejectTask(selectedTask.id)
-            reload()
-          }}
-          onConfirm={() => {
-            confirmTask(selectedTask.id, actor)
-            reload()
-          }}
-        />
-      )}
-
-      {slaModuleOpen && <ManningSlaModule onClose={() => setSlaModuleOpen(false)} />}
     </div>
   )
 }
@@ -1099,95 +955,6 @@ function AssignmentDetailModal({
               className="rounded-md border border-border px-4 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-accent"
             >
               Close
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function TaskDetailModal({
-  task,
-  onClose,
-  onReject,
-  onConfirm,
-}: {
-  task: ManningTask
-  onClose: () => void
-  onReject: () => void
-  onConfirm: () => void
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-lg overflow-hidden rounded-xl bg-card p-6 shadow-2xl space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between border-b border-border pb-3">
-          <div>
-            <span className="text-[0.58rem] font-bold uppercase tracking-[0.2em] text-primary">
-              48h Confirmation Task Detail
-            </span>
-            <h2 className="font-serif text-xl font-medium text-card-foreground">{task.title}</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-
-        <div className="rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground leading-relaxed">
-          <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-            Task Description
-          </span>
-          {task.description}
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 text-xs">
-          <div className="rounded-lg border border-border bg-background p-3">
-            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
-              Lead Officer
-            </span>
-            <span className="font-semibold text-card-foreground">{task.lead_name}</span>
-          </div>
-          <div className="rounded-lg border border-border bg-background p-3">
-            <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
-              Status
-            </span>
-            <span className="font-bold text-amber-600">{task.status}</span>
-          </div>
-        </div>
-
-        {task.status === 'Submitted' && (
-          <div className="flex justify-end gap-2 border-t border-border pt-3">
-            <button
-              type="button"
-              onClick={() => {
-                onReject()
-                onClose()
-              }}
-              className="rounded-md border border-destructive/40 px-4 py-2 text-xs font-semibold text-destructive hover:bg-destructive/10"
-            >
-              Reject Task
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onConfirm()
-                onClose()
-              }}
-              className="rounded-md bg-emerald-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-emerald-700"
-            >
-              Confirm Task
             </button>
           </div>
         )}

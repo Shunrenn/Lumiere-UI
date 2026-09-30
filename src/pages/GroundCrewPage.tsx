@@ -717,7 +717,7 @@ function Home({
         <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-200">
           <div className="flex items-center gap-2 font-bold uppercase tracking-wider">
             <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
-            48-Hour Escalation Warning
+            Pending Escalation Warning
           </div>
           <p className="mt-1 leading-relaxed">
             {approachingSummary.totalApproaching} declaration(s) approaching safety cutoff across{' '}
@@ -871,7 +871,7 @@ function DecisionMode({
             <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-200">
               <div className="flex items-center gap-2 font-bold uppercase tracking-wider">
                 <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
-                48-Hour Escalation Warning
+                Pending Escalation Warning
               </div>
               <p className="mt-1 leading-relaxed">
                 {approachingForEvent.length} declaration(s) approaching safety cutoff. Unresolved items will auto-escalate.

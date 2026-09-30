@@ -66,11 +66,6 @@ const SEED_INCIDENTS: IncidentItem[] = [
   },
 ]
 
-const INITIAL_OVERDUE = [
-  { id: 't-1', title: 'Polish & crate candelabras', lead: 'Warehouse Lead', due: 'Aug 19, 12:00' },
-  { id: 't-2', title: 'Confirm return count', lead: 'Warehouse Lead', due: 'Aug 18, 17:00' },
-]
-
 export function ManningPage() {
   const { adminName, adminEmail, logout } = useAuth()
   const declarations = useGroundCrewDeclarations()
@@ -80,7 +75,7 @@ export function ManningPage() {
   const [unlocked, setUnlocked] = useState(false)
   const [pin, setPin] = useState('')
   const [incidentStates, setIncidentStates] = useState<Record<string, string>>({})
-  const [overdueTasks, setOverdueTasks] = useState(INITIAL_OVERDUE)
+  const [overdueTasks, setOverdueTasks] = useState<{ id: string; title: string; lead: string; due: string }[]>([])
   const [now, setNow] = useState(() => Date.now())
   const [standingWarningCount, setStandingWarningCount] = useState(2)
 
@@ -144,7 +139,7 @@ export function ManningPage() {
       <PwaHeader
         title={
           tab === 'home'
-            ? 'Manning & SLA Console'
+            ? 'Manning Console'
             : tab === 'calendar'
               ? 'Manning Review Log'
               : tab === 'activity'
@@ -153,15 +148,15 @@ export function ManningPage() {
         }
         subtitle={
           tab === 'home'
-            ? '48-hour escalation window & crew welfare control'
+            ? 'Ground crew welfare & incident control'
             : tab === 'calendar'
-              ? 'Unconfirmed lead tasks & expired field declarations'
+              ? 'Pending field declarations & daily review log'
               : tab === 'activity'
                 ? 'Audit trail of overrides, warnings & incidents'
                 : adminEmail || 'manning@lumiere.internal'
         }
         roleName="Manning Officer"
-        subRole="Field Operations & SLA Escalation"
+        subRole="Field Operations & Crew Welfare"
         icon={
           tab === 'home' ? (
             <ShieldAlert className="size-5 text-primary" />
@@ -329,7 +324,7 @@ function HomeTab({
 
   return (
     <div className="space-y-4">
-      {/* SLA Escalation Hero / Alert Card */}
+      {/* Field Declarations Monitor Card */}
       <PwaCard
         className="cursor-pointer transition-all hover:border-primary/50 hover:shadow-md"
         headerClassName="border-b-0 pb-0"
@@ -350,7 +345,7 @@ function HomeTab({
                 <Bell className="size-4" />
               </span>
               <span className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-primary">
-                48-Hour SLA Policy Monitor
+                Field Declarations Monitor
               </span>
             </div>
             <span className="inline-flex items-center text-xs font-semibold text-primary gap-0.5">
@@ -363,21 +358,20 @@ function HomeTab({
               <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs">
                 <p className="font-bold text-destructive flex items-center gap-1.5">
                   <AlertTriangle className="size-3.5 shrink-0" />
-                  {totalBreaches} Escalated Item{totalBreaches > 1 ? 's' : ''} Exceeding 48h Window
+                  {totalBreaches} Escalated Item{totalBreaches > 1 ? 's' : ''} Pending Review
                 </p>
                 <p className="mt-1 text-muted-foreground leading-relaxed">
-                  {overdue.length} unconfirmed lead task{overdue.length === 1 ? '' : 's'} and{' '}
                   {fallbackDeclarations.length} ground crew condition declaration{fallbackDeclarations.length === 1 ? '' : 's'}{' '}
-                  have exceeded the 48-hour Event Admin window and require Manning authority.
+                  exceeded the Event Admin review window and require Manning authority.
                 </p>
               </div>
             ) : (
               <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs">
                 <p className="font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
-                  <CheckCircle2 className="size-3.5 shrink-0" /> All Event SLA Windows Secure
+                  <CheckCircle2 className="size-3.5 shrink-0" /> All Field Review Windows Clear
                 </p>
                 <p className="mt-0.5 text-muted-foreground">
-                  All field declarations and lead confirmations are currently within their 48-hour review limits.
+                  All field declarations are currently within their review limits.
                 </p>
               </div>
             )}
@@ -387,7 +381,7 @@ function HomeTab({
                 <Clock className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
                 <span>
                   <strong>Escalation Warning:</strong> {approachingSummary.totalApproaching} pending declaration
-                  {approachingSummary.totalApproaching > 1 ? 's are' : ' is'} within 12 hours of breach across{' '}
+                  {approachingSummary.totalApproaching > 1 ? 's are' : ' is'} approaching deadline across{' '}
                   {approachingSummary.eventsCount} event{approachingSummary.eventsCount > 1 ? 's' : ''}.
                 </span>
               </div>
@@ -396,11 +390,11 @@ function HomeTab({
         </div>
       </PwaCard>
 
-      {/* 48-Hour Overrides Section */}
+      {/* Field Escalation Actions Section */}
       <div>
         <div className="mb-2.5 flex items-center justify-between px-1">
           <h2 className="font-serif text-sm font-semibold tracking-tight uppercase tracking-[0.14em] text-foreground">
-            48-Hour Escalation Actions ({totalBreaches})
+            Escalated Field Actions ({totalBreaches})
           </h2>
           <span className="text-[0.625rem] font-bold text-muted-foreground uppercase tracking-wider">
             Manning Authority
@@ -409,45 +403,12 @@ function HomeTab({
 
         {totalBreaches === 0 ? (
           <PwaEmptyState
-            title="All SLA Items Resolved"
-            description="There are currently no overdue lead confirmations or escalated field declarations pending Manning override."
+            title="All Field Items Resolved"
+            description="There are currently no escalated field declarations pending Manning override."
             icon={<CheckCircle2 className="size-6 text-emerald-500" />}
           />
         ) : (
           <div className="space-y-3">
-            {/* Overdue Lead Confirmation Tasks */}
-            {overdue.map((task) => (
-              <PwaCard key={task.id} className="border-l-4 border-l-rose-500">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center rounded-full bg-destructive/15 px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider text-destructive">
-                        Overdue SLA
-                      </span>
-                      <span className="text-[0.65rem] text-muted-foreground">Due: {task.due}</span>
-                    </div>
-                    <h3 className="mt-1 font-serif text-base font-bold text-foreground leading-snug">
-                      {task.title}
-                    </h3>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Assigned Lead: <strong className="text-foreground">{task.lead}</strong>
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex items-center justify-end border-t border-border/60 pt-3">
-                  <PwaButton
-                    id={`override-task-${task.id}`}
-                    onClick={() => onOverrideTask(task.id, task.title)}
-                    variant="primary"
-                    size="sm"
-                  >
-                    Override &amp; Confirm
-                  </PwaButton>
-                </div>
-              </PwaCard>
-            ))}
-
             {/* Expired Ground Crew Field Declarations */}
             {fallbackDeclarations.map((decl) => (
               <PwaCard key={decl.id} className="border-l-4 border-l-destructive">
@@ -455,7 +416,7 @@ function HomeTab({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="inline-flex items-center rounded-full bg-destructive/15 px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider text-destructive">
-                        Escalated to Manning (48h+)
+                        Escalated to Manning
                       </span>
                       <PwaBadge
                         variant={decl.condition === 'Damaged' ? 'destructive' : 'neutral'}
@@ -636,19 +597,18 @@ function HomeTab({
         )}
       </PwaCard>
 
-      {/* Notifications & SLA Breaches Modal */}
+      {/* Notifications & Escalated Items Modal */}
       <PwaModal
         isOpen={detailModalOpen}
         onClose={() => setDetailModalOpen(false)}
-        title="Notifications & SLA Breaches"
-        subtitle="Manning Control SLA Monitoring Feed"
+        title="Notifications & Escalated Items"
+        subtitle="Manning Control Monitoring Feed"
       >
         <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-0.5">
           <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs">
-            <p className="font-bold text-rose-600 dark:text-rose-400">48-Hour SLA Policy Enforcement Active</p>
+            <p className="font-bold text-rose-600 dark:text-rose-400">Field Declaration Policy Active</p>
             <p className="mt-1 text-muted-foreground leading-relaxed">
-              All field lead task confirmations and ground crew condition declarations must be processed within 48 hours
-              to secure schedule integrity and crew accountability.
+              All ground crew condition declarations must be processed to secure schedule integrity and crew accountability.
             </p>
           </div>
 
@@ -734,7 +694,7 @@ function HomeTab({
               <ShieldCheck className="size-10 text-emerald-500 mx-auto" />
               <h4 className="font-serif text-base font-bold text-foreground">All Escalations Resolved</h4>
               <p className="text-xs text-muted-foreground">
-                No active 48-hour SLA breaches or escalated declarations require review at this time.
+                No active escalated declarations require review at this time.
               </p>
             </div>
           )}
@@ -853,12 +813,12 @@ function CalendarTab({ fallbackCount, approachingCount, onSave }: CalendarTabPro
             </p>
             {fallbackCount > 0 && (
               <p className="text-destructive font-semibold">
-                {fallbackCount} field declaration{fallbackCount > 1 ? 's' : ''} exceeded the 48-hour Event Admin window.
+                {fallbackCount} field declaration{fallbackCount > 1 ? 's' : ''} exceeded the Event Admin review window.
               </p>
             )}
             {approachingCount > 0 && (
               <p className="text-amber-700 dark:text-amber-300 font-semibold">
-                {approachingCount} declaration{approachingCount > 1 ? 's' : ''} currently approaching 48h deadline.
+                {approachingCount} declaration{approachingCount > 1 ? 's' : ''} currently approaching review deadline.
               </p>
             )}
           </div>
@@ -940,7 +900,7 @@ function ActivityTab({ standingWarningCount, unlocked, incidentStates }: Activit
       },
       {
         id: 'act-3',
-        title: '48h Fallback Declaration Reconciled',
+        title: 'Field Declaration Reconciled',
         detail: 'La Nuit Dorée damage report escalated from Event Admin queue',
         timestamp: 'Aug 19, 2026 · 17:30',
         badge: 'Reconciled',
@@ -1017,9 +977,9 @@ function AccountTab({ name, email, onLogout }: AccountTabProps) {
           <div className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-muted/20 p-2.5">
             <ShieldCheck className="size-4 shrink-0 text-primary mt-0.5" />
             <div>
-              <p className="font-bold text-foreground">48-Hour SLA Override Authority</p>
+              <p className="font-bold text-foreground">Field Declaration Override Authority</p>
               <p className="text-muted-foreground text-[0.7rem] mt-0.5">
-                Can approve or reject field condition declarations left unreviewed by Event Admins after 48 hours.
+                Can approve or reject field condition declarations left unreviewed by Event Admins.
               </p>
             </div>
           </div>

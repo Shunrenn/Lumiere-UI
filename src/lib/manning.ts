@@ -4,13 +4,9 @@ import { isTeamLead, isTeamLeadToday, QUALIFIED_LEAD_ROLES } from '@/lib/warehou
 import { removeManningApi, removeManningOverrideApi } from './manningApi'
 
 // =====================================================================
-// Manning & SLA engine + Incident Reporting data access
+// Manning Delegation + Incident Reporting data access
 // (WOM / Manning designated modules). All persistence is Supabase.
-// The 48h lead-confirmation SLA is enforced here so both the UI badges
-// and the escalation sweep share a single source of truth.
 // =====================================================================
-
-export const LEAD_CONFIRM_SLA_HOURS = 48
 
 // ---- Types -----------------------------------------------------------
 // These deterministic records keep the workspace usable when a connected
@@ -20,7 +16,6 @@ export const LEAD_CONFIRM_SLA_HOURS = 48
 export const MANNING_PRESET_MODE = 'preset' as const
 
 const presetNow = new Date().toISOString()
-const presetDue = new Date(Date.now() + 36 * 60 * 60 * 1000).toISOString()
 
 export type ManningTaskStatus =
   | 'Assigned'
@@ -164,71 +159,7 @@ const PRESET_ASSIGNMENTS: ManningAssignment[] = [
   },
 ]
 
-const PRESET_TASKS: ManningTask[] = [
-  {
-    id: 'preset-task-1',
-    title: 'Confirm outbound equipment manifest',
-    description: 'Review the locked manifest and confirm all items are staged.',
-    task_type: 'personal',
-    assignee_name: 'Lucia Mendes',
-    assignee_email: 'lucia@example.com',
-    lead_name: 'Amara Okafor',
-    assignment_id: 'preset-assignment-1',
-    work_date: new Date().toISOString().slice(0, 10),
-    deadline: presetDue,
-    status: 'Submitted',
-    submitted_at: presetNow,
-    sla_due: presetDue,
-    confirmed_at: null,
-    confirmed_by: null,
-    escalated: false,
-    escalated_at: null,
-    created_by: 'Preset Example',
-    created_at: presetNow,
-  },
-  {
-    id: 'preset-task-2',
-    title: 'Verify dock safety inspection',
-    description: 'Complete the dock walk-through and upload the signed safety checklist.',
-    task_type: 'generic',
-    assignee_name: null,
-    assignee_email: null,
-    lead_name: 'Lucia Mendes',
-    assignment_id: 'preset-assignment-2',
-    work_date: new Date().toISOString().slice(0, 10),
-    deadline: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
-    status: 'Assigned',
-    submitted_at: null,
-    sla_due: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
-    confirmed_at: null,
-    confirmed_by: null,
-    escalated: false,
-    escalated_at: null,
-    created_by: 'Preset Example',
-    created_at: presetNow,
-  },
-  {
-    id: 'preset-task-3',
-    title: 'Confirm exhibition hardware count',
-    description: 'Check the packed display hardware against the transfer manifest before dispatch.',
-    task_type: 'personal',
-    assignee_name: 'Elena Rossi',
-    assignee_email: 'elena@example.com',
-    lead_name: 'Sofia Reyes',
-    assignment_id: 'preset-assignment-3',
-    work_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-    deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    status: 'In Progress',
-    submitted_at: null,
-    sla_due: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    confirmed_at: null,
-    confirmed_by: null,
-    escalated: false,
-    escalated_at: null,
-    created_by: 'Preset Example',
-    created_at: presetNow,
-  },
-]
+const PRESET_TASKS: ManningTask[] = []
 
 const PRESET_WARNINGS: ManningWarning[] = [
   {
@@ -390,7 +321,7 @@ let localIncidents = [...PRESET_INCIDENTS]
 let manningUsingPreset = false
 let incidentsUsingPreset = false
 
-// ---- SLA helpers -----------------------------------------------------
+// ---- Task helpers -----------------------------------------------------
 
 /** Expand a date or start/end date range into discrete YYYY-MM-DD calendar date strings. */
 export function expandDateRange(startDate: string, endDate?: string | null): string[] {
@@ -411,13 +342,13 @@ export function expandDateRange(startDate: string, endDate?: string | null): str
   return dates
 }
 
-/** Whether a submitted task has blown its 48h lead-confirmation window. */
+/** Whether a submitted task has exceeded its confirmation window. */
 export function isSlaOverdue(task: ManningTask, now: Date = new Date()): boolean {
   if (task.status !== 'Submitted' || !task.sla_due) return false
   return new Date(task.sla_due).getTime() < now.getTime()
 }
 
-/** Milliseconds remaining until the SLA window closes (negative if overdue). */
+/** Milliseconds remaining until deadline. */
 export function slaRemainingMs(task: ManningTask, now: Date = new Date()): number | null {
   if (task.status !== 'Submitted' || !task.sla_due) return null
   return new Date(task.sla_due).getTime() - now.getTime()
@@ -790,10 +721,10 @@ export async function createTask(
   return fallback
 }
 
-/** Member submits work — opens the 48h lead-confirmation SLA window. */
+/** Member submits work item. */
 export async function submitTask(id: string): Promise<void> {
   const now = new Date()
-  const slaDue = new Date(now.getTime() + LEAD_CONFIRM_SLA_HOURS * 3_600_000)
+  const slaDue = new Date(now.getTime() + 48 * 3_600_000)
   const { error } = await supabase
     .from('manning_tasks')
     .update({ status: 'Submitted', submitted_at: now.toISOString(), sla_due: slaDue.toISOString() })
@@ -819,7 +750,7 @@ export async function setTaskStatus(id: string, status: ManningTaskStatus): Prom
   if (error) throw error
 }
 
-/** Lead confirms a submitted task inside the SLA window. */
+/** Lead confirms a submitted task. */
 export async function confirmTask(id: string, confirmedBy: string): Promise<void> {
   const existing = localTasks.find((t) => t.id === id)
   if (existing && (existing.status === 'Confirmed' || existing.status === 'Rejected')) {
@@ -922,8 +853,8 @@ export async function rejectTask(id: string, rejectedBy: string = 'Team Lead'): 
 }
 
 /**
- * SLA sweep: any Submitted task past its sla_due is auto-escalated so an
- * unresponsive lead cannot silently sit on a member's submission.
+ * Task sweep: any Submitted task past its due date is auto-escalated so an
+ * unresponsive lead cannot sit on a member's submission.
  */
 export async function escalateOverdueTasks(tasks: ManningTask[]): Promise<string[]> {
   const now = new Date()
@@ -1166,18 +1097,10 @@ export function useManningData(): ManningData {
         Promise.all([fetchAssignments(), fetchTasks(), fetchWarnings()]),
         'Manning workspace',
       )
-      // Run the SLA sweep, then re-pull tasks if anything escalated so the
-      // UI reflects auto-escalations immediately.
-      let escalated: string[] = []
-      try {
-        escalated = await escalateOverdueTasks(t)
-      } catch (error) {
-        console.warn('[v0] Manning SLA sweep unavailable; keeping preset task data.', error)
-      }
       setAssignments(a)
       setWarnings(w)
       setUsingPreset(manningUsingPreset)
-      setTasks(escalated.length ? await fetchTasks() : manningUsingPreset ? [...localTasks] : t)
+      setTasks(manningUsingPreset ? [...localTasks] : t)
     } catch (err) {
       console.warn('[v0] Manning tables unavailable; using preset workspace data.', err)
       setAssignments(localAssignments)
