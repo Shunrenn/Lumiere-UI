@@ -457,7 +457,10 @@ export function isTeamLead(
 }
 
 export function getOpsWeekDates(weekOffset = 0): string[] {
-  const monday = new Date(2026, 1, 2 + weekOffset * 7)
+  const now = new Date()
+  const day = now.getDay()
+  const diffToMonday = (day === 0 ? -6 : 1 - day) + weekOffset * 7
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday)
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(d.getDate() + i)

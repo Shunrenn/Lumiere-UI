@@ -99,7 +99,7 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
   const [overrideSuccessBanner, setOverrideSuccessBanner] = useState<string | null>(null)
 
   const selectedEvent = events.find((e) => e.id === eventId)
-  const [assignmentDate, setAssignmentDate] = useState(selectedEvent?.targetDate ?? '2026-08-20')
+  const [assignmentDate, setAssignmentDate] = useState(() => selectedEvent?.targetDate ?? new Date().toISOString().slice(0, 10))
 
   // Keep assignmentDate in sync with selectedEvent targetDate when event changes
   useMemo(() => {

@@ -32,7 +32,7 @@ interface DailyZoneDutyViewProps {
 }
 
 export function DailyZoneDutyView({ crewRows, presetSquads }: DailyZoneDutyViewProps) {
-  const [selectedDate, setSelectedDate] = useState('2026-08-20')
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [modalTarget, setModalTarget] = useState<{
     department: 'Warehouse' | 'Production'
     zone?: WarehouseZone
