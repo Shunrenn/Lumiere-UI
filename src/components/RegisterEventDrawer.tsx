@@ -210,7 +210,8 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
             conflictingEvents: res.conflictingEvents || [],
           })
         } else if (!res.success) {
-          alert(`Failed to register event: ${res.message || 'Unknown error'}`)
+          const msg = res.message || 'Unknown error'
+          alert(msg.startsWith('Unable to') || msg.startsWith('Failed to') ? msg : `Failed to register event: ${msg}`)
         } else {
           setServerConflict(null)
           close()
@@ -218,7 +219,8 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
       }
     } catch (err: any) {
       console.error('[RegisterEventDrawer] Failed to save event:', err)
-      alert(`Failed to save event: ${err?.message || 'Unknown error'}`)
+      const errMessage = err?.message || 'Unknown error'
+      alert(errMessage.startsWith('Unable to') || errMessage.startsWith('Failed to') ? errMessage : `Failed to save event: ${errMessage}`)
     }
   }
 
@@ -517,7 +519,6 @@ export function RegisterEventDrawer({ open, onClose, event = null, mode = 'creat
                   >
                     <option value="Local">Local (NCR / Metro)</option>
                     <option value="National">National (Regional)</option>
-                    <option value="International">International (Global / Destination)</option>
                   </select>
                 </div>
                 <div>

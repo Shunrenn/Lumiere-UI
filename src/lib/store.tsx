@@ -2075,49 +2075,54 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       initiatorRole = 'Executive',
       allowConflictOverride = false,
     ): Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }> => {
-      const { createEventApi } = await import('@/lib/eventsApi')
+      const { createEventApi, isGuid } = await import('@/lib/eventsApi')
 
       const sanitizeToIsoDate = (val?: string): string => {
         if (!val) return ''
         const trimmed = val.trim()
         if (trimmed.includes('T')) return trimmed.split('T')[0]
         if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
-        const d = new Date(trimmed)
-        if (!isNaN(d.getTime())) {
-          const y = d.getFullYear()
-          const m = String(d.getMonth() + 1).padStart(2, '0')
-          const day = String(d.getDate()).padStart(2, '0')
-          return `${y}-${m}-${day}`
-        }
         return ''
       }
 
       const cleanTargetDate = sanitizeToIsoDate(draft.targetDate) || new Date().toISOString().slice(0, 10)
-      const cleanIngressDate = sanitizeToIsoDate(draft.ingressDate) || sanitizeToIsoDate(draft.installationStart) || cleanTargetDate
+      const cleanIngressDate = sanitizeToIsoDate(draft.ingressDate) || cleanTargetDate
+      const cleanReturnDate = sanitizeToIsoDate(draft.returnDate)
 
       const dateOfEventIso = `${cleanTargetDate}T00:00:00Z`
       const ingressDateIso = `${cleanIngressDate}T00:00:00Z`
+      const returnDateIso = cleanReturnDate ? `${cleanReturnDate}T00:00:00Z` : undefined
 
       const formatTimeStr = (t?: string, defaultVal = '08:00:00') => {
         if (!t) return defaultVal
-        return t.length === 5 ? `${t}:00` : t
+        const trimmed = t.trim()
+        return trimmed.length === 5 ? `${trimmed}:00` : trimmed
       }
 
-      const result = await createEventApi(
-        {
-          eventName: draft.title,
-          eventVenue: draft.venue || 'Venue Pending',
-          geoClass: draft.geoClass === 'National' ? 'National' : 'Local',
-          dateOfEvent: dateOfEventIso,
-          ingressDate: ingressDateIso,
-          ingressTime: formatTimeStr(draft.ingressTime, '08:00:00'),
-          fullStop: formatTimeStr(draft.fullStop, '23:00:00'),
-          returnDate: draft.installationEnd ? `${sanitizeToIsoDate(draft.installationEnd)}T00:00:00Z` : undefined,
-          notes: draft.moodPlan || undefined,
-          allowConflictOverride,
-        },
+      const pmId = draft.projectManagerId && isGuid(draft.projectManagerId.trim())
+        ? draft.projectManagerId.trim()
+        : undefined
+
+      const reqPayload: any = {
+        eventName: draft.title.trim(),
+        eventVenue: (draft.venue || 'Venue Pending').trim(),
+        geoClass: (draft.geoClass || '').trim().toLowerCase() === 'national' ? 'National' : 'Local',
+        dateOfEvent: dateOfEventIso,
+        ingressDate: ingressDateIso,
+        ingressTime: formatTimeStr(draft.ingressTime, '08:00:00'),
+        fullStop: formatTimeStr(draft.fullStop, '23:00:00'),
+        notes: draft.moodPlan ? draft.moodPlan.trim() : undefined,
         allowConflictOverride,
-      )
+      }
+
+      if (returnDateIso) {
+        reqPayload.returnDate = returnDateIso
+      }
+      if (pmId) {
+        reqPayload.projectManagerId = pmId
+      }
+
+      const result = await createEventApi(reqPayload, allowConflictOverride)
 
       if (result.conflict) {
         return {

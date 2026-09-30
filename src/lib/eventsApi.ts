@@ -154,6 +154,157 @@ export function mapEventResponseToPortalEvent(dto: EventResponseDto, index = 0):
 }
 
 /**
+ * Safely extracts human-readable validation errors from ASP.NET Core ValidationProblemDetails.
+ * Prevents exposing stack traces, database internals, or server filesystem paths.
+ */
+export function extractValidationErrorMessage(body: any): string | undefined {
+  if (!body || typeof body !== 'object') return undefined
+
+  const safeFilter = (msg: string): boolean => {
+    if (!msg) return false
+    const lower = msg.toLowerCase()
+    if (
+      lower.includes('system.data') ||
+      lower.includes('sqlexception') ||
+      lower.includes('stack trace') ||
+      lower.includes('at ') ||
+      lower.includes('c:\\') ||
+      lower.includes('/app/')
+    ) {
+      return false
+    }
+    return true
+  }
+
+  // 1. ASP.NET Core ValidationProblemDetails `errors` dictionary
+  if (body.errors && typeof body.errors === 'object') {
+    const errorMessages: string[] = []
+    for (const key of Object.keys(body.errors)) {
+      const val = body.errors[key]
+      if (Array.isArray(val)) {
+        val.forEach((msg) => {
+          if (typeof msg === 'string' && msg.trim() && safeFilter(msg)) {
+            errorMessages.push(msg.trim())
+          }
+        })
+      } else if (typeof val === 'string' && val.trim() && safeFilter(val)) {
+        errorMessages.push(val.trim())
+      }
+    }
+    if (errorMessages.length > 0) {
+      return `Unable to register event:\n${errorMessages.join('\n')}`
+    }
+  }
+
+  // 2. Direct string fields
+  if (typeof body.error === 'string' && body.error.trim() && safeFilter(body.error)) {
+    return body.error.trim()
+  }
+  if (typeof body.Error === 'string' && body.Error.trim() && safeFilter(body.Error)) {
+    return body.Error.trim()
+  }
+  if (typeof body.detail === 'string' && body.detail.trim() && safeFilter(body.detail)) {
+    return body.detail.trim()
+  }
+  if (
+    typeof body.title === 'string' &&
+    body.title.trim() &&
+    body.title !== 'One or more validation errors occurred.' &&
+    safeFilter(body.title)
+  ) {
+    return body.title.trim()
+  }
+  if (typeof body.message === 'string' && body.message.trim() && safeFilter(body.message)) {
+    return body.message.trim()
+  }
+
+  return undefined
+}
+
+/**
+ * Normalizes CreateEventRequest to match canonical backend POST /api/events contract.
+ * - Trims eventName & eventVenue
+ * - Normalizes geoClass to "Local" | "National"
+ * - Formats dateOfEvent & ingressDate as ISO DateTime without timezone drift (YYYY-MM-DDTHH:mm:ssZ)
+ * - Formats ingressTime & fullStop as TimeSpan strings ("HH:mm" or "HH:mm:ss")
+ * - Omits returnDate if absent/invalid (NEVER sends null or empty string)
+ * - Omits projectManagerId if absent or invalid GUID (NEVER sends empty string)
+ */
+export function normalizeCreateEventPayload(request: CreateEventRequest): Record<string, any> {
+  const sanitizeIsoDate = (val?: string): string | undefined => {
+    if (!val) return undefined
+    const trimmed = val.trim()
+    if (!trimmed) return undefined
+    const datePart = trimmed.split('T')[0]
+    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+      return `${datePart}T00:00:00Z`
+    }
+    return undefined
+  }
+
+  const sanitizeTimeOnly = (val?: string, fallback = '08:00:00'): string => {
+    if (!val) return fallback
+    const trimmed = val.trim()
+    if (!trimmed) return fallback
+    if (trimmed.includes('T')) {
+      const timePart = trimmed.split('T')[1]?.replace('Z', '').split('.')[0]
+      if (timePart && /^\d{1,2}:\d{2}(:\d{2})?$/.test(timePart)) {
+        return timePart
+      }
+    }
+    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+      return trimmed
+    }
+    return fallback
+  }
+
+  const trimmedName = (request.eventName || '').trim()
+  const trimmedVenue = (request.eventVenue || '').trim()
+  const rawGeo = (request.geoClass || '').trim().toLowerCase()
+  const geoClass: 'Local' | 'National' = rawGeo === 'national' ? 'National' : 'Local'
+
+  const dateOfEvent = sanitizeIsoDate(request.dateOfEvent) || `${new Date().toISOString().slice(0, 10)}T00:00:00Z`
+  const ingressDate = sanitizeIsoDate(request.ingressDate) || dateOfEvent
+  const ingressTime = sanitizeTimeOnly(request.ingressTime, '08:00:00')
+  const fullStop = sanitizeTimeOnly(request.fullStop, '23:00:00')
+
+  const payload: Record<string, any> = {
+    eventName: trimmedName,
+    eventVenue: trimmedVenue,
+    geoClass,
+    dateOfEvent,
+    ingressDate,
+    ingressTime,
+    fullStop,
+    allowConflictOverride: !!request.allowConflictOverride,
+  }
+
+  // returnDate: omit if absent. NEVER send null or ""
+  const sanitizedReturn = sanitizeIsoDate(request.returnDate)
+  if (sanitizedReturn) {
+    payload.returnDate = sanitizedReturn
+  }
+
+  // projectManagerId: send valid GUID only, omit if empty string or invalid
+  if (request.projectManagerId && isGuid(request.projectManagerId.trim())) {
+    payload.projectManagerId = request.projectManagerId.trim()
+  }
+
+  // Optional fields
+  if (request.notes !== undefined && request.notes !== null && request.notes.trim() !== '') {
+    payload.notes = request.notes
+  }
+  if (request.eventPegs) payload.eventPegs = request.eventPegs
+  if (request.colorPalette) payload.colorPalette = request.colorPalette
+  if (request.brandingAndTextures) payload.brandingAndTextures = request.brandingAndTextures
+  if (typeof request.estimatedRevenue === 'number' && !isNaN(request.estimatedRevenue)) {
+    payload.estimatedRevenue = request.estimatedRevenue
+  }
+
+  return payload
+}
+
+/**
  * Creates an event via POST /api/events.
  * Returns authoritative response or structured conflict/validation error.
  */
@@ -164,10 +315,10 @@ export async function createEventApi(
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 12000)
   try {
-    const payload = {
+    const payload = normalizeCreateEventPayload({
       ...request,
       allowConflictOverride: allowConflictOverride || request.allowConflictOverride || false,
-    }
+    })
     const res = await fetch(`${API_BASE_URL}/api/events`, {
       method: 'POST',
       headers: getAuthHeaders(),
@@ -207,7 +358,7 @@ export async function createEventApi(
       return {
         success: false,
         kind: 'validation_error',
-        message: body.error || body.Error || 'Validation error creating event.',
+        message: extractValidationErrorMessage(body) || 'Validation error creating event.',
       }
     }
 
@@ -328,7 +479,7 @@ export async function updateEventApi(
       return {
         success: false,
         kind: 'validation_error',
-        message: body.error || body.Error || 'Validation error updating event.',
+        message: extractValidationErrorMessage(body) || 'Validation error updating event.',
       }
     }
 

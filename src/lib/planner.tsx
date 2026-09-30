@@ -588,10 +588,11 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const addPortfolio = useCallback(async (draft: NewPortfolioDraft) => {
     const { createEventApi } = await import('@/lib/eventsApi')
 
-    const dateOfEventIso = draft.date ? `${draft.date}T00:00:00Z` : new Date().toISOString()
+    const cleanDate = draft.date && draft.date.trim() ? draft.date.trim().split('T')[0] : new Date().toISOString().slice(0, 10)
+    const dateOfEventIso = `${cleanDate}T00:00:00Z`
     const result = await createEventApi({
-      eventName: draft.title,
-      eventVenue: draft.venue || 'Venue Pending',
+      eventName: draft.title.trim(),
+      eventVenue: (draft.venue || 'Venue Pending').trim(),
       geoClass: 'Local',
       dateOfEvent: dateOfEventIso,
       ingressDate: dateOfEventIso,

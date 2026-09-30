@@ -274,6 +274,8 @@ export interface NewEventDraft {
   ingressDate?: string
   ingressTime?: string
   fullStop?: string
+  returnDate?: string
+  projectManagerId?: string
 }
 
 /* ---------- Account / User Actions ---------- */
