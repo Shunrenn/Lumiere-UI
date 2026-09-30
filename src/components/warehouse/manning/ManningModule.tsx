@@ -66,7 +66,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
   const presetSquads = useMemo(() => getPresetSquads(staff), [staff])
 
   // Manning Delegation Data
-  const { assignments, reload } = useManningData()
+  const { assignments, reload, loading: assignmentsLoading, error: assignmentsError } = useManningData()
   const declarations = useGroundCrewDeclarations()
 
   // Navigation State
@@ -474,61 +474,76 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                 </div>
 
                 <div className="space-y-3">
-                  {assignments.map((assignment) => (
-                    <div
-                      key={assignment.id}
-                      onClick={() => setSelectedAssignment(assignment)}
-                      className="rounded-xl border border-border bg-card p-4 shadow-sm cursor-pointer hover:border-primary/50 hover:bg-accent/40 transition-all space-y-3"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-foreground text-sm">{assignment.event_name}</span>
-                            {assignment.deployment_ref && (
-                              <span className="rounded bg-muted px-2 py-0.5 text-[0.6rem] font-mono text-muted-foreground">
-                                {assignment.deployment_ref}
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Date: <span className="font-medium text-foreground">{assignment.work_date}</span> · Lead:{' '}
-                            <span className="font-medium text-foreground">{assignment.lead_name}</span>
-                            {assignment.venue ? ` · Venue: ${assignment.venue}` : ''}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleExportCrewRoster(assignment)
-                            }}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-card-foreground transition hover:bg-accent hover:border-primary/50"
-                          >
-                            <Download className="size-3" />
-                            Export Roster (PDF)
-                          </button>
-                          <span
-                            className={cn(
-                              'rounded px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wider',
-                              assignment.status === 'Active' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground',
-                            )}
-                          >
-                            {assignment.status}
-                          </span>
-                        </div>
-                      </div>
-                      {assignment.member_names.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
-                          {assignment.member_names.map((name) => (
-                            <span key={name} className="rounded-md border border-border bg-background px-2.5 py-1 text-[0.65rem] text-foreground">
-                              {name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                  {assignmentsLoading ? (
+                    <div className="rounded-xl border border-border bg-card p-8 text-center text-xs text-muted-foreground">
+                      Loading deployment rosters...
                     </div>
-                  ))}
+                  ) : assignmentsError ? (
+                    <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center text-xs text-destructive">
+                      <p className="font-semibold">Unable to load manning assignments</p>
+                      <p className="mt-1 text-[0.7rem] text-muted-foreground">{assignmentsError}</p>
+                    </div>
+                  ) : assignments.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-xs text-muted-foreground">
+                      No ground crew deployment rosters assigned.
+                    </div>
+                  ) : (
+                    assignments.map((assignment) => (
+                      <div
+                        key={assignment.id}
+                        onClick={() => setSelectedAssignment(assignment)}
+                        className="rounded-xl border border-border bg-card p-4 shadow-sm cursor-pointer hover:border-primary/50 hover:bg-accent/40 transition-all space-y-3"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-foreground text-sm">{assignment.event_name}</span>
+                              {assignment.deployment_ref && (
+                                <span className="rounded bg-muted px-2 py-0.5 text-[0.6rem] font-mono text-muted-foreground">
+                                  {assignment.deployment_ref}
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Date: <span className="font-medium text-foreground">{assignment.work_date}</span> · Lead:{' '}
+                              <span className="font-medium text-foreground">{assignment.lead_name}</span>
+                              {assignment.venue ? ` · Venue: ${assignment.venue}` : ''}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleExportCrewRoster(assignment)
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-card-foreground transition hover:bg-accent hover:border-primary/50"
+                            >
+                              <Download className="size-3" />
+                              Export Roster (PDF)
+                            </button>
+                            <span
+                              className={cn(
+                                'rounded px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wider',
+                                assignment.status === 'Active' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground',
+                              )}
+                            >
+                              {assignment.status}
+                            </span>
+                          </div>
+                        </div>
+                        {assignment.member_names.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
+                            {assignment.member_names.map((name) => (
+                              <span key={name} className="rounded-md border border-border bg-background px-2.5 py-1 text-[0.65rem] text-foreground">
+                                {name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}

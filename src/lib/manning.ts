@@ -15,7 +15,6 @@ import { removeManningApi, removeManningOverrideApi } from './manningApi'
 // responses.
 export const MANNING_PRESET_MODE = 'preset' as const
 
-const presetNow = new Date().toISOString()
 
 export type ManningTaskStatus =
   | 'Assigned'
@@ -108,85 +107,6 @@ export interface IncidentReport {
   image_url?: string | null
 }
 
-const PRESET_ASSIGNMENTS: ManningAssignment[] = [
-  {
-    id: 'preset-assignment-1',
-    work_date: new Date().toISOString().slice(0, 10),
-    event_name: 'Louvre Gala Event',
-    venue: 'The Grand Ballroom',
-    deployment_ref: 'EVT-2026-081',
-    lead_name: 'Amara Okafor',
-    lead_email: 'amara@example.com',
-    member_names: ['Lucia Mendes', 'Noah Williams', 'Sofia Reyes'],
-    sub_role: 'Warehouse deployment lead',
-    inherited_from: null,
-    notes: 'Preset example assignment for workspace preview.',
-    status: 'Active',
-    created_by: 'Preset Example',
-    created_at: presetNow,
-  },
-  {
-    id: 'preset-assignment-2',
-    work_date: new Date().toISOString().slice(0, 10),
-    event_name: 'Harbor Lights Product Launch',
-    venue: 'North Loading Hall',
-    deployment_ref: 'EVT-2026-094',
-    lead_name: 'Lucia Mendes',
-    lead_email: 'lucia@example.com',
-    member_names: ['Daniel Price', 'Marcus Chen', 'Aisha Bello', 'Noah Williams'],
-    sub_role: 'Outbound logistics lead',
-    inherited_from: null,
-    notes: 'Coordinate dock access, equipment staging, and final manifest handoff.',
-    status: 'Active',
-    created_by: 'Preset Example',
-    created_at: presetNow,
-  },
-  {
-    id: 'preset-assignment-3',
-    work_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-    event_name: 'Riverside Exhibition Setup',
-    venue: 'East Exhibition Wing',
-    deployment_ref: 'EVT-2026-101',
-    lead_name: 'Sofia Reyes',
-    lead_email: 'sofia@example.com',
-    member_names: ['Amara Okafor', 'Elena Rossi', 'Theo Martin'],
-    sub_role: 'Venue setup coordinator',
-    inherited_from: null,
-    notes: 'Pre-stage display hardware and complete the venue handover checklist.',
-    status: 'Active',
-    created_by: 'Preset Example',
-    created_at: presetNow,
-  },
-]
-
-const PRESET_TASKS: ManningTask[] = []
-
-const PRESET_WARNINGS: ManningWarning[] = [
-  {
-    id: 'preset-warning-1',
-    subject_name: 'Daniel Price',
-    subject_email: 'daniel@example.com',
-    tier: 1,
-    reason: 'Dock safety checklist is due before the outbound handoff.',
-    related_task_id: 'preset-task-2',
-    issued_by: 'Lucia Mendes',
-    issued_at: presetNow,
-    acknowledged: false,
-    acknowledged_at: null,
-  },
-  {
-    id: 'preset-warning-2',
-    subject_name: 'Elena Rossi',
-    subject_email: 'elena@example.com',
-    tier: 2,
-    reason: 'Hardware count remains in progress inside the lead-confirmation window.',
-    related_task_id: 'preset-task-3',
-    issued_by: 'Sofia Reyes',
-    issued_at: presetNow,
-    acknowledged: false,
-    acknowledged_at: null,
-  },
-]
 
 const PRESET_INCIDENTS: IncidentReport[] = [
   {
@@ -299,8 +219,8 @@ const PRESET_INCIDENTS: IncidentReport[] = [
   },
 ]
 
-let localAssignments = [...PRESET_ASSIGNMENTS]
-let localTasks = [...PRESET_TASKS]
+let localAssignments: ManningAssignment[] = []
+let localTasks: ManningTask[] = []
 
 function assignmentIdentity(assignment: ManningAssignment): string {
   return `${assignment.work_date}|${assignment.event_name}|${assignment.venue ?? ''}|${assignment.deployment_ref ?? ''}`
@@ -316,9 +236,8 @@ function dedupeActiveAssignments(assignments: ManningAssignment[]): ManningAssig
     return true
   })
 }
-let localWarnings = [...PRESET_WARNINGS]
+let localWarnings: ManningWarning[] = []
 let localIncidents = [...PRESET_INCIDENTS]
-let manningUsingPreset = false
 let incidentsUsingPreset = false
 
 // ---- Task helpers -----------------------------------------------------
@@ -383,9 +302,8 @@ export async function fetchAssignments(): Promise<ManningAssignment[]> {
     localAssignments = dedupeActiveAssignments((data ?? []) as ManningAssignment[])
     return localAssignments
   } catch (error) {
-    manningUsingPreset = true
-    console.warn('[v0] Manning assignments unavailable; using preset example data.', error)
-    return localAssignments
+    console.warn('[manning] Manning assignments unavailable:', error)
+    throw error
   }
 }
 
@@ -433,7 +351,7 @@ export async function createAssignment(
 
   const now = new Date().toISOString()
   const fallback: ManningAssignment = {
-    id: `preset-assignment-${Date.now()}`,
+    id: `assignment-${Date.now()}`,
     work_date: input.work_date,
     event_name: input.event_name,
     venue: input.venue,
@@ -449,7 +367,6 @@ export async function createAssignment(
     created_at: now,
   }
   localAssignments = dedupeActiveAssignments([fallback, ...localAssignments])
-  manningUsingPreset = true
   return fallback
 }
 
@@ -666,8 +583,7 @@ export async function fetchTasks(): Promise<ManningTask[]> {
     localTasks = (data ?? []) as ManningTask[]
     return localTasks
   } catch (error) {
-    manningUsingPreset = true
-    console.warn('[v0] Manning tasks unavailable; using preset example data.', error)
+    console.warn('[manning] Manning tasks unavailable:', error)
     return localTasks
   }
 }
@@ -716,8 +632,7 @@ export async function createTask(
     created_at: now,
   }
   localTasks = [fallback, ...localTasks]
-  manningUsingPreset = true
-  console.warn('[v0] Task save unavailable; applied the task to preset data.', error)
+  console.warn('[manning] Task save unavailable; applied locally.', error)
   return fallback
 }
 
@@ -738,7 +653,6 @@ export async function submitTask(id: string): Promise<void> {
         ? { ...task, status: 'Submitted', submitted_at: now.toISOString(), sla_due: slaDue.toISOString() }
         : task,
     )
-    manningUsingPreset = true
     return
   }
 
@@ -800,8 +714,6 @@ export async function confirmTask(id: string, confirmedBy: string): Promise<void
         ? { ...task, status: 'Confirmed', confirmed_at: confirmedAt, confirmed_by: confirmedBy }
         : task,
     )
-    manningUsingPreset = true
-    console.warn('[v0] Confirm update unavailable; applied the change to preset task data.', error)
     return
   }
 
@@ -844,8 +756,6 @@ export async function rejectTask(id: string, rejectedBy: string = 'Team Lead'): 
 
   if (localTasks.some((task) => task.id === id)) {
     localTasks = localTasks.map((task) => (task.id === id ? { ...task, status: 'Rejected' } : task))
-    manningUsingPreset = true
-    console.warn('[v0] Reject update unavailable; applied the change to preset task data.', error)
     return
   }
 
@@ -881,8 +791,7 @@ export async function fetchWarnings(): Promise<ManningWarning[]> {
     localWarnings = (data ?? []) as ManningWarning[]
     return localWarnings
   } catch (error) {
-    manningUsingPreset = true
-    console.warn('[v0] Manning warnings unavailable; using preset example data.', error)
+    console.warn('[manning] Manning warnings unavailable:', error)
     return localWarnings
   }
 }
@@ -1099,15 +1008,16 @@ export function useManningData(): ManningData {
       )
       setAssignments(a)
       setWarnings(w)
-      setUsingPreset(manningUsingPreset)
-      setTasks(manningUsingPreset ? [...localTasks] : t)
+      setUsingPreset(false)
+      setTasks(t)
     } catch (err) {
-      console.warn('[v0] Manning tables unavailable; using preset workspace data.', err)
-      setAssignments(localAssignments)
-      setTasks(localTasks)
-      setWarnings(localWarnings)
-      setUsingPreset(true)
-      setError(null)
+      const msg = err instanceof Error ? err.message : 'Manning data unavailable'
+      console.warn('[manning] Failed to load manning data:', err)
+      setAssignments([])
+      setTasks([])
+      setWarnings([])
+      setUsingPreset(false)
+      setError(msg)
     } finally {
       setLoading(false)
     }
