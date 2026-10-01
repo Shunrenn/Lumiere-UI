@@ -418,7 +418,7 @@ export function EventRegistryPage() {
                       Project Valuation
                     </p>
                     <p className="mt-0.5 text-[0.7rem] text-muted-foreground">
-                      Select an event to view its real-time budget breakdown.
+                      Select an event to view its current verified budget breakdown.
                     </p>
                   </div>
                   <select

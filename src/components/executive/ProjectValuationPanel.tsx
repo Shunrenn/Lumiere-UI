@@ -122,7 +122,7 @@ export function ProjectValuationPanel({ event }: { event: PortalEvent }) {
             Project Valuation
           </h3>
           <p className="mt-0.5 text-[0.7rem] text-muted-foreground">
-            Real-time budget breakdown · R14 Administrative Review
+            Current verified budget breakdown · R14 Administrative Review
           </p>
         </div>
         {budget?.hasIncompleteCostData && (

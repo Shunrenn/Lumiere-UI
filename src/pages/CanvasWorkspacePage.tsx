@@ -29,6 +29,7 @@ import { useAuth } from '@/lib/auth'
   import { usePortal, checkAssetAllocationConflict } from '@/lib/store'
   import { approveCanvasApi } from '@/lib/canvasApi'
   import { createDeficitItemApi } from '@/lib/deficitApi'
+  import { fetchAssetsApi } from '@/lib/assetsApi'
 
 
 /* ─── Types ─── */
@@ -91,57 +92,7 @@ const ROLE_DESCRIPTIONS = [
   { role: 'Viewer',        desc: 'Read-only on both Design and Allocation Planning.' },
 ]
 
-const ASSET_CATEGORIES = [
-  {
-    id: 'centerpieces', label: 'Centerpieces',
-    items: [
-      { id: 'cp1', src: '/images/elements/floral-tall.png', label: 'Floral Tall' },
-      { id: 'cp2', src: '/images/elements/candle-ring.png', label: 'Candle Ring' },
-      { id: 'cp3', src: '/images/elements/low-garden.png', label: 'Low Garden' },
-      { id: 'cp4', src: '/images/elements/crystal-vase.png', label: 'Crystal Vase' },
-      { id: 'cp5', src: '/images/elements/orchid-cascade.png', label: 'Orchid Cascade' },
-      { id: 'cp6', src: '/images/elements/wildflower.png', label: 'Wildflower' },
-    ],
-  },
-  {
-    id: 'ceiling', label: 'Ceiling',
-    items: [
-      { id: 'cl1', src: '/images/elements/drape-canopy.png', label: 'Drape Canopy' },
-      { id: 'cl2', src: '/images/elements/chandelier.png', label: 'Chandelier' },
-      { id: 'cl3', src: '/images/elements/string-lights.png', label: 'String Lights' },
-      { id: 'cl4', src: '/images/elements/balloon-arc.png', label: 'Balloon Arc' },
-    ],
-  },
-  {
-    id: 'fabrics', label: 'Fabrics',
-    items: [
-      { id: 'fb1', src: '/images/elements/ivory-satin.png', label: 'Ivory Satin' },
-      { id: 'fb2', src: '/images/elements/blush-chiffon.png', label: 'Blush Chiffon' },
-      { id: 'fb3', src: '/images/elements/gold-lame.png', label: 'Gold Lame' },
-      { id: 'fb4', src: '/images/elements/navy-velvet.png', label: 'Navy Velvet' },
-      { id: 'fb5', src: '/images/elements/sage-linen.png', label: 'Sage Linen' },
-    ],
-  },
-  {
-    id: 'artificials', label: 'Artificials',
-    items: [
-      { id: 'ar1', src: '/images/elements/artificial-flower-stems.png', label: 'Silk Flower Stems' },
-      { id: 'ar2', src: '/images/elements/faux-greenery-garland.png', label: 'Faux Greenery Garland' },
-      { id: 'ar3', src: '/images/elements/foliage-pick.png', label: 'Foliage Pick' },
-      { id: 'ar4', src: '/images/elements/faux-topiary-ball.png', label: 'Faux Topiary Ball' },
-      { id: 'ar5', src: '/images/elements/silk-rose-bundle.png', label: 'Silk Rose Bundle' },
-    ],
-  },
-  {
-    id: 'wirings', label: 'Wirings',
-    items: [
-      { id: 'wr1', src: '/images/elements/fairy-light-strand.png', label: 'Fairy Light Strand' },
-      { id: 'wr2', src: '/images/elements/festoon-string-wiring.png', label: 'Festoon Wiring' },
-      { id: 'wr3', src: '/images/elements/led-strip-roll.png', label: 'LED Strip Roll' },
-      { id: 'wr4', src: '/images/elements/cable-ties-clips.png', label: 'Cable Ties & Clips' },
-    ],
-  },
-]
+
 
 const FONT_STYLES = [
   { label: 'Header',     size: 'text-2xl', weight: 'font-bold',     sample: 'Add a heading' },
@@ -180,56 +131,34 @@ const BACKGROUND_COLORS = [
   '#f3e8ff', '#e0f2fe', '#ecfdf5', '#fff7ed', '#f1f5f9',
 ]
 
-/* ─── Logistics demo data ─── */
+export interface CanonicalCanvasItem {
+  id: string
+  name: string
+  category: string
+  description?: string
+  src: string
+  physicalStock: number
+  unit: string
+}
+
+/* ─── Logistics / Allocated Asset types ─── */
 interface AllocatedAsset {
-  id: string; name: string; dragCount: number; quantity: number | null
-  unit: string; allocated: boolean; availableStock: number
+  id: string
+  name: string
+  dragCount: number
+  quantity: number | null
+  unit: string
+  allocated: boolean
+  availableStock: number
   existingAllocations: { event: string; allocated: number; total: number }[]
 }
 interface PendingReplenishment {
-  id: string; name: string; requestedQty: number; unit: string; event: string
+  id: string
+  name: string
+  requestedQty: number
+  unit: string
+  event: string
 }
-
-const DEMO_ALLOCATED: AllocatedAsset[] = [
-  {
-    id: 'a1', name: 'Floral Tall Centerpiece', dragCount: 12, quantity: 12, unit: 'pcs', allocated: true,
-    availableStock: 18,
-    existingAllocations: [
-      { event: 'The Delacroix Wedding', allocated: 8, total: 20 },
-      { event: 'Gala 2025 — Azure',     allocated: 5, total: 10 },
-    ],
-  },
-  {
-    id: 'a2', name: 'Drape Canopy', dragCount: 3, quantity: null, unit: 'sets', allocated: false,
-    availableStock: 4,
-    existingAllocations: [{ event: 'Baptism — Bautista', allocated: 1, total: 2 }],
-  },
-  {
-    id: 'a3', name: 'String Lights', dragCount: 6, quantity: 6, unit: 'rolls', allocated: true,
-    availableStock: 10,
-    existingAllocations: [{ event: 'Gala 2025 — Azure', allocated: 4, total: 15 }],
-  },
-  {
-    id: 'a4', name: 'Up-lighting', dragCount: 8, quantity: null, unit: 'units', allocated: false,
-    availableStock: 5,
-    existingAllocations: [],
-  },
-]
-
-
-
-// Default availableStock (for the current event's window) assumed for any Elements-panel
-// catalog item that hasn't been given an explicit stock entry below.
-const DEFAULT_ELEMENT_STOCK = 12
-
-// Seeds the shared stock-tracking store (the same AllocatedAsset[] model that powers
-// asset.availableStock inside AllocationModal) with real-time availability for Elements
-// panel catalog items, keyed by the same item id used in ASSET_CATEGORIES/DroppedAsset.
-// A couple are seeded at 0 so the Zero-Stock system has something to demo out of the box.
-const CATALOG_STOCK_SEED: AllocatedAsset[] = [
-  { id: 'cp2', name: 'Candle Ring',    dragCount: 0, quantity: null, unit: 'pcs', allocated: false, availableStock: 0, existingAllocations: [] },
-  { id: 'wr3', name: 'LED Strip Roll', dragCount: 0, quantity: null, unit: 'pcs', allocated: false, availableStock: 0, existingAllocations: [] },
-]
 
 const UNIT_OPTIONS = ['pcs', 'sets', 'rolls', 'units', 'yds', 'm', 'boxes', 'pairs']
 
@@ -333,32 +262,62 @@ function Slider({ label, value, onChange, min = 0, max = 100 }: { label: string;
    LEFT PANEL TABS
    ══════════════════════════════════════════ */
 
-function ElementsTab({ onDropAsset, assets, onRouteToDeficit }: {
+function ElementsTab({
+  onDropAsset,
+  assets,
+  canonicalAssets,
+  assetsLoading,
+  assetsError,
+  onRetryFetch,
+  onRouteToDeficit,
+}: {
   onDropAsset: (asset: DroppedAsset) => void
   assets: AllocatedAsset[]
+  canonicalAssets: CanonicalCanvasItem[]
+  assetsLoading: boolean
+  assetsError: string | null
+  onRetryFetch?: () => void
   onRouteToDeficit: (item: { id: string; name: string; unit: string }) => void
 }) {
   const [query, setQuery] = useState('')
-  const [tooltip, setTooltip] = useState<{ id: string; label: string; src: string } | null>(null)
+  const [tooltip, setTooltip] = useState<{ id: string; label: string; src: string; category?: string; stock: number; description?: string } | null>(null)
   const [blocked, setBlocked] = useState<{ id: string; label: string; unit: string } | null>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
   const blockedRef = useRef<HTMLDivElement>(null)
   useOutsideClick(tooltipRef, () => setTooltip(null))
   useOutsideClick(blockedRef, () => setBlocked(null))
 
-  const filtered = query
-    ? ASSET_CATEGORIES.map((cat) => ({ ...cat, items: cat.items.filter((i) => i.label.toLowerCase().includes(query.toLowerCase())) })).filter((cat) => cat.items.length > 0)
-    : ASSET_CATEGORIES
+  const filteredAssets = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return canonicalAssets
+    return canonicalAssets.filter(
+      (item) => item.name.toLowerCase().includes(q) || (item.description || '').toLowerCase().includes(q),
+    )
+  }, [canonicalAssets, query])
 
-  // Same source of truth as AllocationModal's asset.availableStock — the shared
-  // AllocatedAsset[] store lifted to the workspace root, keyed by catalog item id.
-  function getStock(itemId: string) {
-    return assets.find((a) => a.id === itemId)?.availableStock ?? DEFAULT_ELEMENT_STOCK
+  const categories = useMemo(() => {
+    const map = new Map<string, CanonicalCanvasItem[]>()
+    filteredAssets.forEach((item) => {
+      const cat = item.category || 'Event Assets'
+      const existing = map.get(cat)
+      if (existing) existing.push(item)
+      else map.set(cat, [item])
+    })
+    return Array.from(map.entries()).map(([label, items]) => ({
+      id: label.toLowerCase().replace(/\s+/g, '-'),
+      label,
+      items,
+    }))
+  }, [filteredAssets])
+
+  function getStock(item: CanonicalCanvasItem) {
+    const found = assets.find((a) => a.id === item.id)
+    return found ? found.availableStock : item.physicalStock
   }
 
-  function handleDragStart(e: React.DragEvent, item: { id: string; label: string; src: string }, stock: number) {
+  function handleDragStart(e: React.DragEvent, item: CanonicalCanvasItem, stock: number) {
     if (stock === 0) { e.preventDefault(); return }
-    const payload: DroppedAsset = { id: item.id, name: item.label, src: item.src, defaultUnit: 'pcs' }
+    const payload: DroppedAsset = { id: item.id, name: item.name, src: item.src, defaultUnit: item.unit || 'pcs' }
     e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload))
     e.dataTransfer.effectAllowed = 'copy'
   }
@@ -368,8 +327,8 @@ function ElementsTab({ onDropAsset, assets, onRouteToDeficit }: {
     setTooltip(null)
   }
 
-  function handleTileClick(item: { id: string; label: string }, stock: number) {
-    if (stock === 0) setBlocked({ id: item.id, label: item.label, unit: 'pcs' })
+  function handleTileClick(item: CanonicalCanvasItem, stock: number) {
+    if (stock === 0) setBlocked({ id: item.id, label: item.name, unit: item.unit || 'pcs' })
   }
 
   return (
@@ -377,12 +336,35 @@ function ElementsTab({ onDropAsset, assets, onRouteToDeficit }: {
       <div className="px-3 pt-3 pb-2 shrink-0">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
-          <input type="text" placeholder="Search assets…" value={query} onChange={(e) => setQuery(e.target.value)}
-            className="w-full rounded-lg border border-border bg-background py-1.5 pl-7 pr-3 text-[0.65rem] text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none" />
+          <input
+            type="text"
+            placeholder="Search inventory assets…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full rounded-lg border border-border bg-background py-1.5 pl-7 pr-3 text-[0.65rem] text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none"
+          />
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-5 scrollbar-thin">
-        {filtered.length === 0 ? (
+        {assetsLoading ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <p className="mt-2 text-[0.6rem] text-muted-foreground uppercase tracking-wider">Loading inventory assets...</p>
+          </div>
+        ) : assetsError ? (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-center">
+            <p className="text-[0.62rem] font-semibold text-destructive">{assetsError}</p>
+            {onRetryFetch && (
+              <button
+                type="button"
+                onClick={onRetryFetch}
+                className="mt-2 rounded-lg bg-primary px-3 py-1 text-[0.58rem] font-bold text-primary-foreground hover:opacity-90 transition"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        ) : categories.length === 0 ? (
           <EmptyState
             compact
             title="No assets found"
@@ -390,39 +372,61 @@ function ElementsTab({ onDropAsset, assets, onRouteToDeficit }: {
             icon={PackageSearch}
           />
         ) : (
-          filtered.map((cat) => (
-          <div key={cat.id}>
-            <p className="mb-2 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">{cat.label}</p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {cat.items.map((item) => {
-                const stock = getStock(item.id)
-                const outOfStock = stock === 0
-                return (
-                  <div key={item.id} className={cn('relative group', outOfStock ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing')}
-                    draggable={!outOfStock}
-                    onDragStart={(e) => handleDragStart(e, item, stock)}
-                    onClick={() => handleTileClick(item, stock)}>
-                    <div className={cn('relative aspect-square overflow-hidden rounded-lg transition-all', outOfStock ? 'opacity-40' : 'group-active:scale-95 group-active:opacity-70')}>
-                      <img src={item.src} alt={item.label} draggable={false} className={cn('size-full object-cover mix-blend-multiply dark:mix-blend-normal pointer-events-none', outOfStock && 'grayscale')} />
+          categories.map((cat) => (
+            <div key={cat.id}>
+              <p className="mb-2 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">{cat.label}</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {cat.items.map((item) => {
+                  const stock = getStock(item)
+                  const outOfStock = stock === 0
+                  return (
+                    <div
+                      key={item.id}
+                      className={cn('relative group', outOfStock ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing')}
+                      draggable={!outOfStock}
+                      onDragStart={(e) => handleDragStart(e, item, stock)}
+                      onClick={() => handleTileClick(item, stock)}
+                    >
+                      <div className={cn('relative aspect-square overflow-hidden rounded-lg border border-border/40 bg-muted/20 transition-all flex items-center justify-center', outOfStock ? 'opacity-40' : 'group-active:scale-95 group-active:opacity-70')}>
+                        {item.src ? (
+                          <img
+                            src={item.src}
+                            alt={item.name}
+                            draggable={false}
+                            className={cn('size-full object-cover mix-blend-multiply dark:mix-blend-normal pointer-events-none', outOfStock && 'grayscale')}
+                            onError={(e) => {
+                              (e.currentTarget as HTMLElement).style.display = 'none'
+                            }}
+                          />
+                        ) : (
+                          <Package className="size-5 text-muted-foreground/60" />
+                        )}
+                      </div>
+                      <p className="mt-0.5 truncate text-center text-[0.5rem] font-medium text-foreground">{item.name}</p>
+                      {outOfStock ? (
+                        <span className="mt-0.5 flex w-full items-center justify-center rounded-full bg-muted px-1 py-0.5 text-center text-[0.45rem] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+                          Not Available
+                        </span>
+                      ) : (
+                        <span className="mt-0.5 block text-center text-[0.45rem] font-medium text-muted-foreground/70">{stock} in physical stock</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setTooltip({ id: item.id, label: item.name, src: item.src, category: item.category, stock, description: item.description })
+                        }}
+                        aria-label={`Info for ${item.name}`}
+                        className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-background/80 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-foreground"
+                      >
+                        <Info className="size-2.5" />
+                      </button>
                     </div>
-                    <p className="mt-0.5 truncate text-center text-[0.5rem] text-muted-foreground">{item.label}</p>
-                    {outOfStock ? (
-                      <span className="mt-0.5 flex w-full items-center justify-center rounded-full bg-muted px-1 py-0.5 text-center text-[0.45rem] font-bold uppercase tracking-[0.08em] text-muted-foreground">
-                        Not Available
-                      </span>
-                    ) : (
-                      <span className="mt-0.5 block text-center text-[0.45rem] font-medium text-muted-foreground/70">{stock} in stock</span>
-                    )}
-                    <button type="button" onClick={(e) => { e.stopPropagation(); setTooltip(item) }} aria-label={`Info for ${item.label}`}
-                      className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-background/80 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-foreground">
-                      <Info className="size-2.5" />
-                    </button>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        ))
+          ))
         )}
       </div>
       {blocked && (
@@ -433,7 +437,7 @@ function ElementsTab({ onDropAsset, assets, onRouteToDeficit }: {
               <span className="text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">Not Available</span>
             </div>
             <p className="mb-3 text-[0.62rem] text-muted-foreground leading-relaxed">
-              <span className="font-semibold text-foreground">{blocked.label}</span> has no available stock for this event window right now.
+              <span className="font-semibold text-foreground">{blocked.label}</span> has zero verified physical stock right now.
             </p>
             <div className="flex flex-col gap-1.5">
               <button type="button" onClick={() => { onRouteToDeficit({ id: blocked.id, name: blocked.label, unit: blocked.unit }); setBlocked(null) }}
@@ -450,25 +454,34 @@ function ElementsTab({ onDropAsset, assets, onRouteToDeficit }: {
       )}
       {tooltip && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/60 backdrop-blur-sm">
-          <div ref={tooltipRef} className="w-56 rounded-2xl border border-border bg-card p-4 shadow-2xl">
+          <div ref={tooltipRef} className="w-60 rounded-2xl border border-border bg-card p-4 shadow-2xl">
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-foreground">{tooltip.label}</span>
+              <span className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-foreground truncate max-w-[80%]">{tooltip.label}</span>
               <button type="button" onClick={() => setTooltip(null)} className="text-muted-foreground hover:text-foreground"><X className="size-3.5" /></button>
             </div>
-            <img src={tooltip.src} alt={tooltip.label} className="mb-3 w-full rounded-lg object-cover aspect-square" />
+            <div className="mb-3 w-full rounded-lg bg-muted/20 border border-border/40 aspect-square overflow-hidden flex items-center justify-center">
+              {tooltip.src ? (
+                <img src={tooltip.src} alt={tooltip.label} className="size-full object-cover" />
+              ) : (
+                <Package className="size-10 text-muted-foreground/40" />
+              )}
+            </div>
             <div className="space-y-1">
               <div className="flex justify-between text-[0.6rem]">
                 <span className="text-muted-foreground">Category</span>
-                <span className="text-foreground font-medium">{ASSET_CATEGORIES.find((c) => c.items.some((i) => i.id === tooltip.id))?.label}</span>
+                <span className="text-foreground font-medium">{tooltip.category || 'Event Assets'}</span>
               </div>
               <div className="flex justify-between text-[0.6rem]">
                 <span className="text-muted-foreground">Asset ID</span>
-                <span className="font-mono text-foreground">{tooltip.id.toUpperCase()}</span>
+                <span className="font-mono text-foreground">{tooltip.id}</span>
               </div>
               <div className="flex justify-between text-[0.6rem]">
-                <span className="text-muted-foreground">Status</span>
-                <span className="text-emerald-400 font-medium">Available</span>
+                <span className="text-muted-foreground">Physical Stock</span>
+                <span className="text-foreground font-semibold">{tooltip.stock}</span>
               </div>
+              {tooltip.description && (
+                <p className="text-[0.58rem] text-muted-foreground line-clamp-2 pt-1">{tooltip.description}</p>
+              )}
             </div>
             <button type="button" onClick={() => addToCanvas(tooltip)}
               className="mt-3 w-full rounded-lg bg-primary py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">
@@ -1133,6 +1146,10 @@ function LeftPanel({
   onUpdateColor,
   onInsertPage,
   onInsertAllPages,
+  canonicalAssets,
+  assetsLoading,
+  assetsError,
+  onRetryFetch,
 }: {
   onDropAsset: (asset: DroppedAsset) => void
   eventAlias?: string
@@ -1147,6 +1164,10 @@ function LeftPanel({
   onUpdateColor?: (color: string) => void
   onInsertPage: (sourceProjId: string, pageTitle: string) => void
   onInsertAllPages: (sourceProjId: string) => void
+  canonicalAssets: CanonicalCanvasItem[]
+  assetsLoading: boolean
+  assetsError: string | null
+  onRetryFetch?: () => void
 }) {
   const [activeTab, setActiveTab] = useState<PanelTab>('elements')
   const [collapsed, setCollapsed] = useState(false)
@@ -1177,7 +1198,17 @@ function LeftPanel({
             </span>
           </div>
           <div className="flex flex-1 flex-col overflow-hidden">
-            {activeTab === 'elements'   && <ElementsTab onDropAsset={onDropAsset} assets={assets} onRouteToDeficit={onRouteToDeficit} />}
+            {activeTab === 'elements'   && (
+              <ElementsTab
+                onDropAsset={onDropAsset}
+                assets={assets}
+                canonicalAssets={canonicalAssets}
+                assetsLoading={assetsLoading}
+                assetsError={assetsError}
+                onRetryFetch={onRetryFetch}
+                onRouteToDeficit={onRouteToDeficit}
+              />
+            )}
             {activeTab === 'text'       && <TextTab onPlacePresetText={onPlacePresetText} selectedAsset={selectedAsset} onUpdateFormatting={onUpdateFormatting} onUpdateColor={onUpdateColor} />}
             {activeTab === 'uploads'    && <UploadsTab onDropAsset={onDropAsset} />}
             {activeTab === 'tools'      && <ToolsTab activeTool={activeTool} onToolChange={onToolChange} />}
@@ -2233,9 +2264,9 @@ function AllocationModal({
             <input type="checkbox" checked={declareMax} onChange={(e) => handleDeclareMax(e.target.checked)} className="sr-only" />
             <span className="text-[0.62rem] text-muted-foreground group-hover:text-foreground transition">Declare available stocks <span className="font-semibold text-foreground">(auto-fill max)</span></span>
           </label>
-          {asset.existingAllocations.length > 0 && (
+          {asset.existingAllocations.length > 0 ? (
             <div className="rounded-xl border border-border bg-background p-3 flex flex-col gap-2">
-              <p className="text-[0.58rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">Existing Event Allocations</p>
+              <p className="text-[0.58rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">Committed Allocations</p>
               {asset.existingAllocations.map((a) => (
                 <div key={a.event} className="flex items-center justify-between">
                   <span className="text-[0.62rem] text-foreground truncate max-w-[60%]">{a.event}</span>
@@ -2243,10 +2274,14 @@ function AllocationModal({
                 </div>
               ))}
             </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-background/50 p-2.5 text-center">
+              <p className="text-[0.58rem] text-muted-foreground italic">No prior event commitments recorded for this item.</p>
+            </div>
           )}
           <div className="flex items-center justify-between rounded-xl border border-border bg-background px-3 py-2.5">
-            <span className="text-[0.62rem] text-muted-foreground">Available Stocks</span>
-            <span className="text-[0.68rem] font-bold text-foreground">{formatStock(asset.availableStock)} default {asset.unit}(s)</span>
+            <span className="text-[0.62rem] text-muted-foreground">Physical Stock</span>
+            <span className="text-[0.68rem] font-bold text-foreground">{formatStock(asset.availableStock)} {asset.unit}(s)</span>
           </div>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-border py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-muted-foreground hover:bg-accent hover:text-foreground transition">Cancel</button>
@@ -2357,8 +2392,10 @@ function DeficitModal({ asset, requested, unit, deficit, onClose, onAccept, onBa
                 </div>
                 <div className="rounded-xl border border-border bg-background px-4 py-3 flex flex-col gap-2">
                   <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Strategy</span><span className="font-semibold text-foreground">Cross-Docking</span></div>
-                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Quantity Gained</span><span className="font-semibold text-emerald-400">+{strategyDone.gained} {unit}</span></div>
-                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">New Available</span><span className="font-semibold text-foreground">{asset.availableStock + strategyDone.gained} {unit}</span></div>
+                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Quantity Requested</span><span className="font-semibold text-foreground">+{strategyDone.gained} {unit}</span></div>
+                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Projected if fulfilled</span><span className="font-semibold text-muted-foreground">{asset.availableStock + strategyDone.gained} {unit}</span></div>
+                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Current verified stock</span><span className="font-semibold text-foreground">{asset.availableStock} {unit}</span></div>
+                  <div className="mt-1 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2 py-1 text-[0.58rem] text-amber-400">Pending cross-dock fulfillment — current stock unchanged until warehouse confirms</div>
                 </div>
                 <button type="button" onClick={() => setCrossdockReview(true)} className="w-full rounded-xl bg-primary py-2.5 text-[0.65rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">Next</button>
               </div>
@@ -2366,25 +2403,29 @@ function DeficitModal({ asset, requested, unit, deficit, onClose, onAccept, onBa
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-2">
                   <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/15"><Boxes className="size-4 text-primary" /></div>
-                  <span className="text-[0.72rem] font-semibold text-foreground">Review Updated Allocation</span>
+                  <span className="text-[0.72rem] font-semibold text-foreground">Review Proposed Cross-Dock Allocation</span>
                 </div>
                 <div className="rounded-xl border border-border bg-background px-4 py-3 flex flex-col gap-2">
                   <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Item</span><span className="font-semibold text-foreground">{asset.name}</span></div>
-                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Requested</span><span className="font-semibold text-foreground">{requested} {unit}</span></div>
-                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Updated Available Stock</span><span className="font-semibold text-emerald-400">{asset.availableStock + strategyDone.gained} {unit}</span></div>
+                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Requested for Canvas</span><span className="font-semibold text-foreground">{requested} {unit}</span></div>
+                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Cross-Dock Allocation</span><span className="font-semibold text-foreground">+{strategyDone.gained} {unit}</span></div>
+                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Current verified stock</span><span className="font-semibold text-foreground">{asset.availableStock} {unit}</span></div>
+                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Projected if fulfilled</span><span className="font-semibold text-muted-foreground">{asset.availableStock + strategyDone.gained} {unit}</span></div>
+                  <div className="mt-1 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2 py-1 text-[0.58rem] text-amber-400">Pending cross-dock fulfillment — warehouse must verify inbound before physical dispatch</div>
                 </div>
                 <button type="button" onClick={onClose} className="w-full rounded-xl bg-primary py-2.5 text-[0.65rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">Confirm &amp; Close</button>
               </div>
             ) : (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-2">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/15"><Check className="size-4 text-emerald-400" /></div>
-                  <span className="text-[0.72rem] font-semibold text-foreground">Strategy Applied</span>
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-500/15"><Check className="size-4 text-amber-400" /></div>
+                  <span className="text-[0.72rem] font-semibold text-foreground">Replenishment Requested</span>
                 </div>
                 <div className="rounded-xl border border-border bg-background px-4 py-3 flex flex-col gap-2">
                   <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Strategy</span><span className="font-semibold text-foreground">Replenishment Request</span></div>
-                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Quantity Gained</span><span className="font-semibold text-emerald-400">+{strategyDone.gained} {unit}</span></div>
-                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">New Available</span><span className="font-semibold text-foreground">{asset.availableStock + strategyDone.gained} {unit}</span></div>
+                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Quantity Requested</span><span className="font-semibold text-foreground">{strategyDone.gained} {unit}</span></div>
+                  <div className="flex justify-between text-[0.62rem]"><span className="text-muted-foreground">Current verified stock</span><span className="font-semibold text-foreground">{asset.availableStock} {unit}</span></div>
+                  <div className="mt-1 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2 py-1 text-[0.58rem] text-amber-400">Pending — stock remains at {asset.availableStock} {unit} until fulfillment is verified by warehouse</div>
                 </div>
                 <button type="button" onClick={onClose} className="w-full rounded-xl bg-primary py-2.5 text-[0.65rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">Done</button>
               </div>
@@ -2494,7 +2535,18 @@ function StockAvailabilityWarningModal({ asset, onClose }: { asset: AllocatedAss
   )
 }
 
-function RightPanel({ expanded, onToggleExpand, droppedAssets: _droppedAssets, onRemoveDropped, assets, setAssets, pending, setPending }: {
+function RightPanel({
+  expanded,
+  onToggleExpand,
+  droppedAssets: _droppedAssets,
+  onRemoveDropped,
+  assets,
+  setAssets,
+  pending,
+  setPending,
+  eventId,
+  showToast,
+}: {
   expanded: boolean
   onToggleExpand: () => void
   droppedAssets: DroppedAsset[]
@@ -2503,6 +2555,8 @@ function RightPanel({ expanded, onToggleExpand, droppedAssets: _droppedAssets, o
   setAssets: React.Dispatch<React.SetStateAction<AllocatedAsset[]>>
   pending: PendingReplenishment[]
   setPending: React.Dispatch<React.SetStateAction<PendingReplenishment[]>>
+  eventId?: string
+  showToast: (msg: string) => void
 }) {
   const [isOpen, setIsOpen] = useState(true)
   const [tab, setTab] = useState<RightPanelTab>('allocated')
@@ -2516,17 +2570,41 @@ function RightPanel({ expanded, onToggleExpand, droppedAssets: _droppedAssets, o
   function handleSaveAllocation(id: string, qty: number, unit: string) {
     setAssets((current) => current.map((x) => x.id === id ? { ...x, quantity: qty, unit, allocated: true, availableStock: Math.max(0, x.availableStock - qty) } : x))
   }
-  function handleStrategy(path: StrategyPath, id: string, qty: number, unit: string) {
+  async function handleStrategy(path: StrategyPath, id: string, qty: number, unit: string) {
     if (qty <= 0) return
     if (path === 'replenish') {
       const source = assets.find((x) => x.id === id)
-      setPending((current) => [...current, { id: `pr-${Date.now()}`, name: source?.name ?? id, requestedQty: qty, unit, event: 'Current canvas event' }])
+      const assetName = source?.name ?? id
+      try {
+        const res = await createDeficitItemApi({
+          eventId: eventId || undefined,
+          assetId: id,
+          itemName: assetName,
+          quantityNeeded: qty,
+          triggerSource: 'Canvas',
+          urgencyLevel: 'Medium',
+        })
+        if (res && res.id) {
+          setPending((current) => [
+            ...current,
+            { id: res.id, name: assetName, requestedQty: qty, unit, event: 'Current canvas event' },
+          ])
+          showToast('Replenishment request submitted to warehouse deficit queue.')
+        } else {
+          showToast('Failed to submit replenishment request to server.')
+        }
+      } catch (err) {
+        console.error('[CanvasWorkspace] Replenishment request failed:', err)
+        showToast('Network error while requesting replenishment.')
+      }
     }
-    setAssets((current) => current.map((x) => x.id === id ? { ...x, availableStock: x.availableStock + qty } : x))
+    // Requesting replenishment does NOT alter verified physical stock or canonical availability.
   }
-  function handleVerify(item: PendingReplenishment, adjustedQty: number) {
+  function handleVerify(item: PendingReplenishment, _adjustedQty: number) {
+    // A local UI review button must not fabricate inventory.
+    // Awaiting server warehouse inbound receipt.
     setPending((p) => p.filter((x) => x.id !== item.id))
-    setAssets((current) => current.map((x) => x.name === item.name ? { ...x, availableStock: x.availableStock + adjustedQty } : x))
+    showToast(`Replenishment request for "${item.name}" acknowledged. Awaiting warehouse receiving.`)
   }
 
   return (
@@ -3150,10 +3228,42 @@ export function CanvasWorkspacePage() {
     return []
   })
 
+  /* Canonical Asset Inventory state */
+  const [canonicalCatalogAssets, setCanonicalCatalogAssets] = useState<CanonicalCanvasItem[]>([])
+  const [assetsLoading, setAssetsLoading] = useState(true)
+  const [assetsError, setAssetsError] = useState<string | null>(null)
+
+  const loadCanonicalAssets = useCallback(() => {
+    setAssetsLoading(true)
+    setAssetsError(null)
+    fetchAssetsApi()
+      .then((items) => {
+        const mapped: CanonicalCanvasItem[] = (items || []).map((item) => ({
+          id: item.id || (item as any).assetId || `asset-${Math.random().toString(36).slice(2, 8)}`,
+          name: item.name || 'Unnamed Asset',
+          category: item.category || 'Event Assets',
+          description: item.description,
+          src: item.image || (item as any).catalogPhotoUrl || '',
+          physicalStock: item.currentStock ?? (item as { quantity?: number }).quantity ?? 0,
+          unit: item.unit || 'pcs',
+        }))
+        setCanonicalCatalogAssets(mapped)
+        setAssetsLoading(false)
+      })
+      .catch((err) => {
+        console.warn('[CanvasWorkspace] Failed to fetch canonical assets:', err)
+        setAssetsError('Failed to load asset catalog from server.')
+        setAssetsLoading(false)
+      })
+  }, [])
+
+  useEffect(() => {
+    loadCanonicalAssets()
+  }, [loadCanonicalAssets])
+
   // Single shared source of truth for stock: powers asset.availableStock in the
   // Logistics panel's AllocationModal AND the Elements panel's Zero-Stock badges.
   const [assets, setAssets] = useState<AllocatedAsset[]>(() => {
-    const cleanDefault = [...DEMO_ALLOCATED.map(a => ({ ...a, dragCount: 0, quantity: null, allocated: false })), ...CATALOG_STOCK_SEED]
     if (card?.id) {
       const saved = localStorage.getItem(`lumiere-allocated-assets-${card.id}`)
       if (saved) {
@@ -3167,10 +3277,33 @@ export function CanvasWorkspacePage() {
           console.error('[CanvasWorkspace] Failed to parse saved allocated assets:', e)
         }
       }
-      return cleanDefault
+      return []
     }
-    return cleanDefault
+    return []
   })
+
+  // Sync canonical assets into allocated assets state when catalog is loaded
+  useEffect(() => {
+    if (canonicalCatalogAssets.length > 0) {
+      setAssets((prev) => {
+        const existingMap = new Map(prev.map((a) => [a.id, a]))
+        return canonicalCatalogAssets.map((c) => {
+          const existing = existingMap.get(c.id)
+          return {
+            id: c.id,
+            name: c.name,
+            dragCount: existing?.dragCount ?? 0,
+            quantity: existing?.quantity ?? null,
+            unit: c.unit || 'pcs',
+            allocated: existing?.allocated ?? false,
+            availableStock: c.physicalStock,
+            existingAllocations: existing?.existingAllocations ?? [],
+          }
+        })
+      })
+    }
+  }, [canonicalCatalogAssets])
+
   const [pending, setPending] = useState<PendingReplenishment[]>(() => {
     if (card?.id) {
       const saved = localStorage.getItem(`lumiere-pending-replenishment-${card.id}`)
@@ -3199,10 +3332,20 @@ export function CanvasWorkspacePage() {
   useEffect(() => {
     if (card?.id) {
       localStorage.setItem(`lumiere-dropped-assets-${card.id}`, JSON.stringify(droppedAssets))
-      // Asynchronously persist canvas layout state to PUT /api/canvas/event/{eventId}
+      // Persist canvas layout state to PUT /api/canvas/event/{eventId}.
+      // Result is checked — backend failure is logged but does not throw (fire-and-forget
+      // is intentional for auto-save; user will see stale state on reload if backend is down).
       const eventId = pipelineEvent?.id || card.id
       import('@/lib/canvasApi').then(({ saveCanvasLayoutApi }) => {
-        saveCanvasLayoutApi(eventId, JSON.stringify(droppedAssets))
+        saveCanvasLayoutApi(eventId, JSON.stringify(droppedAssets)).then((result) => {
+          if (!result.ok) {
+            console.warn(
+              `[CanvasWorkspace] Auto-save failed for event ${eventId}:`,
+              result.reason,
+              result.status ?? result.message ?? '',
+            )
+          }
+        })
       })
     }
   }, [droppedAssets, card?.id, pipelineEvent?.id])
@@ -3548,15 +3691,22 @@ export function CanvasWorkspacePage() {
           next[idx] = { ...next[idx], dragCount: count }
         } else {
           const dropped = droppedAssets.find((d) => d.id === id)
+          const canonical = canonicalCatalogAssets.find((c) => c.id === id)
           next.push({
-            id, name: dropped?.name ?? id, dragCount: count, quantity: null,
-            unit: dropped?.defaultUnit ?? 'pcs', allocated: false, availableStock: DEFAULT_ELEMENT_STOCK, existingAllocations: [],
+            id,
+            name: dropped?.name ?? canonical?.name ?? id,
+            dragCount: count,
+            quantity: null,
+            unit: dropped?.defaultUnit ?? canonical?.unit ?? 'pcs',
+            allocated: false,
+            availableStock: canonical?.physicalStock ?? 0,
+            existingAllocations: [],
           })
         }
       })
       return next
     })
-  }, [droppedAssets])
+  }, [droppedAssets, canonicalCatalogAssets])
 
   // Proactive Stock Availability Warning: fires purely from on-canvas drag activity
   // this session — not from manually opening AllocationModal, and not from any
@@ -3607,18 +3757,31 @@ export function CanvasWorkspacePage() {
     return checkAssetAllocationConflict(elements, targetDate, eventId, portalEvents, eventMaterials)
   }, [droppedAssets, pipelineEvent?.date, pipelineEvent?.id, card?.eventDate, card?.id, portalEvents, eventMaterials])
 
-  // R9: Canvas approval & direct warehouse dispatch queue bridge
+  // R9: Canvas approval & warehouse dispatch queue bridge.
+  // approveCanvasApi persists approval to backend; dispatch population is
+  // backend-driven from that event. Frontend module-state dispatch (approveDesign)
+  // is local-session only and does NOT substitute for backend persistence.
   async function handleApproveCanvas() {
     setIsApproving(true)
     try {
       const eventId = pipelineEvent?.id || card?.id
       if (eventId) {
-        await approveCanvasApi(eventId)
+        const approveResult = await approveCanvasApi(eventId)
+        if (!approveResult.ok) {
+          // Backend rejected or network error — do NOT claim success.
+          const detail =
+            approveResult.reason === 'backend-rejected'
+              ? `Server returned ${approveResult.status ?? 'error'}`
+              : 'Network error — please check your connection'
+          showToast(`Canvas approval failed: ${detail}`)
+          return
+        }
       }
+      // Backend approval confirmed (or no eventId — local design only).
       if (card?.id) {
         await approveDesign(card.id)
       }
-      showToast('Canvas approved! Warehouse dispatch preparation queue populated.')
+      showToast('Canvas approved and submitted to warehouse. Dispatch queue will be updated by the server.')
     } catch (err) {
       console.error('Canvas approval failed:', err)
       showToast('Failed to approve canvas layout')
@@ -4046,6 +4209,10 @@ export function CanvasWorkspacePage() {
           onUpdateColor={(c) => selectedAssetId && updateAsset(selectedAssetId, { fill: c, strokeColor: c })}
           onInsertPage={handleInsertPage}
           onInsertAllPages={handleInsertAllPages}
+          canonicalAssets={canonicalCatalogAssets}
+          assetsLoading={assetsLoading}
+          assetsError={assetsError}
+          onRetryFetch={loadCanonicalAssets}
         />
 
         {/* Canvas + bottom bar */}
@@ -4164,6 +4331,8 @@ export function CanvasWorkspacePage() {
             setAssets={setAssets}
             pending={pending}
             setPending={setPending}
+            eventId={pipelineEvent?.id || card?.id}
+            showToast={showToast}
           />
         )}
       </div>

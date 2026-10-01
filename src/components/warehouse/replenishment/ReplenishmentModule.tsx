@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Download, Plus, Search, X } from 'lucide-react'
 import { usePortal } from '@/lib/store'
-import { getDeficitLines, lineCost, type DeficitLine } from '@/lib/warehouse-replenishment'
+import { lineCost, type DeficitLine } from '@/lib/warehouse-replenishment'
 import { createDeficitItemApi, fetchDeficitQueueApi, updateDeficitStatusApi } from '@/lib/deficitApi'
 import { DeficitTable } from '@/components/warehouse/replenishment/DeficitTable'
 import { GeneratePOModal } from '@/components/warehouse/replenishment/GeneratePOModal'
@@ -19,7 +19,9 @@ interface ReplenishmentModuleProps {
 
 export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
   const { events } = usePortal()
-  const [lines, setLines] = useState<DeficitLine[]>(() => getDeficitLines(events))
+  const [lines, setLines] = useState<DeficitLine[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('grouped')
   const [query, setQuery] = useState('')
   const [poLine, setPoLine] = useState<DeficitLine | null>(null)
@@ -29,35 +31,39 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
   const [bulkOpen, setBulkOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    let active = true
-    fetchDeficitQueueApi().then((items) => {
-      if (!active || !items.length) return
-      const mapped: DeficitLine[] = items.map((item) => ({
-        id: item.id,
-        eventId: item.eventId || undefined,
-        eventTitle: item.eventName || undefined,
-        itemName: item.itemName,
-        category: (item.itemCategory as any) || 'General',
-        unit: 'pcs',
-        triggerSource: 'Auto-Threshold',
-        currentStock: 0,
-        threshold: item.quantityNeeded,
-        costPerUnit: 100,
-        priority: (item.urgencyLevel as any) || 'Medium',
-        status: (item.status as any) || 'Not Purchased',
-        primaryVendorId: '',
-        quantityNeeded: item.quantityNeeded,
-      }))
-      setLines((prev) => {
-        const existingIds = new Set(prev.map((l) => l.id))
-        const newOnly = mapped.filter((m) => !existingIds.has(m.id))
-        return [...newOnly, ...prev]
+  const loadDeficits = () => {
+    setLoading(true)
+    setError(null)
+    fetchDeficitQueueApi()
+      .then((items) => {
+        const mapped: DeficitLine[] = items.map((item) => ({
+          id: item.id,
+          eventId: item.eventId || undefined,
+          eventTitle: item.eventName || undefined,
+          itemName: item.itemName,
+          category: (item.itemCategory as any) || 'General',
+          unit: item.unit || 'pcs',
+          triggerSource: (item.triggerSource as any) || 'Auto-Threshold',
+          currentStock: item.currentStock ?? 0,
+          threshold: item.threshold ?? item.quantityNeeded,
+          costPerUnit: item.costPerUnit ?? 100,
+          priority: (item.urgencyLevel as any) || (item.priority as any) || 'Medium',
+          status: (item.status as any) || 'Not Purchased',
+          primaryVendorId: item.primaryVendorId || '',
+          quantityNeeded: item.quantityNeeded,
+        }))
+        setLines(mapped)
+        setLoading(false)
       })
-    })
-    return () => {
-      active = false
-    }
+      .catch((err) => {
+        console.warn('[ReplenishmentModule] Failed to load deficit queue:', err)
+        setError('Failed to load deficit queue from server. Please check connection.')
+        setLoading(false)
+      })
+  }
+
+  useEffect(() => {
+    loadDeficits()
   }, [])
 
   const filtered = useMemo(() => {
@@ -259,7 +265,23 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
       </div>
 
       <div className="flex-1 px-6 py-6 sm:px-10">
-        {viewMode === 'consolidated' ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center p-16 text-center">
+            <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <p className="mt-3 text-xs text-muted-foreground uppercase tracking-wider">Loading canonical deficit queue...</p>
+          </div>
+        ) : error ? (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center">
+            <p className="text-xs font-semibold text-destructive">{error}</p>
+            <button
+              type="button"
+              onClick={loadDeficits}
+              className="mt-3 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90"
+            >
+              Retry
+            </button>
+          </div>
+        ) : viewMode === 'consolidated' ? (
           <div className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <h2 className="font-serif text-lg font-medium text-card-foreground">All Deficit Lines</h2>
@@ -267,20 +289,26 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
                 {filtered.length} items
               </span>
             </div>
-            <DeficitTable
-              lines={filtered}
-              selectedIds={selectedIds}
-              onRowClick={setPoLine}
-              onEdit={setEditLine}
-              onRemove={handleRemove}
-              onTagForDispatch={handleTagForDispatch}
-            />
+            {filtered.length === 0 ? (
+              <div className="p-12 text-center text-sm text-muted-foreground">
+                No deficit records found in queue.
+              </div>
+            ) : (
+              <DeficitTable
+                lines={filtered}
+                selectedIds={selectedIds}
+                onRowClick={setPoLine}
+                onEdit={setEditLine}
+                onRemove={handleRemove}
+                onTagForDispatch={handleTagForDispatch}
+              />
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-6">
             {grouped.groups.length === 0 && grouped.general.length === 0 && (
               <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center text-sm text-muted-foreground">
-                No deficit records found.
+                No deficit records found in queue.
               </div>
             )}
             {grouped.groups.map(([eventId, group]) => {

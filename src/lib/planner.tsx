@@ -766,7 +766,23 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       if (!design) return false
       const eventId = design.eventId ?? selectedEventId ?? undefined
       if (eventId) {
-        void approveCanvasApi(eventId)
+        // Task 1 / R9: Await canonical backend approval — do not fire-and-forget.
+        const approveResult = await approveCanvasApi(eventId)
+        if (!approveResult.ok) {
+          console.warn(
+            `[planner] approveDesign: backend canvas approval failed for event ${eventId}:`,
+            approveResult.reason,
+            approveResult.status ?? approveResult.message ?? '',
+          )
+          // Return false so callers know approval did not succeed canonically.
+          return false
+        }
+        // Backend approval confirmed. Populate local module-state dispatch queue.
+        // R9 boundary: populateWarehouseDispatchFromCanvas writes to in-memory module
+        // state only. It does NOT persist to backend dispatch tables. Persistent
+        // warehouse logistics queue population is backend-driven from the approval
+        // event above. This local state is session-only scaffolding until the backend
+        // exposes a GET /api/dispatch-queue?eventId= endpoint for the frontend to read.
         const ev = events.find((e) => e.id === eventId)
         const materials = eventMaterials[eventId] || []
         populateWarehouseDispatchFromCanvas(
