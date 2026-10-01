@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PortalEvent } from '@/lib/types'
 import type { WarehouseModuleId } from '@/lib/warehouse-modules'
+import { useNav } from '@/lib/nav'
 import { WarehouseRail } from '@/components/warehouse/WarehouseRail'
 import { CompanionPanel } from '@/components/warehouse/CompanionPanel'
 
@@ -19,6 +20,7 @@ function moduleParamName(id: WarehouseModuleId): string {
 }
 
 export function WarehouseDrilldown({ entry, onExit, onSelectModule }: WarehouseDrilldownProps) {
+  const { navigate } = useNav()
   const [internalModuleId, setInternalModuleId] = useState<WarehouseModuleId>(entry.moduleId)
 
   useEffect(() => {
@@ -28,6 +30,10 @@ export function WarehouseDrilldown({ entry, onExit, onSelectModule }: WarehouseD
   const activeModuleId = entry.moduleId || internalModuleId
 
   const handleSelectModule = (id: WarehouseModuleId) => {
+    if (id === 'vendors') {
+      navigate('vendors')
+      return
+    }
     if (onSelectModule) {
       onSelectModule(id)
     } else {

@@ -27,8 +27,16 @@ const NavContext = createContext<NavContextValue | null>(null)
 
 export function parseRouteFromUrl(): Route | null {
   if (typeof window === 'undefined') return null
-  const param = new URLSearchParams(window.location.search).get('route')
+  const searchParams = new URLSearchParams(window.location.search)
+  const param = searchParams.get('route')
+  const moduleParam = searchParams.get('module')?.toLowerCase().trim()
   const rawPath = window.location.pathname.trim().replace(/^\/+|\/+$/g, '')
+
+  if (rawPath === 'overview' && moduleParam === 'vendors') {
+    window.history.replaceState({ route: 'vendors' }, '', '/vendors')
+    return 'vendors'
+  }
+
   const candidate = (param || rawPath) as Route
   return VALID_ROUTES.has(candidate) ? candidate : null
 }

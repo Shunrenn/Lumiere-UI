@@ -9,6 +9,7 @@ import { WarehouseDrilldown, type DrilldownEntry } from '@/components/warehouse/
 import { WarehouseEventDetailPage } from '@/pages/WarehouseEventDetailPage'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
+import { useNav } from '@/lib/nav'
 import type { WarehouseModuleId } from '@/lib/warehouse-modules'
 import type { PortalEvent } from '@/lib/types'
 
@@ -16,12 +17,11 @@ function parseWarehouseModuleFromUrl(): WarehouseModuleId | null {
   if (typeof window === 'undefined') return null
   const params = new URLSearchParams(window.location.search)
   const raw = params.get('module')?.toLowerCase().trim()
-  if (!raw) return null
+  if (!raw || raw === 'vendors') return null
   const validModules: Record<string, WarehouseModuleId> = {
     inventory: 'assets',
     assets: 'assets',
     replenishment: 'replenishment',
-    vendors: 'vendors',
     dispatch: 'dispatch',
     manning: 'manning',
     production: 'production',
@@ -33,6 +33,7 @@ function parseWarehouseModuleFromUrl(): WarehouseModuleId | null {
 import { canAccessWarehouseModule } from '@/lib/route-guard'
 
 export function WarehouseHomePage() {
+  const { navigate } = useNav()
   const { events } = usePortal()
   const { currentUser } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
@@ -46,6 +47,15 @@ export function WarehouseHomePage() {
   const [summaryEvent, setSummaryEvent] = useState<PortalEvent | null>(null)
   const [isLoading] = useState(false)
   const [isError, setIsError] = useState(false)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('module')?.toLowerCase().trim() === 'vendors') {
+        navigate('vendors', null, { replace: true })
+      }
+    }
+  }, [navigate])
 
   useEffect(() => {
     const syncFromUrl = () => {
@@ -71,6 +81,10 @@ export function WarehouseHomePage() {
 
   const openModule = (id: WarehouseModuleId) => {
     if (!canAccessWarehouseModule(currentUser, id)) return
+    if (id === 'vendors') {
+      navigate('vendors')
+      return
+    }
     setDrilldown({ kind: 'module', moduleId: id })
     const paramName = id === 'assets' ? 'inventory' : id
     const targetSearch = `?module=${paramName}`

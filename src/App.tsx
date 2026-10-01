@@ -47,6 +47,7 @@ const ProductionManagerPage = lazy(() => import('@/pages/ProductionManagerPage')
 const InventoryOfficerPage = lazy(() => import('@/pages/InventoryOfficerPage').then((m) => ({ default: m.InventoryOfficerPage })))
 const ProjectManagerDashboardPage = lazy(() => import('@/pages/ProjectManagerDashboardPage').then((m) => ({ default: m.ProjectManagerDashboardPage })))
 const ExecutiveAssetInventoryPage = lazy(() => import('@/pages/ExecutiveAssetInventoryPage').then((m) => ({ default: m.ExecutiveAssetInventoryPage })))
+const VendorManagementPage = lazy(() => import('@/pages/VendorManagementPage').then((m) => ({ default: m.VendorManagementPage })))
 const WarehouseDrilldown = lazy(() => import('@/components/warehouse/WarehouseDrilldown').then((m) => ({ default: m.WarehouseDrilldown })))
 import type { WarehouseModuleId } from '@/lib/warehouse-modules'
 import { canAccessRoute, getDefaultRouteForUser, PWA_STANDALONE_ROUTES } from '@/lib/route-guard'
@@ -149,9 +150,10 @@ function Router() {
   // Explicitly denied: Manning, Production, Workforce, Logs, full WOM super-role admin.
   if (isWarehouseAssociate) {
     switch (route) {
+      case 'vendors':
+        return <VendorManagementPage />
       case 'inventory':
       case 'replenishment':
-      case 'vendors':
       case 'dispatch': {
         const modId = route === 'inventory' ? 'assets' : (route as WarehouseModuleId)
         return (
@@ -207,12 +209,7 @@ function Router() {
     case 'dispatch':
       return <DispatchManifestPage />
     case 'vendors':
-      return (
-        <WarehouseDrilldown
-          entry={{ kind: 'module', moduleId: 'vendors' }}
-          onExit={() => navigate('overview')}
-        />
-      )
+      return <VendorManagementPage />
     case 'event-detail':
       return <EventDetailPage />
     case 'canvas':
@@ -289,11 +286,22 @@ function Gate() {
   // should land straight on Workforce Management on a fresh load/refresh —
   // scoped to this one param, not a general URL-routing migration.
   const rawPath = typeof window !== 'undefined' ? window.location.pathname.replace(/^\/+|\/+$/g, '') : ''
-  const urlRouteParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('route') : null
-  const candidateRoute = (urlRouteParam || rawPath) as Route
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
+  const urlRouteParam = searchParams.get('route')
+  const moduleParam = searchParams.get('module')?.toLowerCase().trim()
+  let candidateRoute = (urlRouteParam || rawPath) as Route
+
+  // Canonicalize legacy /overview?module=vendors directly to /vendors
+  if (rawPath === 'overview' && moduleParam === 'vendors') {
+    if (typeof window !== 'undefined') {
+      window.history.replaceState({ route: 'vendors' }, '', '/vendors')
+    }
+    candidateRoute = 'vendors'
+  }
+
   const hasWorkforceHighlight =
     typeof window !== 'undefined' &&
-    (new URLSearchParams(window.location.search).has('highlight') || Boolean(window.history.state?.highlight))
+    (searchParams.has('highlight') || Boolean(window.history.state?.highlight))
 
   let initialRoute: Route
   if (hasWorkforceHighlight && canAccessRoute(currentUser, 'workforce', canAccessAssetInventory)) {
