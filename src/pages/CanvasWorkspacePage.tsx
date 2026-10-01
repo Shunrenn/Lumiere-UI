@@ -332,7 +332,7 @@ function ElementsTab({
   }
 
   function handleDragStart(e: React.DragEvent, item: CanonicalCanvasItem, stock: number) {
-    if (stock === 0) { e.preventDefault(); return }
+    if (stock <= 0) { e.preventDefault(); return }
     const payload: DroppedAsset = { id: item.id, name: item.name, src: item.src, defaultUnit: item.unit || 'pcs' }
     e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload))
     e.dataTransfer.effectAllowed = 'copy'
@@ -344,7 +344,7 @@ function ElementsTab({
   }
 
   function handleTileClick(item: CanonicalCanvasItem, stock: number) {
-    if (stock === 0) setBlocked({ id: item.id, label: item.name, unit: item.unit || 'pcs' })
+    if (stock <= 0) setBlocked({ id: item.id, label: item.name, unit: item.unit || 'pcs' })
   }
 
   return (
@@ -394,7 +394,7 @@ function ElementsTab({
               <div className="grid grid-cols-3 gap-1.5">
                 {cat.items.map((item) => {
                   const stock = getStock(item)
-                  const outOfStock = stock === 0
+                  const outOfStock = stock <= 0
                   return (
                     <div
                       key={item.id}
@@ -420,8 +420,8 @@ function ElementsTab({
                       </div>
                       <p className="mt-0.5 truncate text-center text-[0.5rem] font-medium text-foreground">{item.name}</p>
                       {outOfStock ? (
-                        <span className="mt-0.5 flex w-full items-center justify-center rounded-full bg-muted px-1 py-0.5 text-center text-[0.45rem] font-bold uppercase tracking-[0.08em] text-muted-foreground">
-                          Not Available
+                        <span className="mt-0.5 flex w-full items-center justify-center rounded-full bg-destructive/15 px-1 py-0.5 text-center text-[0.45rem] font-bold uppercase tracking-[0.08em] text-destructive">
+                          NOT AVAILABLE
                         </span>
                       ) : (
                         <span className="mt-0.5 block text-center text-[0.45rem] font-medium text-muted-foreground/70">{stock} in physical stock</span>
@@ -450,7 +450,7 @@ function ElementsTab({
           <div ref={blockedRef} className="w-60 rounded-2xl border border-border bg-card p-4 shadow-2xl">
             <div className="mb-2 flex items-center gap-2">
               <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-destructive/15"><AlertTriangle className="size-3.5 text-destructive" /></div>
-              <span className="text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">Not Available</span>
+              <span className="text-[0.65rem] font-bold uppercase tracking-[0.1em] text-destructive">NOT AVAILABLE</span>
             </div>
             <p className="mb-3 text-[0.62rem] text-muted-foreground leading-relaxed">
               <span className="font-semibold text-foreground">{blocked.label}</span> has zero verified physical stock right now.
@@ -2306,7 +2306,14 @@ function AllocationModal({
           )}
           <div className="flex items-center justify-between rounded-xl border border-border bg-background px-3 py-2.5">
             <span className="text-[0.62rem] text-muted-foreground">Physical Stock</span>
-            <span className="text-[0.68rem] font-bold text-foreground">{formatStock(asset.availableStock)} {asset.unit}(s)</span>
+            <div className="flex items-center gap-1.5">
+              {asset.availableStock <= 0 && (
+                <span className="rounded-md bg-destructive/15 px-1.5 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider text-destructive">
+                  NOT AVAILABLE
+                </span>
+              )}
+              <span className="text-[0.68rem] font-bold text-foreground">{formatStock(asset.availableStock)} {asset.unit}(s)</span>
+            </div>
           </div>
           {serverAvailability === 'loading' ? (
             <div className="flex items-center justify-between rounded-xl border border-border bg-background px-3 py-2 text-[0.60rem] text-muted-foreground">
@@ -2315,12 +2322,19 @@ function AllocationModal({
           ) : typeof serverAvailability === 'object' && serverAvailability !== null ? (
             <div className={cn(
               'flex flex-col gap-1 rounded-xl border px-3 py-2',
-              serverAvailability.hasConflict ? 'border-amber-500/40 bg-amber-500/10' : 'border-emerald-500/40 bg-emerald-500/10'
+              serverAvailability.hasConflict || serverAvailability.availableQuantity <= 0 ? 'border-amber-500/40 bg-amber-500/10' : 'border-emerald-500/40 bg-emerald-500/10'
             )}>
               <div className="flex items-center justify-between text-[0.60rem]">
-                <span className={serverAvailability.hasConflict ? 'font-semibold text-amber-400' : 'font-semibold text-emerald-400'}>
-                  {serverAvailability.hasConflict ? 'Event Window Conflict' : 'Event Window Verified'}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className={serverAvailability.hasConflict || serverAvailability.availableQuantity <= 0 ? 'font-semibold text-amber-400' : 'font-semibold text-emerald-400'}>
+                    {serverAvailability.availableQuantity <= 0 ? 'Event Window Unavailable' : serverAvailability.hasConflict ? 'Event Window Conflict' : 'Event Window Verified'}
+                  </span>
+                  {serverAvailability.availableQuantity <= 0 && (
+                    <span className="rounded-md bg-destructive/20 px-1.5 py-0.5 text-[0.52rem] font-bold uppercase tracking-wider text-destructive">
+                      NOT AVAILABLE
+                    </span>
+                  )}
+                </div>
                 <span className="text-[0.65rem] font-bold text-foreground">
                   {serverAvailability.availableQuantity} {unit}(s) available
                 </span>
