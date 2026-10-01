@@ -51,6 +51,7 @@ import { getPendingQueue, type QueuedDeclaration } from '@/lib/offlineQueue'
 import { subscribeOfflineSync, triggerOfflineReplay } from '@/lib/offlineReplay'
 import { queueManningStatusUpdate, getManningUserMutations } from '@/lib/offline/manningOutbox'
 import { triggerOutboxReplay, subscribeSyncEngine } from '@/lib/offline/offlineReplayEngine'
+import { setReadCache, getReadCache } from '@/lib/offline/db'
 import { StatusBadge } from '@/components/StatusBadge'
 import {
   PwaBadge,
@@ -165,6 +166,8 @@ export function GroundCrewPage() {
   const [loadingAssignments, setLoadingAssignments] = useState(true)
   const [assignmentError, setAssignmentError] = useState<string | null>(null)
   const [mutatingAssignmentId, setMutatingAssignmentId] = useState<string | null>(null)
+  const [isCachedData, setIsCachedData] = useState(false)
+  const [cacheTimestamp, setCacheTimestamp] = useState<string | null>(null)
   const [blockerModalAssignment, setBlockerModalAssignment] = useState<MyManningAssignmentDto | null>(null)
   const [blockerReasonInput, setBlockerReasonInput] = useState('')
   const [blockerNotesInput, setBlockerNotesInput] = useState('')
@@ -174,60 +177,86 @@ export function GroundCrewPage() {
     setLoadingAssignments(true)
     setAssignmentError(null)
     const userId = currentUser?.id
-    try {
-      const data = await fetchMyManningAssignments()
-      if (userId) {
-        const outbox = await getManningUserMutations(userId)
-        const outboxMap = new Map(outbox.map((m) => [m.payload.assignmentId, m]))
-        const merged = data.map((a) => {
-          const m = outboxMap.get(a.assignmentId)
-          if (m) {
-            return {
-              ...a,
-              executionStatus: m.payload.status,
-              blockerReason: m.payload.blockerReason || a.blockerReason,
-              pendingSync: m.status === 'pending' || m.status === 'syncing',
-              syncStatus: m.status,
-              lastSyncError: m.lastError,
-            }
+
+    // 1. If online, attempt canonical REST first
+    if (typeof navigator === 'undefined' || navigator.onLine) {
+      try {
+        const data = await fetchMyManningAssignments()
+        setIsCachedData(false)
+        setCacheTimestamp(null)
+
+        // Store authoritative read snapshot into durable IndexedDB read_cache
+        if (userId) {
+          try {
+            await setReadCache(userId, 'manning', 'my-assignments', data)
+          } catch (cErr) {
+            console.warn('[readCache] Failed to cache assignments:', cErr)
           }
-          return { ...a, pendingSync: false, syncStatus: 'confirmed' as const }
-        })
-        setMyAssignments(merged)
-      } else {
-        setMyAssignments(data)
-      }
-    } catch (err: any) {
-      if (userId) {
-        try {
+        }
+
+        if (userId) {
           const outbox = await getManningUserMutations(userId)
-          if (outbox.length > 0 && myAssignments.length > 0) {
-            const outboxMap = new Map(outbox.map((m) => [m.payload.assignmentId, m]))
-            setMyAssignments((prev) =>
-              prev.map((a) => {
-                const m = outboxMap.get(a.assignmentId)
-                if (m) {
-                  return {
-                    ...a,
-                    executionStatus: m.payload.status,
-                    blockerReason: m.payload.blockerReason || a.blockerReason,
-                    pendingSync: m.status === 'pending' || m.status === 'syncing',
-                    syncStatus: m.status,
-                    lastSyncError: m.lastError,
-                  }
-                }
-                return a
-              }),
-            )
-            return
-          }
-        } catch {}
+          const outboxMap = new Map(outbox.map((m) => [m.payload.assignmentId, m]))
+          const merged = data.map((a) => {
+            const m = outboxMap.get(a.assignmentId)
+            if (m) {
+              return {
+                ...a,
+                executionStatus: m.payload.status,
+                blockerReason: m.payload.blockerReason || a.blockerReason,
+                pendingSync: m.status === 'pending' || m.status === 'syncing',
+                syncStatus: m.status,
+                lastSyncError: m.lastError,
+              }
+            }
+            return { ...a, pendingSync: false, syncStatus: 'confirmed' as const }
+          })
+          setMyAssignments(merged)
+        } else {
+          setMyAssignments(data)
+        }
+        setLoadingAssignments(false)
+        return
+      } catch (err: any) {
+        console.warn('[GroundCrewPage] REST fetch failed, attempting read cache fallback:', err)
       }
-      setAssignmentError(err?.message || 'Unable to connect to Manning schedule.')
-    } finally {
-      setLoadingAssignments(false)
     }
-  }, [currentUser?.id, myAssignments.length])
+
+    // 2. Offline / network fallback: hydrate from user-scoped read_cache
+    if (userId) {
+      try {
+        const cached = await getReadCache<MyManningAssignmentDto[]>(userId, 'manning', 'my-assignments')
+        if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
+          const outbox = await getManningUserMutations(userId)
+          const outboxMap = new Map(outbox.map((m) => [m.payload.assignmentId, m]))
+          const merged = cached.data.map((a) => {
+            const m = outboxMap.get(a.assignmentId)
+            if (m) {
+              return {
+                ...a,
+                executionStatus: m.payload.status,
+                blockerReason: m.payload.blockerReason || a.blockerReason,
+                pendingSync: m.status === 'pending' || m.status === 'syncing',
+                syncStatus: m.status,
+                lastSyncError: m.lastError,
+              }
+            }
+            return { ...a, pendingSync: false, syncStatus: 'confirmed' as const }
+          })
+          setMyAssignments(merged)
+          setIsCachedData(true)
+          setCacheTimestamp(cached.cachedAt)
+          setLoadingAssignments(false)
+          return
+        }
+      } catch (cErr) {
+        console.warn('[GroundCrewPage] Read cache retrieval failed:', cErr)
+      }
+    }
+
+    setAssignmentError('Network unavailable and no cached assignments found for this account.')
+    setLoadingAssignments(false)
+  }, [currentUser?.id])
 
   useEffect(() => {
     void loadAssignments()
@@ -855,6 +884,8 @@ export function GroundCrewPage() {
                 assignments={myAssignments}
                 loadingAssignments={loadingAssignments}
                 assignmentError={assignmentError}
+                isCachedData={isCachedData}
+                cacheTimestamp={cacheTimestamp}
                 onRefreshAssignments={loadAssignments}
                 mutatingAssignmentId={mutatingAssignmentId}
                 onUpdateAssignmentStatus={handleUpdateAssignmentStatus}
@@ -1053,6 +1084,8 @@ function Home({
   assignments,
   loadingAssignments,
   assignmentError,
+  isCachedData,
+  cacheTimestamp,
   onRefreshAssignments,
   mutatingAssignmentId,
   onUpdateAssignmentStatus,
@@ -1064,6 +1097,8 @@ function Home({
   assignments: MyManningAssignmentDto[]
   loadingAssignments: boolean
   assignmentError: string | null
+  isCachedData?: boolean
+  cacheTimestamp?: string | null
   onRefreshAssignments: () => void
   mutatingAssignmentId: string | null
   onUpdateAssignmentStatus: (
@@ -1095,6 +1130,8 @@ function Home({
         assignments={assignments}
         loading={loadingAssignments}
         error={assignmentError}
+        isCachedData={isCachedData}
+        cacheTimestamp={cacheTimestamp}
         onRefresh={onRefreshAssignments}
         mutatingAssignmentId={mutatingAssignmentId}
         onUpdateStatus={onUpdateAssignmentStatus}
@@ -1172,6 +1209,8 @@ function MyAssignmentsSection({
   assignments,
   loading,
   error,
+  isCachedData,
+  cacheTimestamp,
   onRefresh,
   mutatingAssignmentId,
   onUpdateStatus,
@@ -1180,6 +1219,8 @@ function MyAssignmentsSection({
   assignments: MyManningAssignmentDto[]
   loading: boolean
   error: string | null
+  isCachedData?: boolean
+  cacheTimestamp?: string | null
   onRefresh: () => void
   mutatingAssignmentId: string | null
   onUpdateStatus: (
@@ -1208,6 +1249,20 @@ function MyAssignmentsSection({
           <span>Refresh</span>
         </button>
       </div>
+
+      {isCachedData && (
+        <div className="flex items-center justify-between rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs text-sky-800 dark:text-sky-200">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="inline-block size-2 rounded-full bg-sky-500 animate-pulse" />
+            <span>Cached Operational Data (Offline)</span>
+          </div>
+          {cacheTimestamp && (
+            <span className="text-[0.65rem] opacity-75">
+              Snapshot: {new Date(cacheTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+        </div>
+      )}
 
       {loading && (
         <div className="space-y-2">
