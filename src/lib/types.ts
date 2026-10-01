@@ -244,6 +244,7 @@ export interface PortalEvent {
   ingressDate?: string
   ingressTime?: string
   fullStop?: string
+  returnDate?: string
   geoClass?: string
   budget: number
   status: EventStatus

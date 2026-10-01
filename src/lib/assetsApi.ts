@@ -28,9 +28,43 @@ function getAuthHeaders(): HeadersInit {
   return headers
 }
 
-export async function fetchAssetsApi(): Promise<Partial<CatalogAsset>[]> {
+/**
+ * Query parameters forwarded to GET /api/assets.
+ * Mirrors AssetController.GetAssets query params exactly:
+ *   search   - free-text search (name / description)
+ *   category - category filter
+ *   theme    - theme/tag filter (maps to tagValue on backend)
+ *   page, pageSize - pagination
+ */
+export interface SearchAssetsParams {
+  search?: string
+  category?: string
+  theme?: string
+  page?: number
+  pageSize?: number
+}
+
+/**
+ * Fetches canonical Asset Registry data from GET /api/assets.
+ *
+ * Supports backend-side search/theme/category filtering.
+ * Backend contract (AssetController.cs):
+ *   GET /api/assets?search=&category=&theme=&page=&pageSize=
+ *
+ * Returns [] on any failure — callers must handle empty state explicitly.
+ * The empty result is a real backend response, not a fallback stock substitute.
+ */
+export async function fetchAssetsApi(params?: SearchAssetsParams): Promise<Partial<CatalogAsset>[]> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/assets`, {
+    const qs = new URLSearchParams()
+    if (params?.search) qs.set('search', params.search)
+    if (params?.category) qs.set('category', params.category)
+    if (params?.theme) qs.set('theme', params.theme)
+    if (params?.page != null) qs.set('page', String(params.page))
+    if (params?.pageSize != null) qs.set('pageSize', String(params.pageSize))
+    const query = qs.toString()
+    const url = query ? `${API_BASE_URL}/api/assets?${query}` : `${API_BASE_URL}/api/assets`
+    const res = await fetch(url, {
       headers: getAuthHeaders(),
     })
     if (!res.ok) return []

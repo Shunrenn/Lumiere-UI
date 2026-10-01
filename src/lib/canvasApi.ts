@@ -1,4 +1,4 @@
-﻿import { API_BASE_URL, getAuthToken } from './apiConfig'
+import { API_BASE_URL, getAuthToken } from './apiConfig'
 
 /**
  * Exact C# DTO matching Lumiere.Core.DTOs.CanvasResponse
@@ -26,6 +26,69 @@ export interface SaveCanvasRequestDto {
   pdfUrl?: string
   canvasMode?: string
   canvasStatus?: string
+}
+
+// ---------------------------------------------------------------------------
+// Reservation / Availability DTOs
+// Exactly mirrors Lumiere.Core.DTOs.ReservationDTOs
+// ---------------------------------------------------------------------------
+
+/**
+ * Mirrors AssetConflictDetail in ReservationDTOs.cs
+ */
+export interface AssetConflictDetail {
+  assetId: string
+  assetName: string | null
+  requestedQuantity: number
+  availableQuantity: number
+  physicalStock: number
+  committedQuantity: number
+  conflictingEventId: string
+  conflictingEventName: string | null
+  conflictingLockStart: string
+  conflictingLockEnd: string
+}
+
+/**
+ * Mirrors AssetAvailabilityDto in ReservationDTOs.cs.
+ * AUTHORITATIVE server response for event-window asset availability.
+ *
+ * SEMANTICS:
+ *   physicalStock      - total units in warehouse (physical reality)
+ *   committedQuantity  - units already reserved in overlapping windows
+ *   availableQuantity  - physicalStock minus committedQuantity for this window
+ *   requestedQuantity  - the quantity we asked about
+ *   hasConflict        - true when requestedQuantity > availableQuantity
+ *   deficitQuantity    - shortfall when constrained
+ */
+export interface AssetAvailabilityDto {
+  assetId: string
+  assetName: string
+  physicalStock: number
+  committedQuantity: number
+  availableQuantity: number
+  requestedQuantity: number
+  hasConflict: boolean
+  deficitQuantity: number
+  conflictingEvents: AssetConflictDetail[]
+}
+
+/**
+ * Mirrors AssetReservationItemDto in ReservationDTOs.cs
+ */
+export interface AssetReservationItemDto {
+  assetId: string
+  quantity: number
+}
+
+/**
+ * Mirrors CanvasValidationResponse in ReservationDTOs.cs
+ */
+export interface CanvasValidationResponse {
+  availableAssetIds: string[]
+  conflictedAssetIds: string[]
+  availabilityDetails: AssetAvailabilityDto[]
+  isValid: boolean
 }
 
 function getAuthHeaders(): HeadersInit {
@@ -67,7 +130,7 @@ export async function fetchCanvasLayoutApi(eventId: string): Promise<CanvasRespo
 }
 
 // ---------------------------------------------------------------------------
-// Canonical result type
+// Canonical result types
 // Callers MUST check .ok before showing success UI or triggering downstream
 // operations. Never treat absence of ok:false as implicit success.
 // ---------------------------------------------------------------------------
@@ -77,11 +140,20 @@ export type CanvasApiResult =
   | { ok: false; reason: 'network-error' | 'backend-rejected' | 'no-event-id'; status?: number; message?: string }
 
 /**
+ * Structured 409 conflict result from POST /api/canvas/event/{eventId}/approve.
+ * Mirrors the TemporalConflictException shape from CanvasController.cs:
+ *   { Message: string, Conflicts: AssetConflictDetail[] }
+ */
+export type CanvasApprovalResult =
+  | { ok: true }
+  | { ok: false; reason: 'conflict-409'; message: string; conflicts: AssetConflictDetail[] }
+  | { ok: false; reason: 'backend-rejected'; status: number; message?: string }
+  | { ok: false; reason: 'network-error'; message?: string }
+  | { ok: false; reason: 'no-event-id' }
+
+/**
  * Saves canvas layout state to PUT /api/canvas/event/{eventId}.
- *
- * Returns CanvasApiResult. Callers must check .ok before showing "Saved" UI.
- * Network errors and backend rejections both return { ok: false }.
- * NEVER silently converts failures into success.
+ * Returns CanvasApiResult. NEVER silently converts failures into success.
  */
 export async function saveCanvasLayoutApi(eventId: string, canvasStateJson: string): Promise<CanvasApiResult> {
   const payload: SaveCanvasRequestDto = {
@@ -107,24 +179,122 @@ export async function saveCanvasLayoutApi(eventId: string, canvasStateJson: stri
 }
 
 /**
- * Approves a canvas layout and activates the warehouse dispatch queue bridge
- * via POST /api/canvas/event/{eventId}/approve.
- *
- * Returns CanvasApiResult. Callers must check .ok before showing "Approved" UI
- * and before triggering any downstream dispatch population.
- * NEVER silently converts failures into success.
- *
- * R9 boundary: This persists canvas approval to the backend. Downstream
- * warehouse logistics/dispatch queue population is backend-driven from this
- * approval event. Frontend dispatch state (populateWarehouseDispatchFromCanvas)
- * is module-scoped memory only and does NOT substitute for backend persistence.
+ * Normalizes backend conflict detail object to camelCase AssetConflictDetail regardless of server casing.
  */
-export async function approveCanvasApi(eventId: string): Promise<CanvasApiResult> {
+export function normalizeConflictDetail(raw: any): AssetConflictDetail {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      assetId: '',
+      assetName: null,
+      requestedQuantity: 0,
+      availableQuantity: 0,
+      physicalStock: 0,
+      committedQuantity: 0,
+      conflictingEventId: '',
+      conflictingEventName: null,
+      conflictingLockStart: '',
+      conflictingLockEnd: '',
+    }
+  }
+  return {
+    assetId: raw.assetId ?? raw.AssetId ?? '',
+    assetName: raw.assetName ?? raw.AssetName ?? null,
+    requestedQuantity: Number(raw.requestedQuantity ?? raw.RequestedQuantity ?? 0),
+    availableQuantity: Number(raw.availableQuantity ?? raw.AvailableQuantity ?? 0),
+    physicalStock: Number(raw.physicalStock ?? raw.PhysicalStock ?? 0),
+    committedQuantity: Number(raw.committedQuantity ?? raw.CommittedQuantity ?? 0),
+    conflictingEventId: raw.conflictingEventId ?? raw.ConflictingEventId ?? '',
+    conflictingEventName: raw.conflictingEventName ?? raw.ConflictingEventName ?? null,
+    conflictingLockStart: raw.conflictingLockStart ?? raw.ConflictingLockStart ?? '',
+    conflictingLockEnd: raw.conflictingLockEnd ?? raw.ConflictingLockEnd ?? '',
+  }
+}
+
+/**
+ * Normalizes backend availability DTO to camelCase AssetAvailabilityDto regardless of server casing.
+ */
+export function normalizeAvailabilityDto(raw: any): AssetAvailabilityDto {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      assetId: '',
+      assetName: '',
+      physicalStock: 0,
+      committedQuantity: 0,
+      availableQuantity: 0,
+      requestedQuantity: 0,
+      hasConflict: false,
+      deficitQuantity: 0,
+      conflictingEvents: [],
+    }
+  }
+  const rawConflicts = raw.conflictingEvents ?? raw.ConflictingEvents ?? []
+  return {
+    assetId: raw.assetId ?? raw.AssetId ?? '',
+    assetName: raw.assetName ?? raw.AssetName ?? '',
+    physicalStock: Number(raw.physicalStock ?? raw.PhysicalStock ?? 0),
+    committedQuantity: Number(raw.committedQuantity ?? raw.CommittedQuantity ?? 0),
+    availableQuantity: Number(raw.availableQuantity ?? raw.AvailableQuantity ?? 0),
+    requestedQuantity: Number(raw.requestedQuantity ?? raw.RequestedQuantity ?? 0),
+    hasConflict: Boolean(raw.hasConflict ?? raw.HasConflict ?? false),
+    deficitQuantity: Number(raw.deficitQuantity ?? raw.DeficitQuantity ?? 0),
+    conflictingEvents: Array.isArray(rawConflicts) ? rawConflicts.map(normalizeConflictDetail) : [],
+  }
+}
+
+/**
+ * Normalizes backend validation response to camelCase CanvasValidationResponse.
+ */
+export function normalizeValidationResponse(raw: any): CanvasValidationResponse {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      availableAssetIds: [],
+      conflictedAssetIds: [],
+      availabilityDetails: [],
+      isValid: true,
+    }
+  }
+  const rawAvailIds = raw.availableAssetIds ?? raw.AvailableAssetIds ?? []
+  const rawConfIds = raw.conflictedAssetIds ?? raw.ConflictedAssetIds ?? []
+  const rawDetails = raw.availabilityDetails ?? raw.AvailabilityDetails ?? []
+  return {
+    availableAssetIds: Array.isArray(rawAvailIds) ? rawAvailIds : [],
+    conflictedAssetIds: Array.isArray(rawConfIds) ? rawConfIds : [],
+    availabilityDetails: Array.isArray(rawDetails) ? rawDetails.map(normalizeAvailabilityDto) : [],
+    isValid: Boolean(raw.isValid ?? raw.IsValid ?? (Array.isArray(rawConfIds) ? rawConfIds.length === 0 : true)),
+  }
+}
+
+/**
+ * Approves a canvas layout via POST /api/canvas/event/{eventId}/approve.
+ *
+ * Returns CanvasApprovalResult. Callers MUST check .ok before showing success UI.
+ *
+ * HTTP 409 Conflict:
+ *   CanvasController.cs catches TemporalConflictException and returns:
+ *     { Message: string, Conflicts: AssetConflictDetail[] }
+ *   Surfaced as { ok: false, reason: 'conflict-409', message, conflicts }.
+ *   NO success state must be shown on a 409. Planner must remain on Canvas.
+ *
+ * R9 boundary: Persistent AssetReservation + DispatchPreparationQueue creation is
+ * backend-driven from this approval event. Frontend dispatch state is local only.
+ */
+export async function approveCanvasApi(eventId: string): Promise<CanvasApprovalResult> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/canvas/event/${encodeURIComponent(eventId)}/approve`, {
       method: 'POST',
       headers: getAuthHeaders(),
     })
+    if (res.status === 409) {
+      let body: any = {}
+      try { body = await res.json() } catch { /* non-JSON 409 body */ }
+      const rawConflicts = body.conflicts ?? body.Conflicts ?? []
+      const conflicts: AssetConflictDetail[] = Array.isArray(rawConflicts)
+        ? rawConflicts.map(normalizeConflictDetail)
+        : []
+      const message = body.message ?? body.Message ?? 'Canvas approval rejected due to asset reservation conflicts.'
+      console.warn(`[canvasApi] POST /api/canvas/event/${eventId}/approve 409 Conflict:`, message, conflicts)
+      return { ok: false, reason: 'conflict-409', message, conflicts }
+    }
     if (!res.ok) {
       console.warn(`[canvasApi] POST /api/canvas/event/${eventId}/approve returned HTTP ${res.status}`)
       return { ok: false, reason: 'backend-rejected', status: res.status }
@@ -132,6 +302,152 @@ export async function approveCanvasApi(eventId: string): Promise<CanvasApiResult
     return { ok: true }
   } catch (err) {
     console.warn(`[canvasApi] POST /api/canvas/event/${eventId}/approve network error:`, err)
+    return { ok: false, reason: 'network-error', message: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/reservations/availability
+// Server-authoritative event-window asset availability.
+// ---------------------------------------------------------------------------
+
+export interface GetAssetAvailabilityParams {
+  assetId: string
+  start: string   // ISO-8601 DateTimeOffset
+  end: string     // ISO-8601 DateTimeOffset
+  quantity?: number
+  eventId?: string
+}
+
+export type AssetAvailabilityResult =
+  | { ok: true; data: AssetAvailabilityDto }
+  | { ok: false; reason: 'not-found' | 'backend-error' | 'network-error' | 'missing-params'; message?: string }
+
+/**
+ * Fetches server-authoritative event-window availability for a single asset.
+ *
+ * GET /api/reservations/availability?assetId=&start=&end=&quantity=&eventId=
+ *
+ * AUTHORITATIVE operational truth:
+ *   physicalStock      - total units in warehouse
+ *   committedQuantity  - units locked by other overlapping reservations
+ *   availableQuantity  - available for THIS event window
+ *   requestedQuantity  - what we asked for
+ *   hasConflict        - true when request cannot be met
+ *
+ * On failure: returns { ok: false }. Callers show "availability unknown".
+ * NEVER substitute physicalStock for event-window available quantity.
+ *
+ * Supports AbortSignal for stale-request cancellation.
+ */
+export async function getAssetAvailabilityApi(
+  params: GetAssetAvailabilityParams,
+  signal?: AbortSignal,
+): Promise<AssetAvailabilityResult> {
+  const { assetId, start, end, quantity = 1, eventId } = params
+  if (!assetId || !start || !end) {
+    return { ok: false, reason: 'missing-params', message: 'assetId, start, and end are required.' }
+  }
+  const qs = new URLSearchParams({
+    assetId,
+    start,
+    end,
+    quantity: String(Math.max(1, quantity)),
+  })
+  if (eventId) qs.set('eventId', eventId)
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/reservations/availability?${qs.toString()}`, {
+      headers: getAuthHeaders(),
+      signal,
+    })
+    if (res.status === 404) {
+      return { ok: false, reason: 'not-found', message: 'Asset not found on server.' }
+    }
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`
+      try { const b = await res.json(); msg = (b as { Error?: string })?.Error || msg } catch { /* ignore */ }
+      console.warn(`[canvasApi] GET /api/reservations/availability returned ${res.status}`)
+      return { ok: false, reason: 'backend-error', message: msg }
+    }
+    const rawData = await res.json()
+    const data: AssetAvailabilityDto = normalizeAvailabilityDto(rawData)
+    return { ok: true, data }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      return { ok: false, reason: 'network-error', message: 'Request cancelled.' }
+    }
+    console.warn('[canvasApi] GET /api/reservations/availability network error:', err)
+    return { ok: false, reason: 'network-error', message: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/reservations/validate-canvas-state
+// Pre-approval server-side Canvas validation.
+// ---------------------------------------------------------------------------
+
+export interface ValidateCanvasStateParams {
+  items: AssetReservationItemDto[]  // canonical asset ID + required quantity
+  lockStart: string                  // ISO-8601 DateTimeOffset
+  lockEnd: string                    // ISO-8601 DateTimeOffset
+  eventId?: string
+}
+
+export type CanvasValidationResult =
+  | { ok: true; data: CanvasValidationResponse }
+  | { ok: false; reason: 'backend-error' | 'network-error' | 'missing-params'; message?: string }
+
+/**
+ * Validates current canvas resource requirements against backend availability.
+ *
+ * POST /api/reservations/validate-canvas-state
+ *
+ * Request body mirrors CanvasValidationRequest in ReservationDTOs.cs:
+ *   Items: [{ AssetId: guid, Quantity: int }]
+ *   LockStart, LockEnd: DateTimeOffset
+ *   EventId: guid?
+ *
+ * Response (CanvasValidationResponse):
+ *   availableAssetIds   - assets fully satisfiable
+ *   conflictedAssetIds  - assets with shortfall
+ *   availabilityDetails - per-asset breakdown
+ *   isValid             - true only when conflictedAssetIds is empty
+ *
+ * IMPORTANT: Items must use canonical asset IDs + required quantities (not
+ * visual instance counts unless the product model explicitly maps them).
+ */
+export async function validateCanvasStateApi(
+  params: ValidateCanvasStateParams,
+): Promise<CanvasValidationResult> {
+  const { items, lockStart, lockEnd, eventId } = params
+  if (!items || items.length === 0 || !lockStart || !lockEnd) {
+    return { ok: false, reason: 'missing-params', message: 'items, lockStart, and lockEnd are required.' }
+  }
+  // Map to C# PascalCase DTO shape expected by the controller
+  const body = {
+    Items: items.map((i) => ({ AssetId: i.assetId, Quantity: i.quantity })),
+    LockStart: lockStart,
+    LockEnd: lockEnd,
+    ...(eventId ? { EventId: eventId } : {}),
+  }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/reservations/validate-canvas-state`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`
+      try { const b = await res.json(); msg = (b as { Error?: string })?.Error || msg } catch { /* ignore */ }
+      console.warn(`[canvasApi] POST /api/reservations/validate-canvas-state returned ${res.status}`)
+      return { ok: false, reason: 'backend-error', message: msg }
+    }
+    const rawData = await res.json()
+    const data: CanvasValidationResponse = normalizeValidationResponse(rawData)
+    return { ok: true, data }
+  } catch (err) {
+    console.warn('[canvasApi] POST /api/reservations/validate-canvas-state network error:', err)
     return { ok: false, reason: 'network-error', message: err instanceof Error ? err.message : String(err) }
   }
 }

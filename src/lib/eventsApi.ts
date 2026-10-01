@@ -144,6 +144,7 @@ export function mapEventResponseToPortalEvent(dto: EventResponseDto, index = 0):
     ingressDate: dto.ingressDate ? dto.ingressDate.split('T')[0] : undefined,
     ingressTime: dto.ingressTime ? dto.ingressTime.slice(0, 5) : undefined,
     fullStop: dto.fullStop ? dto.fullStop.slice(0, 5) : undefined,
+    returnDate: dto.returnDate ? dto.returnDate.split('T')[0] : undefined,
     geoClass: dto.geoClass || 'Local',
     budget: dto.estimatedRevenue ?? 0,
     status: (dto.status || 'Active') as any,

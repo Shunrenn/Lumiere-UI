@@ -27,9 +27,9 @@ import { useAuth } from '@/lib/auth'
   import { EmptyState } from '@/components/EmptyState'
   import { KonvaInfiniteCanvas, type KonvaInfiniteCanvasHandle, type CanvasTool, type KonvaCanvasAsset, ARTBOARD_W, ARTBOARD_H } from '@/components/canvas/KonvaInfiniteCanvas'
   import { usePortal, checkAssetAllocationConflict } from '@/lib/store'
-  import { approveCanvasApi } from '@/lib/canvasApi'
+  import { approveCanvasApi, getAssetAvailabilityApi, validateCanvasStateApi, type AssetConflictDetail, type AssetAvailabilityDto } from '@/lib/canvasApi'
   import { createDeficitItemApi } from '@/lib/deficitApi'
-  import { fetchAssetsApi } from '@/lib/assetsApi'
+  import { fetchAssetsApi, type SearchAssetsParams } from '@/lib/assetsApi'
 
 
 /* ─── Types ─── */
@@ -270,6 +270,7 @@ function ElementsTab({
   assetsError,
   onRetryFetch,
   onRouteToDeficit,
+  onSearchChange,
 }: {
   onDropAsset: (asset: DroppedAsset) => void
   assets: AllocatedAsset[]
@@ -278,15 +279,30 @@ function ElementsTab({
   assetsError: string | null
   onRetryFetch?: () => void
   onRouteToDeficit: (item: { id: string; name: string; unit: string }) => void
+  /** Called with the debounced search term so the parent can re-fetch from backend */
+  onSearchChange?: (term: string) => void
 }) {
   const [query, setQuery] = useState('')
   const [tooltip, setTooltip] = useState<{ id: string; label: string; src: string; category?: string; stock: number; description?: string } | null>(null)
   const [blocked, setBlocked] = useState<{ id: string; label: string; unit: string } | null>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
   const blockedRef = useRef<HTMLDivElement>(null)
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useOutsideClick(tooltipRef, () => setTooltip(null))
   useOutsideClick(blockedRef, () => setBlocked(null))
 
+  function handleQueryChange(value: string) {
+    setQuery(value)
+    // Debounce: send to backend after 350ms idle — avoids a request on every keystroke
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    searchDebounceRef.current = setTimeout(() => {
+      onSearchChange?.(value.trim())
+    }, 350)
+  }
+
+  // When backend search is active (onSearchChange provided), canonicalAssets already
+  // reflects the server-filtered result set. Client-side filter only applies as a
+  // fast local refinement while the debounce timer hasn't yet fired.
   const filteredAssets = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return canonicalAssets
@@ -338,9 +354,9 @@ function ElementsTab({
           <Search className="absolute left-2.5 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search inventory assets…"
+            placeholder="Search assets…"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => handleQueryChange(e.target.value)}
             className="w-full rounded-lg border border-border bg-background py-1.5 pl-7 pr-3 text-[0.65rem] text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none"
           />
         </div>
@@ -1150,6 +1166,7 @@ function LeftPanel({
   assetsLoading,
   assetsError,
   onRetryFetch,
+  onSearchChange,
 }: {
   onDropAsset: (asset: DroppedAsset) => void
   eventAlias?: string
@@ -1168,6 +1185,7 @@ function LeftPanel({
   assetsLoading: boolean
   assetsError: string | null
   onRetryFetch?: () => void
+  onSearchChange?: (term: string) => void
 }) {
   const [activeTab, setActiveTab] = useState<PanelTab>('elements')
   const [collapsed, setCollapsed] = useState(false)
@@ -1207,6 +1225,7 @@ function LeftPanel({
                 assetsError={assetsError}
                 onRetryFetch={onRetryFetch}
                 onRouteToDeficit={onRouteToDeficit}
+                onSearchChange={onSearchChange}
               />
             )}
             {activeTab === 'text'       && <TextTab onPlacePresetText={onPlacePresetText} selectedAsset={selectedAsset} onUpdateFormatting={onUpdateFormatting} onUpdateColor={onUpdateColor} />}
@@ -2203,10 +2222,12 @@ void InfiniteCanvas
    ══════════════════════════════════════════ */
 
 function AllocationModal({
-  asset, onClose, onSave, onStrategy,
+  asset, onClose, onSave, onStrategy, serverAvailability, onFetchAvailability,
 }: {
   asset: AllocatedAsset; onClose: () => void; onSave: (id: string, qty: number, unit: string) => void
   onStrategy: (path: StrategyPath, id: string, qty: number, unit: string) => void
+  serverAvailability?: AssetAvailabilityDto | 'loading' | 'error'
+  onFetchAvailability?: (assetId: string, quantity?: number) => Promise<boolean>
 }) {
   const [qty, setQty] = useState<string>(asset.dragCount.toString())
   const [unit, setUnit] = useState(asset.unit)
@@ -2218,6 +2239,10 @@ function AllocationModal({
   const requestedBase = convertToBase(requested, unit)
   const availableBase = convertToBase(asset.availableStock, asset.unit)
   const deficit = Math.max(0, requestedBase - availableBase) / (UNIT_FACTORS[unit] ?? 1)
+
+  useEffect(() => {
+    onFetchAvailability?.(asset.id, requested)
+  }, [asset.id, requested, onFetchAvailability])
 
   function handleDeclareMax(checked: boolean) { setDeclareMax(checked); if (checked) setQty(asset.availableStock.toString()) }
   function handleSave() { if (deficit > 0) { setDeficitOpen(true); return }; onSave(asset.id, requested, unit); onClose() }
@@ -2283,6 +2308,30 @@ function AllocationModal({
             <span className="text-[0.62rem] text-muted-foreground">Physical Stock</span>
             <span className="text-[0.68rem] font-bold text-foreground">{formatStock(asset.availableStock)} {asset.unit}(s)</span>
           </div>
+          {serverAvailability === 'loading' ? (
+            <div className="flex items-center justify-between rounded-xl border border-border bg-background px-3 py-2 text-[0.60rem] text-muted-foreground">
+              <span className="flex items-center gap-1.5"><RefreshCw className="size-3 animate-spin text-primary" /> Verifying event-window availability...</span>
+            </div>
+          ) : typeof serverAvailability === 'object' && serverAvailability !== null ? (
+            <div className={cn(
+              'flex flex-col gap-1 rounded-xl border px-3 py-2',
+              serverAvailability.hasConflict ? 'border-amber-500/40 bg-amber-500/10' : 'border-emerald-500/40 bg-emerald-500/10'
+            )}>
+              <div className="flex items-center justify-between text-[0.60rem]">
+                <span className={serverAvailability.hasConflict ? 'font-semibold text-amber-400' : 'font-semibold text-emerald-400'}>
+                  {serverAvailability.hasConflict ? 'Event Window Conflict' : 'Event Window Verified'}
+                </span>
+                <span className="text-[0.65rem] font-bold text-foreground">
+                  {serverAvailability.availableQuantity} {unit}(s) available
+                </span>
+              </div>
+              {serverAvailability.hasConflict && (
+                <div className="text-[0.56rem] text-amber-300/80">
+                  Deficit: {serverAvailability.deficitQuantity} {unit}(s) — {serverAvailability.committedQuantity} committed to overlapping events
+                </div>
+              )}
+            </div>
+          ) : null}
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-border py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-muted-foreground hover:bg-accent hover:text-foreground transition">Cancel</button>
             <button type="button" onClick={handleSave} className="flex-1 rounded-xl bg-primary py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">Allocate</button>
@@ -2510,9 +2559,9 @@ function VerifyReplenishmentModal({ item, onClose, onVerify }: { item: PendingRe
   )
 }
 
-// Fires automatically from on-canvas drag activity (see the dragCount-vs-availableStock
-// effect in CanvasWorkspacePage) — separate from AllocationModal's deficit flow, which
-// only runs when a user manually opens that modal.
+// Fires automatically from on-canvas drag activity — advisory only.
+// This warning is based on physicalStock from the asset catalog, not server-authoritative
+// event-window availability. It is an early UX guide, not an operational availability gate.
 function StockAvailabilityWarningModal({ asset, onClose }: { asset: AllocatedAsset; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
   useOutsideClick(ref, onClose)
@@ -2521,14 +2570,69 @@ function StockAvailabilityWarningModal({ asset, onClose }: { asset: AllocatedAss
       <div ref={ref} className="w-72 rounded-2xl border border-amber-500/40 bg-card p-4 shadow-2xl">
         <div className="mb-3 flex items-center gap-2">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-500/15"><AlertTriangle className="size-4 text-amber-400" /></div>
-          <span className="text-[0.68rem] font-bold uppercase tracking-[0.12em] text-foreground">Stock Availability Warning</span>
+          <span className="text-[0.68rem] font-bold uppercase tracking-[0.12em] text-foreground">Advisory: Catalog Stock Reached</span>
         </div>
         <p className="mb-3 text-[0.64rem] text-muted-foreground leading-relaxed">
-          You&apos;ve placed <span className="font-semibold text-foreground">{asset.dragCount} {asset.unit}</span> of <span className="font-semibold text-foreground">{asset.name}</span> on the canvas, which reaches its available stock of <span className="font-semibold text-foreground">{asset.availableStock} {asset.unit}</span> for this event window.
+          You&apos;ve placed <span className="font-semibold text-foreground">{asset.dragCount} {asset.unit}</span> of{' '}
+          <span className="font-semibold text-foreground">{asset.name}</span> on the canvas, reaching its catalog stock of{' '}
+          <span className="font-semibold text-foreground">{asset.availableStock} {asset.unit}</span>.
+        </p>
+        <p className="mb-3 text-[0.60rem] text-amber-400/80 leading-relaxed">
+          This is an advisory based on physical stock. Event-window availability (accounting for other committed events) is verified by the server at canvas validation and approval.
         </p>
         <button type="button" onClick={onClose}
           className="w-full rounded-xl bg-primary py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">
           Got It
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Shown when POST /api/canvas/event/{id}/approve returns HTTP 409 Conflict.
+// Displays the structured conflict details from TemporalConflictException.
+function ApprovalConflict409Modal({
+  message,
+  conflicts,
+  onClose,
+}: {
+  message: string
+  conflicts: AssetConflictDetail[]
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useOutsideClick(ref, onClose)
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-background/70 backdrop-blur-sm">
+      <div ref={ref} className="w-80 max-h-[80vh] overflow-y-auto rounded-2xl border border-red-500/40 bg-card p-5 shadow-2xl">
+        <div className="mb-3 flex items-center gap-2">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-red-500/15">
+            <AlertTriangle className="size-4 text-red-400" />
+          </div>
+          <span className="text-[0.68rem] font-bold uppercase tracking-[0.12em] text-foreground">Approval Conflict</span>
+        </div>
+        <p className="mb-3 text-[0.64rem] text-muted-foreground leading-relaxed">{message}</p>
+        {conflicts.length > 0 && (
+          <div className="mb-3 space-y-2">
+            {conflicts.map((c, i) => (
+              <div key={i} className="rounded-xl border border-border bg-background/60 p-3 text-[0.60rem] space-y-1">
+                <div className="font-semibold text-foreground">{c.assetName ?? c.assetId}</div>
+                <div className="flex gap-3 text-muted-foreground">
+                  <span>Required: <span className="font-bold text-foreground">{c.requestedQuantity}</span></span>
+                  <span>Available: <span className="font-bold text-red-400">{c.availableQuantity}</span></span>
+                </div>
+                {c.conflictingEventName && (
+                  <div className="text-muted-foreground">
+                    Conflicts with: <span className="font-semibold text-foreground">{c.conflictingEventName}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <button type="button" onClick={onClose}
+          className="w-full rounded-xl bg-card border border-border py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-foreground hover:bg-accent transition">
+          Close — Revise Canvas
         </button>
       </div>
     </div>
@@ -2546,6 +2650,8 @@ function RightPanel({
   setPending,
   eventId,
   showToast,
+  serverAvailability,
+  onFetchAvailability,
 }: {
   expanded: boolean
   onToggleExpand: () => void
@@ -2557,6 +2663,8 @@ function RightPanel({
   setPending: React.Dispatch<React.SetStateAction<PendingReplenishment[]>>
   eventId?: string
   showToast: (msg: string) => void
+  serverAvailability?: Record<string, AssetAvailabilityDto | 'loading' | 'error'>
+  onFetchAvailability?: (assetId: string, quantity?: number) => Promise<boolean>
 }) {
   const [isOpen, setIsOpen] = useState(true)
   const [tab, setTab] = useState<RightPanelTab>('allocated')
@@ -2707,7 +2815,16 @@ function RightPanel({
           </div>
         )}
       </aside>
-      {selectedAsset && <AllocationModal asset={selectedAsset} onClose={() => setSelectedAsset(null)} onSave={handleSaveAllocation} onStrategy={handleStrategy} />}
+      {selectedAsset && (
+        <AllocationModal
+          asset={selectedAsset}
+          serverAvailability={serverAvailability?.[selectedAsset.id]}
+          onFetchAvailability={onFetchAvailability}
+          onClose={() => setSelectedAsset(null)}
+          onSave={handleSaveAllocation}
+          onStrategy={handleStrategy}
+        />
+      )}
       {verifyItem && <VerifyReplenishmentModal item={verifyItem} onClose={() => setVerifyItem(null)} onVerify={handleVerify} />}
     </>
   )
@@ -3232,11 +3349,13 @@ export function CanvasWorkspacePage() {
   const [canonicalCatalogAssets, setCanonicalCatalogAssets] = useState<CanonicalCanvasItem[]>([])
   const [assetsLoading, setAssetsLoading] = useState(true)
   const [assetsError, setAssetsError] = useState<string | null>(null)
+  // Current server-side search term (debounced from ElementsTab)
+  const [assetSearchTerm, setAssetSearchTerm] = useState('')
 
-  const loadCanonicalAssets = useCallback(() => {
+  const loadCanonicalAssets = useCallback((params?: SearchAssetsParams) => {
     setAssetsLoading(true)
     setAssetsError(null)
-    fetchAssetsApi()
+    fetchAssetsApi(params)
       .then((items) => {
         const mapped: CanonicalCanvasItem[] = (items || []).map((item) => ({
           id: item.id || (item as any).assetId || `asset-${Math.random().toString(36).slice(2, 8)}`,
@@ -3257,9 +3376,90 @@ export function CanvasWorkspacePage() {
       })
   }, [])
 
+  // Initial load
   useEffect(() => {
     loadCanonicalAssets()
   }, [loadCanonicalAssets])
+
+  // Re-fetch when search term changes (server-side search/theme/category)
+  useEffect(() => {
+    if (assetSearchTerm !== '') {
+      loadCanonicalAssets({ search: assetSearchTerm })
+    } else {
+      // Empty search: reload full list
+      loadCanonicalAssets()
+    }
+  }, [assetSearchTerm, loadCanonicalAssets])
+
+  // Per-asset server availability: keyed by assetId, fetched when an asset is focused
+  // in the allocation workflow. Uses AbortController to cancel stale requests.
+  const [serverAvailability, setServerAvailability] = useState<Record<string, AssetAvailabilityDto | 'loading' | 'error'>>({})
+  const availabilityAbortRef = useRef<Record<string, AbortController>>({})
+
+  /**
+   * Derives the event-window lock start/end from canonical event fields.
+   * Uses ingressDate as start and returnDate/targetDate as end.
+   * Backend owns temporal conflict logic — we pass the canonical dates as-is.
+   */
+  const getEventWindow = useCallback((): { start: string; end: string } | null => {
+    // Try portal events (have ingressDate, targetDate)
+    const activeEventId = pipelineEvent?.id || card?.id
+    const portalEv = activeEventId ? portalEvents.find((e) => e.id === activeEventId) : null
+    if (portalEv) {
+      const start = portalEv.ingressDate || portalEv.installationStart || portalEv.targetDate
+      const end = portalEv.returnDate || portalEv.installationEnd || portalEv.targetDate
+      if (start && end) {
+        // Ensure ISO-8601 DateTimeOffset format required by backend
+        const startIso = start.includes('T') ? start : `${start}T00:00:00Z`
+        const endIso = end.includes('T') ? end : `${end}T23:59:59Z`
+        return { start: startIso, end: endIso }
+      }
+    }
+    // Fallback: pipeline event date string
+    const dateStr = pipelineEvent?.date || card?.eventDate
+    if (dateStr) {
+      const d = dateStr.split('T')[0]
+      return { start: `${d}T00:00:00Z`, end: `${d}T23:59:59Z` }
+    }
+    return null
+  }, [pipelineEvent, card, portalEvents])
+
+  /**
+   * Fetches server-authoritative event-window availability for a single asset.
+   * Results are stored in serverAvailability keyed by assetId.
+   * Stale requests are cancelled via AbortController.
+   *
+   * Returns false if event-window dates are unavailable (cannot call server).
+   */
+  const fetchAssetAvailability = useCallback(async (assetId: string, quantity: number = 1): Promise<boolean> => {
+    const window = getEventWindow()
+    if (!window) {
+      console.warn('[CanvasWorkspace] Cannot fetch availability: event window dates unavailable.')
+      return false
+    }
+    // Cancel any in-flight request for this asset
+    availabilityAbortRef.current[assetId]?.abort()
+    const controller = new AbortController()
+    availabilityAbortRef.current[assetId] = controller
+
+    setServerAvailability((prev) => ({ ...prev, [assetId]: 'loading' }))
+    const activeEventId = pipelineEvent?.id || card?.id
+    const result = await getAssetAvailabilityApi(
+      { assetId, start: window.start, end: window.end, quantity, eventId: activeEventId || undefined },
+      controller.signal,
+    )
+    if (result.ok) {
+      setServerAvailability((prev) => ({ ...prev, [assetId]: result.data }))
+      return true
+    }
+    if (result.reason !== 'network-error' || result.message !== 'Request cancelled.') {
+      setServerAvailability((prev) => ({ ...prev, [assetId]: 'error' }))
+    }
+    return false
+  }, [getEventWindow, pipelineEvent, card])
+
+  // Structured 409 conflict state (from approval rejection)
+  const [approval409, setApproval409] = useState<{ message: string; conflicts: AssetConflictDetail[] } | null>(null)
 
   // Single shared source of truth for stock: powers asset.availableStock in the
   // Logistics panel's AllocationModal AND the Elements panel's Zero-Stock badges.
@@ -3761,13 +3961,66 @@ export function CanvasWorkspacePage() {
   // approveCanvasApi persists approval to backend; dispatch population is
   // backend-driven from that event. Frontend module-state dispatch (approveDesign)
   // is local-session only and does NOT substitute for backend persistence.
+  //
+  // R5: Structured HTTP 409 conflict handling:
+  //   - Backend returns { Message, Conflicts } on TemporalConflictException
+  //   - Displayed in ApprovalConflict409Modal with per-asset conflict details
+  //   - NO success state is applied on a 409
+  //   - Planner remains on Canvas to revise
   async function handleApproveCanvas() {
     setIsApproving(true)
     try {
       const eventId = pipelineEvent?.id || card?.id
+
+      // R5: Pre-approval server canvas validation using canonical asset IDs + quantities
+      const window = getEventWindow()
+      if (eventId && window) {
+        // Collect tracked canvas assets with their required quantities
+        const allocatedItems = assets
+          .filter((a) => a.allocated && a.quantity != null && a.quantity > 0)
+          .map((a) => ({ assetId: a.id, quantity: a.quantity as number }))
+        if (allocatedItems.length > 0) {
+          const validationResult = await validateCanvasStateApi({
+            items: allocatedItems,
+            lockStart: window.start,
+            lockEnd: window.end,
+            eventId,
+          })
+          if (validationResult.ok && !validationResult.data.isValid) {
+            // Server found conflicts pre-approval — show details and abort
+            const conflictDetails = validationResult.data.availabilityDetails
+              .filter((d) => d.hasConflict)
+              .map((d) => ({
+                assetId: d.assetId,
+                assetName: d.assetName,
+                requestedQuantity: d.requestedQuantity,
+                availableQuantity: d.availableQuantity,
+                physicalStock: d.physicalStock,
+                committedQuantity: d.committedQuantity,
+                conflictingEventId: d.conflictingEvents[0]?.conflictingEventId ?? '',
+                conflictingEventName: d.conflictingEvents[0]?.conflictingEventName ?? null,
+                conflictingLockStart: d.conflictingEvents[0]?.conflictingLockStart ?? '',
+                conflictingLockEnd: d.conflictingEvents[0]?.conflictingLockEnd ?? '',
+              }))
+            setApproval409({
+              message: 'Canvas validation found constrained assets for this event window. Revise quantities or request replenishment before approving.',
+              conflicts: conflictDetails,
+            })
+            return
+          }
+          // validationResult.ok === false: validation endpoint unavailable — proceed to approval
+          // which will do its own authoritative check and may return 409
+        }
+      }
+
       if (eventId) {
         const approveResult = await approveCanvasApi(eventId)
         if (!approveResult.ok) {
+          if (approveResult.reason === 'conflict-409') {
+            // Structured conflict from TemporalConflictException — show modal, DO NOT show success
+            setApproval409({ message: approveResult.message, conflicts: approveResult.conflicts })
+            return
+          }
           // Backend rejected or network error — do NOT claim success.
           const detail =
             approveResult.reason === 'backend-rejected'
@@ -3781,7 +4034,11 @@ export function CanvasWorkspacePage() {
       if (card?.id) {
         await approveDesign(card.id)
       }
-      showToast('Canvas approved and submitted to warehouse. Dispatch queue will be updated by the server.')
+      // After successful backend approval: refresh server availability to reflect new reservations
+      if (eventId) {
+        setServerAvailability({})
+      }
+      showToast('Canvas approved. Dispatch queue will be updated by the server.')
     } catch (err) {
       console.error('Canvas approval failed:', err)
       showToast('Failed to approve canvas layout')
@@ -4213,6 +4470,7 @@ export function CanvasWorkspacePage() {
           assetsLoading={assetsLoading}
           assetsError={assetsError}
           onRetryFetch={loadCanonicalAssets}
+          onSearchChange={setAssetSearchTerm}
         />
 
         {/* Canvas + bottom bar */}
@@ -4333,6 +4591,8 @@ export function CanvasWorkspacePage() {
             setPending={setPending}
             eventId={pipelineEvent?.id || card?.id}
             showToast={showToast}
+            serverAvailability={serverAvailability}
+            onFetchAvailability={fetchAssetAvailability}
           />
         )}
       </div>
@@ -4343,8 +4603,17 @@ export function CanvasWorkspacePage() {
       {/* Share Modal */}
       {showShare && <ShareModal title={displayTitle} onClose={() => setShowShare(false)} />}
 
-      {/* Proactive Stock Availability Warning — fired from canvas drag activity only */}
+      {/* Proactive Stock Availability Warning — advisory, fired from drag activity only */}
       {stockWarning && <StockAvailabilityWarningModal asset={stockWarning} onClose={() => setStockWarning(null)} />}
+
+      {/* Structured HTTP 409 Conflict Modal — shown on approval or pre-validation conflict */}
+      {approval409 && (
+        <ApprovalConflict409Modal
+          message={approval409.message}
+          conflicts={approval409.conflicts}
+          onClose={() => setApproval409(null)}
+        />
+      )}
     </div>
   )
 }

@@ -769,10 +769,18 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         // Task 1 / R9: Await canonical backend approval — do not fire-and-forget.
         const approveResult = await approveCanvasApi(eventId)
         if (!approveResult.ok) {
+          const detail =
+            approveResult.reason === 'conflict-409'
+              ? approveResult.message
+              : approveResult.reason === 'backend-rejected'
+                ? `HTTP ${approveResult.status}`
+                : approveResult.reason === 'network-error'
+                  ? (approveResult.message ?? 'Network error')
+                  : 'No event ID'
           console.warn(
             `[planner] approveDesign: backend canvas approval failed for event ${eventId}:`,
             approveResult.reason,
-            approveResult.status ?? approveResult.message ?? '',
+            detail,
           )
           // Return false so callers know approval did not succeed canonically.
           return false
