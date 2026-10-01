@@ -17,6 +17,7 @@ import {
   ChevronRight,
   ShieldCheck,
   ScrollText,
+  Store,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useNav } from '@/lib/nav'
@@ -24,6 +25,7 @@ import { useAuth } from '@/lib/auth'
 import { useDarkMode } from '@/lib/theme'
 import type { Route } from '@/lib/types'
 import { getWarehouseModule, type WarehouseModuleId } from '@/lib/warehouse-modules'
+import { canAccessRoute } from '@/lib/route-guard'
 
 type NavItem = {
   label: string
@@ -43,6 +45,7 @@ const adminNavItems: NavItem[] = [
 const warehouseNavItems: NavItem[] = [
   { label: 'Overview', blurb: 'Operations metrics & activity dashboard', icon: LayoutGrid, route: 'overview' },
   { label: 'Inventory Stock', blurb: 'Category-specific asset levels and stock tracking', icon: Boxes, route: 'inventory', moduleId: 'assets' },
+  { label: 'Vendor Management', blurb: 'Vendor directory, lead times & preferred suppliers', icon: Store, route: 'vendors', moduleId: 'vendors' },
   { label: 'Damage Validation', blurb: 'Item damage history and inspection reports', icon: AlertTriangle, route: 'damage', moduleId: 'incidents' },
   { label: 'Replenishment', blurb: 'Deficit tracking & reorder requisitions', icon: PackageSearch, route: 'replenishment', moduleId: 'replenishment' },
   { label: 'Warehouse Logs', blurb: 'Audit trail and ledger entries', icon: Warehouse, route: 'warehouse-logs' },
@@ -75,11 +78,12 @@ export function ConsoleSidebar({
   onCloseMobile,
 }: ConsoleSidebarProps) {
   const { route, navigate } = useNav()
-  const { adminName, adminRole, isWarehouse, isPlanner, isAdmin, setConfirmLogout } = useAuth()
+  const { currentUser, adminName, adminRole, isWarehouse, isPlanner, isAdmin, setConfirmLogout } = useAuth()
   const { dark, toggle } = useDarkMode()
   const [companionOpen, setCompanionOpen] = useState(false)
 
-  const navItems = isAdmin ? adminNavItems : isPlanner ? plannerNavItems : isWarehouse ? warehouseNavItems : warehouseNavItems
+  const baseNavItems = isAdmin ? adminNavItems : isPlanner ? plannerNavItems : isWarehouse ? warehouseNavItems : warehouseNavItems
+  const navItems = baseNavItems.filter((item) => canAccessRoute(currentUser, item.route))
 
   const activeItem = navItems.find((item) => route === item.route || routeParent[route] === item.route) ?? navItems[0]
 
