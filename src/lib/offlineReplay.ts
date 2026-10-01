@@ -1,4 +1,10 @@
-import { getPendingQueue, removeQueuedDeclaration, updateQueuedDeclaration } from './offlineQueue'
+import {
+  getPendingQueue,
+  removeQueuedDeclaration,
+  updateQueuedDeclaration,
+  blobToDataUrl,
+} from './offlineQueue'
+import { getEvidenceBlob } from './offline/db'
 
 type SyncListener = (pendingCount: number, syncing: boolean) => void
 const syncListeners = new Set<SyncListener>()
@@ -37,12 +43,31 @@ export async function triggerOfflineReplay(): Promise<{ syncedCount: number; err
     for (const item of pendingItems) {
       await updateQueuedDeclaration(item.id, { syncStatus: 'syncing' })
       try {
+        let photoDataUrl = item.photoUrl || ''
+        const userId = item.userId || item.submittedBy || 'gc-user'
+
+        // If binary evidence is stored in evidence_blobs, retrieve and encode to Data URL for REST transmission
+        if (item.evidenceBlobId) {
+          try {
+            const blobRecord = await getEvidenceBlob(userId, item.evidenceBlobId)
+            if (blobRecord && blobRecord.blob) {
+              const b =
+                blobRecord.blob instanceof Blob
+                  ? blobRecord.blob
+                  : new Blob([blobRecord.blob], { type: blobRecord.mimeType })
+              photoDataUrl = await blobToDataUrl(b)
+            }
+          } catch (blobErr) {
+            console.warn(`[offlineReplay] Could not load evidence blob for ${item.id}:`, blobErr)
+          }
+        }
+
         const result = await submitDamageReportApi({
           assetId: item.assetId,
           eventId: item.eventId,
           damagedQuantity: item.quantity,
           noPhotographicEvidence: item.noPhotographicEvidence ?? false,
-          photoUrl: item.photoUrl || '',
+          photoUrl: photoDataUrl,
           sha256Hash: item.sha256Hash || '',
           exifMetadata: item.exifMetadata,
           gpsCoordinates: item.gpsCoordinates,
@@ -52,7 +77,7 @@ export async function triggerOfflineReplay(): Promise<{ syncedCount: number; err
 
         // HTTP 201 (Created) or 200 (Exact idempotent replay) count as successful sync
         if (result.kind === 'created' || result.kind === 'replayed') {
-          await removeQueuedDeclaration(item.id)
+          await removeQueuedDeclaration(item.id, userId)
           syncedCount++
         } else {
           // Server rejected or conflict: record status and error, do NOT report false success
