@@ -20,7 +20,7 @@
   <title>Lumière — Your Digital Co-Event Planner</title>
   <link rel="manifest" href="/manifest.json" />
   <script>
-    if ('serviceWorker' in navigator && !window.location.hostname.includes('localhost')) {
+    if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
         navigator.serviceWorker.register('/sw.js').then(function(reg) {
           console.log('[PWA] ServiceWorker registered with scope:', reg.scope);
