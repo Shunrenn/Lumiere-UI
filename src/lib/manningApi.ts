@@ -430,3 +430,77 @@ export async function removeManningOverrideApi(id: string, reason: string): Prom
     }
   }
 }
+
+export interface MyManningAssignmentDto {
+  assignmentId: string
+  eventId: string
+  eventName: string
+  shiftDate: string
+  shiftStartTime: string | null
+  shiftEndTime: string | null
+  workArea: string | null
+  taskTitle: string
+  taskDescription: string | null
+  assetId: string | null
+  assetName: string | null
+  productionTaskId: string | null
+  taskPoolId: string | null
+  taskPoolName: string | null
+  taskPoolItemId: string | null
+  manningRequirementId: string | null
+  assignedRole: string
+}
+
+export function normalizeMyAssignmentRecord(raw: any): MyManningAssignmentDto {
+  return {
+    assignmentId: String(raw.assignmentId ?? raw.AssignmentId ?? ''),
+    eventId: String(raw.eventId ?? raw.EventId ?? ''),
+    eventName: String(raw.eventName ?? raw.EventName ?? ''),
+    shiftDate: String(raw.shiftDate ?? raw.ShiftDate ?? ''),
+    shiftStartTime: raw.shiftStartTime ?? raw.ShiftStartTime ?? null,
+    shiftEndTime: raw.shiftEndTime ?? raw.ShiftEndTime ?? null,
+    workArea: raw.workArea ?? raw.WorkArea ?? null,
+    taskTitle: String(raw.taskTitle ?? raw.TaskTitle ?? 'Assigned Task'),
+    taskDescription: raw.taskDescription ?? raw.TaskDescription ?? null,
+    assetId: raw.assetId ?? raw.AssetId ?? null,
+    assetName: raw.assetName ?? raw.AssetName ?? null,
+    productionTaskId: raw.productionTaskId ?? raw.ProductionTaskId ?? null,
+    taskPoolId: raw.taskPoolId ?? raw.TaskPoolId ?? null,
+    taskPoolName: raw.taskPoolName ?? raw.TaskPoolName ?? null,
+    taskPoolItemId: raw.taskPoolItemId ?? raw.TaskPoolItemId ?? null,
+    manningRequirementId: raw.manningRequirementId ?? raw.ManningRequirementId ?? null,
+    assignedRole: String(raw.assignedRole ?? raw.AssignedRole ?? 'Ground Crew'),
+  }
+}
+
+/**
+ * GET /api/manning/my-assignments
+ * Retrieves the authenticated Ground Crew / Staff member's assigned operational tasks.
+ */
+export async function fetchMyManningAssignments(): Promise<MyManningAssignmentDto[]> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10000)
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/manning/my-assignments`, {
+      headers: getHeaders(),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+
+    if (res.status === 401) {
+      return []
+    }
+
+    if (!res.ok) {
+      console.warn(`[manningApi] GET /api/manning/my-assignments returned HTTP ${res.status}`)
+      throw new Error(`Failed to load assignments: HTTP ${res.status}`)
+    }
+
+    const data = await res.json()
+    return Array.isArray(data) ? data.map(normalizeMyAssignmentRecord) : []
+  } catch (err: any) {
+    clearTimeout(timeoutId)
+    console.warn('[manningApi] GET /api/manning/my-assignments failed:', err)
+    throw err
+  }
+}

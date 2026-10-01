@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   AlertTriangle,
+  Briefcase,
   CalendarDays,
   Camera,
   Check,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   FileText,
+  Layers,
   Lock,
   LogOut,
   MapPin,
@@ -24,6 +27,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { usePortal } from '@/lib/store'
+import { fetchMyManningAssignments, type MyManningAssignmentDto } from '@/lib/manningApi'
 import { markBatchStalled, resolveBatchStall, useDispatchStore } from '@/lib/warehouse-dispatch'
 import type { DispatchBatch } from '@/lib/event-detail'
 import { IncidentForm } from '@/components/PwaWorkflows'
@@ -148,6 +152,36 @@ export function GroundCrewPage() {
 
   const [adminEventId, setAdminEventId] = useState('')
   const [crewEvents, setCrewEvents] = useState<EventItem[]>([])
+
+  // Canonical Manning operational assignments for authenticated user
+  const [myAssignments, setMyAssignments] = useState<MyManningAssignmentDto[]>([])
+  const [loadingAssignments, setLoadingAssignments] = useState(true)
+  const [assignmentError, setAssignmentError] = useState<string | null>(null)
+
+  const loadAssignments = useCallback(async () => {
+    setLoadingAssignments(true)
+    setAssignmentError(null)
+    try {
+      const data = await fetchMyManningAssignments()
+      setMyAssignments(data)
+    } catch (err: any) {
+      setAssignmentError(err?.message || 'Unable to connect to Manning schedule.')
+    } finally {
+      setLoadingAssignments(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadAssignments()
+  }, [loadAssignments])
+
+  useEffect(() => {
+    const handleFocus = () => {
+      void loadAssignments()
+    }
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [loadAssignments])
 
   useEffect(() => {
     if (derivedEvents.length > 0) {
@@ -496,7 +530,7 @@ export function GroundCrewPage() {
     { id: 'home', label: 'Console', icon: MapPin },
     {
       id: 'tasks',
-      label: 'Decision',
+      label: accessLevel === 'Event Admin' ? 'Decision' : 'Declarations',
       icon: ShieldCheck,
       badgeCount: pendingDeclarationsForCurrentAdmin.length,
     },
@@ -589,6 +623,10 @@ export function GroundCrewPage() {
                 events={crewEvents}
                 onOpen={(item) => setSelectedEventId(item.id)}
                 approachingSummary={approachingSummary}
+                assignments={myAssignments}
+                loadingAssignments={loadingAssignments}
+                assignmentError={assignmentError}
+                onRefreshAssignments={loadAssignments}
               />
             )}
           </>
@@ -703,10 +741,18 @@ function Home({
   events,
   onOpen,
   approachingSummary,
+  assignments,
+  loadingAssignments,
+  assignmentError,
+  onRefreshAssignments,
 }: {
   events: EventItem[]
   onOpen: (event: EventItem) => void
   approachingSummary?: { totalApproaching: number; eventsCount: number } | null
+  assignments: MyManningAssignmentDto[]
+  loadingAssignments: boolean
+  assignmentError: string | null
+  onRefreshAssignments: () => void
 }) {
   const currentEvent = events.find((e) => e.status === 'Current') || events[0]
   const upcomingEvents = events.filter((e) => e.id !== currentEvent?.id && e.status !== 'Completed')
@@ -725,6 +771,14 @@ function Home({
           </p>
         </div>
       )}
+
+      {/* Canonical My Assignments Section */}
+      <MyAssignmentsSection
+        assignments={assignments}
+        loading={loadingAssignments}
+        error={assignmentError}
+        onRefresh={onRefreshAssignments}
+      />
 
       {currentEvent && (
         <PwaCard
@@ -789,6 +843,146 @@ function Home({
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function MyAssignmentsSection({
+  assignments,
+  loading,
+  error,
+  onRefresh,
+}: {
+  assignments: MyManningAssignmentDto[]
+  loading: boolean
+  error: string | null
+  onRefresh: () => void
+}) {
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center justify-between px-0.5">
+        <div className="flex items-center gap-2">
+          <ClipboardList className="size-4 text-primary" />
+          <h3 className="font-serif text-sm font-semibold uppercase tracking-[0.14em] text-foreground">
+            My Assignments
+          </h3>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="inline-flex items-center gap-1 rounded-lg bg-muted px-2 py-1 text-[0.65rem] font-semibold text-muted-foreground hover:bg-accent hover:text-foreground transition disabled:opacity-50"
+          title="Refresh assignments"
+        >
+          <RefreshCw className={`size-3 ${loading ? 'animate-spin' : ''}`} />
+          <span>Refresh</span>
+        </button>
+      </div>
+
+      {loading && (
+        <div className="space-y-2">
+          <div className="animate-pulse rounded-2xl border border-border/60 bg-muted/40 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="h-4 w-28 rounded bg-muted-foreground/20" />
+              <div className="h-4 w-16 rounded bg-muted-foreground/20" />
+            </div>
+            <div className="h-5 w-48 rounded bg-muted-foreground/20" />
+            <div className="h-3 w-36 rounded bg-muted-foreground/20" />
+          </div>
+        </div>
+      )}
+
+      {!loading && error && (
+        <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-3.5 text-xs text-destructive space-y-2">
+          <div className="flex items-center gap-2 font-semibold">
+            <AlertCircle className="size-4 shrink-0" />
+            <span>Failed to load assignments</span>
+          </div>
+          <p className="text-[0.7rem] text-destructive/90 leading-relaxed">{error}</p>
+          <PwaButton onClick={onRefresh} variant="outline" size="sm" className="w-full mt-1">
+            Retry
+          </PwaButton>
+        </div>
+      )}
+
+      {!loading && !error && assignments.length === 0 && (
+        <PwaEmptyState
+          title="No Scheduled Assignments"
+          description="No assignments have been scheduled for you."
+        />
+      )}
+
+      {!loading && !error && assignments.length > 0 && (
+        <div className="space-y-2.5">
+          {assignments.map((item) => (
+            <PwaCard key={item.assignmentId || item.taskPoolItemId || `${item.eventId}-${item.taskTitle}`} className="p-3.5 space-y-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1.5 text-[0.65rem] font-bold uppercase tracking-wider text-primary">
+                    <span>{item.eventName}</span>
+                    {item.workArea && (
+                      <>
+                        <span className="text-muted-foreground/60">•</span>
+                        <span className="text-muted-foreground">{item.workArea}</span>
+                      </>
+                    )}
+                  </div>
+                  <h4 className="font-serif text-sm font-bold text-foreground leading-snug">{item.taskTitle}</h4>
+                </div>
+                <PwaBadge variant="subrole" subRole="Field" label={item.assignedRole || 'Field Crew'} />
+              </div>
+
+              {/* Timing */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1 text-[0.7rem]">
+                  <CalendarDays className="size-3 text-muted-foreground" />
+                  {dateLabel(item.shiftDate)}
+                </span>
+                {(item.shiftStartTime || item.shiftEndTime) && (
+                  <span className="inline-flex items-center gap-1 text-[0.7rem]">
+                    <Clock className="size-3 text-muted-foreground" />
+                    {item.shiftStartTime || '--:--'} – {item.shiftEndTime || '--:--'}
+                  </span>
+                )}
+              </div>
+
+              {/* Task Description if present */}
+              {item.taskDescription && (
+                <p className="rounded-xl border border-border/40 bg-muted/20 p-2.5 text-xs text-muted-foreground leading-relaxed">
+                  {item.taskDescription}
+                </p>
+              )}
+
+              {/* Associated Asset or Pool Info */}
+              {(item.assetName || item.taskPoolName) && (
+                <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[0.65rem]">
+                  {item.assetName && (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-secondary/80 px-2 py-0.5 font-medium text-foreground">
+                      <Layers className="size-2.5 text-primary" />
+                      Asset: {item.assetName}
+                    </span>
+                  )}
+                  {item.taskPoolName && (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 font-medium text-muted-foreground">
+                      <Briefcase className="size-2.5" />
+                      Pool: {item.taskPoolName}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Neutral Status Footnote - NO FAKE EXECUTION MUTATIONS */}
+              <div className="border-t border-border/40 pt-2 flex items-center justify-between text-[0.65rem] text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <CheckCircle2 className="size-3 text-primary/70" />
+                  Assignment Active
+                </span>
+                <span className="italic">Execution feedback managed via shift checkpoints</span>
+              </div>
+            </PwaCard>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
