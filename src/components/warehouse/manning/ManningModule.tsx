@@ -522,6 +522,22 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                               <Download className="size-3" />
                               Export Roster (PDF)
                             </button>
+                            {assignment.executionStatus && (
+                              <span
+                                className={cn(
+                                  'rounded px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wider',
+                                  assignment.executionStatus === 'InProgress' || assignment.executionStatus === 'In Progress'
+                                    ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30'
+                                    : assignment.executionStatus === 'Blocked'
+                                      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                                      : assignment.executionStatus === 'Completed'
+                                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                        : 'bg-muted text-muted-foreground border border-border',
+                                )}
+                              >
+                                {assignment.executionStatus === 'InProgress' ? 'In Progress' : assignment.executionStatus}
+                              </span>
+                            )}
                             <span
                               className={cn(
                                 'rounded px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wider',
@@ -532,6 +548,14 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                             </span>
                           </div>
                         </div>
+                        {assignment.executionStatus === 'Blocked' && assignment.blockerReason && (
+                          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-900 dark:text-amber-200">
+                            <span className="font-bold text-[0.65rem] uppercase tracking-wider text-amber-700 dark:text-amber-400 block">
+                              Active Execution Blocker Reported by Crew:
+                            </span>
+                            <p className="mt-0.5 text-xs leading-relaxed font-medium">{assignment.blockerReason}</p>
+                          </div>
+                        )}
                         {assignment.member_names.length > 0 && (
                           <div className="flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
                             {assignment.member_names.map((name) => (
@@ -835,7 +859,7 @@ function AssignmentDetailModal({
           </div>
           <div className="rounded-lg border border-border bg-background p-3">
             <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
-              Status
+              Assignment Status
             </span>
             <span className={cn('font-bold', assignment.status === 'Active' ? 'text-emerald-600' : 'text-muted-foreground')}>
               {assignment.status}
@@ -853,7 +877,48 @@ function AssignmentDetailModal({
             </span>
             <span className="font-semibold text-card-foreground">{assignment.lead_name}</span>
           </div>
+          {assignment.executionStatus && (
+            <div className="rounded-lg border border-border bg-background p-3 col-span-2">
+              <span className="text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground block">
+                Ground Execution State
+              </span>
+              <div className="mt-1 flex items-center justify-between">
+                <span
+                  className={cn(
+                    'rounded px-2 py-0.5 text-xs font-bold uppercase tracking-wider',
+                    assignment.executionStatus === 'InProgress' || assignment.executionStatus === 'In Progress'
+                      ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                      : assignment.executionStatus === 'Blocked'
+                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                        : assignment.executionStatus === 'Completed'
+                          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                          : 'bg-muted text-muted-foreground',
+                  )}
+                >
+                  {assignment.executionStatus === 'InProgress' ? 'In Progress' : assignment.executionStatus}
+                </span>
+                {(assignment.startedAt || assignment.completedAt) && (
+                  <span className="text-[0.65rem] text-muted-foreground">
+                    {assignment.completedAt
+                      ? `Completed: ${new Date(assignment.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                      : assignment.startedAt
+                        ? `Started: ${new Date(assignment.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                        : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
+
+        {assignment.executionStatus === 'Blocked' && assignment.blockerReason && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+            <span className="font-bold text-[0.65rem] uppercase tracking-wider text-amber-700 dark:text-amber-400 block">
+              Active Crew Blocker Reason:
+            </span>
+            <p className="text-xs leading-relaxed font-medium">{assignment.blockerReason}</p>
+          </div>
+        )}
 
         {assignment.venue && (
           <div className="rounded-lg border border-border bg-background p-3 text-xs">

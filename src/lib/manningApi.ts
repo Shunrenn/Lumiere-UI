@@ -13,6 +13,14 @@ export interface ManningRecordDto {
   shiftEndTime?: string | null
   notes?: string | null
   isOverride?: boolean
+  executionStatus?: 'Assigned' | 'InProgress' | 'Completed' | 'Blocked' | string
+  startedAt?: string | null
+  completedAt?: string | null
+  executionUpdatedAt?: string | null
+  blockerReason?: string | null
+  executionNotes?: string | null
+  taskTitle?: string | null
+  workArea?: string | null
   createdAt?: string
   updatedAt?: string
 }
@@ -96,6 +104,14 @@ export function normalizeManningRecord(raw: any): ManningRecordDto {
     shiftEndTime: raw.shiftEndTime ?? raw.ShiftEndTime ?? null,
     notes: raw.notes ?? raw.Notes ?? null,
     isOverride: Boolean(raw.isOverride ?? raw.IsOverride ?? false),
+    executionStatus: raw.executionStatus ?? raw.ExecutionStatus ?? 'Assigned',
+    startedAt: raw.startedAt ?? raw.StartedAt ?? null,
+    completedAt: raw.completedAt ?? raw.CompletedAt ?? null,
+    executionUpdatedAt: raw.executionUpdatedAt ?? raw.ExecutionUpdatedAt ?? null,
+    blockerReason: raw.blockerReason ?? raw.BlockerReason ?? null,
+    executionNotes: raw.executionNotes ?? raw.ExecutionNotes ?? null,
+    taskTitle: raw.taskTitle ?? raw.TaskTitle ?? null,
+    workArea: raw.workArea ?? raw.WorkArea ?? null,
     createdAt: raw.createdAt ?? raw.CreatedAt ?? '',
     updatedAt: raw.updatedAt ?? raw.UpdatedAt ?? '',
   }
@@ -449,6 +465,12 @@ export interface MyManningAssignmentDto {
   taskPoolItemId: string | null
   manningRequirementId: string | null
   assignedRole: string
+  executionStatus?: 'Assigned' | 'InProgress' | 'Completed' | 'Blocked' | string
+  startedAt?: string | null
+  completedAt?: string | null
+  executionUpdatedAt?: string | null
+  blockerReason?: string | null
+  executionNotes?: string | null
 }
 
 export function normalizeMyAssignmentRecord(raw: any): MyManningAssignmentDto {
@@ -470,6 +492,12 @@ export function normalizeMyAssignmentRecord(raw: any): MyManningAssignmentDto {
     taskPoolItemId: raw.taskPoolItemId ?? raw.TaskPoolItemId ?? null,
     manningRequirementId: raw.manningRequirementId ?? raw.ManningRequirementId ?? null,
     assignedRole: String(raw.assignedRole ?? raw.AssignedRole ?? 'Ground Crew'),
+    executionStatus: String(raw.executionStatus ?? raw.ExecutionStatus ?? 'Assigned'),
+    startedAt: raw.startedAt ?? raw.StartedAt ?? null,
+    completedAt: raw.completedAt ?? raw.CompletedAt ?? null,
+    executionUpdatedAt: raw.executionUpdatedAt ?? raw.ExecutionUpdatedAt ?? null,
+    blockerReason: raw.blockerReason ?? raw.BlockerReason ?? null,
+    executionNotes: raw.executionNotes ?? raw.ExecutionNotes ?? null,
   }
 }
 
@@ -502,5 +530,70 @@ export async function fetchMyManningAssignments(): Promise<MyManningAssignmentDt
     clearTimeout(timeoutId)
     console.warn('[manningApi] GET /api/manning/my-assignments failed:', err)
     throw err
+  }
+}
+
+export interface UpdateExecutionStatusRequestDto {
+  status: 'InProgress' | 'Completed' | 'Blocked'
+  blockerReason?: string | null
+  notes?: string | null
+}
+
+export type UpdateExecutionStatusResult =
+  | { success: true; status: 200; data: MyManningAssignmentDto }
+  | { success: false; status: number; error: string }
+
+/**
+ * POST /api/manning/assignments/{assignmentId}/status
+ * Updates the execution status of an authenticated crew assignment.
+ */
+export async function updateMyAssignmentExecutionStatus(
+  assignmentId: string,
+  req: UpdateExecutionStatusRequestDto,
+): Promise<UpdateExecutionStatusResult> {
+  const trimmedBlocker = req.blockerReason ? req.blockerReason.trim() : null
+  if (req.status === 'Blocked' && !trimmedBlocker) {
+    return {
+      success: false,
+      status: 400,
+      error: 'Blocker reason is required when reporting a blocker.',
+    }
+  }
+
+  const payload = {
+    status: req.status,
+    blockerReason: trimmedBlocker,
+    notes: req.notes ? req.notes.trim() : null,
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/manning/assignments/${encodeURIComponent(assignmentId)}/status`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      return {
+        success: true,
+        status: 200,
+        data: normalizeMyAssignmentRecord(data),
+      }
+    }
+
+    const errorBody = await res.json().catch(() => ({}))
+    return {
+      success: false,
+      status: res.status,
+      error: errorBody.error ?? errorBody.Error ?? errorBody.message ?? `Status update failed with HTTP ${res.status}`,
+    }
+  } catch (err: any) {
+    console.warn(`[manningApi] POST /api/manning/assignments/${assignmentId}/status failed:`, err)
+    return {
+      success: false,
+      status: 0,
+      error: err?.message || 'Network error updating assignment execution status',
+    }
   }
 }

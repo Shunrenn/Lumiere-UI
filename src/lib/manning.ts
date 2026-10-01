@@ -49,6 +49,14 @@ export interface ManningAssignment {
   status: 'Active' | 'Closed'
   is_override?: boolean
   isOverride?: boolean
+  executionStatus?: 'Assigned' | 'InProgress' | 'Completed' | 'Blocked' | string
+  startedAt?: string | null
+  completedAt?: string | null
+  executionUpdatedAt?: string | null
+  blockerReason?: string | null
+  executionNotes?: string | null
+  taskTitle?: string | null
+  workArea?: string | null
   created_by: string | null
   created_at: string
 }

@@ -16,6 +16,7 @@ import {
   MapPin,
   MessageSquare,
   PackageCheck,
+  Play,
   Send,
   ShieldCheck,
   UserCircle2,
@@ -27,7 +28,11 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { usePortal } from '@/lib/store'
-import { fetchMyManningAssignments, type MyManningAssignmentDto } from '@/lib/manningApi'
+import {
+  fetchMyManningAssignments,
+  updateMyAssignmentExecutionStatus,
+  type MyManningAssignmentDto,
+} from '@/lib/manningApi'
 import { markBatchStalled, resolveBatchStall, useDispatchStore } from '@/lib/warehouse-dispatch'
 import type { DispatchBatch } from '@/lib/event-detail'
 import { IncidentForm } from '@/components/PwaWorkflows'
@@ -157,6 +162,11 @@ export function GroundCrewPage() {
   const [myAssignments, setMyAssignments] = useState<MyManningAssignmentDto[]>([])
   const [loadingAssignments, setLoadingAssignments] = useState(true)
   const [assignmentError, setAssignmentError] = useState<string | null>(null)
+  const [mutatingAssignmentId, setMutatingAssignmentId] = useState<string | null>(null)
+  const [blockerModalAssignment, setBlockerModalAssignment] = useState<MyManningAssignmentDto | null>(null)
+  const [blockerReasonInput, setBlockerReasonInput] = useState('')
+  const [blockerNotesInput, setBlockerNotesInput] = useState('')
+  const [blockerError, setBlockerError] = useState<string | null>(null)
 
   const loadAssignments = useCallback(async () => {
     setLoadingAssignments(true)
@@ -182,6 +192,69 @@ export function GroundCrewPage() {
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
   }, [loadAssignments])
+
+  const handleUpdateAssignmentStatus = async (
+    assignmentId: string,
+    req: { status: 'InProgress' | 'Completed' | 'Blocked'; blockerReason?: string | null; notes?: string | null },
+  ): Promise<{ success: boolean; error?: string }> => {
+    setMutatingAssignmentId(assignmentId)
+    try {
+      const res = await updateMyAssignmentExecutionStatus(assignmentId, req)
+      if (res.success) {
+        setMyAssignments((prev) =>
+          prev.map((a) => (a.assignmentId === assignmentId ? { ...a, ...res.data } : a)),
+        )
+        const label =
+          req.status === 'InProgress'
+            ? 'Task marked In Progress.'
+            : req.status === 'Completed'
+              ? 'Task marked Completed.'
+              : 'Task blocker submitted to Manning ledger.'
+        setToast(label)
+        window.setTimeout(() => setToast(''), 4000)
+        return { success: true }
+      } else {
+        setToast(`Action rejected by server: ${res.error}`)
+        window.setTimeout(() => setToast(''), 4500)
+        return { success: false, error: res.error }
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Network error updating assignment status.'
+      setToast(`Update failed: ${msg}`)
+      window.setTimeout(() => setToast(''), 4500)
+      return { success: false, error: msg }
+    } finally {
+      setMutatingAssignmentId(null)
+    }
+  }
+
+  const handleOpenBlockerModal = (assignment: MyManningAssignmentDto) => {
+    setBlockerModalAssignment(assignment)
+    setBlockerReasonInput('')
+    setBlockerNotesInput('')
+    setBlockerError(null)
+  }
+
+  const handleSubmitBlocker = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!blockerModalAssignment) return
+    const reason = blockerReasonInput.trim()
+    if (!reason) {
+      setBlockerError('A detailed blocker reason is required.')
+      return
+    }
+    setBlockerError(null)
+    const res = await handleUpdateAssignmentStatus(blockerModalAssignment.assignmentId, {
+      status: 'Blocked',
+      blockerReason: reason,
+      notes: blockerNotesInput.trim() || null,
+    })
+    if (res.success) {
+      setBlockerModalAssignment(null)
+    } else {
+      setBlockerError(res.error || 'Server rejected blocker submission.')
+    }
+  }
 
   useEffect(() => {
     if (derivedEvents.length > 0) {
@@ -627,6 +700,9 @@ export function GroundCrewPage() {
                 loadingAssignments={loadingAssignments}
                 assignmentError={assignmentError}
                 onRefreshAssignments={loadAssignments}
+                mutatingAssignmentId={mutatingAssignmentId}
+                onUpdateAssignmentStatus={handleUpdateAssignmentStatus}
+                onOpenBlockerModal={handleOpenBlockerModal}
               />
             )}
           </>
@@ -692,6 +768,83 @@ export function GroundCrewPage() {
       {toast && <PwaToast message={toast} />}
 
       {/* Shared Modals */}
+      {blockerModalAssignment && (
+        <PwaModal
+          isOpen={Boolean(blockerModalAssignment)}
+          onClose={() => {
+            if (!mutatingAssignmentId) {
+              setBlockerModalAssignment(null)
+              setBlockerError(null)
+            }
+          }}
+          title="Report Execution Blocker"
+          subtitle={`${blockerModalAssignment.taskTitle} • ${blockerModalAssignment.eventName}`}
+        >
+          <form onSubmit={handleSubmitBlocker} className="space-y-4">
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
+              Reporting a blocker marks this assignment as Blocked on the live Manning ledger and alerts warehouse operations.
+            </div>
+
+            <label className="block text-xs font-semibold text-foreground">
+              Blocker Reason <span className="text-destructive">*</span>
+              <textarea
+                name="blockerReason"
+                required
+                rows={3}
+                value={blockerReasonInput}
+                onChange={(e) => setBlockerReasonInput(e.target.value)}
+                disabled={Boolean(mutatingAssignmentId)}
+                placeholder="Explain the obstacle preventing task progress (e.g. missing items, vehicle delay, safety lock)..."
+                className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+
+            <label className="block text-xs font-semibold text-foreground">
+              Operational Notes (Optional)
+              <textarea
+                name="notes"
+                rows={2}
+                value={blockerNotesInput}
+                onChange={(e) => setBlockerNotesInput(e.target.value)}
+                disabled={Boolean(mutatingAssignmentId)}
+                placeholder="Additional details for WOM or lead officer..."
+                className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+
+            {blockerError && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-2.5 text-xs text-destructive">
+                {blockerError}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-1">
+              <PwaButton
+                type="submit"
+                disabled={Boolean(mutatingAssignmentId) || !blockerReasonInput.trim()}
+                variant="destructive"
+                size="md"
+                className="flex-1"
+              >
+                {mutatingAssignmentId ? 'Submitting Blocker...' : 'Submit Blocker'}
+              </PwaButton>
+              <PwaButton
+                type="button"
+                onClick={() => {
+                  setBlockerModalAssignment(null)
+                  setBlockerError(null)
+                }}
+                disabled={Boolean(mutatingAssignmentId)}
+                variant="ghost"
+                size="md"
+              >
+                Cancel
+              </PwaButton>
+            </div>
+          </form>
+        </PwaModal>
+      )}
+
       {showReport && reportItem && selectedEvent && (
         <PwaModal
           isOpen={showReport}
@@ -745,6 +898,9 @@ function Home({
   loadingAssignments,
   assignmentError,
   onRefreshAssignments,
+  mutatingAssignmentId,
+  onUpdateAssignmentStatus,
+  onOpenBlockerModal,
 }: {
   events: EventItem[]
   onOpen: (event: EventItem) => void
@@ -753,6 +909,12 @@ function Home({
   loadingAssignments: boolean
   assignmentError: string | null
   onRefreshAssignments: () => void
+  mutatingAssignmentId: string | null
+  onUpdateAssignmentStatus: (
+    assignmentId: string,
+    req: { status: 'InProgress' | 'Completed' | 'Blocked'; blockerReason?: string | null; notes?: string | null },
+  ) => Promise<{ success: boolean; error?: string }>
+  onOpenBlockerModal: (assignment: MyManningAssignmentDto) => void
 }) {
   const currentEvent = events.find((e) => e.status === 'Current') || events[0]
   const upcomingEvents = events.filter((e) => e.id !== currentEvent?.id && e.status !== 'Completed')
@@ -778,6 +940,9 @@ function Home({
         loading={loadingAssignments}
         error={assignmentError}
         onRefresh={onRefreshAssignments}
+        mutatingAssignmentId={mutatingAssignmentId}
+        onUpdateStatus={onUpdateAssignmentStatus}
+        onOpenBlocker={onOpenBlockerModal}
       />
 
       {currentEvent && (
@@ -852,11 +1017,20 @@ function MyAssignmentsSection({
   loading,
   error,
   onRefresh,
+  mutatingAssignmentId,
+  onUpdateStatus,
+  onOpenBlocker,
 }: {
   assignments: MyManningAssignmentDto[]
   loading: boolean
   error: string | null
   onRefresh: () => void
+  mutatingAssignmentId: string | null
+  onUpdateStatus: (
+    assignmentId: string,
+    req: { status: 'InProgress' | 'Completed' | 'Blocked'; blockerReason?: string | null; notes?: string | null },
+  ) => Promise<{ success: boolean; error?: string }>
+  onOpenBlocker: (assignment: MyManningAssignmentDto) => void
 }) {
   return (
     <div className="space-y-2.5">
@@ -914,73 +1088,186 @@ function MyAssignmentsSection({
 
       {!loading && !error && assignments.length > 0 && (
         <div className="space-y-2.5">
-          {assignments.map((item) => (
-            <PwaCard key={item.assignmentId || item.taskPoolItemId || `${item.eventId}-${item.taskTitle}`} className="p-3.5 space-y-2.5">
-              <div className="flex items-start justify-between gap-2">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-1.5 text-[0.65rem] font-bold uppercase tracking-wider text-primary">
-                    <span>{item.eventName}</span>
-                    {item.workArea && (
-                      <>
-                        <span className="text-muted-foreground/60">•</span>
-                        <span className="text-muted-foreground">{item.workArea}</span>
-                      </>
+          {assignments.map((item) => {
+            const rawStatus = item.executionStatus || 'Assigned'
+            const isCompleted = rawStatus === 'Completed'
+            const isInProgress = rawStatus === 'InProgress' || rawStatus === 'In Progress'
+            const isBlocked = rawStatus === 'Blocked'
+            const isAssigned = !isCompleted && !isInProgress && !isBlocked
+            const isMutatingThis = mutatingAssignmentId === item.assignmentId
+
+            return (
+              <PwaCard
+                key={item.assignmentId || item.taskPoolItemId || `${item.eventId}-${item.taskTitle}`}
+                className="p-3.5 space-y-3"
+              >
+                {/* Event & Status Header */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5 text-[0.65rem] font-bold uppercase tracking-wider text-primary">
+                      <span>{item.eventName}</span>
+                      {item.workArea && (
+                        <>
+                          <span className="text-muted-foreground/60">•</span>
+                          <span className="text-muted-foreground">{item.workArea}</span>
+                        </>
+                      )}
+                    </div>
+                    <h4 className="font-serif text-sm font-bold text-foreground leading-snug">{item.taskTitle}</h4>
+                  </div>
+
+                  <div className="shrink-0 flex flex-col items-end gap-1">
+                    {isCompleted ? (
+                      <PwaBadge variant="accent" label="Completed" />
+                    ) : isInProgress ? (
+                      <PwaBadge variant="subrole" subRole="Field" label="In Progress" />
+                    ) : isBlocked ? (
+                      <PwaBadge variant="destructive" label="Blocked" />
+                    ) : (
+                      <PwaBadge variant="neutral" label="Assigned" />
+                    )}
+                    <span className="text-[0.6rem] text-muted-foreground">{item.assignedRole || 'Field Crew'}</span>
+                  </div>
+                </div>
+
+                {/* Timing and Operational Schedule */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 text-[0.7rem]">
+                    <CalendarDays className="size-3 text-muted-foreground" />
+                    {dateLabel(item.shiftDate)}
+                  </span>
+                  {(item.shiftStartTime || item.shiftEndTime) && (
+                    <span className="inline-flex items-center gap-1 text-[0.7rem]">
+                      <Clock className="size-3 text-muted-foreground" />
+                      {item.shiftStartTime || '--:--'} – {item.shiftEndTime || '--:--'}
+                    </span>
+                  )}
+                  {item.startedAt && !isCompleted && (
+                    <span className="inline-flex items-center gap-1 text-[0.65rem] text-primary">
+                      Started: {new Date(item.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                  {item.completedAt && (
+                    <span className="inline-flex items-center gap-1 text-[0.65rem] text-emerald-600 dark:text-emerald-400">
+                      Completed: {new Date(item.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+
+                {/* Task Description if present */}
+                {item.taskDescription && (
+                  <p className="rounded-xl border border-border/40 bg-muted/20 p-2.5 text-xs text-muted-foreground leading-relaxed">
+                    {item.taskDescription}
+                  </p>
+                )}
+
+                {/* Associated Asset or Pool Info */}
+                {(item.assetName || item.taskPoolName) && (
+                  <div className="flex flex-wrap items-center gap-2 text-[0.65rem]">
+                    {item.assetName && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-secondary/80 px-2 py-0.5 font-medium text-foreground">
+                        <Layers className="size-2.5 text-primary" />
+                        Asset: {item.assetName}
+                      </span>
+                    )}
+                    {item.taskPoolName && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 font-medium text-muted-foreground">
+                        <Briefcase className="size-2.5" />
+                        Pool: {item.taskPoolName}
+                      </span>
                     )}
                   </div>
-                  <h4 className="font-serif text-sm font-bold text-foreground leading-snug">{item.taskTitle}</h4>
-                </div>
-                <PwaBadge variant="subrole" subRole="Field" label={item.assignedRole || 'Field Crew'} />
-              </div>
-
-              {/* Timing */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1 text-[0.7rem]">
-                  <CalendarDays className="size-3 text-muted-foreground" />
-                  {dateLabel(item.shiftDate)}
-                </span>
-                {(item.shiftStartTime || item.shiftEndTime) && (
-                  <span className="inline-flex items-center gap-1 text-[0.7rem]">
-                    <Clock className="size-3 text-muted-foreground" />
-                    {item.shiftStartTime || '--:--'} – {item.shiftEndTime || '--:--'}
-                  </span>
                 )}
-              </div>
 
-              {/* Task Description if present */}
-              {item.taskDescription && (
-                <p className="rounded-xl border border-border/40 bg-muted/20 p-2.5 text-xs text-muted-foreground leading-relaxed">
-                  {item.taskDescription}
-                </p>
-              )}
+                {/* Active Blocker Display Banner */}
+                {isBlocked && (
+                  <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-[0.68rem] uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                      <AlertTriangle className="size-3.5 shrink-0" />
+                      <span>Active Blocker Reported:</span>
+                    </div>
+                    <p className="text-xs leading-relaxed font-medium pl-5">{item.blockerReason || 'Blocker logged with Manning ledger.'}</p>
+                  </div>
+                )}
 
-              {/* Associated Asset or Pool Info */}
-              {(item.assetName || item.taskPoolName) && (
-                <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[0.65rem]">
-                  {item.assetName && (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-secondary/80 px-2 py-0.5 font-medium text-foreground">
-                      <Layers className="size-2.5 text-primary" />
-                      Asset: {item.assetName}
+                {/* Execution Lifecycle Action Buttons */}
+                {isAssigned && (
+                  <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+                    <PwaButton
+                      onClick={() => onUpdateStatus(item.assignmentId, { status: 'InProgress' })}
+                      disabled={isMutatingThis}
+                      variant="primary"
+                      size="sm"
+                      icon={<Play className="size-3.5" />}
+                      className="flex-1"
+                    >
+                      {isMutatingThis ? 'Starting...' : 'Start Task'}
+                    </PwaButton>
+                    <PwaButton
+                      onClick={() => onOpenBlocker(item)}
+                      disabled={isMutatingThis}
+                      variant="outline"
+                      size="sm"
+                      icon={<AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400" />}
+                      className="text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                    >
+                      Report Blocker
+                    </PwaButton>
+                  </div>
+                )}
+
+                {isInProgress && (
+                  <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+                    <PwaButton
+                      onClick={() => onUpdateStatus(item.assignmentId, { status: 'Completed' })}
+                      disabled={isMutatingThis}
+                      variant="primary"
+                      size="sm"
+                      icon={<Check className="size-3.5" />}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      {isMutatingThis ? 'Completing...' : 'Complete Task'}
+                    </PwaButton>
+                    <PwaButton
+                      onClick={() => onOpenBlocker(item)}
+                      disabled={isMutatingThis}
+                      variant="outline"
+                      size="sm"
+                      icon={<AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400" />}
+                      className="text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                    >
+                      Report Blocker
+                    </PwaButton>
+                  </div>
+                )}
+
+                {isBlocked && (
+                  <div className="pt-1 border-t border-border/40">
+                    <PwaButton
+                      onClick={() => onUpdateStatus(item.assignmentId, { status: 'InProgress' })}
+                      disabled={isMutatingThis}
+                      variant="primary"
+                      size="sm"
+                      icon={<Play className="size-3.5" />}
+                      className="w-full"
+                    >
+                      {isMutatingThis ? 'Resuming Task...' : 'Resume Task'}
+                    </PwaButton>
+                  </div>
+                )}
+
+                {isCompleted && (
+                  <div className="border-t border-border/40 pt-2 flex items-center justify-between text-[0.68rem] text-emerald-600 dark:text-emerald-400 font-medium">
+                    <span className="inline-flex items-center gap-1.5">
+                      <CheckCircle2 className="size-3.5" />
+                      Task Execution Completed
                     </span>
-                  )}
-                  {item.taskPoolName && (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 font-medium text-muted-foreground">
-                      <Briefcase className="size-2.5" />
-                      Pool: {item.taskPoolName}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Neutral Status Footnote - NO FAKE EXECUTION MUTATIONS */}
-              <div className="border-t border-border/40 pt-2 flex items-center justify-between text-[0.65rem] text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <CheckCircle2 className="size-3 text-primary/70" />
-                  Assignment Active
-                </span>
-                <span className="italic">Execution feedback managed via shift checkpoints</span>
-              </div>
-            </PwaCard>
-          ))}
+                    <span className="text-[0.6rem] text-muted-foreground italic">Confirmed on ledger</span>
+                  </div>
+                )}
+              </PwaCard>
+            )
+          })}
         </div>
       )}
     </div>
