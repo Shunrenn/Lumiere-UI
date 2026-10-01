@@ -13,6 +13,7 @@ import { API_BASE_URL } from './apiConfig'
 import { useIdleTimeout } from './useIdleTimeout'
 import { fetchAuthCapabilities } from './adminPermissionsApi'
 import { getDefaultRouteForUser } from './route-guard'
+import { getRealtimeConnection, stopRealtimeConnection } from './realtime'
 
 export type WomSubRole =
   | 'Manning Officer'
@@ -306,10 +307,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setConfirmLogout(false)
     setHasConfirmationPin(false)
     setBackendAssetCapability(false)
+    void stopRealtimeConnection()
     if (typeof window !== 'undefined') {
       window.history.replaceState(null, '', '/')
     }
   }, [])
+
+  useEffect(() => {
+    if (currentUser) {
+      void getRealtimeConnection()
+    } else {
+      void stopRealtimeConnection()
+    }
+  }, [currentUser])
 
   useIdleTimeout(logout, Boolean(currentUser))
 

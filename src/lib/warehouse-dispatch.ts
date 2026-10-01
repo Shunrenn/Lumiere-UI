@@ -51,6 +51,20 @@ function publish(_targetEventId?: string, _targetBatch?: DispatchBatch) {
   listeners.forEach((listener) => listener())
 }
 
+if (typeof window !== 'undefined') {
+  window.addEventListener('lumiere:realtime_invalidation', (e: Event) => {
+    const customEvent = e as CustomEvent
+    const eventName = customEvent.detail?.eventName
+    if (
+      !eventName ||
+      eventName === 'WarehouseDispatchUpdated' ||
+      eventName === 'OperationInvalidated'
+    ) {
+      publish()
+    }
+  })
+}
+
 import { logAuditEvent } from '@/lib/audit-logger'
 
 export function deleteBatch(

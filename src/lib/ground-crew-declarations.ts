@@ -90,6 +90,21 @@ let declarations: GroundCrewDeclaration[] = [
 ]
 
 function emit() { listeners.forEach((listener) => listener()) }
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('lumiere:realtime_invalidation', (e: Event) => {
+    const customEvent = e as CustomEvent
+    const eventName = customEvent.detail?.eventName
+    if (
+      !eventName ||
+      eventName === 'GroundCrewDeclarationUpdated' ||
+      eventName === 'DamageReportCreated' ||
+      eventName === 'OperationInvalidated'
+    ) {
+      emit()
+    }
+  })
+}
 function isExpired(declaration: GroundCrewDeclaration, now = Date.now()) { return now - new Date(declaration.submittedAt).getTime() >= 48 * 60 * 60 * 1000 }
 
 export function useGroundCrewDeclarations() {

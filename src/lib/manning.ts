@@ -1033,6 +1033,19 @@ export function useManningData(): ManningData {
 
   useEffect(() => {
     void reload()
+
+    const handleInvalidation = (e: Event) => {
+      const customEvent = e as CustomEvent
+      const eventName = customEvent.detail?.eventName
+      if (!eventName || eventName === 'ManningUpdated' || eventName === 'OperationInvalidated') {
+        void reload()
+      }
+    }
+
+    window.addEventListener('lumiere:realtime_invalidation', handleInvalidation)
+    return () => {
+      window.removeEventListener('lumiere:realtime_invalidation', handleInvalidation)
+    }
   }, [reload])
 
   return { assignments, tasks, warnings, loading, error, usingPreset, reload }
