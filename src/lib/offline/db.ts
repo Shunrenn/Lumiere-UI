@@ -108,8 +108,9 @@ export function openOfflineDB(): Promise<IDBDatabase> {
  * Enqueues a durable mutation into the outbox for the authenticated user.
  */
 export async function enqueueMutation<TPayload>(
-  entry: Omit<MutationOutboxEntry<TPayload>, 'id' | 'createdAt' | 'retryCount' | 'status'> & {
+  entry: Omit<MutationOutboxEntry<TPayload>, 'id' | 'clientTxId' | 'createdAt' | 'retryCount' | 'status'> & {
     id?: string
+    clientTxId?: string
     status?: MutationStatus
     createdAt?: string
   }

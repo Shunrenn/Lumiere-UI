@@ -471,6 +471,9 @@ export interface MyManningAssignmentDto {
   executionUpdatedAt?: string | null
   blockerReason?: string | null
   executionNotes?: string | null
+  pendingSync?: boolean
+  syncStatus?: 'pending' | 'syncing' | 'confirmed' | 'failed' | 'conflict'
+  lastSyncError?: string | null
 }
 
 export function normalizeMyAssignmentRecord(raw: any): MyManningAssignmentDto {

@@ -49,6 +49,8 @@ import {
 import { computePhotoSha256, extractPhotoMetadata, type HavaPhotoMetadata } from '@/lib/hava'
 import { getPendingQueue, type QueuedDeclaration } from '@/lib/offlineQueue'
 import { subscribeOfflineSync, triggerOfflineReplay } from '@/lib/offlineReplay'
+import { queueManningStatusUpdate, getManningUserMutations } from '@/lib/offline/manningOutbox'
+import { triggerOutboxReplay, subscribeSyncEngine } from '@/lib/offline/offlineReplayEngine'
 import { StatusBadge } from '@/components/StatusBadge'
 import {
   PwaBadge,
@@ -121,7 +123,7 @@ function dateLabel(date: string) {
 }
 
 export function GroundCrewPage() {
-  const { adminName, adminEmail, adminRole, logout } = useAuth()
+  const { currentUser, adminName, adminEmail, adminRole, logout } = useAuth()
   const { events, staff, procurement, initiateEventEgress } = usePortal()
   const dispatchStore = useDispatchStore(events, staff, procurement)
   const declarations = useGroundCrewDeclarations()
@@ -171,15 +173,61 @@ export function GroundCrewPage() {
   const loadAssignments = useCallback(async () => {
     setLoadingAssignments(true)
     setAssignmentError(null)
+    const userId = currentUser?.id
     try {
       const data = await fetchMyManningAssignments()
-      setMyAssignments(data)
+      if (userId) {
+        const outbox = await getManningUserMutations(userId)
+        const outboxMap = new Map(outbox.map((m) => [m.payload.assignmentId, m]))
+        const merged = data.map((a) => {
+          const m = outboxMap.get(a.assignmentId)
+          if (m) {
+            return {
+              ...a,
+              executionStatus: m.payload.status,
+              blockerReason: m.payload.blockerReason || a.blockerReason,
+              pendingSync: m.status === 'pending' || m.status === 'syncing',
+              syncStatus: m.status,
+              lastSyncError: m.lastError,
+            }
+          }
+          return { ...a, pendingSync: false, syncStatus: 'confirmed' as const }
+        })
+        setMyAssignments(merged)
+      } else {
+        setMyAssignments(data)
+      }
     } catch (err: any) {
+      if (userId) {
+        try {
+          const outbox = await getManningUserMutations(userId)
+          if (outbox.length > 0 && myAssignments.length > 0) {
+            const outboxMap = new Map(outbox.map((m) => [m.payload.assignmentId, m]))
+            setMyAssignments((prev) =>
+              prev.map((a) => {
+                const m = outboxMap.get(a.assignmentId)
+                if (m) {
+                  return {
+                    ...a,
+                    executionStatus: m.payload.status,
+                    blockerReason: m.payload.blockerReason || a.blockerReason,
+                    pendingSync: m.status === 'pending' || m.status === 'syncing',
+                    syncStatus: m.status,
+                    lastSyncError: m.lastError,
+                  }
+                }
+                return a
+              }),
+            )
+            return
+          }
+        } catch {}
+      }
       setAssignmentError(err?.message || 'Unable to connect to Manning schedule.')
     } finally {
       setLoadingAssignments(false)
     }
-  }, [])
+  }, [currentUser?.id, myAssignments.length])
 
   useEffect(() => {
     void loadAssignments()
@@ -193,16 +241,84 @@ export function GroundCrewPage() {
     return () => window.removeEventListener('focus', handleFocus)
   }, [loadAssignments])
 
+  // Subscribe to offline replay engine for auto-sync and refresh
+  useEffect(() => {
+    const userId = currentUser?.id
+    if (!userId) return
+
+    const unsub = subscribeSyncEngine((status) => {
+      if (status.state === 'idle' && status.lastSyncAt) {
+        void loadAssignments()
+      }
+    })
+
+    const handleOnlineReplay = () => {
+      void triggerOutboxReplay(userId).then((res) => {
+        if (res.synced > 0) {
+          void loadAssignments()
+        }
+      })
+    }
+    window.addEventListener('online', handleOnlineReplay)
+
+    return () => {
+      unsub()
+      window.removeEventListener('online', handleOnlineReplay)
+    }
+  }, [currentUser?.id, loadAssignments])
+
   const handleUpdateAssignmentStatus = async (
     assignmentId: string,
     req: { status: 'InProgress' | 'Completed' | 'Blocked'; blockerReason?: string | null; notes?: string | null },
   ): Promise<{ success: boolean; error?: string }> => {
     setMutatingAssignmentId(assignmentId)
+    const userId = currentUser?.id || 'anonymous'
+    const targetAssignment = myAssignments.find((a) => a.assignmentId === assignmentId)
+
+    // 1. If offline, enqueue immediately to durable IndexedDB outbox
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      try {
+        await queueManningStatusUpdate(userId, assignmentId, targetAssignment?.eventId, req)
+        setMyAssignments((prev) =>
+          prev.map((a) =>
+            a.assignmentId === assignmentId
+              ? {
+                  ...a,
+                  executionStatus: req.status,
+                  blockerReason: req.blockerReason || a.blockerReason,
+                  pendingSync: true,
+                  syncStatus: 'pending',
+                }
+              : a,
+          ),
+        )
+        const label =
+          req.status === 'InProgress'
+            ? 'Task marked In Progress (Pending Sync).'
+            : req.status === 'Completed'
+              ? 'Task marked Completed (Pending Sync).'
+              : 'Task blocker queued (Pending Sync).'
+        setToast(label)
+        window.setTimeout(() => setToast(''), 4000)
+        return { success: true }
+      } catch (err: any) {
+        setToast(`Failed to queue offline task: ${err.message}`)
+        return { success: false, error: err.message }
+      } finally {
+        setMutatingAssignmentId(null)
+      }
+    }
+
+    // 2. If online, attempt REST mutation with outbox fallback on network drop
     try {
       const res = await updateMyAssignmentExecutionStatus(assignmentId, req)
       if (res.success) {
         setMyAssignments((prev) =>
-          prev.map((a) => (a.assignmentId === assignmentId ? { ...a, ...res.data } : a)),
+          prev.map((a) =>
+            a.assignmentId === assignmentId
+              ? { ...a, ...res.data, pendingSync: false, syncStatus: 'confirmed' }
+              : a,
+          ),
         )
         const label =
           req.status === 'InProgress'
@@ -213,16 +329,55 @@ export function GroundCrewPage() {
         setToast(label)
         window.setTimeout(() => setToast(''), 4000)
         return { success: true }
+      } else if (res.status === 0) {
+        // Network drop during call
+        await queueManningStatusUpdate(userId, assignmentId, targetAssignment?.eventId, req)
+        setMyAssignments((prev) =>
+          prev.map((a) =>
+            a.assignmentId === assignmentId
+              ? {
+                  ...a,
+                  executionStatus: req.status,
+                  blockerReason: req.blockerReason || a.blockerReason,
+                  pendingSync: true,
+                  syncStatus: 'pending',
+                }
+              : a,
+          ),
+        )
+        setToast('Network unavailable. Action saved to offline queue (Pending Sync).')
+        window.setTimeout(() => setToast(''), 4000)
+        return { success: true }
       } else {
         setToast(`Action rejected by server: ${res.error}`)
         window.setTimeout(() => setToast(''), 4500)
         return { success: false, error: res.error }
       }
     } catch (err: any) {
-      const msg = err?.message || 'Network error updating assignment status.'
-      setToast(`Update failed: ${msg}`)
-      window.setTimeout(() => setToast(''), 4500)
-      return { success: false, error: msg }
+      try {
+        await queueManningStatusUpdate(userId, assignmentId, targetAssignment?.eventId, req)
+        setMyAssignments((prev) =>
+          prev.map((a) =>
+            a.assignmentId === assignmentId
+              ? {
+                  ...a,
+                  executionStatus: req.status,
+                  blockerReason: req.blockerReason || a.blockerReason,
+                  pendingSync: true,
+                  syncStatus: 'pending',
+                }
+              : a,
+          ),
+        )
+        setToast('Action saved to offline queue (Pending Sync).')
+        window.setTimeout(() => setToast(''), 4000)
+        return { success: true }
+      } catch (qErr: any) {
+        const msg = err?.message || 'Network error updating assignment status.'
+        setToast(`Update failed: ${msg}`)
+        window.setTimeout(() => setToast(''), 4500)
+        return { success: false, error: msg }
+      }
     } finally {
       setMutatingAssignmentId(null)
     }
@@ -1118,12 +1273,24 @@ function MyAssignmentsSection({
                   </div>
 
                   <div className="shrink-0 flex flex-col items-end gap-1">
-                    {isCompleted ? (
-                      <PwaBadge variant="accent" label="Completed" />
+                    {item.syncStatus === 'conflict' ? (
+                      <PwaBadge variant="destructive" label="Conflict / Needs Attention" />
+                    ) : isCompleted ? (
+                      <PwaBadge
+                        variant="accent"
+                        label={item.pendingSync ? 'Completed — Pending Sync' : 'Completed'}
+                      />
                     ) : isInProgress ? (
-                      <PwaBadge variant="subrole" subRole="Field" label="In Progress" />
+                      <PwaBadge
+                        variant="subrole"
+                        subRole="Field"
+                        label={item.pendingSync ? 'In Progress — Pending Sync' : 'In Progress'}
+                      />
                     ) : isBlocked ? (
-                      <PwaBadge variant="destructive" label="Blocked" />
+                      <PwaBadge
+                        variant="destructive"
+                        label={item.pendingSync ? 'Blocked — Pending Sync' : 'Blocked'}
+                      />
                     ) : (
                       <PwaBadge variant="neutral" label="Assigned" />
                     )}
@@ -1154,6 +1321,19 @@ function MyAssignmentsSection({
                     </span>
                   )}
                 </div>
+
+                {/* Conflict / Needs Attention Alert Banner */}
+                {item.syncStatus === 'conflict' && (
+                  <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-[0.68rem] uppercase tracking-wider text-destructive">
+                      <AlertTriangle className="size-3.5 shrink-0" />
+                      <span>Conflict / Needs Attention:</span>
+                    </div>
+                    <p className="text-xs leading-relaxed font-medium pl-5">
+                      {item.lastSyncError || 'Server rejected offline mutation. Task reassigned or invalid transition.'}
+                    </p>
+                  </div>
+                )}
 
                 {/* Task Description if present */}
                 {item.taskDescription && (
@@ -1261,9 +1441,11 @@ function MyAssignmentsSection({
                   <div className="border-t border-border/40 pt-2 flex items-center justify-between text-[0.68rem] text-emerald-600 dark:text-emerald-400 font-medium">
                     <span className="inline-flex items-center gap-1.5">
                       <CheckCircle2 className="size-3.5" />
-                      Task Execution Completed
+                      {item.pendingSync ? 'Completed — Pending Sync' : 'Task Execution Completed'}
                     </span>
-                    <span className="text-[0.6rem] text-muted-foreground italic">Confirmed on ledger</span>
+                    <span className="text-[0.6rem] text-muted-foreground italic">
+                      {item.pendingSync ? 'Saved in offline outbox' : 'Confirmed on ledger'}
+                    </span>
                   </div>
                 )}
               </PwaCard>
