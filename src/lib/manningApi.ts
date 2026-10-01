@@ -543,6 +543,75 @@ export type UpdateExecutionStatusResult =
   | { success: true; status: 200; data: MyManningAssignmentDto }
   | { success: false; status: number; error: string }
 
+export interface OverrideAssignmentRequestDto {
+  newUserId: string
+  justification: string
+}
+
+export type OverrideAssignmentResult =
+  | { success: true; status: 200; data: ManningRecordDto }
+  | { success: false; status: number; error: string }
+
+/**
+ * POST /api/manning/assignments/{assignmentId}/override
+ * Manual Resource Override for a specific assignment by WOM/Admin.
+ */
+export async function overrideAssignmentApi(
+  assignmentId: string,
+  req: OverrideAssignmentRequestDto,
+): Promise<OverrideAssignmentResult> {
+  const trimmedJustification = req.justification ? req.justification.trim() : ''
+  if (!trimmedJustification) {
+    return {
+      success: false,
+      status: 400,
+      error: 'Mandatory justification is required for Manual Resource Override.',
+    }
+  }
+
+  if (!req.newUserId) {
+    return {
+      success: false,
+      status: 400,
+      error: 'Replacement Ground Crew member is required.',
+    }
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/manning/assignments/${encodeURIComponent(assignmentId)}/override`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        newUserId: req.newUserId,
+        justification: trimmedJustification,
+      }),
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      return {
+        success: true,
+        status: 200,
+        data: normalizeManningRecord(data),
+      }
+    }
+
+    const errorBody = await res.json().catch(() => ({}))
+    return {
+      success: false,
+      status: res.status,
+      error: errorBody.error ?? errorBody.Error ?? errorBody.message ?? `Resource override failed with HTTP ${res.status}`,
+    }
+  } catch (err: any) {
+    console.warn(`[manningApi] POST /api/manning/assignments/${assignmentId}/override failed:`, err)
+    return {
+      success: false,
+      status: 0,
+      error: err?.message || 'Network error performing resource override',
+    }
+  }
+}
+
 /**
  * POST /api/manning/assignments/{assignmentId}/status
  * Updates the execution status of an authenticated crew assignment.

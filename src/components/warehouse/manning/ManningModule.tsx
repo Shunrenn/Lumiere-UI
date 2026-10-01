@@ -16,6 +16,8 @@ import { useAuth } from '@/lib/auth'
 import {
   canPerformRoutineRemoval,
   canPerformOverrideRemoval,
+  canPerformResourceOverride,
+  overrideAssignmentApi,
 } from '@/lib/manningApi'
 import {
   useCrewRows,
@@ -753,16 +755,50 @@ function AssignmentDetailModal({
   onExport?: (assignment: ManningAssignment) => void
   onAssignmentClosed?: () => void
 }) {
-  const { subRolesByParent } = usePortal()
+  const { staff, subRolesByParent } = usePortal()
   const { adminRole, subRole, hasFullWarehouseAccess } = useAuth()
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [closing, setClosing] = useState(false)
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false)
   const [removalReason, setRemovalReason] = useState('')
 
+  // Manual Resource Override state
+  const [overrideOpen, setOverrideOpen] = useState(false)
+  const [selectedReplacementUserId, setSelectedReplacementUserId] = useState('')
+  const [overrideJustification, setOverrideJustification] = useState('')
+  const [submittingOverride, setSubmittingOverride] = useState(false)
+
   const isOverride = Boolean(assignment.is_override || assignment.isOverride)
   const canRoutineRemove = canPerformRoutineRemoval({ role: adminRole, subRole })
   const canOverrideRemove = canPerformOverrideRemoval({ role: adminRole, subRole, fullWarehouseAccess: hasFullWarehouseAccess })
+  const canOverrideResource = canPerformResourceOverride({ role: adminRole, subRole, fullWarehouseAccess: hasFullWarehouseAccess })
+
+  const rawExecStatus = assignment.executionStatus || 'Assigned'
+  const isAssignedOnly = rawExecStatus === 'Assigned'
+
+  // Replacement Ground Crew candidates from canonical workforce source
+  const replacementCandidates = useMemo(() => {
+    return staff.filter((s) => {
+      if (s.accountStatus === 'Suspended' || s.archived) return false
+      const roleLower = (s.role || '').toLowerCase()
+      const subRoleLower = (s.subRole || '').toLowerCase()
+      const isGroundCrew =
+        roleLower.includes('ground') ||
+        roleLower.includes('crew') ||
+        roleLower.includes('member') ||
+        roleLower.includes('field') ||
+        subRoleLower.includes('ground') ||
+        subRoleLower.includes('crew') ||
+        s.role === 'Warehouse Lead' ||
+        s.role === 'Warehouse Member' ||
+        s.role === 'Ground Crew'
+      const fullName = `${s.firstName} ${s.surname}`.trim()
+      const isCurrentAssigned =
+        fullName.toLowerCase() === (assignment.lead_name || '').toLowerCase() ||
+        assignment.member_names.some((m) => m.toLowerCase() === fullName.toLowerCase())
+      return isGroundCrew && !isCurrentAssigned
+    })
+  }, [staff, assignment])
 
   async function handleCloseAssignment() {
     const trimmedReason = removalReason.trim()
@@ -803,6 +839,43 @@ function AssignmentDetailModal({
       console.error('[ManningModule] close assignment failed:', err)
       setErrorMsg(err?.message || 'Failed to remove assignment from backend ledger')
       setClosing(false)
+    }
+  }
+
+  async function handleConfirmOverride() {
+    const trimmed = overrideJustification.trim()
+    if (!trimmed) {
+      setErrorMsg('Mandatory justification is required for Manual Resource Override.')
+      return
+    }
+    if (!selectedReplacementUserId) {
+      setErrorMsg('Please select a replacement Ground Crew member.')
+      return
+    }
+
+    if (!isAssignedOnly) {
+      setErrorMsg('In-progress, blocked, and completed assignments cannot be reassigned.')
+      return
+    }
+
+    setErrorMsg(null)
+    setSubmittingOverride(true)
+    try {
+      const res = await overrideAssignmentApi(assignment.id, {
+        newUserId: selectedReplacementUserId,
+        justification: trimmed,
+      })
+
+      if (res.success) {
+        onAssignmentClosed?.()
+        onClose()
+      } else {
+        setErrorMsg(res.error || 'Resource override failed.')
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Network error performing resource override.')
+    } finally {
+      setSubmittingOverride(false)
     }
   }
 
@@ -945,8 +1018,90 @@ function AssignmentDetailModal({
           </div>
         </div>
 
-        {/* Confirmation Sub-Dialog for Assignment Removal */}
-        {confirmRemoveOpen ? (
+        {/* Sub-Dialog for Manual Resource Override */}
+        {overrideOpen ? (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-semibold text-xs">
+              <ShieldAlert className="size-4 shrink-0" />
+              <span>Manual Resource Override</span>
+            </div>
+
+            <div className="rounded-lg border border-border/60 bg-background p-3 text-xs space-y-1">
+              <p><strong className="text-foreground">Task Title:</strong> {assignment.event_name}</p>
+              <p><strong className="text-foreground">Current Crew:</strong> {assignment.lead_name || assignment.member_names.join(', ') || 'Assigned Crew'}</p>
+              {assignment.venue && <p><strong className="text-foreground">Venue/Area:</strong> {assignment.venue}</p>}
+              <p><strong className="text-foreground">Shift Date:</strong> {assignment.work_date}</p>
+              <p><strong className="text-foreground">Current Assignment Status:</strong> <span className="font-bold text-emerald-600">{rawExecStatus}</span></p>
+            </div>
+
+            {!isAssignedOnly ? (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-900 dark:text-amber-200">
+                In-progress, blocked, and completed assignments cannot be reassigned.
+              </div>
+            ) : (
+              <>
+                <label className="block text-xs font-semibold text-foreground">
+                  Replacement Ground Crew <span className="text-destructive">*</span>
+                  <select
+                    value={selectedReplacementUserId}
+                    disabled={submittingOverride}
+                    onChange={(e) => setSelectedReplacementUserId(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-input bg-background p-2 text-xs text-foreground outline-none focus:border-primary"
+                  >
+                    <option value="">Select replacement Ground Crew member...</option>
+                    {replacementCandidates.map((cand) => (
+                      <option key={cand.id} value={cand.id}>
+                        {cand.firstName} {cand.surname} ({cand.role}{cand.subRole ? ` • ${cand.subRole}` : ''})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block text-xs font-semibold text-foreground">
+                  Justification <span className="text-destructive">*</span>
+                  <textarea
+                    value={overrideJustification}
+                    disabled={submittingOverride}
+                    onChange={(e) => setOverrideJustification(e.target.value)}
+                    placeholder="State mandatory operational exception justification..."
+                    rows={2}
+                    className="mt-1 w-full rounded-md border border-input bg-background p-2 text-xs text-foreground outline-none focus:border-primary"
+                  />
+                  <span className="mt-1 text-[0.68rem] text-muted-foreground italic block">
+                    Required for accountability and audit history.
+                  </span>
+                </label>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={submittingOverride}
+                    onClick={() => {
+                      setOverrideOpen(false)
+                      setErrorMsg(null)
+                    }}
+                    className="rounded-md border border-border px-3 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-accent disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!overrideJustification.trim() || !selectedReplacementUserId || submittingOverride}
+                    onClick={handleConfirmOverride}
+                    className={cn(
+                      'rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white transition',
+                      overrideJustification.trim() && selectedReplacementUserId && !submittingOverride
+                        ? 'bg-amber-600 hover:bg-amber-700'
+                        : 'bg-amber-600/40 cursor-not-allowed',
+                    )}
+                  >
+                    {submittingOverride ? 'Submitting Resource Override...' : 'Confirm Resource Override'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : confirmRemoveOpen ? (
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-3">
             <div className="flex items-center gap-2 text-destructive font-semibold text-xs">
               <AlertTriangle className="size-4 shrink-0" />
@@ -993,7 +1148,7 @@ function AssignmentDetailModal({
           </div>
         ) : (
           <div className="flex items-center justify-between border-t border-border pt-3">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -1004,6 +1159,21 @@ function AssignmentDetailModal({
                 <Download className="size-3.5" />
                 Export Roster (PDF)
               </button>
+
+              {canOverrideResource && assignment.status === 'Active' && (
+                <button
+                  type="button"
+                  disabled={closing || submittingOverride}
+                  onClick={() => {
+                    setErrorMsg(null)
+                    setConfirmRemoveOpen(false)
+                    setOverrideOpen(true)
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 disabled:opacity-50"
+                >
+                  Manual Resource Override
+                </button>
+              )}
 
               {assignment.status === 'Active' && (
                 isOverride && !canOverrideRemove ? (
@@ -1017,6 +1187,7 @@ function AssignmentDetailModal({
                     disabled={closing || (!isOverride && !canRoutineRemove)}
                     onClick={() => {
                       setErrorMsg(null)
+                      setOverrideOpen(false)
                       setRemovalReason('')
                       setConfirmRemoveOpen(true)
                     }}
