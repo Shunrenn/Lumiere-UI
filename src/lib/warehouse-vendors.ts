@@ -84,6 +84,8 @@ export function normalizeVendorStatus(rawStatus?: string): VendorStatus {
   return 'Active'
 }
 
+const EMPTY_VENDORS: WarehouseVendor[] = []
+
 export function useWarehouseVendors(): WarehouseVendor[] {
   useEffect(() => {
     let active = true
@@ -103,8 +105,8 @@ export function useWarehouseVendors(): WarehouseVendor[] {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
-    () => cachedVendors ?? [],
-    () => cachedVendors ?? [],
+    () => cachedVendors ?? EMPTY_VENDORS,
+    () => cachedVendors ?? EMPTY_VENDORS,
   )
 }
 

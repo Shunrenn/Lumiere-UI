@@ -31,7 +31,7 @@ export function VendorManagementModule() {
       setVendors((prev) => {
         const ids = new Set(prev.map((item) => item.id))
         const newItems = initialVendors.filter((item) => !ids.has(item.id))
-        if (newItems.length === 0 && prev.length === initialVendors.length) return prev
+        if (newItems.length === 0) return prev
         return [...newItems, ...prev]
       })
     }
