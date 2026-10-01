@@ -13,6 +13,7 @@
 
 import { getPendingMutations, getUserMutations, type MutationOutboxEntry } from './db'
 import { replaySingleManningMutation, type ManningMutationPayload } from './manningOutbox'
+import { replaySingleChecklistMutation } from './checklistOutbox'
 
 export type SyncEngineState = 'idle' | 'syncing' | 'offline'
 
@@ -118,8 +119,16 @@ export async function triggerOutboxReplay(userId: string): Promise<{
         } else {
           failed++
         }
+      } else if (entry.domain === 'checklist' || entry.domain === 'dispatch') {
+        const result = await replaySingleChecklistMutation(userId, entry)
+        if (result.success) {
+          synced++
+        } else if (result.conflict) {
+          conflicts++
+        } else {
+          failed++
+        }
       }
-      // Future domain handlers (checklists, etc.) will hook here
     }
 
     currentStatus.lastSyncAt = new Date().toISOString()

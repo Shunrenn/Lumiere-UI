@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { usePortal } from '@/lib/store'
+import { queueOfflineEgressItemCompletion } from '@/lib/offline/checklistOutbox'
 import type {
   EventEgressItemResponse,
   EventEgressResponse,
@@ -34,7 +35,7 @@ export function PartialEgressSection({
   onNavigateToDamage,
   onNavigateToAssets,
 }: PartialEgressSectionProps) {
-  const { adminRole, isAdmin, hasFullWarehouseAccess, isWarehouseLead, isGroundCrew } = useAuth()
+  const { adminRole, isAdmin, hasFullWarehouseAccess, isWarehouseLead, isGroundCrew, adminEmail } = useAuth()
   const {
     partialEgressesByEvent,
     fetchEventEgress,
@@ -49,6 +50,7 @@ export function PartialEgressSection({
   const [initiationNote, setInitiationNote] = useState('')
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
   const [staleVersionBanner, setStaleVersionBanner] = useState(false)
+  const [pendingOfflineItemIds, setPendingOfflineItemIds] = useState<string[]>([])
 
   // Modals for supervisory actions
   const [exceptionModalItem, setExceptionModalItem] = useState<EventEgressItemResponse | null>(null)
@@ -183,8 +185,25 @@ export function PartialEgressSection({
 
   const handleCompleteItem = async (item: EventEgressItemResponse) => {
     if (!egress) return
+
     if (!navigator.onLine) {
-      setErrorBanner('Network disconnected. Item completion requires an active connection.')
+      setActionInProgress(item.id)
+      try {
+        const userId = adminEmail || 'crew'
+        await queueOfflineEgressItemCompletion(
+          userId,
+          eventId,
+          item.id,
+          egress.version,
+          item.version
+        )
+        setPendingOfflineItemIds((prev) => [...prev, item.id])
+        setErrorBanner(null)
+      } catch (err: any) {
+        setErrorBanner(`Failed to queue offline: ${err?.message}`)
+      } finally {
+        setActionInProgress(null)
+      }
       return
     }
 
@@ -632,7 +651,9 @@ export function PartialEgressSection({
                           <span
                             className={cn(
                               'rounded-full px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider',
-                              item.status === 'Resolved'
+                              pendingOfflineItemIds.includes(item.id)
+                                ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30'
+                                : item.status === 'Resolved'
                                 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
                                 : item.status === 'Exception Resolved'
                                 ? 'bg-purple-500/15 text-purple-700 dark:text-purple-400'
@@ -641,7 +662,7 @@ export function PartialEgressSection({
                                 : 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
                             )}
                           >
-                            {item.status}
+                            {pendingOfflineItemIds.includes(item.id) ? 'Pending Sync' : item.status}
                           </span>
 
                           {item.resolvedAfterDeadline && (
@@ -719,9 +740,11 @@ export function PartialEgressSection({
                           <button
                             type="button"
                             onClick={() => handleCompleteItem(item)}
-                            disabled={!canComplete || itemProcessing}
+                            disabled={!canComplete || itemProcessing || pendingOfflineItemIds.includes(item.id)}
                             title={
-                              !canComplete
+                              pendingOfflineItemIds.includes(item.id)
+                                ? 'Item completion queued for offline synchronization'
+                                : !canComplete
                                 ? isOverdue && !isEscalated
                                   ? 'Item completion locked: Overdue egress must be escalated first'
                                   : isOverdue && !isSupervisor
@@ -731,7 +754,9 @@ export function PartialEgressSection({
                             }
                             className={cn(
                               'rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm transition flex items-center gap-1.5',
-                              canComplete
+                              pendingOfflineItemIds.includes(item.id)
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-400/40 cursor-default'
+                                : canComplete
                                 ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                                 : 'bg-muted text-muted-foreground cursor-not-allowed opacity-60',
                             )}
@@ -741,7 +766,7 @@ export function PartialEgressSection({
                             ) : (
                               <CheckCircle2 className="size-3.5" />
                             )}
-                            Complete Item
+                            {pendingOfflineItemIds.includes(item.id) ? 'Queued (Pending Sync)' : 'Complete Item'}
                           </button>
 
                           {/* Supervisor Exception Button */}

@@ -50,6 +50,7 @@ import { computePhotoSha256, extractPhotoMetadata, type HavaPhotoMetadata } from
 import { getPendingQueue, type QueuedDeclaration } from '@/lib/offlineQueue'
 import { subscribeOfflineSync, triggerOfflineReplay } from '@/lib/offlineReplay'
 import { queueManningStatusUpdate, getManningUserMutations } from '@/lib/offline/manningOutbox'
+import { queueOfflinePhaseAdvancement } from '@/lib/offline/checklistOutbox'
 import { triggerOutboxReplay, subscribeSyncEngine } from '@/lib/offline/offlineReplayEngine'
 import { setReadCache, getReadCache } from '@/lib/offline/db'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -684,17 +685,30 @@ export function GroundCrewPage() {
     window.setTimeout(() => setToast(''), 3500)
   }
 
-  const advancePhase = (eventId: string) => {
+  const advancePhase = async (eventId: string) => {
+    const targetEvent = crewEvents.find((e) => e.id === eventId)
+    if (!targetEvent || !targetEvent.phase) return
+
+    const order: CheckpointPhase[] = ['Dispatch Loading', 'Venue Arrival', 'Pre-Event Setup', 'Post-Event Egress']
+    const idx = order.indexOf(targetEvent.phase)
+    if (idx < 0 || idx >= order.length - 1) return
+    const nextPhase = order[idx + 1]
+
+    if (!navigator.onLine) {
+      try {
+        const userId = adminEmail || 'crew'
+        await queueOfflinePhaseAdvancement(userId, eventId, targetEvent.phase, nextPhase)
+        setToast(`Checkpoint advanced to ${nextPhase} (Pending Sync).`)
+        window.setTimeout(() => setToast(''), 3500)
+      } catch (err) {
+        console.warn('Failed to queue phase advancement:', err)
+      }
+    }
+
     setCrewEvents((prev) =>
       prev.map((item) => {
         if (item.id !== eventId) return item
-        if (!item.phase) return item  // no canonical phase — cannot advance
-        const order: CheckpointPhase[] = ['Dispatch Loading', 'Venue Arrival', 'Pre-Event Setup', 'Post-Event Egress']
-        const idx = order.indexOf(item.phase)
-        if (idx >= 0 && idx < order.length - 1) {
-          return { ...item, phase: order[idx + 1] }
-        }
-        return item
+        return { ...item, phase: nextPhase }
       })
     )
   }
