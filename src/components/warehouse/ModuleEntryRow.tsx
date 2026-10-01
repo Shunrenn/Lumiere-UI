@@ -1,5 +1,6 @@
 import { WAREHOUSE_MODULES, type WarehouseModuleId } from '@/lib/warehouse-modules'
 import { useAuth } from '@/lib/auth'
+import { canAccessWarehouseModule } from '@/lib/route-guard'
 import { cn } from '@/lib/utils'
 
 interface ModuleEntryRowProps {
@@ -7,13 +8,11 @@ interface ModuleEntryRowProps {
 }
 
 export function ModuleEntryRow({ onOpenModule }: ModuleEntryRowProps) {
-  const { isWarehouseAssociate } = useAuth()
+  const { currentUser, isWarehouseAssociate } = useAuth()
 
-  const modules = isWarehouseAssociate
-    ? WAREHOUSE_MODULES.filter((m) =>
-        m.id === 'assets' || m.id === 'replenishment' || m.id === 'vendors' || m.id === 'dispatch',
-      ).map((m) => (m.id === 'assets' ? { ...m, label: 'Inventory' } : m))
-    : WAREHOUSE_MODULES
+  const modules = WAREHOUSE_MODULES.filter((m) =>
+    canAccessWarehouseModule(currentUser, m.id),
+  ).map((m) => (m.id === 'assets' && isWarehouseAssociate ? { ...m, label: 'Inventory' } : m))
 
   return (
     <div className={cn('grid gap-2.5 sm:gap-3.5 w-full', isWarehouseAssociate ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-7')}>

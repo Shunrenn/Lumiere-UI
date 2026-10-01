@@ -30,20 +30,15 @@ function parseWarehouseModuleFromUrl(): WarehouseModuleId | null {
   return validModules[raw] ?? null
 }
 
-function isModuleAllowedForRole(modId: WarehouseModuleId, isAssociate: boolean): boolean {
-  if (isAssociate && (modId === 'manning' || modId === 'production' || modId === 'incidents')) {
-    return false
-  }
-  return true
-}
+import { canAccessWarehouseModule } from '@/lib/route-guard'
 
 export function WarehouseHomePage() {
   const { events } = usePortal()
-  const { isWarehouseAssociate } = useAuth()
+  const { currentUser } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
   const [drilldown, setDrilldown] = useState<DrilldownEntry | null>(() => {
     const modId = parseWarehouseModuleFromUrl()
-    if (modId && isModuleAllowedForRole(modId, isWarehouseAssociate)) {
+    if (modId && canAccessWarehouseModule(currentUser, modId)) {
       return { kind: 'module', moduleId: modId }
     }
     return null
@@ -55,20 +50,27 @@ export function WarehouseHomePage() {
   useEffect(() => {
     const syncFromUrl = () => {
       const modId = parseWarehouseModuleFromUrl()
-      if (modId && isModuleAllowedForRole(modId, isWarehouseAssociate)) {
+      if (!modId) {
+        setDrilldown((prev) => (prev?.kind === 'module' ? null : prev))
+        return
+      }
+      if (canAccessWarehouseModule(currentUser, modId)) {
         setDrilldown({ kind: 'module', moduleId: modId })
       } else {
         setDrilldown((prev) => (prev?.kind === 'module' ? null : prev))
+        if (typeof window !== 'undefined' && window.location.search) {
+          window.history.replaceState({ route: 'overview' }, '', '/overview')
+        }
       }
     }
 
     syncFromUrl()
     window.addEventListener('popstate', syncFromUrl)
     return () => window.removeEventListener('popstate', syncFromUrl)
-  }, [isWarehouseAssociate])
+  }, [currentUser])
 
   const openModule = (id: WarehouseModuleId) => {
-    if (!isModuleAllowedForRole(id, isWarehouseAssociate)) return
+    if (!canAccessWarehouseModule(currentUser, id)) return
     setDrilldown({ kind: 'module', moduleId: id })
     const paramName = id === 'assets' ? 'inventory' : id
     const targetSearch = `?module=${paramName}`

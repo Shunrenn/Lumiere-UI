@@ -3,6 +3,8 @@ import { cn } from '@/lib/utils'
 import { WAREHOUSE_MODULES, type WarehouseModuleId } from '@/lib/warehouse-modules'
 import { useAuth } from '@/lib/auth'
 
+import { canAccessWarehouseModule } from '@/lib/route-guard'
+
 interface WarehouseRailProps {
   activeModuleId: WarehouseModuleId
   onSelectModule: (id: WarehouseModuleId) => void
@@ -10,13 +12,11 @@ interface WarehouseRailProps {
 }
 
 export function WarehouseRail({ activeModuleId, onSelectModule, onExit }: WarehouseRailProps) {
-  const { isWarehouseAssociate } = useAuth()
+  const { currentUser, isWarehouseAssociate } = useAuth()
 
-  const modules = isWarehouseAssociate
-    ? WAREHOUSE_MODULES.filter((m) =>
-        m.id === 'assets' || m.id === 'replenishment' || m.id === 'vendors' || m.id === 'dispatch',
-      ).map((m) => (m.id === 'assets' ? { ...m, label: 'Inventory' } : m))
-    : WAREHOUSE_MODULES
+  const modules = WAREHOUSE_MODULES.filter((m) =>
+    canAccessWarehouseModule(currentUser, m.id),
+  ).map((m) => (m.id === 'assets' && isWarehouseAssociate ? { ...m, label: 'Inventory' } : m))
 
   return (
     <aside className="flex h-full w-16 shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar py-4">

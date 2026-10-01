@@ -12,6 +12,7 @@ import { type GroundCrewSubRole, normalizeGroundCrewSubRole } from './types'
 import { API_BASE_URL } from './apiConfig'
 import { useIdleTimeout } from './useIdleTimeout'
 import { fetchAuthCapabilities } from './adminPermissionsApi'
+import { getDefaultRouteForUser } from './route-guard'
 
 export type WomSubRole =
   | 'Manning Officer'
@@ -185,7 +186,29 @@ export function getStoredAuth() {
   return { rawUser, rawToken, isSession: !localUser && Boolean(sessionUser) }
 }
 
+export function getInitialUser(): PortalAccount | null {
+  if (typeof window === 'undefined') return null
+  const { rawUser, rawToken } = getStoredAuth()
+  if (!rawUser) return null
+  try {
+    const parsed = JSON.parse(rawUser) as PortalAccount
+    const token = parsed.token || rawToken
+    if (token && isJwtExpired(token)) {
+      clearStoredAuth()
+      return null
+    }
+    return {
+      ...parsed,
+      portal: inferPortal(parsed),
+    }
+  } catch {
+    clearStoredAuth()
+    return null
+  }
+}
+
 interface AuthContextValue {
+  currentUser: PortalAccount | null
   isAuthenticated: boolean
   adminName: string
   adminRole: string
@@ -243,12 +266,14 @@ function getInitialHasPin(): boolean {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<PortalAccount | null>(null)
+  const [currentUser, setCurrentUser] = useState<PortalAccount | null>(getInitialUser)
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [hasConfirmationPin, setHasConfirmationPin] = useState<boolean>(getInitialHasPin)
   // Authoritative backend capability state for Executive.
-  // Defaults to false (safe denied) until authoritatively known from backend.
-  const [backendAssetCapability, setBackendAssetCapability] = useState<boolean>(false)
+  // Defaults to synchronously hydrated user's capability until authoritatively refreshed.
+  const [backendAssetCapability, setBackendAssetCapability] = useState<boolean>(
+    () => Boolean(getInitialUser()?.canAccessAssetInventoryAndAllocation),
+  )
 
   const refreshCapabilities = useCallback(async (tokenOverride?: string): Promise<boolean> => {
     const t = tokenOverride || getStoredAuth().rawToken || currentUser?.token
@@ -259,6 +284,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await fetchAuthCapabilities(t)
     if (result) {
       setBackendAssetCapability(result.canAccessAssetInventoryAndAllocation)
+      setCurrentUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              canAccessAssetInventoryAndAllocation: result.canAccessAssetInventoryAndAllocation,
+            }
+          : null,
+      )
       return result.canAccessAssetInventoryAndAllocation
     } else {
       // Safe denied state if API returns non-200 or network failure
@@ -273,6 +306,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setConfirmLogout(false)
     setHasConfirmationPin(false)
     setBackendAssetCapability(false)
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', '/')
+    }
   }, [])
 
   useIdleTimeout(logout, Boolean(currentUser))
@@ -402,6 +438,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
 
           // Authoritative capability consumed directly from login response
+          const canonicalRoute = getDefaultRouteForUser(account)
+          if (typeof window !== 'undefined') {
+            window.history.replaceState({ route: canonicalRoute }, '', `/${canonicalRoute}`)
+          }
           setBackendAssetCapability(Boolean(account.canAccessAssetInventoryAndAllocation))
           setCurrentUser(account)
           const storage = remember ? localStorage : sessionStorage
@@ -611,6 +651,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
+      currentUser,
       isAuthenticated: Boolean(currentUser),
       adminName: currentUser?.name ?? '',
       adminRole: currentUser?.role ?? '',

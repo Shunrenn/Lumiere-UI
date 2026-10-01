@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Route } from '@/lib/types'
+import { VALID_ROUTES } from '@/lib/route-guard'
 
 // A cross-page instruction: navigating from a dashboard "Open" button can
 // carry an intent that the destination page consumes to auto-trigger an action
@@ -17,40 +18,12 @@ export interface NavIntent {
 
 interface NavContextValue {
   route: Route
-  navigate: (route: Route, intent?: NavIntent | null) => void
+  navigate: (route: Route, intent?: NavIntent | null, options?: { replace?: boolean }) => void
   intent: NavIntent | null
   clearIntent: () => void
 }
 
 const NavContext = createContext<NavContextValue | null>(null)
-
-const VALID_ROUTES = new Set<Route>([
-  'overview',
-  'workforce',
-  'dashboard',
-  'registry',
-  'logs',
-  'security-audit',
-  'rbac',
-  'damage',
-  'replenishment',
-  'inventory',
-  'warehouse-logs',
-  'crew',
-  'deployments',
-  'dispatch',
-  'vendors',
-  'event-detail',
-  'canvas',
-  'canvas-workspace',
-  'field-ops',
-  'warehouse-lead',
-  'warehouse-member',
-  'manning',
-  'production-manager',
-  'inventory-officer',
-  'project-manager',
-])
 
 export function parseRouteFromUrl(): Route | null {
   if (typeof window === 'undefined') return null
@@ -67,16 +40,20 @@ export function NavProvider({
   children: ReactNode
   initialRoute?: Route
 }) {
-  const [route, setRoute] = useState<Route>(() => parseRouteFromUrl() || initialRoute)
+  const [route, setRoute] = useState<Route>(initialRoute)
   const [intent, setIntent] = useState<NavIntent | null>(null)
+
+  // Keep internal state aligned if initialRoute is changed by the gate
+  useEffect(() => {
+    setRoute(initialRoute)
+  }, [initialRoute])
 
   // Keep browser address bar in sync with initial route on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const activeRoute = parseRouteFromUrl() || initialRoute
-      const targetPath = `/${activeRoute}`
+      const targetPath = `/${initialRoute}`
       if (window.location.pathname !== targetPath) {
-        window.history.replaceState({ route: activeRoute }, '', targetPath)
+        window.history.replaceState({ route: initialRoute }, '', targetPath)
       }
     }
   }, [initialRoute])
@@ -97,16 +74,21 @@ export function NavProvider({
     }
   }, [])
 
-  const navigate = useCallback((next: Route, nextIntent: NavIntent | null = null) => {
-    setIntent(nextIntent)
-    setRoute(next)
-    if (typeof window !== 'undefined') {
-      const targetPath = `/${next}`
-      if (window.location.pathname !== targetPath) {
-        window.history.pushState({ route: next }, '', targetPath)
+  const navigate = useCallback(
+    (next: Route, nextIntent: NavIntent | null = null, options?: { replace?: boolean }) => {
+      setIntent(nextIntent)
+      setRoute(next)
+      if (typeof window !== 'undefined') {
+        const targetPath = `/${next}`
+        if (options?.replace) {
+          window.history.replaceState({ route: next }, '', targetPath)
+        } else if (window.location.pathname !== targetPath) {
+          window.history.pushState({ route: next }, '', targetPath)
+        }
       }
-    }
-  }, [])
+    },
+    [],
+  )
 
   const clearIntent = useCallback(() => setIntent(null), [])
 

@@ -9,6 +9,7 @@ import { ProductionModule } from '@/components/warehouse/production/ProductionMo
 import { IncidentReportingModule } from '@/components/warehouse/incidents/IncidentReportingModule'
 
 import { useAuth } from '@/lib/auth'
+import { canAccessWarehouseModule } from '@/lib/route-guard'
 
 interface CompanionPanelProps {
   moduleId: WarehouseModuleId
@@ -16,11 +17,11 @@ interface CompanionPanelProps {
 }
 
 export function CompanionPanel({ moduleId, onClose }: CompanionPanelProps) {
-  const { isWarehouseAssociate } = useAuth()
+  const { currentUser } = useAuth()
   const module = getWarehouseModule(moduleId)
   if (!module) return null
 
-  if (isWarehouseAssociate && (moduleId === 'manning' || moduleId === 'production' || moduleId === 'incidents')) {
+  if (!canAccessWarehouseModule(currentUser, moduleId)) {
     return null
   }
 
