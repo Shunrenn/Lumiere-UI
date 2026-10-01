@@ -600,16 +600,17 @@ export function GroundCrewPage() {
   }, [accessLevel])
 
   const navItems: PwaNavItem[] = [
-    { id: 'home', label: 'Console', icon: MapPin },
+    { id: 'home', label: 'Tasks', icon: ClipboardList },
+    { id: 'calendar', label: 'Calendar', icon: CalendarDays },
     {
       id: 'tasks',
-      label: accessLevel === 'Event Admin' ? 'Decision' : 'Declarations',
-      icon: ShieldCheck,
+      label: 'HAVA',
+      icon: Camera,
       badgeCount: pendingDeclarationsForCurrentAdmin.length,
+      isCenter: true,
     },
-    { id: 'calendar', label: 'Calendar', icon: CalendarDays },
     { id: 'activity', label: 'Record', icon: FileText },
-    { id: 'account', label: 'Account', icon: UserCircle2 },
+    { id: 'account', label: 'Profile', icon: UserCircle2 },
   ]
 
   return (
