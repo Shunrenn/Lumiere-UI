@@ -9,6 +9,7 @@ import { LogoutModal } from '@/components/LogoutModal'
 import { OfflineBanner } from '@/components/OfflineBanner'
 import { WelcomeModal } from '@/components/WelcomeModal'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { loadRosterFromDatabase } from '@/lib/roster'
 import { PlannerProvider } from '@/lib/planner'
 import { WarehouseProvider } from '@/lib/warehouse'
@@ -315,9 +316,11 @@ function Gate() {
   return (
     <NavProvider initialRoute={initialRoute}>
       <AdminGrowthSummaryProvider>
-        <Suspense fallback={<LoadingSkeleton variant="page" />}>
-          <Router />
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={<LoadingSkeleton variant="page" />}>
+            <Router />
+          </Suspense>
+        </ErrorBoundary>
         <WelcomeModal />
       </AdminGrowthSummaryProvider>
     </NavProvider>
