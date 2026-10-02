@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Grid2X2, List, Plus, Search, X } from 'lucide-react'
+import { Grid2X2, List, Plus, Search, X, Palette } from 'lucide-react'
 import {
   addCatalogAsset,
   useCatalogAssets,
@@ -10,6 +10,7 @@ import {
 import { AssetCard, ASSET_STATUS_TONE, getTierGlanceDisplay } from '@/components/warehouse/asset-catalog/AssetCard'
 import { AssetDetailModal } from '@/components/warehouse/asset-catalog/AssetDetailModal'
 import { AddAssetModal, type NewAssetDraft } from '@/components/warehouse/asset-catalog/AddAssetModal'
+import { WarehousePaintRegistryModal } from '@/components/warehouse/paint/WarehousePaintRegistryModal'
 import { GridRevealContainer } from '@/components/GridRevealContainer'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { cn } from '@/lib/utils'
@@ -61,6 +62,7 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [selectedAsset, setSelectedAsset] = useState<CatalogAsset | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [paintOpen, setPaintOpen] = useState(false)
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -210,6 +212,14 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
                 <List className="size-3.5" />
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => setPaintOpen(true)}
+              className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-foreground transition hover:bg-accent"
+            >
+              <Palette className="size-3.5 text-primary" />
+              Paint Registry
+            </button>
             {!effectiveReadOnly && (
               <button
                 type="button"
@@ -376,6 +386,7 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
 
       {selectedAsset && <AssetDetailModal asset={selectedAsset} onClose={() => setSelectedAsset(null)} />}
       {addOpen && <AddAssetModal onClose={() => setAddOpen(false)} onCreate={handleCreate} />}
+      {paintOpen && <WarehousePaintRegistryModal onClose={() => setPaintOpen(false)} />}
     </div>
   )
 }
