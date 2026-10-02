@@ -13,7 +13,10 @@ import {
   type ProductionStage,
 } from '@/lib/warehouse-production'
 import { Pill } from '@/components/warehouse/shared/Pill'
-import type { Tone } from '@/components/warehouse/event-detail/status-tone'
+import {
+  formatProductionStatus,
+  getProductionStatusTone,
+} from '@/lib/productionApi'
 import { ProductionDetailModal } from '@/components/warehouse/production/ProductionDetailModal'
 import { QuotaEstimationModal } from '@/components/warehouse/production/QuotaEstimationModal'
 import { ProductionGanttView } from '@/components/warehouse/production/ProductionGanttView'
@@ -24,14 +27,16 @@ import { cn } from '@/lib/utils'
 
 type MainModuleView = 'gantt' | 'kanban' | 'workload'
 
-const STAGE_TONE: Record<ProductionStage, Tone> = {
-  Unprepped: 'neutral',
-  Prepping: 'progress',
-  'Awaiting Approval': 'caution',
-  Ready: 'positive',
-}
-
-const STATUS_FILTERS: Array<ProductionStage | 'All'> = ['All', 'Unprepped', 'Prepping', 'Awaiting Approval', 'Ready']
+const STATUS_FILTERS: Array<ProductionStage | 'All'> = [
+  'All',
+  'Pending',
+  'MaterialsVerified',
+  'InProgress',
+  'CompletedAwaitingApproval',
+  'RejectedRework',
+  'Approved',
+  'DispatchReady',
+]
 
 interface ProductionModuleProps {
   onClose: () => void
@@ -352,7 +357,9 @@ function CrossEventWorkloadTable({
               <td className="px-5 py-3.5 text-xs text-card-foreground">{item.assignedCrew}</td>
               <td className="px-5 py-3.5 text-xs text-card-foreground">{item.estimatedHours}h</td>
               <td className="px-5 py-3.5">
-                <Pill tone={STAGE_TONE[item.stage]}>{item.stage}</Pill>
+                <Pill tone={getProductionStatusTone(item.status || item.stage)}>
+                  {formatProductionStatus(item.status || item.stage)}
+                </Pill>
               </td>
             </tr>
           ))}
@@ -380,7 +387,7 @@ function KanbanBoard({
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {PRODUCTION_STAGES.map((stage) => {
-        const stageItems = filtered.filter((item) => item.stage === stage)
+        const stageItems = filtered.filter((item) => (item.status || item.stage) === stage)
         return (
           <div
             key={stage}
@@ -391,7 +398,7 @@ function KanbanBoard({
             className="flex flex-col gap-3 rounded-xl border border-border bg-card/60 p-3"
           >
             <div className="flex items-center justify-between px-1">
-              <Pill tone={STAGE_TONE[stage]}>{stage}</Pill>
+              <Pill tone={getProductionStatusTone(stage)}>{formatProductionStatus(stage)}</Pill>
               <span className="text-[0.6rem] font-semibold text-muted-foreground">{stageItems.length}</span>
             </div>
             <div className="flex min-h-16 flex-col gap-2.5">

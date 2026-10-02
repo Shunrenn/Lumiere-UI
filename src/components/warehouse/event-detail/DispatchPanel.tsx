@@ -339,6 +339,7 @@ export function DispatchPanel({
                 const isCompleted = item.prepStatus === 'Completed'
                 const isPrepping = item.prepStatus === 'Prepping'
                 const isPendingPull = item.prepStatus === 'Pending Pull'
+                const isAwaitingProduction = item.prepStatus === 'Awaiting Production'
                 const isVerifying = verifyingAssetId === item.assetId
 
                 return (
@@ -370,11 +371,13 @@ export function DispatchPanel({
                           isCompleted && 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
                           isPrepping && 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300',
                           isPendingPull && 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
+                          isAwaitingProduction && 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-500/20',
                         )}
                       >
                         {isCompleted && <CheckCircle2 className="size-3 text-emerald-600 dark:text-emerald-400" />}
                         {isPrepping && <Clock className="size-3 text-sky-600 dark:text-sky-400" />}
                         {isPendingPull && <AlertTriangle className="size-3 text-amber-600 dark:text-amber-400" />}
+                        {isAwaitingProduction && <Clock className="size-3 text-indigo-600 dark:text-indigo-400" />}
                         {item.prepStatus}
                       </span>
 
@@ -393,6 +396,12 @@ export function DispatchPanel({
                           )}
                           Verify Item
                         </button>
+                      )}
+
+                      {isAwaitingProduction && (
+                        <span className="text-[0.6rem] text-muted-foreground italic hidden sm:inline">
+                          Fabrication in progress · locked from staging
+                        </span>
                       )}
 
                       {isCompleted && (

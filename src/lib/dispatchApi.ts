@@ -1,6 +1,6 @@
 import { API_BASE_URL, getAuthToken } from './apiConfig'
 
-export type CanonicalPrepStatus = 'Pending Pull' | 'Prepping' | 'Completed'
+export type CanonicalPrepStatus = 'Awaiting Production' | 'Pending Pull' | 'Prepping' | 'Completed'
 
 export interface PackingListAssetDto {
   assetId: string

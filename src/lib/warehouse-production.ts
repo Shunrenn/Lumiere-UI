@@ -5,9 +5,32 @@ import type { PortalEvent, Staff } from '@/lib/types'
 import { getBespokeSubCategoryConfigs, type CatalogAsset } from '@/lib/warehouse-catalog'
 import { getCrewPool } from '@/lib/warehouse-crew'
 
-export type ProductionStage = 'Unprepped' | 'Prepping' | 'Awaiting Approval' | 'Ready'
+export type CanonicalProductionStage =
+  | 'Pending'
+  | 'MaterialsVerified'
+  | 'InProgress'
+  | 'CompletedAwaitingApproval'
+  | 'RejectedRework'
+  | 'Approved'
+  | 'DispatchReady'
+  | 'Cancelled'
 
-export const PRODUCTION_STAGES: ProductionStage[] = ['Unprepped', 'Prepping', 'Awaiting Approval', 'Ready']
+export type ProductionStage =
+  | CanonicalProductionStage
+  | 'Unprepped'
+  | 'Prepping'
+  | 'Awaiting Approval'
+  | 'Ready'
+
+export const PRODUCTION_STAGES: ProductionStage[] = [
+  'Pending',
+  'MaterialsVerified',
+  'InProgress',
+  'CompletedAwaitingApproval',
+  'RejectedRework',
+  'Approved',
+  'DispatchReady',
+]
 
 export type ShiftType = 'morning' | 'night' | 'both'
 
@@ -83,8 +106,16 @@ export interface ProductionItem {
   estimatedHours: number
   startedAt: number
   stage: ProductionStage
+  status?: string
+  progressPercentage?: number
+  completedQuantity?: number
+  targetQuantity?: number
   rawMaterials: RawMaterial[]
   accomplishment?: AccomplishmentDeclaration
+  verificationNotes?: string
+  rejectionReason?: string
+  approvalNotes?: string
+  handoffNotes?: string
 
   // Gantt & Scheduling Engine Fields
   quota: number
@@ -207,7 +238,104 @@ export function useProductionItems(events: PortalEvent[] = [], staff: Staff[] = 
 }
 
 export function moveProductionItem(id: string, stage: ProductionStage) {
-  items = items.map((item) => (item.id === id ? { ...item, stage } : item))
+  items = items.map((item) => (item.id === id ? { ...item, stage, status: stage } : item))
+  publish()
+}
+
+export function verifyMaterialsOnItem(id: string, notes?: string) {
+  items = items.map((item) =>
+    item.id === id
+      ? {
+          ...item,
+          stage: 'MaterialsVerified',
+          status: 'MaterialsVerified',
+          verificationNotes: notes || item.verificationNotes,
+          rawMaterials: item.rawMaterials.map((m) => ({ ...m, checked: true })),
+        }
+      : item,
+  )
+  publish()
+}
+
+export function updateItemProgress(
+  id: string,
+  progressPercentage: number,
+  completedQuantity?: number,
+  notes?: string,
+) {
+  items = items.map((item) => {
+    if (item.id !== id) return item
+    const is100 = progressPercentage >= 100
+    const newStage: ProductionStage = is100 ? 'CompletedAwaitingApproval' : 'InProgress'
+    return {
+      ...item,
+      stage: newStage,
+      status: newStage,
+      progressPercentage,
+      completedQuantity: completedQuantity ?? item.completedQuantity ?? Math.round((progressPercentage / 100) * item.quota),
+      accomplishment: notes
+        ? { notes, submittedAt: new Date().toISOString(), photoDataUrl: item.accomplishment?.photoDataUrl }
+        : item.accomplishment,
+    }
+  })
+  publish()
+}
+
+export function approveProductionItem(id: string, notes?: string) {
+  items = items.map((item) =>
+    item.id === id
+      ? {
+          ...item,
+          stage: 'Approved',
+          status: 'Approved',
+          approvalNotes: notes || item.approvalNotes,
+        }
+      : item,
+  )
+  publish()
+}
+
+export function rejectProductionItem(id: string, reason: string) {
+  items = items.map((item) =>
+    item.id === id
+      ? {
+          ...item,
+          stage: 'RejectedRework',
+          status: 'RejectedRework',
+          rejectionReason: reason,
+        }
+      : item,
+  )
+  publish()
+}
+
+export function resumeProductionItemRework(id: string, notes?: string) {
+  items = items.map((item) =>
+    item.id === id
+      ? {
+          ...item,
+          stage: 'InProgress',
+          status: 'InProgress',
+          accomplishment: notes
+            ? { notes, submittedAt: new Date().toISOString() }
+            : item.accomplishment,
+        }
+      : item,
+  )
+  publish()
+}
+
+export function handoffProductionItem(id: string, notes?: string) {
+  items = items.map((item) =>
+    item.id === id
+      ? {
+          ...item,
+          stage: 'DispatchReady',
+          status: 'DispatchReady',
+          handoffNotes: notes || item.handoffNotes,
+        }
+      : item,
+  )
   publish()
 }
 
@@ -225,7 +353,8 @@ export function submitForApproval(itemId: string, notes: string, photoDataUrl?: 
     item.id === itemId
       ? {
           ...item,
-          stage: 'Awaiting Approval',
+          stage: 'CompletedAwaitingApproval',
+          status: 'CompletedAwaitingApproval',
           accomplishment: { notes, photoDataUrl, submittedAt: new Date().toISOString() },
         }
       : item,
@@ -234,12 +363,12 @@ export function submitForApproval(itemId: string, notes: string, photoDataUrl?: 
 }
 
 export function approveForDispatch(itemId: string) {
-  items = items.map((item) => (item.id === itemId ? { ...item, stage: 'Ready' } : item))
+  items = items.map((item) => (item.id === itemId ? { ...item, stage: 'DispatchReady', status: 'DispatchReady' } : item))
   publish()
 }
 
 export function sendBackForRevision(itemId: string) {
-  items = items.map((item) => (item.id === itemId ? { ...item, stage: 'Prepping' } : item))
+  items = items.map((item) => (item.id === itemId ? { ...item, stage: 'RejectedRework', status: 'RejectedRework' } : item))
   publish()
 }
 
