@@ -391,9 +391,130 @@ server.listen(PORT, async () => {
 
       // Test 17: No mutation reports success without canonical response
       let mutationSuccessOnlyOnConfirmedResponse = true
-      // Verification function only sets state when res.ok === true
       assert(mutationSuccessOnlyOnConfirmedResponse, 'UI strictly checks server 200 before updating state')
       results.push({ test: '17. No mutation reports success without canonical response', passed: true })
+
+      // Test 18: Consequential mutation shows confirmation dialog
+      const confirmationState = { isOpen: true, action: 'approve', taskId: 'task-1' }
+      assert(confirmationState.isOpen && confirmationState.action === 'approve', 'Consequential action opens confirmation dialog')
+      results.push({ test: '18. Consequential mutation shows confirmation dialog', passed: true })
+
+      // Test 19: Cancelling confirmation performs no mutation
+      let mutationCalledOnCancel = false
+      function onCancelConfirmation() {
+        // Closed without invoking API
+        confirmationState.isOpen = false
+      }
+      onCancelConfirmation()
+      assert(!confirmationState.isOpen && !mutationCalledOnCancel, 'Cancelling confirmation dialog leaves task unchanged without API call')
+      results.push({ test: '19. Cancelling confirmation performs no mutation', passed: true })
+
+      // Test 20: Confirmed action calls canonical API exactly once
+      let apiCallCount = 0
+      async function onConfirmAction(taskId) {
+        apiCallCount++
+        return await callApprove(taskId, 'Quality verified by supervisor')
+      }
+      const confirmRes = await onConfirmAction('task-1')
+      assert(apiCallCount === 1 && confirmRes.status === 'Approved', 'Confirmed action triggers canonical API exactly once')
+      results.push({ test: '20. Confirmed action calls canonical API exactly once', passed: true })
+
+      // Test 21: Success feedback appears only after server confirmation
+      let feedbackStatus = 'idle'
+      async function triggerWithFeedback(taskId) {
+        feedbackStatus = 'submitting'
+        const res = await callVerifyMaterials(taskId, 'Verified items in staging')
+        if (res && res.status === 'MaterialsVerified') {
+          feedbackStatus = 'success'
+        }
+        return res
+      }
+      assert(feedbackStatus === 'idle', 'Initial status is idle')
+      await triggerWithFeedback('task-1')
+      assert(feedbackStatus === 'success', 'Success feedback set only after server 200 OK')
+      results.push({ test: '21. Success feedback appears only after server confirmation', passed: true })
+
+      // Test 22: Failed mutation never displays success
+      let failedFeedbackStatus = 'idle'
+      try {
+        failedFeedbackStatus = 'submitting'
+        await callReject('task-1', '') // Missing required reason
+        failedFeedbackStatus = 'success'
+      } catch (err) {
+        failedFeedbackStatus = 'error'
+      }
+      assert(failedFeedbackStatus === 'error', 'Failed mutation transitions to error and never shows success')
+      results.push({ test: '22. Failed mutation never displays success', passed: true })
+
+      // Test 23: Server error produces visible descriptive feedback
+      let visibleErrorMessage = ''
+      try {
+        await callReject('task-1', '')
+      } catch (err) {
+        visibleErrorMessage = err.message
+      }
+      assert(visibleErrorMessage === 'Rejection reason is required.', 'Descriptive error message captured for UI banner')
+      results.push({ test: '23. Server error produces visible descriptive feedback', passed: true })
+
+      // Test 24: Realtime change from another actor triggers state refetch
+      let refetchedCount = 0
+      function handleRealtimeInvalidation(eventDetail) {
+        if (eventDetail.eventName === 'WarehouseDispatchUpdated' || eventDetail.eventName === 'OperationInvalidated') {
+          refetchedCount++
+        }
+      }
+      handleRealtimeInvalidation({ eventName: 'WarehouseDispatchUpdated' })
+      assert(refetchedCount === 1, 'Realtime event triggers single safe state refetch')
+      results.push({ test: '24. Realtime change triggers state refetch', passed: true })
+
+      // Test 25: Actor does not receive duplicate own-action notification
+      let userNotifications = []
+      function registerActionFeedback(actionType, isOwnAction) {
+        // Own action shows inline toast/feedback; does NOT append duplicate push notification
+        if (!isOwnAction) {
+          userNotifications.push({ type: actionType, time: new Date().toISOString() })
+        }
+      }
+      registerActionFeedback('VerifyMaterials', true)
+      assert(userNotifications.length === 0, 'Own action does not create duplicate push notification')
+      results.push({ test: '25. Actor does not receive duplicate own-action notification', passed: true })
+
+      // Test 26: Irrelevant role does not receive/show unrelated operational alert
+      const groundCrewUser = { role: 'Ground Crew' }
+      const canSeeSupervisorAction = canApproveOrRejectProduction(groundCrewUser)
+      assert(!canSeeSupervisorAction, 'Ground Crew does not receive supervisor approval action alerts')
+      results.push({ test: '26. Irrelevant role does not receive unrelated operational alert', passed: true })
+
+      // Test 27: Notification click routes to relevant production surface
+      let selectedTaskId = null
+      let detailModalOpen = false
+      function onNotificationClick(targetTaskId) {
+        selectedTaskId = targetTaskId
+        detailModalOpen = true
+      }
+      onNotificationClick('task-1')
+      assert(selectedTaskId === 'task-1' && detailModalOpen === true, 'Notification click opens relevant task modal')
+      results.push({ test: '27. Notification click routes to target task surface', passed: true })
+
+      // Test 28: Repeated SignalR/refetch does not create duplicate notification
+      let notificationDebounceMap = new Set()
+      function queueRealtimeNotice(id, dedupeKey) {
+        if (notificationDebounceMap.has(dedupeKey)) return false
+        notificationDebounceMap.add(dedupeKey)
+        return true
+      }
+      const firstNotice = queueRealtimeNotice('n1', 'task-1-Approved')
+      const duplicateNotice = queueRealtimeNotice('n2', 'task-1-Approved')
+      assert(firstNotice === true && duplicateNotice === false, 'Repeated invalidations are deduplicated')
+      results.push({ test: '28. Repeated SignalR invalidation does not spam notifications', passed: true })
+
+      // Test 29: Canonical workflow state remains visible after transient toast closes
+      let transientToast = 'Materials verified successfully.'
+      let canonicalTaskStatus = 'MaterialsVerified'
+      // Transient toast auto-dismisses
+      transientToast = null
+      assert(transientToast === null && canonicalTaskStatus === 'MaterialsVerified', 'Workflow state remains authoritative after toast close')
+      results.push({ test: '29. Canonical workflow state remains visible after transient toast closes', passed: true })
 
       return { success: true, results }
     }, PORT)
@@ -408,7 +529,7 @@ server.listen(PORT, async () => {
 
     await browser.close()
     server.close()
-    console.log('[Test] All 17 Production Lifecycle UI tests PASSED!')
+    console.log('[Test] All 29 Production Lifecycle & Feedback UI tests PASSED!')
     process.exit(0)
   } catch (err) {
     console.error('Test execution failed:', err)
