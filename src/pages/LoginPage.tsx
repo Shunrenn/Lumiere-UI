@@ -72,7 +72,7 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
       void supabase
         .from('access_requests')
         .insert({ email: normalized, type: requestType, status: 'pending' })
-      
+
       addUserAction({
         type: 'access-request',
         user: normalized,
@@ -111,47 +111,47 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
         </div>
         <div className="flex min-h-full items-center justify-center px-6 py-10">
           <div className="flex w-full max-w-xl flex-col rounded-xl border border-border/80 bg-card/95 p-8 sm:p-12 shadow-sm backdrop-blur-sm">
-          {view === 'signin' && (
-            <SignInView
-              email={email}
-              password={password}
-              showPassword={showPassword}
-              remember={remember}
-              error={error}
-              signingIn={signingIn}
-              onEmail={setEmail}
-              onPassword={setPassword}
-              onToggleShow={() => setShowPassword((s) => !s)}
-              onRemember={() => setRemember((r) => !r)}
-              onSubmit={handleSignIn}
-              onForgot={() => {
-                setRequestError('')
-                setRequestType('forgot-password')
-                setView('request')
-              }}
-              onRequest={() => {
-                setError('')
-                setRequestError('')
-                setRequestType('request-password')
-                setView('request')
-              }}
-              onCrewPortal={onCrewPortal}
-            />
-          )}
+            {view === 'signin' && (
+              <SignInView
+                email={email}
+                password={password}
+                showPassword={showPassword}
+                remember={remember}
+                error={error}
+                signingIn={signingIn}
+                onEmail={setEmail}
+                onPassword={setPassword}
+                onToggleShow={() => setShowPassword((s) => !s)}
+                onRemember={() => setRemember((r) => !r)}
+                onSubmit={handleSignIn}
+                onForgot={() => {
+                  setRequestError('')
+                  setRequestType('forgot-password')
+                  setView('request')
+                }}
+                onRequest={() => {
+                  setError('')
+                  setRequestError('')
+                  setRequestType('request-password')
+                  setView('request')
+                }}
+                onCrewPortal={onCrewPortal}
+              />
+            )}
 
-          {view === 'request' && (
-            <RequestView
-              email={requestEmail}
-              type={requestType}
-              error={requestError}
-              submitting={submittingRequest}
-              onEmail={setRequestEmail}
-              onSubmit={handleRequest}
-              onBack={() => setView('signin')}
-            />
-          )}
+            {view === 'request' && (
+              <RequestView
+                email={requestEmail}
+                type={requestType}
+                error={requestError}
+                submitting={submittingRequest}
+                onEmail={setRequestEmail}
+                onSubmit={handleRequest}
+                onBack={() => setView('signin')}
+              />
+            )}
 
-          {view === 'sent' && <SentView onReturn={() => setView('signin')} />}
+            {view === 'sent' && <SentView onReturn={() => setView('signin')} />}
           </div>
         </div>
       </div>
@@ -282,22 +282,22 @@ function SignInView(props: {
       </button>
 
       {import.meta.env.DEV && (
-      <div className="mt-6 space-y-1 text-center text-xs text-muted-foreground/70">
-        <p>Demo admin · admin@lumiere.com · lumiere2026</p>
-        <p>Executive · executive@lumiere.com · lumiere2026</p>
-        <p>Event planner · planner@lumiere.com · lumiere2026</p>
-        <p>Ground crew · crew@lumiere.com · lumiere2026</p>
-        <p className="pt-2 font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
-          Warehouse Ops
-        </p>
-        <p>Full access · Warehouse Ops Manager · warehouseops@lumiere.com · lumiere2026 · 246810</p>
-        <p>Sub-role · Manning Officer · manning@lumiere.com · lumiere2026</p>
-        <p>Sub-role · Warehouse Manager · warehouse@lumiere.com · lumiere2026</p>
-        <p>Sub-role · Production Manager · production@lumiere.com · lumiere2026</p>
-        <p>Sub-role · Inventory Officer · inventory@lumiere.com · lumiere2026</p>
-        <p>Sub-role · Purchasing Officer · purchasing@lumiere.com · lumiere2026</p>
-      </div>
-    )}
+        <div className="mt-6 space-y-1 text-center text-xs text-muted-foreground/70">
+          <p>Demo admin · admin@lumiere.com · lumiere2026</p>
+          <p>Executive · executive@lumiere.com · lumiere2026</p>
+          <p>Event planner · planner@lumiere.com · lumiere2026</p>
+          <p>Ground crew · crew@lumiere.com · lumiere2026</p>
+          <p className="pt-2 font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
+            Warehouse Ops
+          </p>
+          <p>Full access · Warehouse Ops Manager · warehouseops@lumiere.com · lumiere2026 · 246810</p>
+          <p>Sub-role · Manning Officer · manning@lumiere.com · lumiere2026</p>
+          <p>Sub-role · Warehouse Manager · warehouse@lumiere.com · lumiere2026</p>
+          <p>Sub-role · Production Manager · production@lumiere.com · lumiere2026</p>
+          <p>Sub-role · Inventory Officer · inventory@lumiere.com · lumiere2026</p>
+          <p>Sub-role · Purchasing Officer · purchasing@lumiere.com · lumiere2026</p>
+        </div>
+      )}
     </form>
   )
 }
@@ -410,11 +410,10 @@ function ThemeToggle({ mode, onChange }: { mode: ThemeMode; onChange: (mode: The
           aria-label={label}
           title={label}
           onClick={() => onChange(optionMode)}
-          className={`flex size-8 items-center justify-center rounded-full transition-colors ${
-            mode === optionMode
+          className={`flex size-8 items-center justify-center rounded-full transition-colors ${mode === optionMode
               ? 'bg-foreground text-background'
               : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-          }`}
+            }`}
         >
           <Icon className="size-3.5" aria-hidden="true" />
         </button>
