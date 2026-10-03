@@ -251,6 +251,9 @@ export interface PortalEvent {
   moodPlan: string
   projectManagerId?: string
   projectManagerName?: string
+  coverUrl?: string
+  thumbnail?: string
+  eventPegs?: string
 }
 
 /* ---------- Dispatch & Batches ---------- */

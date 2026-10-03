@@ -151,6 +151,9 @@ export function mapEventResponseToPortalEvent(dto: EventResponseDto, index = 0):
     moodPlan: dto.notes || '',
     projectManagerId: dto.projectManagerId,
     projectManagerName: dto.projectManagerName,
+    coverUrl: (dto as any).coverUrl || (dto as any).thumbnail || dto.eventPegs,
+    thumbnail: (dto as any).thumbnail || (dto as any).coverUrl || dto.eventPegs,
+    eventPegs: dto.eventPegs,
   }
 }
 

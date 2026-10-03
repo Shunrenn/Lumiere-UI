@@ -249,41 +249,42 @@ function makeEventAlias(title: string): string {
   return `${letters || 'EVT'}-26`
 }
 
-function mapPortalEventsToCards(evList: any[], designerNames?: string[]): ProjectCard[] {
-  const designers = (designerNames && designerNames.length > 0) ? designerNames : DEMO_DESIGNERS
-  const thumbnails = [
-    '/images/decor/chateau-ballroom.png',
-    '/images/decor/garden-wedding.png',
-    '/images/decor/floral-arch.png',
-    '/images/decor/minimalist-table.png',
-    '/images/decor/candelabra.png',
-    '/images/decor/string-lights.png',
-    '/images/decor/velvet-sofa.png',
-    '/images/decor/dance-floor.png',
-    '/images/decor/silk-runner.png',
-    '/images/decor/gold-charger.png',
-  ]
-
-  return evList.map((ev, i) => {
-    const parts = parseIsoDateParts(ev.targetDate)
+function mapPortalEventsToCards(
+  evList: any[],
+  existingCards: ProjectCard[] = [],
+  defaultDesigner = 'Lumière Creatives',
+): ProjectCard[] {
+  return evList.map((ev) => {
+    const parts = parseIsoDateParts(ev.targetDate || ev.dateOfEvent)
     const dateStr = parts
       ? `${MONTH_NAMES[parts.month].slice(0, 3)} ${parts.day}, ${parts.year}`
       : 'TBD'
     const title = ev.title || ev.name || 'Untitled Event'
     const alias = makeEventAlias(title)
-    const designer = designers[i % designers.length]
+    const cardId = `pc-event-${ev.id}`
+    const existing = existingCards.find((c) => c.id === cardId)
+
+    // Canonical thumbnail from backend if available, or persisted user-designed canvas export, else neutral empty
+    const canonicalCover =
+      ev.coverUrl ||
+      ev.thumbnail ||
+      (typeof ev.eventPegs === 'string' && (ev.eventPegs.startsWith('http') || ev.eventPegs.startsWith('data:')) ? ev.eventPegs : '') ||
+      ''
+    const thumbnail = canonicalCover || existing?.thumbnail || ''
+
+    const designer = ev.projectManagerName || defaultDesigner || 'Lumière Creatives'
 
     return {
-      id: `pc-event-${ev.id}`,
+      id: cardId,
       title: `${title} — Main Layout`,
       type: 'Design',
       designer,
-      collaborators: i % 2 === 0 ? [{ name: 'Marc Delacroix', role: 'Asset Planner' }] : [],
+      collaborators: existing?.collaborators || [],
       eventAlias: alias,
       eventDate: dateStr,
       lastEdited: 'Synced from API',
-      thumbnail: thumbnails[i % thumbnails.length],
-      starred: i < 3,
+      thumbnail,
+      starred: existing?.starred ?? false,
     }
   })
 }
@@ -500,8 +501,6 @@ interface ProjectCard {
   thumbnail: string
   starred: boolean
 }
-
-const DEMO_DESIGNERS = ['Elena Vasseur', 'Marc Delacroix', 'Sophie Laurent', 'Julien Morel', 'Isabelle Renard', 'Pierre Faure']
 
 const DEMO_CARDS: ProjectCard[] = mapPortalEventsToCards(REAL_10_SEEDED_EVENTS)
 
@@ -894,9 +893,24 @@ function ProjectCardItem({
             className="size-full object-cover transition duration-300 group-hover:scale-105"
           />
         ) : (
-          <div className="flex flex-col items-center justify-center gap-1.5 text-muted-foreground">
-            <LayoutGrid className="size-6 opacity-30" />
-            <span className="text-[0.52rem] font-bold uppercase tracking-[0.1em] opacity-50">Mood Board</span>
+          <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-card via-muted/40 to-card p-4 text-muted-foreground border-b border-border/40 select-none">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-sm">
+              {card.type === 'Mood Board' ? (
+                <Sparkles className="size-4.5" />
+              ) : (
+                <PenTool className="size-4.5" />
+              )}
+            </div>
+            <div className="text-center">
+              {card.eventAlias ? (
+                <span className="font-mono text-[0.6rem] font-bold uppercase tracking-wider text-foreground block">
+                  {card.eventAlias}
+                </span>
+              ) : null}
+              <p className="text-[0.52rem] font-medium tracking-wide text-muted-foreground/80">
+                {card.type === 'Mood Board' ? 'Empty Mood Board' : 'No project cover yet'}
+              </p>
+            </div>
           </div>
         )}
         <div className="absolute bottom-2 left-2 z-10">
@@ -988,11 +1002,13 @@ function ProjectRowItem({
         </div>
       )}
 
-      <div className="size-10 shrink-0 overflow-hidden rounded-md bg-muted flex items-center justify-center">
+      <div className="size-10 shrink-0 overflow-hidden rounded-md bg-muted flex items-center justify-center border border-border/50">
         {card.thumbnail ? (
           <img src={card.thumbnail} alt="" className="size-full object-cover" />
         ) : (
-          <LayoutGrid className="size-4 text-muted-foreground opacity-40" />
+          <div className="flex size-full items-center justify-center bg-muted/60 text-muted-foreground font-mono text-[0.6rem] font-bold text-foreground">
+            {card.eventAlias ? card.eventAlias.slice(0, 4) : <PenTool className="size-4 opacity-50 text-primary" />}
+          </div>
         )}
       </div>
 
@@ -1161,11 +1177,11 @@ export function DesignCanvasHubPage() {
 
   // Map real backend events into calendar grid events for visible month/year
   const calEvents = useMemo(() => {
-    const source = (portalEvents && portalEvents.length > 0) ? portalEvents : REAL_10_SEEDED_EVENTS
+    const source = (portalEvents && portalEvents.length > 0) ? portalEvents : (import.meta.env.DEV ? REAL_10_SEEDED_EVENTS : [])
     const events: CalendarEvent[] = []
 
     source.forEach((ev, index) => {
-      const parts = parseIsoDateParts(ev.targetDate)
+      const parts = parseIsoDateParts(ev.targetDate || ev.dateOfEvent)
       if (!parts) return
       if (parts.year !== calYear || parts.month !== calMonth) return
 
@@ -1250,13 +1266,13 @@ export function DesignCanvasHubPage() {
 
   // Combine real events as project cards with local card state
   const effectiveCards = useMemo(() => {
-    const source = (portalEvents && portalEvents.length > 0) ? portalEvents : REAL_10_SEEDED_EVENTS
-    const realCards = mapPortalEventsToCards(source, dbDesigners)
-    const userCards = cards.filter((c) => c.id.startsWith('mb-') || c.id.startsWith('pc-custom-'))
+    const source = (portalEvents && portalEvents.length > 0) ? portalEvents : (import.meta.env.DEV ? REAL_10_SEEDED_EVENTS : [])
+    const realCards = mapPortalEventsToCards(source, cards, adminName || 'Lumière Creatives')
+    const userCards = cards.filter((c) => c.id.startsWith('mb-') || c.id.startsWith('pc-custom-') || (!c.id.startsWith('pc-event-') && !realCards.some(rc => rc.id === c.id)))
     const hasSeedMb = userCards.some((c) => c.id === SEED_MOOD_BOARD_CARD.id)
     const mbSeeds = hasSeedMb ? [] : [SEED_MOOD_BOARD_CARD]
     return [...mbSeeds, ...realCards, ...userCards]
-  }, [portalEvents, cards, dbDesigners])
+  }, [portalEvents, cards, adminName])
 
   const [searchQuery, setSearchQuery] = useState('')
   const [designer, setDesigner] = useState('All Designers')
@@ -1390,11 +1406,11 @@ export function DesignCanvasHubPage() {
 
   // Events across upcoming months, sorted chronologically (soonest first)
   const upcomingEvents = useMemo(() => {
-    const source = (portalEvents && portalEvents.length > 0) ? portalEvents : REAL_10_SEEDED_EVENTS
+    const source = (portalEvents && portalEvents.length > 0) ? portalEvents : (import.meta.env.DEV ? REAL_10_SEEDED_EVENTS : [])
     const all: CalendarEvent[] = []
 
     source.forEach((ev, index) => {
-      const parts = parseIsoDateParts(ev.targetDate)
+      const parts = parseIsoDateParts(ev.targetDate || ev.dateOfEvent)
       if (!parts) return
       const eventName = ev.title || ev.name || 'Untitled Event'
       const alias = makeEventAlias(eventName)
@@ -1924,7 +1940,7 @@ export function DesignCanvasHubPage() {
                       eventAlias: makeEventAlias(eventName),
                       eventDate: targetEv.targetDate || 'Upcoming',
                       lastEdited: 'Synced from API checkpoint',
-                      thumbnail: '/images/decor/chateau-ballroom.png',
+                      thumbnail: '',
                       starred: false,
                     })
                   )

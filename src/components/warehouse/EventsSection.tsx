@@ -4,21 +4,14 @@ import { cn } from '@/lib/utils'
 import type { EventStatus, PortalEvent } from '@/lib/types'
 import { useDeployments } from '@/lib/deployments'
 
-const THUMBNAILS = [
-  '/images/decor/chateau-ballroom.png',
-  '/images/decor/garden-wedding.png',
-  '/images/decor/floral-arch.png',
-  '/images/decor/candelabra.png',
-  '/images/decor/dance-floor.png',
-  '/images/decor/velvet-sofa.png',
-]
-
-function hashOf(value: string) {
-  return Math.abs(value.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0))
-}
-
-function thumbnailFor(event: PortalEvent) {
-  return THUMBNAILS[hashOf(event.id) % THUMBNAILS.length]
+function thumbnailFor(event: PortalEvent): string {
+  const ev = event as any
+  return (
+    ev.coverUrl ||
+    ev.thumbnail ||
+    (typeof ev.eventPegs === 'string' && (ev.eventPegs.startsWith('http') || ev.eventPegs.startsWith('data:')) ? ev.eventPegs : '') ||
+    ''
+  )
 }
 
 type ChipTone = 'ok' | 'warn' | 'progress' | 'muted'
@@ -28,8 +21,7 @@ function chipFor(event: PortalEvent, inTransit: boolean): { label: string; tone:
   if (event.status === 'Cancelled') return { label: 'Cancelled', tone: 'muted' }
   if (inTransit) return { label: 'Dispatch in progress', tone: 'progress' }
   if (event.status === 'On Hold') {
-    const unresolved = (hashOf(event.refId) % 3) + 1
-    return { label: `${unresolved} deficit${unresolved > 1 ? 's' : ''} unresolved`, tone: 'warn' }
+    return { label: 'On Hold', tone: 'warn' }
   }
   return { label: 'On track', tone: 'ok' }
 }
@@ -188,19 +180,29 @@ function EventCard({
   chip: { label: string; tone: ChipTone }
   onOpen: () => void
 }) {
+  const thumb = thumbnailFor(event)
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="group overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+      className="group overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
     >
-      <div className="aspect-[3/2] w-full overflow-hidden">
-        <img
-          src={thumbnailFor(event) || '/placeholder.svg'}
-          alt=""
-          crossOrigin="anonymous"
-          className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
-        />
+      <div className="aspect-[3/2] w-full overflow-hidden bg-muted flex items-center justify-center">
+        {thumb ? (
+          <img
+            src={thumb}
+            alt=""
+            crossOrigin="anonymous"
+            className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex size-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-card via-muted/40 to-card p-3 text-muted-foreground border-b border-border/40">
+            <span className="font-mono text-xs font-bold uppercase tracking-wider text-foreground">
+              {event.refId || event.title.slice(0, 4).toUpperCase()}
+            </span>
+            <span className="text-[0.52rem] font-medium text-muted-foreground/70">No cover image</span>
+          </div>
+        )}
       </div>
       <div className="p-2.5">
         <h3 className="truncate font-serif text-sm font-medium text-card-foreground">{event.title}</h3>
@@ -231,18 +233,27 @@ function EventRow({
   chip: { label: string; tone: ChipTone }
   onOpen: () => void
 }) {
+  const thumb = thumbnailFor(event)
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="flex items-center gap-4 overflow-hidden rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-accent"
+      className="flex items-center gap-4 overflow-hidden rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-accent cursor-pointer"
     >
-      <img
-        src={thumbnailFor(event) || '/placeholder.svg'}
-        alt=""
-        crossOrigin="anonymous"
-        className="size-16 shrink-0 rounded-lg object-cover"
-      />
+      <div className="size-16 shrink-0 rounded-lg overflow-hidden bg-muted flex items-center justify-center border border-border/50">
+        {thumb ? (
+          <img
+            src={thumb}
+            alt=""
+            crossOrigin="anonymous"
+            className="size-full object-cover"
+          />
+        ) : (
+          <span className="font-mono text-xs font-bold text-foreground">
+            {event.refId ? event.refId.slice(0, 4) : event.title.slice(0, 3).toUpperCase()}
+          </span>
+        )}
+      </div>
       <div className="min-w-0 flex-1">
         <h3 className="truncate font-serif text-base font-medium text-card-foreground">{event.title}</h3>
         <p className="truncate text-xs text-muted-foreground">{event.venue}</p>
