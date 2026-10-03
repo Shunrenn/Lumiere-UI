@@ -60,7 +60,15 @@ export async function getRealtimeConnection(): Promise<signalR.HubConnection | n
         'ManningUpdated',
         'WarehouseDispatchUpdated',
         'DamageReportCreated',
+        'DamageReportUpdated',
+        'DamageReportVerdictIssued',
         'GroundCrewDeclarationUpdated',
+        'ProductionTaskUpdated',
+        'DeficitQueueUpdated',
+        'CanvasStatusChanged',
+        'EventStatusChanged',
+        'PartialEgressEscalated',
+        'InventoryUpdated',
         'OperationInvalidated',
       ]
 
