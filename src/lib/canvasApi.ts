@@ -451,3 +451,254 @@ export async function validateCanvasStateApi(
     return { ok: false, reason: 'network-error', message: err instanceof Error ? err.message : String(err) }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Canvas Collaboration & Access DTOs and API
+// Exact C# endpoints:
+//   GET    /api/events/{eventId}/access
+//   POST   /api/events/{eventId}/access
+//   PUT    /api/events/{eventId}/access/{targetUserId}
+//   DELETE /api/events/{eventId}/access/{targetUserId}
+//   GET    /api/events/{eventId}/collaborator-candidates
+// ---------------------------------------------------------------------------
+
+export type CanvasAccessLevel = 'CO_EDIT' | 'COMMENT' | 'VIEW'
+
+export interface CanvasCollaboratorDto {
+  userId: string
+  eventId: string
+  displayName: string
+  role?: string
+  email?: string
+  accessLevel: CanvasAccessLevel
+  grantedAt?: string
+  grantedBy?: string
+}
+
+export interface CollaboratorCandidateDto {
+  userId: string
+  displayName: string
+  role: string
+  email?: string
+  isEventPlanner?: boolean
+}
+
+export function normalizeCollaboratorDto(raw: any, eventIdFallback = ''): CanvasCollaboratorDto {
+  if (!raw) {
+    return {
+      userId: '',
+      eventId: eventIdFallback,
+      displayName: 'Unknown',
+      accessLevel: 'VIEW',
+    }
+  }
+
+  const userId = String(raw.userId ?? raw.UserId ?? raw.targetUserId ?? raw.TargetUserId ?? raw.id ?? raw.Id ?? '')
+  const eventId = String(raw.eventId ?? raw.EventId ?? eventIdFallback)
+  const displayName = String(raw.displayName ?? raw.DisplayName ?? raw.name ?? raw.Name ?? raw.userName ?? raw.UserName ?? 'Team Member')
+  const role = raw.role ?? raw.Role ?? undefined
+  const email = raw.email ?? raw.Email ?? undefined
+  
+  const rawLevel = String(raw.accessLevel ?? raw.AccessLevel ?? raw.level ?? raw.Level ?? 'VIEW').toUpperCase()
+  let accessLevel: CanvasAccessLevel = 'VIEW'
+  if (rawLevel.includes('EDIT') || rawLevel === 'CO_EDIT') {
+    accessLevel = 'CO_EDIT'
+  } else if (rawLevel.includes('COMMENT')) {
+    accessLevel = 'COMMENT'
+  } else {
+    accessLevel = 'VIEW'
+  }
+
+  const grantedAt = raw.grantedAt ?? raw.GrantedAt ?? undefined
+  const grantedBy = raw.grantedBy ?? raw.GrantedBy ?? undefined
+
+  return {
+    userId,
+    eventId,
+    displayName,
+    role,
+    email,
+    accessLevel,
+    grantedAt,
+    grantedBy,
+  }
+}
+
+export function normalizeCandidateDto(raw: any): CollaboratorCandidateDto {
+  if (!raw) {
+    return {
+      userId: '',
+      displayName: 'Unknown Candidate',
+      role: 'Staff',
+    }
+  }
+
+  const userId = String(raw.userId ?? raw.UserId ?? raw.id ?? raw.Id ?? '')
+  const displayName = String(raw.displayName ?? raw.DisplayName ?? raw.name ?? raw.Name ?? raw.userName ?? raw.UserName ?? 'Candidate')
+  const role = String(raw.role ?? raw.Role ?? 'Staff')
+  const email = raw.email ?? raw.Email ?? undefined
+  const isEventPlanner = role.toLowerCase().includes('planner') || role.toLowerCase().includes('creative')
+
+  return {
+    userId,
+    displayName,
+    role,
+    email,
+    isEventPlanner,
+  }
+}
+
+/**
+ * GET /api/events/{eventId}/access
+ */
+export async function fetchCanvasAccessApi(eventId: string): Promise<CanvasCollaboratorDto[]> {
+  if (!eventId) return []
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/access`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    })
+
+    if (!res.ok) {
+      if (res.status === 404) return []
+      console.warn(`[canvasApi] fetchCanvasAccessApi HTTP ${res.status}`)
+      return []
+    }
+
+    const data = await res.json()
+    if (!Array.isArray(data)) return []
+    return data.map((item) => normalizeCollaboratorDto(item, eventId))
+  } catch (err) {
+    console.warn('[canvasApi] fetchCanvasAccessApi network error:', err)
+    return []
+  }
+}
+
+/**
+ * GET /api/events/{eventId}/collaborator-candidates
+ */
+export async function fetchCollaboratorCandidatesApi(eventId: string): Promise<CollaboratorCandidateDto[]> {
+  if (!eventId) return []
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/collaborator-candidates`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    })
+
+    if (!res.ok) {
+      console.warn(`[canvasApi] fetchCollaboratorCandidatesApi HTTP ${res.status}`)
+      return []
+    }
+
+    const data = await res.json()
+    if (!Array.isArray(data)) return []
+    return data.map(normalizeCandidateDto)
+  } catch (err) {
+    console.warn('[canvasApi] fetchCollaboratorCandidatesApi network error:', err)
+    return []
+  }
+}
+
+/**
+ * POST /api/events/{eventId}/access
+ */
+export async function grantCanvasAccessApi(
+  eventId: string,
+  targetUserId: string,
+  accessLevel: CanvasAccessLevel,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!eventId || !targetUserId) {
+    return { ok: false, error: 'eventId and targetUserId are required' }
+  }
+
+  try {
+    const body = {
+      TargetUserId: targetUserId,
+      targetUserId,
+      AccessLevel: accessLevel,
+      accessLevel,
+    }
+
+    const res = await fetch(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/access`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      const msg = err.error || err.Error || err.message || err.Message || `HTTP ${res.status}`
+      return { ok: false, error: msg }
+    }
+
+    return { ok: true }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Network error while granting canvas access' }
+  }
+}
+
+/**
+ * PUT /api/events/{eventId}/access/{targetUserId}
+ */
+export async function updateCanvasAccessApi(
+  eventId: string,
+  targetUserId: string,
+  accessLevel: CanvasAccessLevel,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!eventId || !targetUserId) {
+    return { ok: false, error: 'eventId and targetUserId are required' }
+  }
+
+  try {
+    const body = {
+      AccessLevel: accessLevel,
+      accessLevel,
+    }
+
+    const res = await fetch(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/access/${encodeURIComponent(targetUserId)}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      const msg = err.error || err.Error || err.message || err.Message || `HTTP ${res.status}`
+      return { ok: false, error: msg }
+    }
+
+    return { ok: true }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Network error while updating canvas access' }
+  }
+}
+
+/**
+ * DELETE /api/events/{eventId}/access/{targetUserId}
+ */
+export async function revokeCanvasAccessApi(
+  eventId: string,
+  targetUserId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!eventId || !targetUserId) {
+    return { ok: false, error: 'eventId and targetUserId are required' }
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/access/${encodeURIComponent(targetUserId)}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      const msg = err.error || err.Error || err.message || err.Message || `HTTP ${res.status}`
+      return { ok: false, error: msg }
+    }
+
+    return { ok: true }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Network error while revoking canvas access' }
+  }
+}
+

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Check,
   FileText,
@@ -9,12 +9,14 @@ import {
   CheckSquare,
   AlertTriangle,
   CheckCircle2,
+  Users,
 } from 'lucide-react'
 import { usePlanner, type PipelineEvent } from '@/lib/planner'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import { PartialEgressSection } from '@/components/warehouse/PartialEgressSection'
+import { fetchCanvasAccessApi, type CanvasCollaboratorDto } from '@/lib/canvasApi'
 import type { PortalEvent } from '@/lib/types'
 
 const PIPELINE_STEPS = [
@@ -37,7 +39,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'overview', label: 'Logistical Overview' },
   { key: 'materials', label: 'Material Requirement' },
   { key: 'documents', label: 'Design Documents' },
-  { key: 'team', label: 'Team Assignments' },
+  { key: 'team', label: 'Canvas Collaborators' },
 ]
 
 function ReadField({ label, value, className }: { label: string; value: string; className?: string }) {
@@ -82,6 +84,13 @@ export function EventPipelinePanel({
 
   const [tab, setTab] = useState<Tab>(materials.length > 0 ? 'materials' : 'overview')
   const [verified, setVerified] = useState<Record<string, boolean>>({})
+  const [collaborators, setCollaborators] = useState<CanvasCollaboratorDto[]>([])
+
+  useEffect(() => {
+    if (event?.id) {
+      fetchCanvasAccessApi(event.id).then(setCollaborators).catch(() => {})
+    }
+  }, [event?.id])
 
   // Find bound damage exceptions for this event
   const boundExceptions = damageExceptions.filter(
@@ -470,34 +479,69 @@ export function EventPipelinePanel({
       )}
 
       {tab === 'team' && (
-        <div className={cn(gap, 'grid grid-cols-1 gap-3', !compact && 'sm:grid-cols-2 lg:grid-cols-3')}>
-          <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-4">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold uppercase tracking-wide text-primary">
-              {(adminName || 'EP').slice(0, 2).toUpperCase()}
+        <div className={cn(gap, 'space-y-4')}>
+          <div className="flex items-center justify-between">
+            <h3 className="flex items-center gap-2 text-[0.62rem] font-bold uppercase tracking-[0.16em] text-card-foreground">
+              <Users className="size-4 text-primary" />
+              Canvas Collaborators &amp; Assigned Personnel
+            </h3>
+            <span className="rounded border border-border bg-muted px-2 py-0.5 text-[0.55rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              {1 + collaborators.length} Active Member{1 + collaborators.length === 1 ? '' : 's'}
             </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-card-foreground">{adminName || 'Master Event Planner'}</p>
-              <p className="text-[0.65rem] uppercase tracking-[0.1em] text-muted-foreground">Event Planner & Creative Lead</p>
-            </div>
           </div>
-          <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-4">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-xs font-bold uppercase tracking-wide text-emerald-600">
-              {((event as any).projectManagerName || 'PM').slice(0, 2).toUpperCase()}
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-card-foreground">{(event as any).projectManagerName || 'Operations Project Manager'}</p>
-              <p className="text-[0.65rem] uppercase tracking-[0.1em] text-muted-foreground">Project Manager & Logistics</p>
+
+          <div className={cn('grid grid-cols-1 gap-3', !compact && 'sm:grid-cols-2 lg:grid-cols-3')}>
+            {/* Lead Event Planner */}
+            <div className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-5 py-4">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold uppercase tracking-wide text-primary">
+                {(adminName || 'EP').slice(0, 2).toUpperCase()}
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-card-foreground">{adminName || 'Master Event Planner'}</p>
+                <p className="text-[0.65rem] uppercase tracking-[0.1em] text-muted-foreground">Lead Event Planner &amp; Creative Owner</p>
+                <span className="inline-block mt-1 rounded bg-primary/10 border border-primary/30 px-1.5 py-0.2 text-[0.52rem] font-bold uppercase tracking-wider text-primary">
+                  Owner · Full Write
+                </span>
+              </div>
             </div>
+
+            {/* Canonical Canvas Collaborators */}
+            {collaborators.map((c) => {
+              const accessBadge =
+                c.accessLevel === 'CO_EDIT'
+                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                  : c.accessLevel === 'COMMENT'
+                    ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30'
+                    : 'bg-muted text-muted-foreground border-border'
+              const accessLabel =
+                c.accessLevel === 'CO_EDIT'
+                  ? 'Can edit (CO_EDIT)'
+                  : c.accessLevel === 'COMMENT'
+                    ? 'Can review (COMMENT)'
+                    : 'Can view (VIEW)'
+
+              return (
+                <div key={c.userId} className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-4">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold uppercase tracking-wide text-foreground">
+                    {c.displayName.slice(0, 2).toUpperCase()}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-card-foreground truncate">{c.displayName}</p>
+                    <p className="text-[0.65rem] uppercase tracking-[0.1em] text-muted-foreground truncate">{c.role || 'Collaborator'}</p>
+                    <span className={cn('inline-block mt-1 rounded border px-1.5 py-0.2 text-[0.52rem] font-bold uppercase tracking-wider', accessBadge)}>
+                      {accessLabel}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
           </div>
-          <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-4">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-sky-500/10 text-xs font-bold uppercase tracking-wide text-sky-600">
-              WH
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-card-foreground">Warehouse & Staging Team</p>
-              <p className="text-[0.65rem] uppercase tracking-[0.1em] text-muted-foreground">Logistics Handoff & Dispatch</p>
-            </div>
-          </div>
+
+          {collaborators.length === 0 && (
+            <p className="text-[0.62rem] text-muted-foreground px-1 italic">
+              No additional collaborators have been granted Canvas access for this event yet. Use the Canvas Share tool to invite team members.
+            </p>
+          )}
         </div>
       )}
     </div>

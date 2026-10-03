@@ -3,9 +3,13 @@
  * Uses `import.meta.env.VITE_API_URL` when specified.
  * Defaults to 'http://localhost:8080' in development mode only — never in production builds.
  */
+const envUrl: string | undefined =
+  typeof import.meta !== 'undefined' ? (import.meta.env?.VITE_API_URL as string | undefined) : undefined
+const isDev: boolean =
+  typeof import.meta !== 'undefined' ? Boolean(import.meta.env?.DEV) : false
+
 export const API_BASE_URL: string =
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') ||
-  (import.meta.env.DEV ? 'http://localhost:8080' : '')
+  (envUrl ? envUrl.replace(/\/+$/, '') : '') || (isDev ? 'http://localhost:8080' : '')
 
 /**
  * Retrieves stored JWT auth token from localStorage or sessionStorage.

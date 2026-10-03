@@ -10,12 +10,22 @@ export interface PaintBrand {
 
 export interface PaintColor {
   id: string
-  brandId: string
+  assetId?: string
+  assetName?: string
+  brandId?: string
   brandName?: string
+  paintBrand?: string
   name: string
   hexCode: string
+  materialFinish?: string
   finish?: string // 'Matte' | 'Gloss' | 'Semi-Gloss' | 'Satin'
   colorCode?: string
+  colorOrder?: number
+  quantityInStock?: number
+  availableQuantity?: number
+  operationalDomain?: string
+  category?: string
+  createdAt?: string
 }
 
 function getAuthHeaders(): HeadersInit {
@@ -36,12 +46,69 @@ export const CANONICAL_PAINT_BRANDS: PaintBrand[] = [
 ]
 
 export const CANONICAL_PAINT_COLORS: PaintColor[] = [
-  { id: 'col-1', brandId: 'brand-1', brandName: 'Boysen', name: 'Matte Black', hexCode: '#111111', finish: 'Matte', colorCode: 'B-01' },
-  { id: 'col-2', brandId: 'brand-1', brandName: 'Boysen', name: 'Pure White', hexCode: '#FFFFFF', finish: 'Satin', colorCode: 'B-02' },
-  { id: 'col-3', brandId: 'brand-2', brandName: 'Davies', name: 'Imperial Gold', hexCode: '#D4AF37', finish: 'Gloss', colorCode: 'D-50' },
-  { id: 'col-4', brandId: 'brand-2', brandName: 'Davies', name: 'Champagne Bronze', hexCode: '#8E795D', finish: 'Semi-Gloss', colorCode: 'D-55' },
-  { id: 'col-5', brandId: 'brand-3', brandName: 'Nippon Paint', name: 'Midnight Navy', hexCode: '#0A192F', finish: 'Matte', colorCode: 'N-80' },
+  { id: 'col-1', brandId: 'brand-1', brandName: 'Boysen', paintBrand: 'Boysen', name: 'Matte Black', hexCode: '#111111', finish: 'Matte', materialFinish: 'Matte', colorCode: 'B-01', quantityInStock: 25, availableQuantity: 20 },
+  { id: 'col-2', brandId: 'brand-1', brandName: 'Boysen', paintBrand: 'Boysen', name: 'Pure White', hexCode: '#FFFFFF', finish: 'Satin', materialFinish: 'Satin', colorCode: 'B-02', quantityInStock: 40, availableQuantity: 38 },
+  { id: 'col-3', brandId: 'brand-2', brandName: 'Davies', paintBrand: 'Davies', name: 'Imperial Gold', hexCode: '#D4AF37', finish: 'Gloss', materialFinish: 'Gloss', colorCode: 'D-50', quantityInStock: 15, availableQuantity: 12 },
+  { id: 'col-4', brandId: 'brand-2', brandName: 'Davies', paintBrand: 'Davies', name: 'Champagne Bronze', hexCode: '#8E795D', finish: 'Semi-Gloss', materialFinish: 'Semi-Gloss', colorCode: 'D-55', quantityInStock: 10, availableQuantity: 8 },
+  { id: 'col-5', brandId: 'brand-3', brandName: 'Nippon Paint', paintBrand: 'Nippon Paint', name: 'Midnight Navy', hexCode: '#0A192F', finish: 'Matte', materialFinish: 'Matte', colorCode: 'N-80', quantityInStock: 8, availableQuantity: 5 },
 ]
+
+export function normalizePaintColor(raw: any): PaintColor {
+  if (!raw) {
+    return { id: '', name: 'Unknown', hexCode: '#000000' }
+  }
+
+  const id = String(raw.id ?? raw.Id ?? '')
+  const assetId = raw.assetId ?? raw.AssetId ?? undefined
+  const assetName = raw.assetName ?? raw.AssetName ?? undefined
+  const brandId = raw.brandId ?? raw.BrandId ?? ''
+  const brandName = raw.brandName ?? raw.BrandName ?? raw.paintBrand ?? raw.PaintBrand ?? ''
+  const paintBrand = raw.paintBrand ?? raw.PaintBrand ?? brandName
+  const name = raw.name ?? raw.Name ?? 'Unnamed Color'
+  const hexCode = raw.hexCode ?? raw.HexCode ?? '#000000'
+  const finish = raw.finish ?? raw.Finish ?? raw.materialFinish ?? raw.MaterialFinish ?? 'Matte'
+  const materialFinish = raw.materialFinish ?? raw.MaterialFinish ?? finish
+  const colorCode = raw.colorCode ?? raw.ColorCode ?? undefined
+  const colorOrder = raw.colorOrder ?? raw.ColorOrder != null ? Number(raw.colorOrder ?? raw.ColorOrder) : undefined
+  const quantityInStock = raw.quantityInStock ?? raw.QuantityInStock != null ? Number(raw.quantityInStock ?? raw.QuantityInStock) : undefined
+  const availableQuantity = raw.availableQuantity ?? raw.AvailableQuantity != null ? Number(raw.availableQuantity ?? raw.AvailableQuantity) : quantityInStock
+  const operationalDomain = raw.operationalDomain ?? raw.OperationalDomain ?? undefined
+  const category = raw.category ?? raw.Category ?? undefined
+  const createdAt = raw.createdAt ?? raw.CreatedAt ?? undefined
+
+  return {
+    id,
+    assetId,
+    assetName,
+    brandId,
+    brandName,
+    paintBrand,
+    name,
+    hexCode,
+    finish,
+    materialFinish,
+    colorCode,
+    colorOrder,
+    quantityInStock,
+    availableQuantity,
+    operationalDomain,
+    category,
+    createdAt,
+  }
+}
+
+export function normalizePaintBrand(raw: any): PaintBrand {
+  if (!raw) {
+    return { id: '', name: 'Unknown' }
+  }
+  return {
+    id: String(raw.id ?? raw.Id ?? ''),
+    name: raw.name ?? raw.Name ?? 'Unknown Brand',
+    code: raw.code ?? raw.Code ?? undefined,
+    description: raw.description ?? raw.Description ?? undefined,
+    active: Boolean(raw.active ?? raw.Active ?? true),
+  }
+}
 
 export async function fetchPaintBrandsApi(): Promise<PaintBrand[]> {
   try {
@@ -50,7 +117,7 @@ export async function fetchPaintBrandsApi(): Promise<PaintBrand[]> {
     })
     if (!res.ok) return CANONICAL_PAINT_BRANDS
     const data = await res.json()
-    return Array.isArray(data) && data.length > 0 ? data : CANONICAL_PAINT_BRANDS
+    return Array.isArray(data) && data.length > 0 ? data.map(normalizePaintBrand) : CANONICAL_PAINT_BRANDS
   } catch (err) {
     console.warn('[paintApi] Fetch paint brands fallback to canonical:', err)
     return CANONICAL_PAINT_BRANDS
@@ -68,7 +135,8 @@ export async function createPaintBrandApi(brand: Omit<PaintBrand, 'id'>): Promis
       const err = await res.json().catch(() => ({}))
       throw new Error(err.error || `HTTP ${res.status}`)
     }
-    return await res.json()
+    const data = await res.json()
+    return normalizePaintBrand(data)
   } catch (err: any) {
     console.warn('[paintApi] Create paint brand error:', err)
     throw err
@@ -82,7 +150,7 @@ export async function fetchPaintColorsApi(): Promise<PaintColor[]> {
     })
     if (!res.ok) return CANONICAL_PAINT_COLORS
     const data = await res.json()
-    return Array.isArray(data) && data.length > 0 ? data : CANONICAL_PAINT_COLORS
+    return Array.isArray(data) && data.length > 0 ? data.map(normalizePaintColor) : CANONICAL_PAINT_COLORS
   } catch (err) {
     console.warn('[paintApi] Fetch paint colors fallback to canonical:', err)
     return CANONICAL_PAINT_COLORS
@@ -100,7 +168,8 @@ export async function createPaintColorApi(color: Omit<PaintColor, 'id'>): Promis
       const err = await res.json().catch(() => ({}))
       throw new Error(err.error || `HTTP ${res.status}`)
     }
-    return await res.json()
+    const data = await res.json()
+    return normalizePaintColor(data)
   } catch (err: any) {
     console.warn('[paintApi] Create paint color error:', err)
     throw err

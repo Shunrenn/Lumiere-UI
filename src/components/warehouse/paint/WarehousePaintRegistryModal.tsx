@@ -553,11 +553,24 @@ export function WarehousePaintRegistryModal({ onClose }: WarehousePaintRegistryM
                           )}
                         </div>
                         <p className="text-[0.65rem] text-muted-foreground mt-0.5 truncate">
-                          {color.brandName || 'Standard Brand'} · <span className="italic">{color.finish || 'Matte'}</span>
+                          {color.paintBrand || color.brandName || 'Standard Brand'} · <span className="italic">{color.materialFinish || color.finish || 'Matte'}</span>
                         </p>
-                        <span className="text-[0.58rem] font-mono text-muted-foreground/80 block mt-0.5">
-                          {color.hexCode}
-                        </span>
+                        <div className="flex items-center justify-between gap-1 mt-1">
+                          <span className="text-[0.58rem] font-mono text-muted-foreground/80">
+                            {color.hexCode}
+                          </span>
+                          {color.availableQuantity !== undefined ? (
+                            color.availableQuantity > 0 ? (
+                              <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[0.52rem] font-semibold text-emerald-700 dark:text-emerald-300">
+                                {color.availableQuantity} Avail{color.quantityInStock !== undefined ? ` / ${color.quantityInStock} in stock` : ''}
+                              </span>
+                            ) : (
+                              <span className="rounded bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 text-[0.52rem] font-semibold text-rose-700 dark:text-rose-300">
+                                Not Available
+                              </span>
+                            )
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   ))}

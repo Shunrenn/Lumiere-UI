@@ -13,7 +13,6 @@ import {
   Info,
   Maximize2,
   Copy,
-  Share2,
   Link2,
   Trash2,
   Pencil,
@@ -34,7 +33,7 @@ import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { usePortal } from '@/lib/store'
 import { fetchEventsApi } from '@/lib/eventsApi'
-import { NotificationsBell, type NotificationEntry } from '@/components/NotificationsBell'
+import { NotificationsBell } from '@/components/NotificationsBell'
 import { useDarkMode, useThemeMode } from '@/lib/theme'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
@@ -1055,25 +1054,6 @@ export function DesignCanvasHubPage() {
     fetchEventsApi().catch(() => {})
   }, [])
 
-  const plannerNotifications: NotificationEntry[] = useMemo(() => {
-    const items: NotificationEntry[] = []
-
-    if (portalEvents && portalEvents.length > 0) {
-      portalEvents.slice(0, 5).forEach((ev, idx) => {
-        const eventName = (ev as any).title || (ev as any).name || 'New Event'
-        items.push({
-          id: `portal-ev-notif-${ev.id || idx}`,
-          text: `Event in pipeline: "${eventName}" (${ev.client || 'Corporate Client'}). Status: ${ev.status || 'Initialized'}.`,
-          time: ev.targetDate || 'Recent',
-          unread: idx === 0,
-          icon: Share2,
-          color: 'text-primary',
-        })
-      })
-    }
-
-    return items
-  }, [portalEvents])
 
   /* ── Calendar state ── */
   const today = new Date()
@@ -1457,7 +1437,7 @@ export function DesignCanvasHubPage() {
           </button>
 
           {/* Bell */}
-          <NotificationsBell notifications={plannerNotifications} size="sm" />
+          <NotificationsBell size="sm" />
 
           {/* Dark mode */}
           <button

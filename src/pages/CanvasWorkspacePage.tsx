@@ -17,7 +17,7 @@ import {
   MoveHorizontal, MoveVertical, ArrowUp, ArrowDown,
   MessageCircle, EyeOff, MoreHorizontal, ChevronUp,
   GalleryVerticalEnd, GalleryVertical, Grid2X2, FolderSearch, PackageSearch, ImageOff,
-  Undo2, Redo2,
+  Undo2, Redo2, Users,
 } from 'lucide-react'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
@@ -25,6 +25,7 @@ import { useAuth } from '@/lib/auth'
   import { usePlanner } from '@/lib/planner'
   import { EventPipelinePanel } from '@/components/EventPipelinePanel'
   import { EmptyState } from '@/components/EmptyState'
+  import { CanvasCollaborationModal } from '@/components/canvas/CanvasCollaborationModal'
   import { KonvaInfiniteCanvas, type KonvaInfiniteCanvasHandle, type CanvasTool, type KonvaCanvasAsset, ARTBOARD_W, ARTBOARD_H } from '@/components/canvas/KonvaInfiniteCanvas'
   import { usePortal, checkAssetAllocationConflict } from '@/lib/store'
   import { approveCanvasApi, getAssetAvailabilityApi, validateCanvasStateApi, type AssetConflictDetail, type AssetAvailabilityDto } from '@/lib/canvasApi'
@@ -3042,6 +3043,7 @@ export function CanvasWorkspacePage() {
   const [mode, setMode] = useState<WorkspaceMode>('Viewing')
   const [pendingMode, setPendingMode] = useState<WorkspaceMode | null>(null)
   const [commentsOpen, setCommentsOpen] = useState(false)
+  const [collaborationOpen, setCollaborationOpen] = useState(false)
   const [rightExpanded, setRightExpanded] = useState(false)
   const [currentPage, setCurrentPage] = useState('pg1')
   const [comments, setComments] = useState<CanvasComment[]>([])
@@ -4303,6 +4305,16 @@ export function CanvasWorkspacePage() {
           <ModeDropdown mode={mode} onChange={requestModeChange} />
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCollaborationOpen(true)}
+            aria-label="Share & Manage Canvas Collaborators"
+            title="Share & Collaborators"
+            className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-foreground transition hover:border-primary/50 hover:bg-accent cursor-pointer shrink-0"
+          >
+            <Users className="size-3.5 text-primary" />
+            <span className="hidden sm:inline">Share</span>
+          </button>
           <button type="button" onClick={() => setCommentsOpen((o) => !o)} aria-label="Toggle comments" aria-pressed={commentsOpen}
             className={cn('flex size-7 items-center justify-center rounded-md border transition',
               commentsOpen ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}>
@@ -4516,6 +4528,15 @@ export function CanvasWorkspacePage() {
           message={approval409.message}
           conflicts={approval409.conflicts}
           onClose={() => setApproval409(null)}
+        />
+      )}
+
+      {/* Real Canvas Collaboration / Sharing Modal */}
+      {collaborationOpen && (
+        <CanvasCollaborationModal
+          eventId={pipelineEvent?.id || card?.id || selectedEventId || ''}
+          eventTitle={pipelineEvent?.title || card?.title || 'Canvas Workspace'}
+          onClose={() => setCollaborationOpen(false)}
         />
       )}
     </div>
