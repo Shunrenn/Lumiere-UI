@@ -33,14 +33,14 @@ import {
   updateMyAssignmentExecutionStatus,
   type MyManningAssignmentDto,
 } from '@/lib/manningApi'
-import { markBatchStalled, resolveBatchStall, useDispatchStore } from '@/lib/warehouse-dispatch'
+import { useDispatchStore } from '@/lib/warehouse-dispatch'
 import type { DispatchBatch } from '@/lib/event-detail'
-import { IncidentForm } from '@/components/PwaWorkflows'
 import { PartialEgressSection } from '@/components/warehouse/PartialEgressSection'
 import {
   decideGroundCrewDeclaration,
   getApproachingDeclarationsSummary,
   getDeclarationAging,
+  loadDeclarationsFromBackend,
   submitGroundCrewDeclaration,
   updateGroundCrewDeclaration,
   useGroundCrewDeclarations,
@@ -134,14 +134,33 @@ export function GroundCrewPage() {
   const declarations = useGroundCrewDeclarations()
   const [tab, setTab] = useState<Tab>('home')
 
-  // Authoritative staff role lookup — derived strictly from authentication / roster, NEVER self-selected
-  const userStaffRecord = staff.find((s) => s.email.toLowerCase() === (adminEmail || '').toLowerCase())
-  const effectiveRole = userStaffRecord?.role || adminRole || 'Ground Crew'
+  // Canonical Manning operational assignments for authenticated user
+  const [myAssignments, setMyAssignments] = useState<MyManningAssignmentDto[]>([])
+  const [loadingAssignments, setLoadingAssignments] = useState(true)
+  const [assignmentError, setAssignmentError] = useState<string | null>(null)
+  const [mutatingAssignmentId, setMutatingAssignmentId] = useState<string | null>(null)
+  const [isCachedData, setIsCachedData] = useState(false)
+  const [cacheTimestamp, setCacheTimestamp] = useState<string | null>(null)
+  const [blockerModalAssignment, setBlockerModalAssignment] = useState<MyManningAssignmentDto | null>(null)
+  const [blockerReasonInput, setBlockerReasonInput] = useState('')
+  const [blockerNotesInput, setBlockerNotesInput] = useState('')
+  const [blockerError, setBlockerError] = useState<string | null>(null)
 
+  // Operational Lead authority is derived strictly from Manning assignments per event (ManningAssignment.isLead),
+  // NEVER inferred from names, roster position, legacy role labels, or mock stores.
+  const effectiveRole = currentUser?.subRole || adminRole || 'Ground Crew'
+
+  const isLeadForEvent = useCallback((eventId: string | null | undefined): boolean => {
+    if (!eventId) return false
+    if (adminRole === 'Admin' || adminRole === 'Event Admin') return true
+    return myAssignments.some((a) => a.eventId === eventId && a.isLead === true)
+  }, [adminRole, myAssignments])
+
+  const hasAnyLead = myAssignments.some((a) => a.isLead === true)
   const accessLevel: AccessLevel =
-    effectiveRole === 'Event Admin' || effectiveRole === 'Admin'
+    adminRole === 'Event Admin' || adminRole === 'Admin'
       ? 'Event Admin'
-      : effectiveRole === 'Warehouse Lead'
+      : hasAnyLead
         ? 'Team Lead / Field Lead'
         : 'Ground Crew / Member'
 
@@ -164,18 +183,6 @@ export function GroundCrewPage() {
 
   const [adminEventId, setAdminEventId] = useState('')
   const [crewEvents, setCrewEvents] = useState<EventItem[]>([])
-
-  // Canonical Manning operational assignments for authenticated user
-  const [myAssignments, setMyAssignments] = useState<MyManningAssignmentDto[]>([])
-  const [loadingAssignments, setLoadingAssignments] = useState(true)
-  const [assignmentError, setAssignmentError] = useState<string | null>(null)
-  const [mutatingAssignmentId, setMutatingAssignmentId] = useState<string | null>(null)
-  const [isCachedData, setIsCachedData] = useState(false)
-  const [cacheTimestamp, setCacheTimestamp] = useState<string | null>(null)
-  const [blockerModalAssignment, setBlockerModalAssignment] = useState<MyManningAssignmentDto | null>(null)
-  const [blockerReasonInput, setBlockerReasonInput] = useState('')
-  const [blockerNotesInput, setBlockerNotesInput] = useState('')
-  const [blockerError, setBlockerError] = useState<string | null>(null)
 
   const loadAssignments = useCallback(async () => {
     setLoadingAssignments(true)
@@ -450,8 +457,9 @@ export function GroundCrewPage() {
       if (!adminEventId) {
         setAdminEventId(derivedEvents[0].id)
       }
+      void loadDeclarationsFromBackend(derivedEvents)
     }
-  }, [derivedEvents])
+  }, [derivedEvents, adminEventId])
 
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const selectedEvent = selectedEventId ? crewEvents.find((event) => event.id === selectedEventId) ?? null : null
@@ -618,12 +626,7 @@ export function GroundCrewPage() {
         description: desc,
         submittedBy: adminName || 'Ground Crew Member',
         submittedAt: new Date().toISOString(),
-        submittedRole:
-          accessLevel === 'Event Admin'
-            ? 'Field Lead'
-            : accessLevel === 'Ground Crew / Member'
-              ? 'Member'
-              : 'Team Lead',
+        submittedRole: isLeadForEvent(selectedEvent.id) ? 'Field Lead' : 'Member',
         photoUrl: capture?.photoDataUrl,
         sha256Hash: capture?.sha256Hash,
         gpsCoordinates: capture?.meta.gpsCoordinates,
@@ -726,6 +729,14 @@ export function GroundCrewPage() {
       return
     }
 
+    if (!isLeadForEvent(eventId)) {
+      setEgressErrors((prev) => ({
+        ...prev,
+        [eventId]: 'Field Lead operational authority is required to initiate post-event egress for this event.',
+      }))
+      return
+    }
+
     if (!navigator.onLine) {
       setEgressErrors((prev) => ({
         ...prev,
@@ -765,20 +776,6 @@ export function GroundCrewPage() {
         [eventId]: err?.message || 'Network error initiating egress.',
       }))
     }
-  }
-
-  const handleStall = (batchId: string, reason: string) => {
-    if (!selectedEvent) return
-    markBatchStalled(selectedEvent.id, batchId, reason)
-    setToast(`Dispatch batch ${batchId} marked STALLED. Alert sent to Warehouse Lead.`)
-    window.setTimeout(() => setToast(''), 3500)
-  }
-
-  const handleResume = (batchId: string) => {
-    if (!selectedEvent) return
-    resolveBatchStall(selectedEvent.id, batchId)
-    setToast(`Dispatch batch ${batchId} returned to IN_TRANSIT.`)
-    window.setTimeout(() => setToast(''), 3500)
   }
 
   const submitRequest = (event: FormEvent<HTMLFormElement>) => {
@@ -889,6 +886,7 @@ export function GroundCrewPage() {
                 handoffNote={handoffNotes[selectedEvent.id] || ''}
                 onHandoffNoteChange={(val) => setHandoffNotes((prev) => ({ ...prev, [selectedEvent.id]: val }))}
                 egressError={egressErrors[selectedEvent.id] || ''}
+                isLead={isLeadForEvent(selectedEvent.id)}
                 onAdvancePhase={() => advancePhase(selectedEvent.id)}
                 onStartEgress={() => handleStartEgress(selectedEvent.id)}
                 onBack={() => {
@@ -896,8 +894,6 @@ export function GroundCrewPage() {
                   setEgressErrors({})
                 }}
                 onReport={openReport}
-                onStall={handleStall}
-                onResume={handleResume}
               />
             ) : (
               <Home
@@ -1372,7 +1368,10 @@ function MyAssignmentsSection({
                     ) : (
                       <PwaBadge variant="neutral" label="Assigned" />
                     )}
-                    <span className="text-[0.6rem] text-muted-foreground">{item.assignedRole || 'Field Crew'}</span>
+                    <div className="flex items-center gap-1">
+                      {item.isLead && <PwaBadge variant="accent" label="Lead" />}
+                      <span className="text-[0.6rem] text-muted-foreground">{item.assignedRole || 'Field Crew'}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -1711,24 +1710,22 @@ function EventDetail({
   handoffNote,
   onHandoffNoteChange,
   egressError,
+  isLead,
   onAdvancePhase,
   onStartEgress,
   onBack,
   onReport,
-  onStall,
-  onResume,
 }: {
   event: EventItem
   batches: DispatchBatch[]
   handoffNote: string
   onHandoffNoteChange: (value: string) => void
   egressError: string
+  isLead: boolean
   onAdvancePhase: () => void
   onStartEgress: () => void
   onBack: () => void
   onReport: (item: EventItem['items'][number]) => void
-  onStall: (batchId: string, reason: string) => void
-  onResume: (batchId: string) => void
 }) {
   const { phase } = event
   return (
@@ -1745,7 +1742,7 @@ function EventDetail({
         ) : (
           <div className="mt-3 space-y-2">
             {batches.map((batch) => (
-              <StallControl key={batch.id} batch={batch} onStall={onStall} onResume={onResume} />
+              <TransitBatchCard key={batch.id} batch={batch} />
             ))}
           </div>
         )}
@@ -1847,43 +1844,32 @@ function EventDetail({
                   value={handoffNote}
                   onChange={(e) => onHandoffNoteChange(e.target.value)}
                   rows={3}
-                  placeholder="Where are damaged items placed? (prevents duplicate reporting on arrival)"
-                  className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                  disabled={!isLead}
+                  placeholder={isLead ? "Where are damaged items placed? (prevents duplicate reporting on arrival)" : "Field Lead operational authority required to submit handoff note."}
+                  className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
                 />
               </label>
               {egressError && <p className="text-xs text-destructive font-medium">{egressError}</p>}
-              <PwaButton onClick={onStartEgress} variant="primary" size="md" className="w-full">
-                Initiate Post-Event Egress Accountability
+              {!isLead && (
+                <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+                  Post-event egress initiation requires Event Lead operational authority. Ordinary members may view and complete individual returned items below.
+                </p>
+              )}
+              <PwaButton onClick={onStartEgress} disabled={!isLead} variant="primary" size="md" className="w-full">
+                {isLead ? 'Initiate Post-Event Egress Accountability' : 'Event Lead Required to Initiate Egress'}
               </PwaButton>
             </div>
           </PwaCard>
 
-          <PartialEgressSection eventId={event.id} eventTitle={event.name} />
+          <PartialEgressSection eventId={event.id} eventTitle={event.name} isLead={isLead} />
         </div>
       )}
     </div>
   )
 }
 
-function StallControl({
-  batch,
-  onStall,
-  onResume,
-}: {
-  batch: DispatchBatch
-  onStall: (batchId: string, reason: string) => void
-  onResume: (batchId: string) => void
-}) {
-  const [reason, setReason] = useState('')
-  const [open, setOpen] = useState(false)
-  const submit = () => {
-    const value = reason.trim()
-    if (!value) return
-    onStall(batch.id, value)
-    setReason('')
-    setOpen(false)
-  }
-
+function TransitBatchCard({ batch }: { batch: DispatchBatch }) {
+  const vehicleLabel = [batch.vehicleType, batch.plateNumber].filter(Boolean).join(' - ')
   return (
     <div className="rounded-xl border border-border bg-muted/20 p-3 text-xs">
       <div className="flex items-center justify-between gap-2">
@@ -1892,44 +1878,12 @@ function StallControl({
           <p className="font-bold text-foreground">{batch.driverName || 'Transit Driver'}</p>
         </div>
         <PwaBadge
-          variant={batch.stalled ? 'destructive' : 'accent'}
-          label={batch.stalled ? 'STALLED' : 'IN TRANSIT'}
+          variant="accent"
+          label="IN TRANSIT"
         />
       </div>
-
-      {batch.stalled ? (
-        <div className="mt-2 space-y-2">
-          <p className="text-[0.68rem] text-destructive font-medium">Stall Reason: {batch.stalledReason}</p>
-          <PwaButton onClick={() => onResume(batch.id)} variant="outline" size="sm" className="w-full">
-            Resume Transit
-          </PwaButton>
-        </div>
-      ) : (
-        <div className="mt-2">
-          {open ? (
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Reason for transit stall..."
-                className="w-full rounded-lg border border-input bg-background p-2 text-xs"
-              />
-              <div className="flex gap-2">
-                <PwaButton onClick={submit} variant="destructive" size="sm" className="flex-1">
-                  Report Stall
-                </PwaButton>
-                <PwaButton onClick={() => setOpen(false)} variant="ghost" size="sm">
-                  Cancel
-                </PwaButton>
-              </div>
-            </div>
-          ) : (
-            <PwaButton onClick={() => setOpen(true)} variant="ghost" size="sm" className="w-full text-destructive">
-              Mark Stalled
-            </PwaButton>
-          )}
-        </div>
+      {vehicleLabel && (
+        <p className="mt-1 text-[0.65rem] text-muted-foreground">Vehicle: {vehicleLabel}</p>
       )}
     </div>
   )
@@ -2701,9 +2655,6 @@ function Account({
   onRequest: () => void
   onLogout: () => void
 }) {
-  const [incidentOpen, setIncidentOpen] = useState(false)
-  const [message, setMessage] = useState('')
-
   return (
     <div className="space-y-4">
       <PwaCard title={name} subtitle={email} action={<PwaBadge subRole="Field" label="Active Operator" />}>
@@ -2735,26 +2686,11 @@ function Account({
 
       <PwaCard title="Operator Actions">
         <div className="space-y-2">
-          <PwaButton onClick={() => setIncidentOpen(true)} variant="outline" size="md" className="w-full">
-            Incident Report
-          </PwaButton>
-          {message && <p className="text-xs text-primary font-medium text-center">{message}</p>}
           <PwaButton onClick={onLogout} variant="destructive" size="md" className="w-full">
             Sign Out
           </PwaButton>
         </div>
       </PwaCard>
-
-      {incidentOpen && (
-        <PwaModal
-          isOpen={incidentOpen}
-          onClose={() => setIncidentOpen(false)}
-          title="Submit Incident Report"
-          subtitle="File emergency or operational incident"
-        >
-          <IncidentForm onClose={() => setIncidentOpen(false)} onSubmitted={setMessage} />
-        </PwaModal>
-      )}
     </div>
   )
 }

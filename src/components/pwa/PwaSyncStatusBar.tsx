@@ -14,6 +14,8 @@ import {
   type SyncEngineStatus,
 } from '@/lib/offline/offlineReplayEngine'
 import { getUserMutations, type MutationOutboxEntry } from '@/lib/offline/db'
+import { getPendingQueue } from '@/lib/offlineQueue'
+import { subscribeOfflineSync, triggerOfflineReplay } from '@/lib/offlineReplay'
 import { cn } from '@/lib/utils'
 
 interface PwaSyncStatusBarProps {
@@ -33,6 +35,7 @@ export function PwaSyncStatusBar({
     conflictCount: 0,
     lastSyncAt: null,
   })
+  const [havaPendingCount, setHavaPendingCount] = useState<number>(0)
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== 'undefined' ? navigator.onLine : true
   )
@@ -60,6 +63,27 @@ export function PwaSyncStatusBar({
     return () => unsubscribe()
   }, [])
 
+  // Subscribe to HAVA declaration queue
+  useEffect(() => {
+    let active = true
+    const checkHava = async () => {
+      try {
+        const q = await getPendingQueue()
+        if (active) setHavaPendingCount(q.length)
+      } catch {
+        if (active) setHavaPendingCount(0)
+      }
+    }
+    void checkHava()
+    const unsubHava = subscribeOfflineSync((count) => {
+      if (active) setHavaPendingCount(count)
+    })
+    return () => {
+      active = false
+      unsubHava()
+    }
+  }, [])
+
   // Load conflict details when conflictCount > 0
   const loadConflicts = useCallback(async () => {
     if (!userId) return
@@ -83,7 +107,12 @@ export function PwaSyncStatusBar({
     if (!userId || !isOnline || manualSyncing) return
     setManualSyncing(true)
     try {
-      await triggerOutboxReplay(userId)
+      await Promise.allSettled([
+        triggerOutboxReplay(userId),
+        triggerOfflineReplay(),
+      ])
+      const q = await getPendingQueue().catch(() => [])
+      setHavaPendingCount(q.length)
       if (onSyncComplete) {
         onSyncComplete()
       }
@@ -92,6 +121,7 @@ export function PwaSyncStatusBar({
     }
   }
 
+  const totalPending = status.pendingCount + havaPendingCount
   const isSyncing = status.state === 'syncing' || manualSyncing
 
   return (
@@ -106,7 +136,7 @@ export function PwaSyncStatusBar({
             ? 'bg-sky-500/10 border-sky-500/30 text-sky-800 dark:text-sky-300'
             : status.conflictCount > 0
             ? 'bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-300'
-            : status.pendingCount > 0
+            : totalPending > 0
             ? 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300'
             : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-800 dark:text-emerald-300'
         )}
@@ -118,7 +148,7 @@ export function PwaSyncStatusBar({
             <RefreshCw className="size-4 shrink-0 text-sky-600 dark:text-sky-400 animate-spin" />
           ) : status.conflictCount > 0 ? (
             <AlertTriangle className="size-4 shrink-0 text-rose-600 dark:text-rose-400" />
-          ) : status.pendingCount > 0 ? (
+          ) : totalPending > 0 ? (
             <RefreshCw className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
           ) : (
             <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -128,21 +158,29 @@ export function PwaSyncStatusBar({
             {!isOnline ? (
               <span>
                 <strong className="font-semibold">Offline</strong> —{' '}
-                {status.pendingCount > 0
-                  ? `${status.pendingCount} mutation${status.pendingCount > 1 ? 's' : ''} queued in device storage`
-                  : 'mutations will queue safely'}
+                {totalPending > 0
+                  ? `${totalPending} item${totalPending > 1 ? 's' : ''} queued in device storage (${status.pendingCount} ops, ${havaPendingCount} HAVA)`
+                  : 'mutations and evidence will queue safely'}
               </span>
             ) : isSyncing ? (
               <span>
-                <strong className="font-semibold">Syncing</strong> — replaying queued mutations to server...
+                <strong className="font-semibold">Syncing</strong> — replaying queued mutations and evidence to server...
               </span>
             ) : status.conflictCount > 0 ? (
               <span>
                 <strong className="font-semibold">{status.conflictCount} Conflict / Needs Attention</strong>
               </span>
+            ) : status.pendingCount > 0 && havaPendingCount > 0 ? (
+              <span>
+                <strong className="font-semibold">{status.pendingCount} Ops & {havaPendingCount} HAVA Pending Sync</strong>
+              </span>
             ) : status.pendingCount > 0 ? (
               <span>
-                <strong className="font-semibold">{status.pendingCount} Pending Sync</strong> — awaiting replay
+                <strong className="font-semibold">{status.pendingCount} Pending Sync</strong> — operational changes
+              </span>
+            ) : havaPendingCount > 0 ? (
+              <span>
+                <strong className="font-semibold">{havaPendingCount} HAVA Evidence Pending Sync</strong> — forensic reports
               </span>
             ) : (
               <span>

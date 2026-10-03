@@ -48,46 +48,96 @@ export type SubmitDeclarationResult =
 
 type Listener = () => void
 const listeners = new Set<Listener>()
-const seededAt = new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString()
-let declarations: GroundCrewDeclaration[] = [
-  {
-    id: 'decl-expiry-demo',
-    eventId: 'e-1',
-    eventName: 'La Nuit Dorée — Spring Gala 2026',
-    item: 'Gold Chiavari Chairs',
-    condition: 'Damaged',
-    quantity: 2,
-    description: 'Expiry-test declaration seeded beyond the 48-hour confirmation window.',
-    submittedBy: 'Field Lead Demo',
-    submittedRole: 'Field Lead',
-    submittedAt: seededAt,
-    status: 'Pending Event Admin',
-    demoLabel: '48+ hour expiry test',
-    declarationState: 'Finalized',
-    evidenceStatus: 'Unverifiable',
-    version: 1,
-  },
-  {
-    id: 'decl-event-admin-demo',
-    eventId: 'e-1',
-    eventName: 'La Nuit Dorée — Spring Gala 2026',
-    item: 'Premium Crystal Candelabra',
-    condition: 'Damaged',
-    quantity: 1,
-    description: 'Fresh demo declaration for Event Admin confirmation practice.',
-    submittedBy: 'Team Lead Demo',
-    submittedRole: 'Team Lead',
-    submittedAt: new Date().toISOString(),
-    status: 'Pending Event Admin',
-    demoLabel: 'Event Admin confirmation demo',
-    declarationState: 'Reviewable',
-    evidenceStatus: 'Temporally Valid',
-    isTemporallyValid: true,
-    reviewDeadlineAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    isEditable: true,
-    version: 1,
-  },
-]
+let declarations: GroundCrewDeclaration[] = []
+
+export async function loadDeclarationsFromBackend(events?: Array<{ id: string }>): Promise<GroundCrewDeclaration[]> {
+  try {
+    const { fetchDamageReportsAllEvents } = await import('./damageApi')
+    const { getPendingQueue } = await import('./offlineQueue')
+
+    let backendReports: GroundCrewDeclaration[] = []
+    if (events && events.length > 0) {
+      const { reports } = await fetchDamageReportsAllEvents(events)
+      backendReports = reports.map((r) => ({
+        id: r.id,
+        eventId: r.eventId || '',
+        eventName: r.boundEvent || 'Event',
+        assetId: r.assetId || '',
+        item: r.assetName || 'Asset Item',
+        condition: (r.damageType === 'Missing' ? 'Missing' : 'Damaged') as 'Damaged' | 'Missing',
+        quantity: r.damagedQuantity ?? 1,
+        description: r.notes || '',
+        submittedBy: r.reportingOfficer || 'Ground Crew Member',
+        submittedRole: 'Member' as const,
+        submittedAt: r.submittedAt || new Date().toISOString(),
+        status: (r.status === 'Validated'
+          ? 'Confirmed'
+          : r.status === 'Dismissed'
+          ? 'Rejected'
+          : (r.status === 'Held for Audit' || r.status === 'Pending Second Sign-off')
+          ? 'Escalated to Manning'
+          : 'Pending Event Admin') as DeclarationStatus,
+        photoUrl: r.photoUrl,
+        noPhotographicEvidence: r.noPhotographicEvidence,
+        isOfflineQueued: false,
+        sha256Hash: r.sha256Hash,
+        exifMetadata: r.exifMetadata,
+        gpsCoordinates: r.gpsCoordinates,
+        declarationState: r.declarationState,
+        evidenceStatus: r.evidenceStatus,
+        isTemporallyValid: r.isTemporallyValid,
+        reviewDeadlineAt: r.reviewDeadlineAt,
+        version: r.version,
+        isEditable: r.isEditable,
+        finalizedAt: r.finalizedAt,
+        lastEditedAt: r.lastEditedAt,
+        offlineSyncStatus: 'server accepted' as const,
+      }))
+    }
+
+    const offlinePending = await getPendingQueue().catch(() => [])
+    const offlineDecls: GroundCrewDeclaration[] = offlinePending.map((q) => ({
+      id: q.id,
+      eventId: q.eventId,
+      eventName: q.eventName,
+      assetId: q.assetId,
+      item: q.itemName,
+      condition: q.condition,
+      quantity: q.quantity,
+      description: q.description,
+      submittedBy: q.submittedBy,
+      submittedRole: 'Member' as const,
+      submittedAt: q.timestamp,
+      status: 'Pending Event Admin' as const,
+      photoUrl: q.photoUrl,
+      noPhotographicEvidence: q.noPhotographicEvidence,
+      isOfflineQueued: true,
+      offlineSyncStatus: 'locally queued' as const,
+      sha256Hash: q.sha256Hash,
+      exifMetadata: q.exifMetadata,
+      gpsCoordinates: q.gpsCoordinates,
+      declarationState: 'Reviewable' as const,
+      evidenceStatus: q.noPhotographicEvidence ? 'No Photographic Evidence' : 'Unverifiable',
+      version: 1,
+      isEditable: true,
+    }))
+
+    const seen = new Set<string>()
+    const merged: GroundCrewDeclaration[] = []
+    for (const d of [...offlineDecls, ...backendReports]) {
+      if (!seen.has(d.id)) {
+        seen.add(d.id)
+        merged.push(d)
+      }
+    }
+    declarations = merged
+    emit()
+    return declarations
+  } catch (err) {
+    console.warn('[ground-crew-declarations] Failed to load declarations:', err)
+    return declarations
+  }
+}
 
 function emit() { listeners.forEach((listener) => listener()) }
 

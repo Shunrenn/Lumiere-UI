@@ -22,6 +22,7 @@ interface PartialEgressSectionProps {
   eventId: string
   eventTitle?: string
   isSettled?: boolean
+  isLead?: boolean
   className?: string
   onNavigateToDamage?: () => void
   onNavigateToAssets?: () => void
@@ -31,11 +32,12 @@ export function PartialEgressSection({
   eventId,
   eventTitle,
   isSettled,
+  isLead,
   className,
   onNavigateToDamage,
   onNavigateToAssets,
 }: PartialEgressSectionProps) {
-  const { adminRole, isAdmin, hasFullWarehouseAccess, isWarehouseLead, isGroundCrew, adminEmail } = useAuth()
+  const { adminRole, isAdmin, hasFullWarehouseAccess, adminEmail } = useAuth()
   const {
     partialEgressesByEvent,
     fetchEventEgress,
@@ -73,14 +75,12 @@ export function PartialEgressSection({
     hasFullWarehouseAccess ||
     effectiveRoleLower.includes('warehouse manager') ||
     effectiveRoleLower.includes('operations manager') ||
-    effectiveRoleLower.includes('wom')
+    effectiveRoleLower.includes('wom') ||
+    effectiveRoleLower.includes('event admin')
 
   const canInitiate =
-    isGroundCrew ||
-    isWarehouseLead ||
     isSupervisor ||
-    effectiveRoleLower.includes('ground') ||
-    effectiveRoleLower.includes('lead')
+    Boolean(isLead)
 
   // Current aggregate
   const egress: EventEgressResponse | undefined = partialEgressesByEvent[eventId]
@@ -444,7 +444,7 @@ export function PartialEgressSection({
             </div>
           ) : (
             <p className="mt-3 text-[0.7rem] text-muted-foreground font-medium">
-              Requires Ground Crew, Warehouse Lead, Warehouse Manager, or WOM authority to initiate.
+              Requires Event Lead or supervisory authority to initiate post-event partial egress.
             </p>
           )}
         </div>

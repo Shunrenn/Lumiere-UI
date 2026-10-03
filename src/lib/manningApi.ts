@@ -21,6 +21,7 @@ export interface ManningRecordDto {
   executionNotes?: string | null
   taskTitle?: string | null
   workArea?: string | null
+  isLead?: boolean
   createdAt?: string
   updatedAt?: string
 }
@@ -112,6 +113,7 @@ export function normalizeManningRecord(raw: any): ManningRecordDto {
     executionNotes: raw.executionNotes ?? raw.ExecutionNotes ?? null,
     taskTitle: raw.taskTitle ?? raw.TaskTitle ?? null,
     workArea: raw.workArea ?? raw.WorkArea ?? null,
+    isLead: Boolean(raw.isLead ?? raw.IsLead ?? false),
     createdAt: raw.createdAt ?? raw.CreatedAt ?? '',
     updatedAt: raw.updatedAt ?? raw.UpdatedAt ?? '',
   }
@@ -465,6 +467,7 @@ export interface MyManningAssignmentDto {
   taskPoolItemId: string | null
   manningRequirementId: string | null
   assignedRole: string
+  isLead: boolean
   executionStatus?: 'Assigned' | 'InProgress' | 'Completed' | 'Blocked' | string
   startedAt?: string | null
   completedAt?: string | null
@@ -495,6 +498,7 @@ export function normalizeMyAssignmentRecord(raw: any): MyManningAssignmentDto {
     taskPoolItemId: raw.taskPoolItemId ?? raw.TaskPoolItemId ?? null,
     manningRequirementId: raw.manningRequirementId ?? raw.ManningRequirementId ?? null,
     assignedRole: String(raw.assignedRole ?? raw.AssignedRole ?? 'Ground Crew'),
+    isLead: Boolean(raw.isLead ?? raw.IsLead ?? false),
     executionStatus: String(raw.executionStatus ?? raw.ExecutionStatus ?? 'Assigned'),
     startedAt: raw.startedAt ?? raw.StartedAt ?? null,
     completedAt: raw.completedAt ?? raw.CompletedAt ?? null,

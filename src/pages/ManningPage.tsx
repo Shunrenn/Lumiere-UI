@@ -49,22 +49,7 @@ interface IncidentItem {
   date: string
 }
 
-const SEED_INCIDENTS: IncidentItem[] = [
-  {
-    id: 'inc-1',
-    title: 'Welfare concern during load-in',
-    detail: 'Founders Dinner · submitted Aug 20, 09:42',
-    status: 'New',
-    date: 'Aug 20, 2026',
-  },
-  {
-    id: 'inc-2',
-    title: 'Missing radio handset',
-    detail: 'Maison Privée Launch · submitted Aug 19, 16:10',
-    status: 'New',
-    date: 'Aug 19, 2026',
-  },
-]
+const SEED_INCIDENTS: IncidentItem[] = []
 
 export function ManningPage() {
   const { adminName, adminEmail, logout } = useAuth()

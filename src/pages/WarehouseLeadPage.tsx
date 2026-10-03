@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { useWarehouse, LEAD_NOTIFICATIONS, type WarehouseEvent, type WarehouseTask } from '@/lib/warehouse'
-import { FeedbackForm, IncidentForm, GenericTaskPanel } from '@/components/PwaWorkflows'
+import { FeedbackForm, IncidentForm } from '@/components/PwaWorkflows'
 import {
   PwaBadge,
   PwaBottomNav,
@@ -180,8 +180,13 @@ export function WarehouseLeadPage() {
             />
           ) : (
             <>
+              <div className="rounded-xl border border-border/80 bg-muted/30 p-3 text-xs text-muted-foreground">
+                <p className="font-semibold text-foreground">Legacy Warehouse Station View</p>
+                <p className="mt-0.5 leading-relaxed">
+                  Canonical field and warehouse tasks are managed via active Manning assignments at <span className="font-mono text-primary font-bold">/field-ops</span>.
+                </p>
+              </div>
               <Home events={events} tasks={tasks} pendingCount={pendingCount} onOpen={setSelectedEvent} />
-              <GenericTaskPanel canClaim={false} onNotify={notify} />
             </>
           ))}
 
