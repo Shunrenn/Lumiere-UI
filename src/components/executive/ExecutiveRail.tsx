@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { EXECUTIVE_DESTINATIONS, type ExecutiveDestinationId } from '@/lib/executive-destinations'
 import { useAuth } from '@/lib/auth'
 import { useDarkMode } from '@/lib/theme'
+import { canAccessRoute } from '@/lib/route-guard'
 
 interface ExecutiveRailProps {
   activeId: ExecutiveDestinationId
@@ -22,7 +23,7 @@ export function ExecutiveRail({
   collapsed: externalCollapsed,
   onToggleCollapse: externalToggleCollapse,
 }: ExecutiveRailProps) {
-  const { canAccessAssetInventory, isExecutiveLite, adminName, adminRole, setConfirmLogout } = useAuth()
+  const { canAccessAssetInventory, isExecutiveLite, adminName, adminRole, setConfirmLogout, currentUser } = useAuth()
   const { dark, toggle: toggleTheme } = useDarkMode()
 
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
@@ -53,21 +54,23 @@ export function ExecutiveRail({
   // Order and filter destinations based on role:
   // For Executive Lite: 1. Dashboard, 2. Event Operations, 3. Asset Allocation
   // For Full Executive: Preserve existing EXECUTIVE_DESTINATIONS order and capabilities
+  // For other shared shell consumers (e.g. Event Planner): filter strictly by canAccessRoute to prevent role leaks
   const visibleDestinations = useMemo(() => {
     if (isExecutiveLite) {
       const liteOrder: ExecutiveDestinationId[] = ['dashboard', 'registry', 'inventory']
       return liteOrder
         .map((id) => EXECUTIVE_DESTINATIONS.find((d) => d.id === id)!)
         .filter((destination) => {
+          if (!destination) return false
           if (destination.id === 'inventory') return canAccessAssetInventory
-          return Boolean(destination)
+          return canAccessRoute(currentUser, destination.id)
         })
     }
     return EXECUTIVE_DESTINATIONS.filter((destination) => {
-      if (destination.id === 'inventory') return canAccessAssetInventory
-      return true
+      if (destination.id === 'inventory' && !canAccessAssetInventory) return false
+      return canAccessRoute(currentUser, destination.id)
     })
-  }, [isExecutiveLite, canAccessAssetInventory])
+  }, [isExecutiveLite, canAccessAssetInventory, currentUser])
 
   // Executive Lite uses a fixed compact dark rail per client references
   const effectiveCollapsed = isExecutiveLite ? true : isCollapsed

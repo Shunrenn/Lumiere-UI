@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Home, Pencil, ChevronDown, Ruler, Grid3x3, AlignJustify,
-  MessageSquare, CloudOff, Star, Copy, Download, Trash2, Cloud,
-  User, Share2, Maximize2, Monitor, Search, Info, X, Check,
+  MessageSquare, Star, Copy, Download, Trash2, Cloud,
+  Maximize2, Monitor, Search, Info, X, Check,
   Lock, ChevronRight, Eye, Type, Upload, Wrench, FolderOpen,
   ImageIcon, MousePointer2, Pen, Square, Minus, StickyNote,
   Bold, Italic, Underline, AlignLeft, Palette, Plus, ChevronLeft,
@@ -76,21 +76,7 @@ interface CanvasPage {
 
 
 
-/* ─── Demo data ─── */
-const DEMO_COLLABORATORS = [
-  { id: 'c1', name: 'Elena Vasseur',  email: 'elena@lumiere.com',  access: 'Designer' },
-  { id: 'c2', name: 'Marc Delacroix', email: 'marc@lumiere.com',   access: 'Viewer' },
-  { id: 'c3', name: 'Sophie Laurent', email: 'sophie@lumiere.com', access: 'Commenter' },
-  { id: 'c4', name: 'Julien Morel',   email: 'julien@lumiere.com', access: 'Asset Planner' },
-]
-const ACCESS_OPTIONS = ['Planner', 'Designer', 'Asset Planner', 'Commenter', 'Viewer']
-const ROLE_DESCRIPTIONS = [
-  { role: 'Planner',       desc: 'Full access — can edit, share, and manage all workspace settings.' },
-  { role: 'Designer',      desc: 'Design access — can edit canvas. Read-only on asset planning.' },
-  { role: 'Asset Planner', desc: 'Asset planning access — can manage inventory allocations. Read-only on design.' },
-  { role: 'Commenter',     desc: 'Read-only on both Design and Allocation Planning, with comment privilege.' },
-  { role: 'Viewer',        desc: 'Read-only on both Design and Allocation Planning.' },
-]
+
 
 
 
@@ -2984,118 +2970,6 @@ function PinModal({ targetMode, onSuccess, onCancel }: { targetMode: WorkspaceMo
   )
 }
 
-function ShareModal({ title, onClose }: { title: string; onClose: () => void }) {
-  const [collabs, setCollabs] = useState([{ id: 'owner', name: 'You', email: 'admin@lumiere.com', access: 'Owner' }, ...DEMO_COLLABORATORS])
-  const [searchVal, setSearchVal] = useState('')
-  const [notifyEnabled, setNotifyEnabled] = useState(true)
-  const [generalAccess, setGeneralAccess] = useState('Restricted')
-  const [showRoles, setShowRoles] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useOutsideClick(ref, onClose)
-
-  const filteredCollabs = collabs.filter((c) => `${c.name} ${c.email}`.toLowerCase().includes(searchVal.toLowerCase()))
-  function changeAccess(id: string, access: string) { if (id !== 'owner') setCollabs((cs) => cs.map((c) => (c.id === id ? { ...c, access } : c))) }
-  function copyEmails() { navigator.clipboard.writeText(collabs.map((c) => c.email).join(', ')).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 2000) }
-  function copyLink() { navigator.clipboard.writeText(window.location.href).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 2000) }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-      <div ref={ref} className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h2 className="font-display text-sm uppercase tracking-[0.2em] text-foreground">Share &ldquo;{title}&rdquo;</h2>
-          <button type="button" onClick={onClose} aria-label="Close"
-            className="flex size-7 items-center justify-center rounded-full text-muted-foreground transition hover:bg-accent hover:text-foreground"><X className="size-4" /></button>
-        </div>
-        <div className="px-5 py-4 flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input type="text" placeholder="Add people" value={searchVal} onChange={(e) => setSearchVal(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background pl-9 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none" />
-            </div>
-            <button type="button" onClick={() => setShowRoles((v) => !v)} aria-label="Role descriptions"
-              className={cn('flex size-8 items-center justify-center rounded-full border transition',
-                showRoles ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}>
-              <Info className="size-3.5" />
-            </button>
-          </div>
-          {showRoles && (
-            <div className="rounded-xl border border-border bg-background p-3 flex flex-col gap-1.5">
-              <p className="text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted-foreground mb-1">Role Permissions</p>
-              {ROLE_DESCRIPTIONS.map(({ role, desc }) => (
-                <div key={role} className="flex gap-2">
-                  <span className="shrink-0 w-24 text-[0.62rem] font-semibold text-primary">{role}</span>
-                  <span className="text-[0.62rem] text-muted-foreground">{desc}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto pr-1">
-            {filteredCollabs.map((c) => (
-              <div key={c.id} className="flex items-center gap-3 rounded-lg px-2 py-2 transition hover:bg-accent/30">
-                <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary"><User className="size-3.5" /></div>
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-[0.68rem] font-semibold text-foreground">{c.name}</span>
-                  <span className="truncate text-[0.58rem] text-muted-foreground">{c.email}</span>
-                </div>
-                {c.id === 'owner' ? <span className="text-[0.6rem] font-bold uppercase tracking-[0.08em] text-primary">Owner</span> : <AccessSelect value={c.access} onChange={(v) => changeAccess(c.id, v)} />}
-              </div>
-            ))}
-          </div>
-          <div className="flex flex-col gap-3 border-t border-border pt-3">
-            <button type="button" onClick={copyEmails}
-              className="flex items-center gap-2 self-start rounded-lg border border-border bg-background px-3 py-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-foreground transition hover:border-primary/50">
-              {copied ? <Check className="size-3 text-primary" /> : <Copy className="size-3" />}
-              {copied ? 'Copied!' : 'Copy collaborator emails'}
-            </button>
-            <button type="button" onClick={copyLink}
-              className="flex items-center gap-2 self-start rounded-lg border border-border bg-background px-3 py-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-foreground transition hover:border-primary/50">
-              <Share2 className="size-3" />Copy share link
-            </button>
-            <div className="flex items-center justify-between">
-              <span className="text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-foreground">Notify people</span>
-              <button type="button" role="switch" aria-checked={notifyEnabled} onClick={() => setNotifyEnabled((v) => !v)}
-                className={cn('relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors', notifyEnabled ? 'bg-primary' : 'bg-muted')}>
-                <span className={cn('pointer-events-none inline-block size-4 rounded-full bg-white shadow transition-transform', notifyEnabled ? 'translate-x-4' : 'translate-x-0')} />
-              </button>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-foreground">General access</span>
-              <AccessSelect value={generalAccess} onChange={setGeneralAccess} options={['Restricted', 'Anyone can view', 'Anyone can comment', 'Anyone can edit']} />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function AccessSelect({ value, onChange, options = ACCESS_OPTIONS }: { value: string; onChange: (v: string) => void; options?: string[] }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useOutsideClick(ref, () => setOpen(false))
-  return (
-    <div ref={ref} className="relative shrink-0">
-      <button type="button" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }}
-        className="flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.08em] text-foreground transition hover:border-primary/50">
-        {value}<ChevronDown className={cn('size-2.5 transition-transform', open && 'rotate-180')} />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-36 rounded-xl border border-border bg-popover py-1 shadow-2xl">
-          {options.map((opt) => (
-            <button key={opt} type="button" onClick={(e) => { e.stopPropagation(); onChange(opt); setOpen(false) }}
-              className={cn('flex w-full items-center justify-between px-3 py-2 text-left text-xs transition hover:bg-accent',
-                value === opt ? 'text-primary font-semibold' : 'text-popover-foreground')}>
-              {opt}{value === opt && <Check className="size-3" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 function PresentDropdown() {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -3167,7 +3041,6 @@ export function CanvasWorkspacePage() {
   // open in Viewing mode by default. Switching to any edit mode requires PIN verification.
   const [mode, setMode] = useState<WorkspaceMode>('Viewing')
   const [pendingMode, setPendingMode] = useState<WorkspaceMode | null>(null)
-  const [showShare, setShowShare] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [rightExpanded, setRightExpanded] = useState(false)
   const [currentPage, setCurrentPage] = useState('pg1')
@@ -4294,7 +4167,6 @@ export function CanvasWorkspacePage() {
 
   const selectedAsset =
     canvasAssets.find((a) => a.id === selectedAssetId && (a.pageId || pages[0]?.id) === currentPage) ?? null
-  const displayTitle = boardName
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground font-sans">
@@ -4354,13 +4226,11 @@ export function CanvasWorkspacePage() {
           <div className="hidden items-center gap-0.5 xl:flex shrink-0">
             <button type="button" onClick={handleUndo} disabled={pastHistory.length === 0} aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)" className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-30"><Undo2 className="size-3.5" /></button>
             <button type="button" onClick={handleRedo} disabled={futureHistory.length === 0} aria-label="Redo (Ctrl+Y)" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-30"><Redo2 className="size-3.5" /></button>
-            <button type="button" aria-label="Cloud saved" className="flex size-7 items-center justify-center rounded-md text-emerald-400 transition hover:bg-accent"><Cloud className="size-3.5" /></button>
-            <button type="button" aria-label="Offline mode" className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"><CloudOff className="size-3.5" /></button>
+            <span title="Cloud sync active" className="flex size-7 items-center justify-center rounded-md text-emerald-400"><Cloud className="size-3.5" /></span>
             <button type="button" onClick={() => setStarred((s) => !s)} aria-label={starred ? 'Unstar' : 'Star'}
               className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground">
               <Star className={cn('size-3.5', starred && 'fill-primary text-primary')} />
             </button>
-            <button type="button" aria-label="Copy" className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"><Copy className="size-3.5" /></button>
             <button
               type="button"
               aria-label="Download"
@@ -4394,7 +4264,6 @@ export function CanvasWorkspacePage() {
             >
               <Download className="size-3.5" />
             </button>
-            <button type="button" aria-label="Move to trash" className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-destructive"><Trash2 className="size-3.5" /></button>
           </div>
           {/* Page Layout Mode Segmented Toggle Control (Vertical/Flowy vs Horizontal/Thumbnail) */}
           <div className="inline-flex items-center rounded-lg border border-border bg-background p-0.5 shrink-0" role="radiogroup" aria-label="Page layout mode">
@@ -4434,8 +4303,6 @@ export function CanvasWorkspacePage() {
           <ModeDropdown mode={mode} onChange={requestModeChange} />
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button type="button" aria-label="Profile"
-            className="flex size-7 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary transition hover:bg-primary/20"><User className="size-3.5" /></button>
           <button type="button" onClick={() => setCommentsOpen((o) => !o)} aria-label="Toggle comments" aria-pressed={commentsOpen}
             className={cn('flex size-7 items-center justify-center rounded-md border transition',
               commentsOpen ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}>
@@ -4462,10 +4329,6 @@ export function CanvasWorkspacePage() {
               {isApproving ? 'Approving...' : 'Approve & Route'}
             </button>
           )}
-          <button type="button" onClick={() => setShowShare(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90">
-            <Share2 className="size-3" />Share
-          </button>
         </div>
       </header>
 
@@ -4643,9 +4506,6 @@ export function CanvasWorkspacePage() {
 
       {/* PIN Modal */}
       {pendingMode && <PinModal targetMode={pendingMode} onSuccess={onPinSuccess} onCancel={() => setPendingMode(null)} />}
-
-      {/* Share Modal */}
-      {showShare && <ShareModal title={displayTitle} onClose={() => setShowShare(false)} />}
 
       {/* Proactive Stock Availability Warning — advisory, fired from drag activity only */}
       {stockWarning && <StockAvailabilityWarningModal asset={stockWarning} onClose={() => setStockWarning(null)} />}

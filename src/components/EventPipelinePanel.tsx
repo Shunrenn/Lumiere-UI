@@ -15,12 +15,21 @@ import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import { PartialEgressSection } from '@/components/warehouse/PartialEgressSection'
+import type { PortalEvent } from '@/lib/types'
+
+const PIPELINE_STEPS = [
+  { step: '01', label: 'Initialization', state: 'complete' },
+  { step: '02', label: 'Canvas Design', state: 'complete' },
+  { step: '03', label: 'Allocation', state: 'current' },
+  { step: '04', label: 'Approval', state: 'pending' },
+  { step: '05', label: 'Preparation', state: 'pending' },
+  { step: '06', label: 'Dispatch', state: 'pending' },
+  { step: '07', label: 'Settlement', state: 'pending' },
+]
 
 // Shared Event Pipeline content — the "Logistical Overview / Material Requirement / Design
 // Documents / Team Assignments" data — reused by both the full-page EventDetailPage and the
-// in-workspace drawer opened from the Design Canvas / Creative Workspace. Keeping this as a
-// single component means both surfaces read from the same data source (usePlanner) and never
-// drift out of sync.
+// in-workspace drawer opened from the Design Canvas / Creative Workspace.
 
 type Tab = 'overview' | 'materials' | 'documents' | 'team'
 
@@ -29,24 +38,6 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'materials', label: 'Material Requirement' },
   { key: 'documents', label: 'Design Documents' },
   { key: 'team', label: 'Team Assignments' },
-]
-
-const PIPELINE_STEPS = [
-  { label: 'Initialization', state: 'complete' as const },
-  { label: 'Client Brief', state: 'complete' as const },
-  { label: 'Pre-Production', state: 'complete' as const },
-  { label: 'Vendor Lock-in', state: 'complete' as const },
-  { label: 'Staging Rehearsal', state: 'complete' as const },
-  { label: 'Event Day', state: 'complete' as const },
-  { label: 'Post-Event Wrap', state: 'current' as const },
-]
-
-const TEAM = [
-  { name: 'Isabelle Moreau', role: 'Master Event Planner', initials: 'IM' },
-  { name: 'Camille Laurent', role: 'Warehouse Manager', initials: 'CL' },
-  { name: 'Théo Bernard', role: 'Lead Floral Designer', initials: 'TB' },
-  { name: 'Margaux Dubois', role: 'Lighting Director', initials: 'MD' },
-  { name: 'Lucas Petit', role: 'Ground Crew Lead', initials: 'LP' },
 ]
 
 function ReadField({ label, value, className }: { label: string; value: string; className?: string }) {
@@ -71,7 +62,7 @@ export function EventPipelinePanel({
   onTabChange,
   compact = false,
 }: {
-  event: PipelineEvent
+  event: PortalEvent | PipelineEvent
   adminName: string
   /** When provided, empty-state CTAs ("Open Design Canvas") are shown. Omit when the panel is
    *  already being viewed from within the Design Canvas — there's nothing to route to. */
@@ -154,7 +145,7 @@ export function EventPipelinePanel({
               </div>
             </div>
             <span className="shrink-0 self-start rounded border border-border bg-card px-2.5 py-1 text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground sm:self-auto">
-              ID: {event.recordId}
+              ID: {(event as any).refId || (event as any).recordId || 'N/A'}
             </span>
           </div>
 
@@ -171,15 +162,15 @@ export function EventPipelinePanel({
             <div className="mt-5 space-y-4">
               <ReadField label="Event Name / Title" value={event.title} />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <ReadField label="Client Account" value={event.client} />
-                <ReadField label="Account Registration" value={`CLT-${event.recordId.slice(-4)}-MCG`} />
+                <ReadField label="Client Account" value={event.client || 'Corporate Client'} />
+                <ReadField label="Account Registration" value={`CLT-${((event as any).refId || (event as any).recordId || '0000').slice(-4)}`} />
               </div>
-              <ReadField label="Venue Selection Directive" value={event.venue} />
+              <ReadField label="Venue Selection Directive" value={event.venue || 'Venue Pending'} />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <ReadField label="Target Gala Date" value={event.galaDate} />
-                <ReadField label="Event Record ID" value={event.recordId} />
+                <ReadField label="Target Event Date" value={(event as any).targetDate || (event as any).galaDate || (event as any).date || 'TBD'} />
+                <ReadField label="Event Reference ID" value={(event as any).refId || (event as any).recordId || 'N/A'} />
               </div>
-              <ReadField label="Assigned Master Event Planner" value={`${adminName} — Event Planner`} className="sm:max-w-md" />
+              <ReadField label="Assigned Master Event Planner" value={`${adminName || 'Lumière Creatives'} — Event Planner`} className="sm:max-w-md" />
             </div>
           </section>
 
@@ -480,17 +471,33 @@ export function EventPipelinePanel({
 
       {tab === 'team' && (
         <div className={cn(gap, 'grid grid-cols-1 gap-3', !compact && 'sm:grid-cols-2 lg:grid-cols-3')}>
-          {TEAM.map((member) => (
-            <div key={member.name} className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-4">
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold uppercase tracking-wide text-primary">
-                {member.initials}
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-card-foreground">{member.name}</p>
-                <p className="text-[0.65rem] uppercase tracking-[0.1em] text-muted-foreground">{member.role}</p>
-              </div>
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-4">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold uppercase tracking-wide text-primary">
+              {(adminName || 'EP').slice(0, 2).toUpperCase()}
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-card-foreground">{adminName || 'Master Event Planner'}</p>
+              <p className="text-[0.65rem] uppercase tracking-[0.1em] text-muted-foreground">Event Planner & Creative Lead</p>
             </div>
-          ))}
+          </div>
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-4">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-xs font-bold uppercase tracking-wide text-emerald-600">
+              {((event as any).projectManagerName || 'PM').slice(0, 2).toUpperCase()}
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-card-foreground">{(event as any).projectManagerName || 'Operations Project Manager'}</p>
+              <p className="text-[0.65rem] uppercase tracking-[0.1em] text-muted-foreground">Project Manager & Logistics</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-4">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-sky-500/10 text-xs font-bold uppercase tracking-wide text-sky-600">
+              WH
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-card-foreground">Warehouse & Staging Team</p>
+              <p className="text-[0.65rem] uppercase tracking-[0.1em] text-muted-foreground">Logistics Handoff & Dispatch</p>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -88,10 +88,11 @@ const SORT_OPTIONS = [
 export function InventoryStockPage() {
   const { inventory: items, addInventoryItem, updateInventoryItem, completeMaintenance } = usePortal()
   const liveOps = useInventoryOps()
-  // Executive and Admin have read-only oversight; Warehouse Managers mutate the registry.
-  const { isAdmin, isExecutive } = useAuth()
+  // Warehouse Managers mutate the registry; Executive, Admin, and Event Planner have read-only catalog browsing.
+  const { isAdmin, isExecutive, isWarehouse, isPlanner } = useAuth()
   const { intent, clearIntent } = useNav()
-  const readOnly = isAdmin || isExecutive
+  const canMutate = isWarehouse && !isAdmin && !isExecutive && !isPlanner
+  const readOnly = !canMutate
   const [query, setQuery] = useState('')
   const [stateFilter, setStateFilter] = useState<StockStatus | 'All'>('All')
   const [categoryFilter, setCategoryFilter] = useState('')

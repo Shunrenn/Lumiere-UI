@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import {
-  Bell,
   User,
   Search,
   Plus,
@@ -14,8 +13,6 @@ import {
   Info,
   Maximize2,
   Copy,
-  Download,
-  WifiOff,
   Share2,
   Link2,
   Trash2,
@@ -26,15 +23,9 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  Check,
-  Camera,
   Shield,
-  HardDrive,
   Monitor,
   Lock,
-  MessageSquare,
-  UserPlus,
-  UserMinus,
   PenTool,
   PackageSearch,
 } from 'lucide-react'
@@ -63,12 +54,7 @@ const EVENT_PALETTE = [
   '#6B4F3A','#F2E6D9','#B8916A','#7A5C42','#DEC9A8',
 ]
 
-type DesignStatus =
-  | 'Initial Draft'
-  | 'Final Draft'
-  | 'Subject to Review'
-  | 'Ready to Present'
-  | 'Subject to Revision'
+type DesignStatus = string
 
 type ShapeKind = 'ingress' | 'egress' | 'actual'
 
@@ -289,12 +275,17 @@ function mapPortalEventsToCards(
   })
 }
 
-const STATUS_LABEL_COLORS: Record<DesignStatus, string> = {
-  'Initial Draft':      'text-muted-foreground',
-  'Final Draft':        'text-primary',
-  'Subject to Review':  'text-amber-400',
-  'Ready to Present':   'text-emerald-400',
-  'Subject to Revision':'text-rose-400',
+const STATUS_LABEL_COLORS: Record<string, string> = {
+  'Initialized':        'text-amber-400',
+  'In Production':      'text-sky-400',
+  'Reserved':           'text-primary',
+  'Completed':          'text-emerald-400',
+  'Settled':            'text-emerald-400',
+  'On Hold':            'text-rose-400',
+  'Cancelled':          'text-muted-foreground',
+  'Planning':           'text-amber-400',
+  'Active':             'text-emerald-400',
+  'Unknown':            'text-muted-foreground',
 }
 
 function ShapeIndicator({ kind, color }: { kind: ShapeKind; color: string }) {
@@ -316,48 +307,13 @@ function ShapeIndicator({ kind, color }: { kind: ShapeKind; color: string }) {
   )
 }
 
-/* ─── Notifications ─── */
-type NotificationKind = 'share' | 'access-request' | 'access-removed' | 'comment' | 'design-collab' | 'asset-collab'
-
-interface DemoNotification {
-  id: string
-  kind: NotificationKind
-  text: string
-  time: string
-  unread: boolean
-}
-
-const NOTIFICATION_META: Record<NotificationKind, { icon: typeof Bell; color: string }> = {
-  'share':          { icon: Share2,        color: 'text-primary' },
-  'access-request': { icon: UserPlus,      color: 'text-emerald-500' },
-  'access-removed':  { icon: UserMinus,     color: 'text-destructive' },
-  'comment':        { icon: MessageSquare, color: 'text-primary' },
-  'design-collab':  { icon: PenTool,       color: 'text-muted-foreground' },
-  'asset-collab':   { icon: PackageSearch, color: 'text-muted-foreground' },
-}
-
-const DEMO_NOTIFICATIONS: DemoNotification[] = [
-  { id: 'n1', kind: 'share',          text: 'Marc Delacroix shared "Garden Ceremony Moodboard" with you.', time: '5 minutes ago', unread: true },
-  { id: 'n2', kind: 'access-request', text: 'Sophie Laurent requested Asset Planner access to "Château Floral Arch Concept."', time: '1 hour ago', unread: true },
-  { id: 'n3', kind: 'comment',        text: 'Julien Morel commented on "Minimalist Table Proposal."', time: '3 hours ago', unread: true },
-  { id: 'n4', kind: 'access-removed', text: 'Your Viewer access to "Ivory Gala Tablescapes" was removed.', time: 'Yesterday', unread: false },
-  { id: 'n5', kind: 'design-collab',  text: 'Elena Vasseur added you as a design collaborator on "Baroque Grandeur Banquet."', time: '2 days ago', unread: false },
-  { id: 'n6', kind: 'asset-collab',   text: 'Pierre Faure added you as an asset planning collaborator on "Tent Lighting Moodboard."', time: '3 days ago', unread: false },
-]
-
-
-
 /* ─── Profile Settings Sidebar ─── */
 function ProfileSettingsSidebar({ onClose, adminName, onLogout }: {
   onClose: () => void
   adminName: string
   onLogout: () => void
 }) {
-  const [displayName, setDisplayName] = useState(adminName)
-  const [editingName, setEditingName] = useState(false)
-  const [nameDraft, setNameDraft] = useState(adminName)
   const { mode: theme, setMode: applyTheme } = useThemeMode()
-  const [offlineToggle, setOfflineToggle] = useState(false)
   const [logoutPrompt, setLogoutPrompt] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -386,28 +342,10 @@ function ProfileSettingsSidebar({ onClose, adminName, onLogout }: {
           <section>
             <p className="mb-3 flex items-center gap-1.5 text-[0.6rem] font-bold uppercase tracking-[0.14em] text-muted-foreground"><User className="size-3" />Profile</p>
             <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-background p-4">
-              <div className="relative">
-                <div className="flex size-16 items-center justify-center rounded-full bg-primary/15 text-primary text-2xl font-bold">
-                  {displayName.charAt(0).toUpperCase()}
-                </div>
-                <button type="button" aria-label="Upload photo" className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow transition hover:opacity-90">
-                  <Camera className="size-3" />
-                </button>
+              <div className="flex size-16 items-center justify-center rounded-full bg-primary/15 text-primary text-2xl font-bold">
+                {adminName.charAt(0).toUpperCase()}
               </div>
-              {editingName ? (
-                <div className="flex w-full items-center gap-1.5">
-                  <input autoFocus value={nameDraft} onChange={(e) => setNameDraft(e.target.value)}
-                    onBlur={() => { setDisplayName(nameDraft.trim() || displayName); setEditingName(false) }}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { setDisplayName(nameDraft.trim() || displayName); setEditingName(false) } if (e.key === 'Escape') setEditingName(false) }}
-                    className="flex-1 rounded-lg border border-input bg-background px-2 py-1 text-sm text-foreground outline-none focus:border-primary" />
-                  <button type="button" onClick={() => { setDisplayName(nameDraft.trim() || displayName); setEditingName(false) }} className="flex size-6 items-center justify-center rounded text-primary"><Check className="size-3.5" /></button>
-                </div>
-              ) : (
-                <button type="button" onClick={() => { setNameDraft(displayName); setEditingName(true) }} className="group flex items-center gap-1.5 rounded px-2 py-1 text-sm font-semibold text-foreground transition hover:bg-accent">
-                  {displayName}
-                  <Pencil className="size-3 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
-                </button>
-              )}
+              <p className="text-sm font-semibold text-foreground">{adminName || 'Event Planner'}</p>
               <p className="text-[0.65rem] text-muted-foreground">planner@lumiere.com</p>
             </div>
           </section>
@@ -415,24 +353,9 @@ function ProfileSettingsSidebar({ onClose, adminName, onLogout }: {
           {/* Account & Security */}
           <section>
             <p className="mb-3 flex items-center gap-1.5 text-[0.6rem] font-bold uppercase tracking-[0.14em] text-muted-foreground"><Shield className="size-3" />Account & Security</p>
-            <div className="flex flex-col gap-2">
-              {['Update Password', 'Update Passkey'].map((label) => (
-                <button key={label} type="button" className="flex w-full items-center justify-between rounded-xl border border-border bg-background px-4 py-2.5 text-left text-xs font-medium text-foreground transition hover:border-primary/50 hover:bg-accent">
-                  {label}<ChevronDown className="size-3 -rotate-90 text-muted-foreground" />
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {/* Data & Storage */}
-          <section>
-            <p className="mb-3 flex items-center gap-1.5 text-[0.6rem] font-bold uppercase tracking-[0.14em] text-muted-foreground"><HardDrive className="size-3" />Data & Storage</p>
-            <div className="flex items-center justify-between rounded-xl border border-border bg-background px-4 py-2.5">
-              <span className="text-xs text-foreground">Remove offline designs on logout</span>
-              <button type="button" role="switch" aria-checked={offlineToggle} onClick={() => setOfflineToggle((v) => !v)}
-                className={cn('relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors', offlineToggle ? 'bg-primary' : 'bg-muted')}>
-                <span className={cn('pointer-events-none inline-block size-4 rounded-full bg-white shadow transition-transform', offlineToggle ? 'translate-x-4' : 'translate-x-0')} />
-              </button>
+            <div className="rounded-xl border border-border bg-background p-3.5 text-xs text-muted-foreground">
+              <p className="font-medium text-foreground">Authenticated Session</p>
+              <p className="mt-1 text-[0.65rem]">Signed in as Event Planner. Managed via Lumière Central RBAC.</p>
             </div>
           </section>
 
@@ -500,21 +423,6 @@ interface ProjectCard {
   lastEdited: string
   thumbnail: string
   starred: boolean
-}
-
-const DEMO_CARDS: ProjectCard[] = mapPortalEventsToCards(REAL_10_SEEDED_EVENTS)
-
-const SEED_MOOD_BOARD_CARD: ProjectCard = {
-  id: 'mb-seed-concept-01',
-  title: 'Maison Lumine Aesthetic Conceptualization',
-  type: 'Mood Board',
-  designer: 'Elena Vasseur',
-  collaborators: [],
-  eventAlias: '',
-  eventDate: 'Sep 18, 2026',
-  lastEdited: '3 hours ago',
-  thumbnail: '/images/decor/garden-wedding.png',
-  starred: true,
 }
 
 type CardAccess = 'designer' | 'collaborator' | 'none'
@@ -667,14 +575,11 @@ function RenameProjectModal({
 }
 
 const ELLIPSIS_ITEMS = [
-  { icon: ExternalLink, label: 'Open in New Tab' },
   { icon: Info,         label: 'Details' },
+  { icon: ExternalLink, label: 'Open in New Tab' },
   { icon: Maximize2,    label: 'Present Full Screen' },
-  { icon: Copy,         label: 'Make a copy' },
-  { icon: Download,     label: 'Download' },
-  { icon: WifiOff,      label: 'Make available offline' },
-  { icon: Share2,       label: 'Share' },
   { icon: Link2,        label: 'Copy link' },
+  { icon: Copy,         label: 'Make a copy' },
   { icon: Trash2,       label: 'Move to Trash', danger: true },
 ] as const
 
@@ -686,7 +591,6 @@ function EllipsisMenu({
   onStartRename,
   onDuplicate,
   onTrash,
-  onOpenCard,
 }: {
   card: ProjectCard
   onClose: () => void
@@ -695,9 +599,9 @@ function EllipsisMenu({
   onStartRename: () => void
   onDuplicate: () => void
   onTrash: () => void
-  onOpenCard: () => void
 }) {
   const isDesigner = access === 'designer'
+  const isApiEvent = card.id.startsWith('pc-event-')
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -714,22 +618,40 @@ function EllipsisMenu({
         onOpenDetails()
         break
       case 'Make a copy':
-        onDuplicate()
+        if (!isApiEvent) onDuplicate()
         break
       case 'Move to Trash':
-        onTrash()
+        if (!isApiEvent) onTrash()
         break
       case 'Open in New Tab':
+        window.open('/canvas-workspace', '_blank')
+        break
       case 'Present Full Screen':
-        onOpenCard()
+        if (typeof document !== 'undefined') {
+          if (document.fullscreenElement) {
+            document.exitFullscreen?.().catch(() => {})
+          } else {
+            document.documentElement.requestFullscreen?.().catch(() => {})
+          }
+        }
         break
       case 'Copy link':
-        navigator.clipboard?.writeText(window.location.href)
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          navigator.clipboard.writeText(`${window.location.origin}/canvas-workspace?project=${encodeURIComponent(card.id)}`).catch(() => {})
+        }
         break
       default:
         break
     }
   }
+
+  // Filter items: API events are backend records and cannot be duplicated or trashed locally
+  const visibleItems = ELLIPSIS_ITEMS.filter((item) => {
+    if (isApiEvent && (item.label === 'Make a copy' || item.label === 'Move to Trash')) {
+      return false
+    }
+    return true
+  })
 
   return (
     <div
@@ -739,27 +661,29 @@ function EllipsisMenu({
     >
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border">
         <span className="truncate font-serif text-xs text-popover-foreground">{card.title}</span>
-        <button
-          type="button"
-          aria-label="Rename"
-          onClick={() => {
-            if (isDesigner) {
-              onClose()
-              onStartRename()
-            }
-          }}
-          className={cn(
-            'flex size-5 items-center justify-center rounded transition-colors',
-            isDesigner
-              ? 'text-muted-foreground hover:text-foreground cursor-pointer'
-              : 'text-border cursor-not-allowed',
-          )}
-          disabled={!isDesigner}
-        >
-          <Pencil className="size-3" aria-hidden="true" />
-        </button>
+        {!isApiEvent && (
+          <button
+            type="button"
+            aria-label="Rename"
+            onClick={() => {
+              if (isDesigner) {
+                onClose()
+                onStartRename()
+              }
+            }}
+            className={cn(
+              'flex size-5 items-center justify-center rounded transition-colors',
+              isDesigner
+                ? 'text-muted-foreground hover:text-foreground cursor-pointer'
+                : 'text-border cursor-not-allowed',
+            )}
+            disabled={!isDesigner}
+          >
+            <Pencil className="size-3" aria-hidden="true" />
+          </button>
+        )}
       </div>
-      {ELLIPSIS_ITEMS.map((item) => {
+      {visibleItems.map((item) => {
         const Icon = item.icon
         const danger = 'danger' in item && item.danger
         const label = item.label
@@ -837,12 +761,6 @@ function ProjectCardItem({
           showAffordances ? 'opacity-100' : 'opacity-0 pointer-events-none',
         )}
       >
-        <input
-          type="checkbox"
-          aria-label={`Select ${card.title}`}
-          className="size-3.5 rounded border-border accent-primary cursor-pointer"
-          onClick={(e) => e.stopPropagation()}
-        />
         <button
           type="button"
           onClick={(e) => {
@@ -880,7 +798,6 @@ function ProjectCardItem({
             onStartRename={() => onStartRename(card)}
             onDuplicate={() => onDuplicate(card)}
             onTrash={() => onTrash(card)}
-            onOpenCard={() => onOpen(card)}
           />
         )}
       </div>
@@ -982,7 +899,6 @@ function ProjectRowItem({
         onClick={(e) => e.stopPropagation()}
         className={cn('flex items-center gap-2 transition-opacity', showAffordances ? 'opacity-100' : 'opacity-0 pointer-events-none')}
       >
-        <input type="checkbox" aria-label={`Select ${card.title}`} className="size-3.5 rounded border-border accent-primary cursor-pointer" />
         <button
           type="button"
           onClick={(e) => {
@@ -1053,7 +969,6 @@ function ProjectRowItem({
             onStartRename={() => onStartRename(card)}
             onDuplicate={() => onDuplicate(card)}
             onTrash={() => onTrash(card)}
-            onOpenCard={() => onOpen(card)}
           />
         )}
       </div>
@@ -1144,11 +1059,11 @@ export function DesignCanvasHubPage() {
     const items: NotificationEntry[] = []
 
     if (portalEvents && portalEvents.length > 0) {
-      portalEvents.slice(0, 4).forEach((ev, idx) => {
+      portalEvents.slice(0, 5).forEach((ev, idx) => {
         const eventName = (ev as any).title || (ev as any).name || 'New Event'
         items.push({
           id: `portal-ev-notif-${ev.id || idx}`,
-          text: `New event in pipeline: "${eventName}" (${ev.client || 'Corporate Client'}).`,
+          text: `Event in pipeline: "${eventName}" (${ev.client || 'Corporate Client'}). Status: ${ev.status || 'Initialized'}.`,
           time: ev.targetDate || 'Recent',
           unread: idx === 0,
           icon: Share2,
@@ -1156,16 +1071,6 @@ export function DesignCanvasHubPage() {
         })
       })
     }
-
-    DEMO_NOTIFICATIONS.forEach((n) => {
-      items.push({
-        id: n.id,
-        text: n.text,
-        time: n.time,
-        unread: n.unread,
-        ...NOTIFICATION_META[n.kind],
-      })
-    })
 
     return items
   }, [portalEvents])
@@ -1187,7 +1092,7 @@ export function DesignCanvasHubPage() {
 
       const eventName = (ev as any).title || (ev as any).name || 'Untitled Event'
       const alias = makeEventAlias(eventName)
-      const statuses: DesignStatus[] = ['Final Draft', 'Ready to Present', 'Subject to Review', 'Initial Draft']
+      const canonicalStatus = ev.status || 'Initialized'
 
       events.push({
         id: `cal-ev-${ev.id}`,
@@ -1196,7 +1101,7 @@ export function DesignCanvasHubPage() {
         year: parts.year,
         name: eventName,
         alias,
-        status: statuses[index % statuses.length],
+        status: canonicalStatus,
         kind: 'actual',
         colorIndex: index % EVENT_PALETTE.length,
       })
@@ -1233,7 +1138,7 @@ export function DesignCanvasHubPage() {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed
       }
     } catch { /* use default */ }
-    return DEMO_CARDS
+    return []
   })
 
   // Checkpoint refetch tracking for new events (window focus + 30s polling)
@@ -1269,9 +1174,7 @@ export function DesignCanvasHubPage() {
     const source = (portalEvents && portalEvents.length > 0) ? portalEvents : (import.meta.env.DEV ? REAL_10_SEEDED_EVENTS : [])
     const realCards = mapPortalEventsToCards(source, cards, adminName || 'Lumière Creatives')
     const userCards = cards.filter((c) => c.id.startsWith('mb-') || c.id.startsWith('pc-custom-') || (!c.id.startsWith('pc-event-') && !realCards.some(rc => rc.id === c.id)))
-    const hasSeedMb = userCards.some((c) => c.id === SEED_MOOD_BOARD_CARD.id)
-    const mbSeeds = hasSeedMb ? [] : [SEED_MOOD_BOARD_CARD]
-    return [...mbSeeds, ...realCards, ...userCards]
+    return [...realCards, ...userCards]
   }, [portalEvents, cards, adminName])
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -1376,7 +1279,7 @@ export function DesignCanvasHubPage() {
       id: newId,
       title: 'Untitled Mood Board',
       type: 'Mood Board',
-      designer: adminName || 'Elena Vasseur',
+      designer: adminName || 'Event Planner',
       collaborators: [],
       eventAlias: '',
       eventDate: todayFormatted,
@@ -1414,7 +1317,7 @@ export function DesignCanvasHubPage() {
       if (!parts) return
       const eventName = ev.title || ev.name || 'Untitled Event'
       const alias = makeEventAlias(eventName)
-      const statuses: DesignStatus[] = ['Final Draft', 'Ready to Present', 'Subject to Review', 'Initial Draft']
+      const canonicalStatus = ev.status || 'Initialized'
 
       all.push({
         id: `up-ev-${ev.id}`,
@@ -1423,7 +1326,7 @@ export function DesignCanvasHubPage() {
         year: parts.year,
         name: eventName,
         alias,
-        status: statuses[index % statuses.length],
+        status: canonicalStatus,
         kind: 'actual',
         colorIndex: index % EVENT_PALETTE.length,
       })
@@ -1452,22 +1355,8 @@ export function DesignCanvasHubPage() {
       group.events.push(ev)
     }
 
-    // When 'All' is selected: Two-tier sort within each month group:
-    // Tier 1: status !== 'Ready to Present' (chronological ascending)
-    // Tier 2: status === 'Ready to Present' (chronological ascending, placed below Tier 1)
-    // When specific status is selected: pure chronological ascending sort
     for (const group of groups) {
-      if (statusFilter === 'All') {
-        const tier1 = group.events
-          .filter((e) => e.status !== 'Ready to Present')
-          .sort((a, b) => a.day - b.day)
-        const tier2 = group.events
-          .filter((e) => e.status === 'Ready to Present')
-          .sort((a, b) => a.day - b.day)
-        group.events = [...tier1, ...tier2]
-      } else {
-        group.events.sort((a, b) => a.day - b.day)
-      }
+      group.events.sort((a, b) => a.day - b.day)
     }
 
     return groups
@@ -1501,9 +1390,9 @@ export function DesignCanvasHubPage() {
     <div className="flex min-h-screen flex-col bg-background text-foreground font-sans">
       {/* ── Top bar ── */}
       <header className="sticky top-0 z-30 grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-border bg-background/95 px-6 py-3 backdrop-blur-sm lg:px-10">
-        {/* Search (Left column) */}
-        <div className="flex items-center justify-start">
-          <div className="relative w-full max-w-[18rem] lg:max-w-[22rem]">
+        {/* Search & Surface Navigation (Left column) */}
+        <div className="flex items-center justify-start gap-4">
+          <div className="relative w-full max-w-[15rem] lg:max-w-[17rem]">
             <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <input
               type="search"
@@ -1523,6 +1412,30 @@ export function DesignCanvasHubPage() {
               </button>
             )}
           </div>
+
+          <nav className="hidden lg:flex items-center gap-1 border-l border-border pl-3" aria-label="Planner Surfaces">
+            <button
+              type="button"
+              onClick={() => navigate('canvas')}
+              className="rounded-lg bg-primary/15 text-primary border border-primary/30 px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em]"
+            >
+              Canvas
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('registry')}
+              className="rounded-lg border border-transparent text-muted-foreground hover:text-foreground hover:bg-accent px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] transition"
+            >
+              Event Registry
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('inventory')}
+              className="rounded-lg border border-transparent text-muted-foreground hover:text-foreground hover:bg-accent px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] transition"
+            >
+              Inventory
+            </button>
+          </nav>
         </div>
 
         {/* Motto (Mathematically Centered column) */}
@@ -1690,11 +1603,9 @@ export function DesignCanvasHubPage() {
                   className="h-7 rounded-md border border-border bg-background px-2 text-[0.65rem] font-medium text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20 shrink-0 cursor-pointer"
                 >
                   <option value="All">All Statuses</option>
-                  <option value="Initial Draft">Initial Draft</option>
-                  <option value="Subject to Review">Subject to Review</option>
-                  <option value="Subject to Revision">Subject to Revision</option>
-                  <option value="Final Draft">Final Draft</option>
-                  <option value="Ready to Present">Ready to Present</option>
+                  {Array.from(new Set(upcomingEvents.map((e) => e.status).filter(Boolean))).map((st) => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
                 </select>
               </div>
 
@@ -1719,17 +1630,12 @@ export function DesignCanvasHubPage() {
                       {/* List of events with dividers and generous breathing room */}
                       <div className="divide-y divide-border/40 pt-0.5">
                         {group.events.map((ev) => {
-                          const isReadyToPresent = ev.status === 'Ready to Present'
-                          const showFade = statusFilter === 'All' && isReadyToPresent
                           return (
                             <button
                               key={ev.id}
                               type="button"
                               onClick={() => handleOpenCalendarEvent(ev)}
-                              className={cn(
-                                'flex w-full items-center gap-3 px-3.5 py-2.5 text-left rounded-lg transition hover:bg-accent/60 focus:bg-accent/60 focus:outline-none my-0.5',
-                                showFade && 'opacity-50 hover:opacity-80',
-                              )}
+                              className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left rounded-lg transition hover:bg-accent/60 focus:bg-accent/60 focus:outline-none my-0.5"
                             >
                               <ShapeIndicator kind={ev.kind} color={EVENT_PALETTE[ev.colorIndex]} />
                               <div className="min-w-0 flex-1">
