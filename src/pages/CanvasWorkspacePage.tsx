@@ -2359,9 +2359,9 @@ function AllocationModal({
 type DeficitStep = 'main' | 'strategy'
 type StrategyPath = 'crossdock' | 'replenish'
 
-function DeficitModal({ asset, requested, unit, deficit, onClose, onAccept, onBack, onStrategy }: {
+function DeficitModal({ asset, requested, unit, deficit, onClose, onAccept, onBack: _onBack, onStrategy }: {
   asset: AllocatedAsset; requested: number; unit: string; deficit: number
-  onClose: () => void; onAccept: () => void; onBack: () => void
+  onClose: () => void; onAccept: () => void; onBack?: () => void
   onStrategy: (path: StrategyPath, id: string, qty: number, unit: string) => void
 }) {
   const [step, setStep] = useState<DeficitStep>('main')
@@ -2530,10 +2530,40 @@ function DeficitModal({ asset, requested, unit, deficit, onClose, onAccept, onBa
             ))}
           </div>
           <div className="flex flex-col gap-2">
-            <button type="button" onClick={onAccept} className="w-full rounded-xl border border-primary/40 bg-primary/10 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary hover:bg-primary/20 transition">Accept — use lower available count ({asset.availableStock} {unit})</button>
-            <button type="button" onClick={onBack} className="w-full rounded-xl border border-border py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-muted-foreground hover:bg-accent hover:text-foreground transition">Back — return to adjustments</button>
-            {asset.existingAllocations.length > 0 && <button type="button" onClick={() => { setStrategyPath('crossdock'); setStep('strategy') }} className="w-full rounded-xl border border-border bg-background py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-foreground hover:border-primary/50 transition flex items-center justify-center gap-2"><RefreshCw className="size-3.5" />Cross-Docking Exception</button>}
-            <button type="button" onClick={() => { setStrategyPath('replenish'); setStep('strategy') }} className="w-full rounded-xl bg-primary py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition flex items-center justify-center gap-2"><Plus className="size-3.5" />Add More / Request Replenishment</button>
+            {asset.availableStock > 0 && (
+              <button
+                type="button"
+                onClick={onAccept}
+                className="w-full rounded-xl border border-emerald-500/40 bg-emerald-500/10 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-emerald-400 hover:bg-emerald-500/20 transition"
+              >
+                Accept Partial Allocation ({asset.availableStock} {unit})
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => { setStrategyPath('replenish'); setStep('strategy') }}
+              className="w-full rounded-xl bg-primary py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition flex items-center justify-center gap-2"
+            >
+              <Plus className="size-3.5" />
+              Route to Deficit Queue
+            </button>
+            {asset.existingAllocations.length > 0 && (
+              <button
+                type="button"
+                onClick={() => { setStrategyPath('crossdock'); setStep('strategy') }}
+                className="w-full rounded-xl border border-border bg-background py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-foreground hover:border-primary/50 transition flex items-center justify-center gap-2"
+              >
+                <RefreshCw className="size-3.5" />
+                Cross-Docking Exception
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full rounded-xl border border-border py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-muted-foreground hover:bg-accent hover:text-foreground transition"
+            >
+              Skip Allocation
+            </button>
           </div>
         </div>
       </div>
