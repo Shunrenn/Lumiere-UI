@@ -64,6 +64,8 @@ import {
   PwaModal,
   PwaToast,
   PwaSyncStatusBar,
+  HavaCameraCaptureModal,
+  type CapturedEvidence,
   type PwaNavItem,
 } from '@/components/pwa'
 import type { GroundCrewSubRole, HavaDeclarationState, HavaEvidenceStatus } from '@/lib/types'
@@ -1958,11 +1960,24 @@ function DamageForm({
     { photoDataUrl: string; sha256Hash: string; meta: HavaPhotoMetadata }[]
   >([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const [cameraModalOpen, setCameraModalOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const latestCapture = captures[captures.length - 1]
   const photoCount = captures.length
   const photoRequired = condition === 'Damaged' && !noPhotoEvidence
+
+  const handleInSystemCapture = (evidence: CapturedEvidence) => {
+    setCaptures((prev) => [
+      ...prev,
+      {
+        sha256Hash: evidence.sha256Hash,
+        meta: evidence.meta,
+        photoDataUrl: evidence.photoDataUrl,
+      },
+    ])
+    setNoPhotoEvidence(false)
+  }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -2070,11 +2085,11 @@ function DamageForm({
                 </span>
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => setCameraModalOpen(true)}
                   disabled={isProcessing || isSubmitting}
                   className="text-xs font-semibold text-primary underline hover:opacity-80"
                 >
-                  + Add condition photo
+                  + In-System Camera Capture
                 </button>
               </div>
               <div className="rounded-lg bg-background p-2 font-mono text-[0.6rem] text-muted-foreground border border-border space-y-1">
@@ -2083,24 +2098,48 @@ function DamageForm({
                   <span className="text-[0.55rem] uppercase text-muted-foreground">Byte Integrity Checksum</span>
                 </div>
                 <div className="break-all">{latestCapture?.sha256Hash}</div>
+                <div className="flex items-center gap-1.5 pt-0.5 text-[0.55rem] text-muted-foreground">
+                  <MapPin className="size-3 text-primary shrink-0" />
+                  <span>GPS: {latestCapture?.meta.gpsCoordinates || 'Acquiring...'}</span>
+                </div>
                 <p className="text-[0.55rem] text-muted-foreground normal-case font-sans pt-0.5">
                   Client transport checksum only; backend independently inspects bytes for temporal validity and metadata.
                 </p>
               </div>
             </div>
           ) : (
-            <PwaButton
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isProcessing || isSubmitting}
-              variant="outline"
-              size="md"
-              icon={<Camera className="size-4" />}
-              className="w-full"
-            >
-              {isProcessing ? 'Processing photo...' : 'Capture Photo (In-System Camera Requested)'}
-            </PwaButton>
+            <div className="space-y-1.5">
+              <PwaButton
+                type="button"
+                onClick={() => setCameraModalOpen(true)}
+                disabled={isProcessing || isSubmitting}
+                variant="primary"
+                size="md"
+                icon={<Camera className="size-4" />}
+                className="w-full shadow-md"
+              >
+                {isProcessing ? 'Processing photo...' : 'Open In-System Forensic Camera'}
+              </PwaButton>
+              <div className="flex items-center justify-between px-1 text-[0.58rem] text-muted-foreground">
+                <span>In-System camera acquisition</span>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="underline hover:text-foreground"
+                >
+                  Device Capture Fallback
+                </button>
+              </div>
+            </div>
           )}
+
+          <HavaCameraCaptureModal
+            isOpen={cameraModalOpen}
+            onClose={() => setCameraModalOpen(false)}
+            onCaptureComplete={handleInSystemCapture}
+            itemName={item.name}
+            eventName={event}
+          />
         </div>
       )}
 
@@ -2438,13 +2477,21 @@ function Activity({
                       )}
 
                       {/* Temporal Evidence Badge */}
-                      {r.evidenceStatus === 'Temporally Valid' ? (
+                      {r.evidenceStatus === 'Temporally Valid' || r.evidenceStatus === 'Valid' ? (
                         <StatusBadge variant="success" icon={<ShieldCheck className="size-3" />}>
                           Temporally Valid
                         </StatusBadge>
                       ) : r.evidenceStatus === 'Temporally Invalid' ? (
                         <StatusBadge variant="destructive" icon={<AlertCircle className="size-3" />}>
                           Temporally Invalid
+                        </StatusBadge>
+                      ) : r.evidenceStatus === 'Processing Evidence' ? (
+                        <StatusBadge variant="info" icon={<RefreshCw className="size-3 animate-spin" />}>
+                          Processing Evidence
+                        </StatusBadge>
+                      ) : r.evidenceStatus === 'Held for Audit' ? (
+                        <StatusBadge variant="warning" icon={<AlertTriangle className="size-3" />}>
+                          Held for Audit
                         </StatusBadge>
                       ) : r.evidenceStatus === 'No Photographic Evidence' ? (
                         <StatusBadge variant="warning" icon={<AlertTriangle className="size-3" />}>
