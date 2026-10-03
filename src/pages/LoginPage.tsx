@@ -411,8 +411,13 @@ function ThemeToggle({ mode, onChange }: { mode: ThemeMode; onChange: (mode: The
           title={label}
           onClick={() => onChange(optionMode)}
           className={`flex size-8 items-center justify-center rounded-full transition-colors ${mode === optionMode
+<<<<<<< Updated upstream
               ? 'bg-foreground text-background'
               : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+=======
+            ? 'bg-foreground text-background'
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+>>>>>>> Stashed changes
             }`}
         >
           <Icon className="size-3.5" aria-hidden="true" />
