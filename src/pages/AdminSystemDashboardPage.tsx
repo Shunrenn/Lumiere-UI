@@ -111,11 +111,12 @@ function DashboardDetailModal({
   if (!summary) return null
 
   const titles: Record<DashboardSummary, string> = {
-    users: 'Total Users', gateway: 'Gateway Connection', locked: 'Locked Accounts',
+    users: 'Total Active Users', gateway: 'Gateway Connection', locked: 'Locked Accounts',
     activations: 'Pending Activations', distribution: 'User Distribution', pending: 'Pending Actions', trend: 'Trend Analytics',
   }
   const normalizedQuery = query.trim().toLowerCase()
   const visibleStaff = staff.filter((person) => {
+    if (summary === 'users' && person.accountStatus !== 'Active') return false
     if (summary === 'locked' && person.accountStatus !== 'Locked') return false
     if (summary === 'activations' && person.accountStatus !== 'Pending') return false
     if (!normalizedQuery) return true
@@ -191,7 +192,11 @@ export function AdminSystemDashboardPage() {
   const [methodologyOpen, setMethodologyOpen] = useState(false)
   const [detailSummary, setDetailSummary] = useState<DashboardSummary | null>(null)
 
-  const totalUsers = staff.length
+  const activeUsers = useMemo(
+    () => staff.filter((person) => person.accountStatus === 'Active'),
+    [staff],
+  )
+  const totalActiveUsers = activeUsers.length
   const lockedAccounts = userActions.filter(
     (a) => a.status === 'pending' && a.type === 'account-locked',
   ).length
@@ -293,9 +298,9 @@ export function AdminSystemDashboardPage() {
             <div className="grid grid-cols-2 gap-3">
               <StatCard
                 agentSelector="data-agent-total-users"
-                label="Total Users"
-                value={String(totalUsers)}
-                caption="Registered workforce accounts"
+                label="Total Active Users"
+                value={String(totalActiveUsers)}
+                caption="Active workforce accounts"
                 onSelect={() => setDetailSummary('users')}
               />
               <StatCard
