@@ -29,6 +29,18 @@ export function WarehouseShell({ activeRoute, children, stickyHeader }: Warehous
     <ExecutiveShell
       activeId={activeDestinationId}
       onSelect={(id) => {
+        if (isExecutive) {
+          const executiveRoute: Record<string, Route> = {
+            dashboard: 'overview',
+            inventory: 'inventory',
+            registry: 'registry',
+            damage: 'damage',
+            logs: 'logs',
+          }
+          const route = executiveRoute[id]
+          if (route) navigate(route)
+          return
+        }
         const destination = destinations.find((item) => item.id === id)
         if (destination) navigate(destination.route)
       }}
