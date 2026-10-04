@@ -31,26 +31,8 @@ export function ExecutiveLiveFeed({ onViewLogs }: ExecutiveLiveFeedProps) {
   const { flashing, trigger } = useClickFlash(onViewLogs || noop)
 
   return (
-    <section
-      role={onViewLogs ? 'button' : undefined}
-      tabIndex={onViewLogs ? 0 : undefined}
-      onClick={onViewLogs ? trigger : undefined}
-      onKeyDown={
-        onViewLogs
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                trigger()
-              }
-            }
-          : undefined
-      }
-      className={cn(
-        'flex h-full min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card p-4 text-card-foreground transition',
-        onViewLogs && 'cursor-pointer hover:border-primary/40 hover:bg-muted/40',
-        flashing && 'ring-2 ring-primary/60 border-primary/60',
-      )}
-    >
+    <section className={cn('flex h-full min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card p-4 text-card-foreground transition', flashing && 'ring-2 ring-primary/60 border-primary/60')}>
+
       <h2 className="shrink-0 text-sm font-semibold uppercase tracking-[0.12em] text-foreground">
         Live Operations Feed
       </h2>
