@@ -125,7 +125,7 @@ function DashboardDetailModal({
   const isRecordList = ['users', 'locked', 'activations', 'pending'].includes(summary)
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="dashboard-detail-title" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-white/50 p-4 backdrop-blur-sm dark:bg-black/60" role="dialog" aria-modal="true" aria-labelledby="dashboard-detail-title" onClick={onClose}>
       <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-card shadow-2xl" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between border-b border-border px-6 py-4">
           <div>
