@@ -506,7 +506,8 @@ export async function updateEventApi(
 
 /**
  * Fetches all events from GET /api/events.
- * 10-second timeout. Throws on network/server errors to distinguish failure from empty state.
+ * 10-second timeout. Read-only failures return an empty result so background
+ * hydration cannot surface an unhandled runtime error in the dashboard.
  */
 export async function fetchEventsApi(page = 1, pageSize = 50, statusFilter?: string): Promise<PortalEvent[]> {
   // The events endpoint is protected; unauthenticated app boot should use the
@@ -544,7 +545,7 @@ export async function fetchEventsApi(page = 1, pageSize = 50, statusFilter?: str
   } catch (err) {
     clearTimeout(timeoutId)
     console.warn('[eventsApi] GET /api/events failed:', err)
-    throw err
+    return []
   }
 }
 
