@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search, X } from 'lucide-react'
+import { Download, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
@@ -256,15 +256,13 @@ export function AdminSystemDashboardPage() {
   const isDashboard = activeId === 'system-dashboard'
 
   const stickyHeader = isDashboard ? (
-    <div>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-          System Dashboard
-        </h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          A read-only glance at users, access requests, and system health.
-        </p>
+        <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-[0.58rem] font-bold uppercase tracking-[0.16em] text-primary">Admin Console</span>
+        <h1 className="mt-1 font-serif text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">System Dashboard</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">A read-only glance at users, access requests, and system health.</p>
       </div>
+      <button type="button" onClick={() => window.print()} className="inline-flex min-h-[44px] w-fit items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Download className="size-4" aria-hidden="true" />PDF Export</button>
     </div>
   ) : (
     <h1 className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
@@ -297,18 +295,18 @@ export function AdminSystemDashboardPage() {
           <div data-testid="admin-dashboard-stats" className="grid gap-4 lg:grid-cols-2">
             <div className="grid grid-cols-2 gap-3">
               <StatCard
-                agentSelector="data-agent-total-users"
-                label="Total Active Users"
-                value={String(totalActiveUsers)}
-                caption="Active workforce accounts"
-                onSelect={() => setDetailSummary('users')}
-              />
-              <StatCard
                 agentSelector="data-agent-system-health"
-                label="Gateway Connection"
+                label="System Health"
                 value={isBackendConnected ? 'Connected' : 'Offline'}
                 caption={isBackendConnected ? 'Production API gateway active' : 'Offline / local cached mode'}
                 onSelect={() => setDetailSummary('gateway')}
+              />
+              <StatCard
+                agentSelector="data-agent-total-users"
+                label="Total Users"
+                value={String(totalActiveUsers)}
+                caption="Active workforce accounts"
+                onSelect={() => setDetailSummary('users')}
               />
               <StatCard
                 agentSelector="data-agent-locked-accounts"
