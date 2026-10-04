@@ -307,6 +307,24 @@ export function ViewAccountModal({
               )}
             </div>
 
+            {/* Account Status (read-only in View Details) */}
+            <div>
+              <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
+                Status:
+              </label>
+              {readField(staff.accountStatus || '—')}
+            </div>
+
+            {/* Reason / Description is only shown when the existing account model provides one. */}
+            <div>
+              <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
+                Reason / Description:
+              </label>
+              <p className="mt-1.5 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                {'—'}
+              </p>
+            </div>
+
             {/* Subrole */}
             {(() => {
               const isSubroleAllowed =
