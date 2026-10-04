@@ -730,11 +730,11 @@ export function AdminRolesPage() {
         Admin Console / Access
       </p>
       <h1 className="mt-2 font-serif text-3xl font-medium text-foreground sm:text-4xl">
-        Roles &amp; Sub-Roles
+        Roles &amp; Access
       </h1>
       <p className="mt-1.5 text-sm text-muted-foreground text-pretty">
-        The five structural account types and their configurable sub-roles. Toggle sub-roles and
-        open any row to edit its full permission scope, grouped by module.
+Manage the six top-level system roles and their access scope. Open a role to review its
+          legitimate permission coverage, grouped by module.
       </p>
     </div>
   )

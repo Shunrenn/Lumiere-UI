@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, ChevronLeft, ChevronRight, TrendingUp, X } from 'lucide-react'
+import { ArrowRight, TrendingUp, X } from 'lucide-react'
 import type { Staff } from '@/lib/types'
 
 interface Props {
@@ -43,30 +43,18 @@ export function UserGrowthSummaryModal({ open, staff, onClose, onViewInWorkforce
       .sort((a, b) => a.sortValue - b.sortValue)
   }, [staff])
 
-  // Every year that has at least one onboarded record, oldest to newest, so the
-  // "< year >" control only ever steps between years that actually have data.
-  const years = useMemo(() => {
-    const distinct = new Set(allGroups.filter((g) => g.year !== -1).map((g) => g.year))
-    return [...distinct].sort((a, b) => a - b)
-  }, [allGroups])
+  const [rangeDays, setRangeDays] = useState(365)
 
-  const currentYear = new Date().getFullYear()
-  const defaultYear = years.length > 0 ? years[years.length - 1] : currentYear
-  const [selectedYear, setSelectedYear] = useState(defaultYear)
-
-  // Reset to the most recent year with data every time the modal is (re)opened.
   useEffect(() => {
-    if (open) setSelectedYear(defaultYear)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (open) setRangeDays(365)
   }, [open])
 
   if (!open) return null
 
-  const yearIndex = years.indexOf(selectedYear)
-  const hasPrevYear = yearIndex > 0
-  const hasNextYear = yearIndex !== -1 && yearIndex < years.length - 1
-
-  const groups = allGroups.filter((g) => g.year === selectedYear)
+  const latestDate = allGroups.at(-1)?.sortValue ?? Date.now()
+  const rangeStart = latestDate - rangeDays * 86400000
+  const groups = allGroups.filter((g) => g.sortValue >= rangeStart && g.sortValue <= latestDate)
+  const selectedYear = new Date(latestDate).getFullYear()
   const totalTracked = groups.reduce((sum, g) => sum + g.members.length, 0)
   const previousYearTotal = allGroups
     .filter((g) => g.year === selectedYear - 1)
@@ -124,28 +112,12 @@ export function UserGrowthSummaryModal({ open, staff, onClose, onViewInWorkforce
           {/* Year pagination — scopes the month-grouped list below to a single
               year so the list stays short regardless of how many years of
               onboarding history accumulate. */}
-          <div className="flex items-center justify-center gap-4">
-            <button
-              type="button"
-              onClick={() => hasPrevYear && setSelectedYear(years[yearIndex - 1])}
-              disabled={!hasPrevYear}
-              aria-label="Previous year"
-              className="flex size-7 items-center justify-center rounded-md border border-border text-foreground transition hover:border-primary/40 hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-border disabled:hover:bg-transparent"
-            >
-              <ChevronLeft className="size-3.5" aria-hidden="true" />
-            </button>
-            <span className="min-w-[3.5rem] text-center font-sans text-sm font-bold tabular-nums text-card-foreground">
-              {selectedYear}
-            </span>
-            <button
-              type="button"
-              onClick={() => hasNextYear && setSelectedYear(years[yearIndex + 1])}
-              disabled={!hasNextYear}
-              aria-label="Next year"
-              className="flex size-7 items-center justify-center rounded-md border border-border text-foreground transition hover:border-primary/40 hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-border disabled:hover:bg-transparent"
-            >
-              <ChevronRight className="size-3.5" aria-hidden="true" />
-            </button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {[30, 90, 180, 365].map((days) => (
+              <button key={days} type="button" onClick={() => setRangeDays(days)} aria-pressed={rangeDays === days} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${rangeDays === days ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:bg-muted'}`}>
+                {days === 30 ? 'Last 30 Days' : days === 90 ? '3 Months' : days === 180 ? '6 Months' : '1 Year'}
+              </button>
+            ))}
           </div>
 
           <div className="mt-5 grid grid-cols-2 gap-3">

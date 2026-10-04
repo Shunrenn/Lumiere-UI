@@ -52,6 +52,7 @@ export function AdminSecurityAuditPage() {
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
+  const invalidDateRange = Boolean(fromDate && toDate && fromDate > toDate)
 
   const securityLogs: SecurityEvent[] = useMemo(() => {
     return storeLogs.map((l) => {
@@ -73,7 +74,7 @@ export function AdminSecurityAuditPage() {
         status: (l.status as AuditStatus) || 'Success',
         ip: l.ip,
         terminal: 'T-01',
-        token: `UID-${l.id.slice(-4)}`,
+        token: `••••••••••••${l.id.slice(-4)}`,
         note: l.detail,
         dotColor: l.status === 'Success' ? 'bg-emerald-400' : l.status === 'Blocked' ? 'bg-rose-400' : 'bg-amber-400',
       }
@@ -188,6 +189,7 @@ export function AdminSecurityAuditPage() {
       ) : (
         <>
           <div className="mb-5 flex flex-col gap-5">
+        {invalidDateRange && <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">From date must be on or before the To date.</p>}
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative min-w-0 flex-1 lg:max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -288,8 +290,7 @@ export function AdminSecurityAuditPage() {
       </div>
 
       <p className="mb-4 text-xs text-muted-foreground">
-        Showing {rows.length} of {securityLogs.length} security events. Click a row to reveal
-        raw IP, terminal, and token metadata.
+        Showing {rows.length} of {securityLogs.length} security events. Click a row to reveal event metadata, including masked session information.
       </p>
 
       <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -302,7 +303,7 @@ export function AdminSecurityAuditPage() {
           <table className="w-full min-w-[820px] text-left">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-border bg-muted">
-                {['Timestamp', 'Log ID', 'Employee ID', 'Role', 'Action Executed', 'Status', ''].map(
+                {['Timestamp', 'Log ID', 'Employee', 'Role', 'Action', 'Status', 'Details'].map(
                   (h, i) => (
                     <th
                       key={h || `col-${i}`}
@@ -385,7 +386,7 @@ export function AdminSecurityAuditPage() {
                           <td colSpan={7} className="px-4 pb-5 pt-1">
                             <div className="admin-fade rounded-lg border border-border bg-background/60 p-4">
                               <p className="text-[0.58rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                                Details
+                                Event Details
                               </p>
                               <div className="mt-3 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-3">
                                 <MetaField label="IP Address" value={entry.ip} />

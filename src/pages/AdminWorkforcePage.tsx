@@ -152,11 +152,10 @@ export function AdminWorkforcePage() {
   // These three figures mirror the System Dashboard's stats (minus System Health), but
   // render as a compact inline strip in the table header rather than standalone cards —
   // that keeps table rows visible on load instead of pushed below the fold.
-  const totalUsers = staff.length
   const lockedAccounts = userActions.filter((a) => a.status === 'pending' && a.type === 'account-locked').length
   const pendingActivations = userActions.filter((a) => a.status === 'pending' && a.type !== 'account-locked').length
   const tableStats = [
-    { label: 'Total Users', value: totalUsers },
+    { label: 'Active Users', value: staff.filter((s) => (s.accountStatus ?? s.sessionStatus) === 'Active').length },
     { label: 'Locked Accounts', value: lockedAccounts },
     { label: 'Pending Activations', value: pendingActivations },
   ]
