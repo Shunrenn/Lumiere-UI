@@ -509,8 +509,9 @@ export async function updateEventApi(
  * 10-second timeout. Throws on network/server errors to distinguish failure from empty state.
  */
 export async function fetchEventsApi(page = 1, pageSize = 50, statusFilter?: string): Promise<PortalEvent[]> {
-  // The frontend preview is also usable without the separately deployed API.
-  if (!API_BASE_URL) return []
+  // Event endpoints require a bearer token. Avoid a network request on public
+  // screens when no account is signed in, which also prevents preview CORS noise.
+  if (!API_BASE_URL || !getAuthToken()) return []
 
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 10000)
