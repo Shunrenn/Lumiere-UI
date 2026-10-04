@@ -192,7 +192,7 @@ function Router() {
       case 'production':
         return <WarehouseModulePage moduleId="production" />
       case 'damage':
-        return <DamageValidationPage />
+        return <DamageValidationPage shell={isExecutive ? 'executive' : 'warehouse'} />
       case 'overview':
       default:
         return <WarehouseHomePage />

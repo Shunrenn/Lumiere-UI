@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Search, CheckCircle2, XCircle, Clock3, Scale, MoreVertical, Wrench, Ban, UserCheck2, AlertTriangle, Camera } from 'lucide-react'
 import { WarehouseShell } from '@/components/warehouse/WarehouseShell'
+import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
+import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 import { DamageVerdictModal } from '@/components/DamageVerdictModal'
 import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
@@ -37,10 +39,10 @@ const statusIcon: Record<DamageVerdict, typeof Clock3> = {
 type Filter = 'All' | 'Reviewable' | 'Pending' | 'Held for Audit' | 'Second Sign-off' | 'Validated' | 'Dismissed'
 const filters: Filter[] = ['All', 'Reviewable', 'Pending', 'Held for Audit', 'Second Sign-off', 'Validated', 'Dismissed']
 
-export function DamageValidationPage() {
+export function DamageValidationPage({ shell = 'warehouse' }: { shell?: 'warehouse' | 'executive' }) {
   const { damageExceptions: items, isBackendConnected, resolveDamage, staff, subRolesByParent, setSubRolesByParent } = usePortal()
   const { isExecutive, isWarehouse, adminRole, adminEmail, adminName, subRole: userSubRole } = useAuth()
-  const { intent, clearIntent } = useNav()
+  const { intent, clearIntent, navigate } = useNav()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('All')
   const [active, setActive] = useState<DamageException | null>(null)
@@ -185,8 +187,13 @@ export function DamageValidationPage() {
     handleRefetch()
   }, [])
 
+  const Shell = (shell === 'executive' ? ExecutiveShell : WarehouseShell) as any
+  const shellProps: any = shell === 'executive'
+    ? { activeId: 'damage' as ExecutiveDestinationId, onSelect: (id: ExecutiveDestinationId) => navigate(id), stickyHeader }
+    : { activeRoute: 'damage' as const, stickyHeader }
+
   return (
-    <WarehouseShell activeRoute="damage" stickyHeader={stickyHeader}>
+    <Shell {...shellProps}>
       {isError ? (
         <ErrorFallback
           title="Damage Exceptions Registry Unavailable"
@@ -482,6 +489,6 @@ export function DamageValidationPage() {
         womSubRoleName={currentWomSubRole?.name ?? 'Warehouse Manager'}
         onPermanentUnblockSubRole={handlePermanentUnblockSubRole}
       />
-    </WarehouseShell>
+    </Shell>
   )
 }
