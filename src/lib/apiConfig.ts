@@ -16,7 +16,20 @@ export const API_BASE_URL: string =
  */
 export function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null
-  return localStorage.getItem('_lumiere_auth_token') || sessionStorage.getItem('_lumiere_auth_token')
+  const storedToken = localStorage.getItem('_lumiere_auth_token') || sessionStorage.getItem('_lumiere_auth_token')
+  if (storedToken) return storedToken
+
+  // Older persisted sessions stored the token only in the serialized account.
+  // Use that existing session value before treating an authenticated UI session
+  // as unauthenticated at the API boundary.
+  const storedUser = localStorage.getItem('_lumiere_auth_user') || sessionStorage.getItem('_lumiere_auth_user')
+  if (!storedUser) return null
+  try {
+    const token = JSON.parse(storedUser)?.token
+    return typeof token === 'string' && token.trim() ? token : null
+  } catch {
+    return null
+  }
 }
 
 // Global 401 Interceptor: Intercept window.fetch and emit 'lumiere:unauthorized' event when backend returns HTTP 401

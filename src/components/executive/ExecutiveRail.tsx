@@ -1,14 +1,16 @@
 import { useState, useMemo } from 'react'
 import { PanelLeft, Sun, Moon, LogOut, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { EXECUTIVE_DESTINATIONS, type ExecutiveDestinationId } from '@/lib/executive-destinations'
+import { EXECUTIVE_DESTINATIONS, type ExecutiveDestinationId, type SharedRailDestination } from '@/lib/executive-destinations'
 import { useAuth } from '@/lib/auth'
 import { useDarkMode } from '@/lib/theme'
 import { canAccessRoute } from '@/lib/route-guard'
 
-interface ExecutiveRailProps {
-  activeId: ExecutiveDestinationId
-  onSelect: (id: ExecutiveDestinationId) => void
+interface ExecutiveRailProps<T extends string = ExecutiveDestinationId> {
+  activeId: T
+  onSelect: (id: T) => void
+  destinations?: readonly SharedRailDestination[]
+  identityRoleLabel?: string
   collapsed?: boolean
   onToggleCollapse?: () => void
 }
@@ -17,12 +19,14 @@ interface ExecutiveRailProps {
 // Supports both icon-only collapsed (w-16) and fully labeled expanded (w-64) states,
 // with persistent collapse memory in localStorage, keyboard/screen-reader accessibility,
 // conditional RBAC filtering, and accessible profile/theme/logout controls.
-export function ExecutiveRail({
+export function ExecutiveRail<T extends string = ExecutiveDestinationId>({
   activeId,
   onSelect,
   collapsed: externalCollapsed,
   onToggleCollapse: externalToggleCollapse,
-}: ExecutiveRailProps) {
+  destinations,
+  identityRoleLabel,
+}: ExecutiveRailProps<T>) {
   const { canAccessAssetInventory, isExecutiveLite, adminName, adminRole, setConfirmLogout, currentUser } = useAuth()
   const { dark, toggle: toggleTheme } = useDarkMode()
 
@@ -56,6 +60,7 @@ export function ExecutiveRail({
   // For Full Executive: Preserve existing EXECUTIVE_DESTINATIONS order and capabilities
   // For other shared shell consumers (e.g. Event Planner): filter strictly by canAccessRoute to prevent role leaks
   const visibleDestinations = useMemo(() => {
+    if (destinations) return destinations
     if (isExecutiveLite) {
       const liteOrder: ExecutiveDestinationId[] = ['dashboard', 'registry', 'inventory']
       return liteOrder
@@ -70,7 +75,7 @@ export function ExecutiveRail({
       if (destination.id === 'inventory' && !canAccessAssetInventory) return false
       return canAccessRoute(currentUser, destination.id)
     })
-  }, [isExecutiveLite, canAccessAssetInventory, currentUser])
+  }, [destinations, isExecutiveLite, canAccessAssetInventory, currentUser])
 
   // Executive Lite uses a fixed compact dark rail per client references
   const effectiveCollapsed = isExecutiveLite ? true : isCollapsed
@@ -142,7 +147,7 @@ export function ExecutiveRail({
               <button
                 key={destination.id}
                 type="button"
-                onClick={() => onSelect(destination.id)}
+                onClick={() => onSelect(destination.id as T)}
                 aria-label={destination.label}
                 aria-current={active ? 'true' : undefined}
                 title={destination.label}
@@ -164,7 +169,7 @@ export function ExecutiveRail({
             <button
               key={destination.id}
               type="button"
-              onClick={() => onSelect(destination.id)}
+              onClick={() => onSelect(destination.id as T)}
               aria-current={active ? 'true' : undefined}
               title={destination.label}
               className={cn(
@@ -191,7 +196,7 @@ export function ExecutiveRail({
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold text-sidebar-foreground">{adminName || 'Executive'}</p>
-              <p className="truncate text-[0.62rem] uppercase tracking-wider text-sidebar-foreground/60">{adminRole || 'Executive'}</p>
+              <p className="truncate text-[0.62rem] uppercase tracking-wider text-sidebar-foreground/60">{identityRoleLabel || adminRole || 'Executive'}</p>
             </div>
           </div>
         )}

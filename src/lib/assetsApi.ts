@@ -68,7 +68,16 @@ export async function fetchAssetsApi(params?: SearchAssetsParams): Promise<Parti
       headers: getAuthHeaders(),
     })
     if (!res.ok) return []
-    return await res.json()
+    const body = await res.json()
+    // AssetController may return a bare array or a paginated envelope.
+    // Normalize here so Canvas never mistakes a valid envelope for an empty catalog.
+    if (Array.isArray(body)) return body
+    if (Array.isArray(body?.items)) return body.items
+    if (Array.isArray(body?.data)) return body.data
+    if (Array.isArray(body?.assets)) return body.assets
+    if (Array.isArray(body?.result?.items)) return body.result.items
+    if (Array.isArray(body?.result?.assets)) return body.result.assets
+    return []
   } catch (err) {
     console.warn('[assetsApi] Fetch assets API call skipped/fallback:', err)
     return []

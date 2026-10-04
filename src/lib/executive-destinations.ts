@@ -1,4 +1,5 @@
-import { LayoutGrid, ClipboardList, Boxes, ListFilter, type LucideIcon } from 'lucide-react'
+import { LayoutGrid, ClipboardList, Boxes, ListFilter, PenTool, Palette, type LucideIcon } from 'lucide-react'
+import type { Route } from '@/lib/types'
 
 // Executive console destinations.
 // Reconciled to client-presented authority:
@@ -11,6 +12,25 @@ export interface ExecutiveDestination {
   label: string
   icon: LucideIcon
 }
+
+export interface SharedRailDestination {
+  id: string
+  label: string
+  icon: LucideIcon
+  route: Route
+}
+
+export const PLANNER_RAIL_DESTINATIONS: readonly SharedRailDestination[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, route: 'dashboard' },
+  { id: 'design-projects', label: 'Design Projects', icon: PenTool, route: 'design-projects' },
+  { id: 'mood-boards', label: 'Mood Boards', icon: Palette, route: 'mood-boards' },
+  { id: 'inventory', label: 'Asset Catalog', icon: Boxes, route: 'inventory' },
+]
+
+export const PLANNER_RAIL_IDENTITY = {
+  roleLabel: 'EVENT PLANNER',
+  getName: (sessionName: string | undefined) => sessionName || 'Event Planner',
+} as const
 
 export const EXECUTIVE_DESTINATIONS: ExecutiveDestination[] = [
   { id: 'dashboard', label: 'Executive Dashboard', icon: LayoutGrid },

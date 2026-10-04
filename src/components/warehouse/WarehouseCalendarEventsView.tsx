@@ -2,6 +2,8 @@ import { useMemo, useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Circle, Star, Calendar as CalendarIcon } from 'lucide-react'
 import type { PortalEvent } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { DashboardCalendarCard } from '@/components/dashboard/DashboardCalendarCard'
+import { UpcomingEventsPanel } from '@/components/dashboard/UpcomingEventsPanel'
 
 interface WarehouseCalendarEventsViewProps {
   events: PortalEvent[]
@@ -254,11 +256,21 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
   const monthLabel = `${MONTH_NAMES[month]} ${year}`
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-stretch">
+    <div className="grid items-stretch gap-6 min-[1100px]:grid-cols-[minmax(0,1.35fr)_minmax(380px,1fr)]">
       {/* ─── LEFT SIDE: Month Calendar Grid (8 cols) ─── */}
-      <div className="flex flex-col min-h-[35rem] rounded-2xl border border-border/90 bg-card/95 p-5 sm:p-6 lg:col-span-8 shadow-sm sm:shadow-md backdrop-blur-xs">
+      <DashboardCalendarCard
+        icon={CalendarIcon}
+        title={monthLabel}
+        subtitle="Monthly Event & Ingress Roster"
+        className="min-h-[35rem]"
+        controls={<>
+          <button type="button" onClick={handlePrevMonth} aria-label="Previous month" className="flex size-8.5 items-center justify-center rounded-lg border border-border bg-background/80 text-foreground transition-all duration-150 hover:bg-accent hover:border-primary/40"><ChevronLeft className="size-4" /></button>
+          <button type="button" onClick={handleNextMonth} aria-label="Next month" className="flex size-8.5 items-center justify-center rounded-lg border border-border bg-background/80 text-foreground transition-all duration-150 hover:bg-accent hover:border-primary/40"><ChevronRight className="size-4" /></button>
+        </>}
+        legend={<div className="flex flex-wrap items-center gap-5 text-xs text-muted-foreground"><span className="text-[0.62rem] font-bold uppercase tracking-wider">Legend:</span><span className="flex items-center gap-1.5 text-[0.65rem] font-semibold text-card-foreground"><Circle className="size-3 fill-sky-500 text-sky-500" /> Ingress/Egress</span><span className="flex items-center gap-1.5 text-[0.65rem] font-semibold text-card-foreground"><Star className="size-3.5 fill-amber-500 text-amber-500" /> Actual Event</span></div>}
+      >
         {/* Calendar Header & Month Navigation */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/80 pb-4">
+        <div className="hidden">
           <div className="flex items-center gap-3">
             <span className="flex size-10 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/20">
               <CalendarIcon className="size-5" />
@@ -292,7 +304,7 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
         </div>
 
         {/* Legend */}
-        <div className="my-3.5 flex flex-wrap items-center gap-5 text-xs text-muted-foreground">
+        <div className="hidden">
           <span className="text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground">Legend:</span>
           <span className="flex items-center gap-1.5 text-[0.65rem] font-semibold text-card-foreground">
             <Circle className="size-3 fill-sky-500 text-sky-500" /> Ingress/Egress
@@ -383,12 +395,12 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
             )
           })}
         </div>
-      </div>
+      </DashboardCalendarCard>
 
       {/* ─── RIGHT SIDE: Upcoming Events Side Panel (Month-Grouped Sticky Headers) ─── */}
-      <div className="flex flex-col h-[35rem] max-h-[35rem] rounded-2xl border border-border/90 bg-card/95 p-5 sm:p-6 lg:col-span-4 shadow-sm sm:shadow-md backdrop-blur-xs overflow-hidden">
+      <UpcomingEventsPanel title="Upcoming Events" count={upcomingEvents.length} subtitle="Month-Grouped Roster" className="h-[35rem]">
         {/* Side Panel Header (Static / Non-Scrolling) */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/80 pb-4 shrink-0">
+        <div className="hidden">
           <div>
             <h3 className="font-serif text-lg font-medium text-card-foreground">
               Upcoming Events ({upcomingEvents.length})
@@ -400,7 +412,7 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
         </div>
 
         {/* Scrollable Row List with Sticky Month Headers */}
-        <div className="mt-3 flex-1 overflow-y-auto pr-1.5 space-y-4 scrollbar-thin">
+        <div className="space-y-4">
           {monthGroups.length === 0 ? (
             <p className="py-8 text-center text-xs text-muted-foreground">No upcoming events found.</p>
           ) : (
@@ -425,7 +437,7 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
                         className="group flex w-full flex-col gap-1.5 rounded-xl border border-border/80 bg-background/90 p-3.5 text-left shadow-xs transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-accent/40 hover:shadow-sm"
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <h4 className="font-serif text-sm font-medium text-card-foreground group-hover:text-primary transition-colors">
+                            <h4 className="min-w-0 flex-1 truncate font-serif text-sm font-medium text-card-foreground transition-colors group-hover:text-primary">
                             {evt.title}
                           </h4>
                           {/* Urgency-Colored Ingress Countdown Badge */}
@@ -456,7 +468,7 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
             ))
           )}
         </div>
-      </div>
+      </UpcomingEventsPanel>
     </div>
   )
 }

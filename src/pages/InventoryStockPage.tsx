@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Search, Plus, ChevronDown, Grid2X2, List, PackageSearch, ArrowLeft } from 'lucide-react'
 import { ConsoleLayout } from '@/components/ConsoleLayout'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
+import { PLANNER_RAIL_DESTINATIONS, PLANNER_RAIL_IDENTITY } from '@/lib/executive-destinations'
 import { AdminShell } from '@/components/admin/AdminShell'
 import { AddNewAssetModal } from '@/components/AddNewAssetModal'
 import { AssetInformationModal } from '@/components/AssetInformationModal'
@@ -17,7 +18,7 @@ import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { GridRevealContainer } from '@/components/GridRevealContainer'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
-import { ASSET_CATEGORIES, type InventoryItem, type ProcurementItem, type StockStatus } from '@/lib/types'
+import { ASSET_CATEGORIES, type InventoryItem, type ProcurementItem, type StockStatus, type Route } from '@/lib/types'
 
 // Map a warehouse inventory category onto an Event Planner décor category so a
 // newly registered asset lands in the right group of the canvas side panel.
@@ -517,9 +518,14 @@ export function InventoryStockPage() {
 
   const { navigate } = useNav()
 
-  if (isExecutive) {
+  if (isExecutive || isPlanner) {
     return (
-      <ExecutiveShell activeId="dashboard" onSelect={(id) => navigate(id)}>
+      <ExecutiveShell
+        activeId={isPlanner ? 'inventory' : 'dashboard'}
+        onSelect={(id) => navigate(id as Route)}
+        destinations={isPlanner ? PLANNER_RAIL_DESTINATIONS : undefined}
+        identityRoleLabel={isPlanner ? PLANNER_RAIL_IDENTITY.roleLabel : undefined}
+      >
         <div className="mb-4">
           <button
             type="button"
@@ -527,7 +533,7 @@ export function InventoryStockPage() {
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="size-3.5" />
-            Back to Executive Dashboard
+            Back to {isPlanner ? 'Planner Dashboard' : 'Executive Dashboard'}
           </button>
         </div>
         {headerBlock}
