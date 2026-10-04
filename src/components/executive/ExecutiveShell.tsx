@@ -58,13 +58,13 @@ export function ExecutiveShell<T extends string = ExecutiveDestinationId>({
         <ExecutiveTopBar onMenu={() => setMobileOpen(true)} />
 
         {/* Only this region scrolls. */}
-        <div className="flex-1 overflow-x-hidden pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] md:min-h-0 md:overflow-y-auto md:pb-0">
+        <div className="flex-1 overflow-x-hidden pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-md:overflow-visible md:min-h-0 md:overflow-y-auto md:pb-0">
           {stickyHeader && (
             <div className="sticky top-0 z-20 border-b border-border bg-background/95 px-5 py-6 backdrop-blur sm:px-8">
               {stickyHeader}
             </div>
           )}
-          <div className="px-5 py-6 sm:px-8">{children}</div>
+          <div className="px-5 pb-6 pt-[15px] max-sm:px-3 max-sm:pb-3 max-sm:pt-[15px] sm:px-8">{children}</div>
         </div>
       </div>
     </div>

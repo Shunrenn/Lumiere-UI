@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { CalendarClock, ShieldAlert } from 'lucide-react'
+import { CalendarClock, ShieldAlert, Sparkles } from 'lucide-react'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import {
   ExecutiveStatCard,
@@ -176,7 +176,7 @@ export function EventDashboardPage() {
   const stickyHeader = (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[0.62rem] font-bold uppercase tracking-[0.14em] text-primary">Operations Console</span>
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[0.62rem] font-bold uppercase tracking-[0.14em] text-primary"><Sparkles className="size-3" aria-hidden="true" />Operations Console</span>
         <h1 className="mt-1 font-serif text-2xl font-medium tracking-tight text-foreground sm:text-4xl">
           Executive Dashboard
         </h1>
