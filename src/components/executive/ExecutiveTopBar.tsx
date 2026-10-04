@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarClock, LogOut, Menu, Moon, PackageSearch, ShieldAlert, Sun, User } from 'lucide-react'
+import { CalendarClock, LogOut, Moon, PackageSearch, ShieldAlert, Sun, User } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { usePortal } from '@/lib/store'
@@ -12,7 +12,7 @@ import { AssetInformationModal, type Asset } from '@/components/AssetInformation
 // profile menu. Sits alongside the rail outside the scroll container so it
 // never scrolls with page content — mirrors AdminTopBar exactly, only
 // swapping the plain bell for the shared NotificationsBell.
-export function ExecutiveTopBar({ onMenu }: { onMenu?: () => void }) {
+export function ExecutiveTopBar() {
   const { adminName, adminRole, setConfirmLogout } = useAuth()
   const { events, damageExceptions, inventory } = usePortal()
   const { navigate } = useNav()
@@ -122,16 +122,9 @@ export function ExecutiveTopBar({ onMenu }: { onMenu?: () => void }) {
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-background px-5 sm:px-8">
-      <div className="flex min-w-0 items-center gap-3">
-        {onMenu && (
-          <button type="button" onClick={onMenu} aria-label="Open Executive navigation" className="inline-flex size-9 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground md:hidden">
-            <Menu className="size-4" aria-hidden="true" />
-          </button>
-        )}
-        <p className="truncate text-[0.65rem] font-medium uppercase tracking-[0.12em] text-muted-foreground sm:text-xs sm:tracking-[0.15em]">
+      <p className="text-[0.65rem] font-medium uppercase tracking-[0.12em] text-muted-foreground sm:text-xs sm:tracking-[0.15em]">
         {dateLabel} <span className="mx-1 text-border">|</span> {timeLabel}
-        </p>
-      </div>
+      </p>
 
       <div className="flex items-center gap-2">
         <NotificationsBell notifications={notifications} size="md" />
