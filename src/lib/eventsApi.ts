@@ -527,9 +527,12 @@ export async function fetchEventsApi(page = 1, pageSize = 50, statusFilter?: str
       signal: controller.signal,
     })
     clearTimeout(timeoutId)
-    if (res.status === 401) return []
+    // Event loading is read-only and should not take down the dashboard when
+    // the API is temporarily unavailable. Keep the existing local snapshot and
+    // let the next checkpoint poll retry instead of surfacing a repeated error.
     if (!res.ok) {
-      throw new Error(`GET /api/events returned HTTP ${res.status}`)
+      console.warn(`[eventsApi] GET /api/events returned HTTP ${res.status}`)
+      return []
     }
     const body = await res.json()
     const data: EventResponseDto[] = Array.isArray(body)
