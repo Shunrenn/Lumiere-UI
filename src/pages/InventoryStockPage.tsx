@@ -8,7 +8,6 @@ import { AssetInformationModal } from '@/components/AssetInformationModal'
 import { ReorderRequisitionModal } from '@/components/ReorderRequisitionModal'
 import { EmptyState } from '@/components/EmptyState'
 import { cn } from '@/lib/utils'
-import { supabase } from '@/lib/supabase'
 import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
@@ -18,22 +17,6 @@ import { GridRevealContainer } from '@/components/GridRevealContainer'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
 import { ASSET_CATEGORIES, type InventoryItem, type ProcurementItem, type StockStatus } from '@/lib/types'
-
-// Map a warehouse inventory category onto an Event Planner décor category so a
-// newly registered asset lands in the right group of the canvas side panel.
-function toDecorCategory(warehouseCategory: string): string {
-  const c = warehouseCategory.toLowerCase()
-  if (c.includes('light') || c.includes('ambiance') || c.includes('wax')) {
-    return 'Lighting & Atmosphere'
-  }
-  if (c.includes('textile') || c.includes('glass') || c.includes('beverage') || c.includes('table')) {
-    return 'Textiles & Tableware'
-  }
-  if (c.includes('décor') || c.includes('decor') || c.includes('backdrop') || c.includes('floristry') || c.includes('greenery')) {
-    return 'Moodboard & Inspiration'
-  }
-  return 'Furniture Stock'
-}
 
 const statusMeta: Record<StockStatus, { badge: string; dot: string; bar: string }> = {
   Available: { badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/60', dot: 'bg-emerald-500', bar: 'bg-emerald-600 dark:bg-emerald-500' },
@@ -430,21 +413,6 @@ export function InventoryStockPage() {
           }
           addInventoryItem(newItem)
           setIsAddModalOpen(false)
-
-          // Publish to the Event Planner décor library so the new asset shows up
-          // in the canvas side panel. Fire-and-forget; UI already updated.
-          void supabase
-            .from('planner_assets')
-            .insert({
-              sku: assetId,
-              name: data.assetName,
-              decor_category: toDecorCategory(data.category),
-              image: data.image || null,
-              warehouse_stock: quantity,
-            })
-            .then(({ error }) => {
-              if (error) console.error('[v0] Failed to publish asset to planner library:', error)
-            })
         }}
       />
 

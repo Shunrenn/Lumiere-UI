@@ -7,9 +7,9 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { supabase } from '@/lib/supabase'
 import { approveCanvasApi } from '@/lib/canvasApi'
 import { populateWarehouseDispatchFromCanvas } from '@/lib/warehouse-dispatch'
+import { fetchPlannerCatalog } from '@/features/planner/api'
 
 /* ============================================================
    Event Planner domain — pipeline portfolios, design canvases,
@@ -507,7 +507,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<PipelineEvent[]>(seedEvents)
   const [designs, setDesigns] = useState<CanvasDesign[]>(seedDesigns)
   const [concepts] = useState<QuickConcept[]>(seedConcepts)
-  const [decor, setDecor] = useState<DecorElement[]>(seedDecor)
+  const [decor, setDecor] = useState<DecorElement[]>([])
 
   // Hydrate pipeline events from backend REST API (GET /api/events)
   useEffect(() => {
@@ -543,35 +543,35 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Hydrate the décor library with assets registered by the Warehouse Supervisor
-  // so newly stocked items appear in the canvas side panel.
+  // The catalogue is an API projection of available EF inventory. It deliberately
+  // has no browser-to-database path and does not silently substitute demo stock.
   useEffect(() => {
     let active = true
-    ;(async () => {
-      const { data, error } = await supabase
-        .from('planner_assets')
-        .select('id, sku, name, decor_category, image, warehouse_stock')
-        .order('created_at', { ascending: false })
-
-      if (!active) return
-      if (error) {
-        console.error('[v0] Failed to load planner assets:', error)
-        return
-      }
-      if (data && data.length > 0) {
-        const fromWarehouse: DecorElement[] = data.map((row: any) => ({
-          id: `wh-${row.id}`,
-          name: row.name,
-          sku: row.sku,
-          category: (row.decor_category ?? 'Furniture Stock') as DecorCategory,
-          image: row.image || undefined,
-          warehouseStock: row.warehouse_stock ?? 0,
-        }))
-        const seededSkus = new Set(seedDecor.map((d) => d.sku))
-        const merged = fromWarehouse.filter((d) => !seededSkus.has(d.sku))
-        setDecor([...merged, ...seedDecor])
-      }
-    })()
+    fetchPlannerCatalog()
+      .then((assets) => {
+        if (!active) return
+        const validCategories = new Set<DecorCategory>([
+          'Furniture Stock',
+          'Textiles & Tableware',
+          'Lighting & Atmosphere',
+          'Floor Plan Layout',
+          'Color & Pantone',
+          'Moodboard & Inspiration',
+        ])
+        setDecor(assets.map((asset) => ({
+          id: asset.id,
+          name: asset.name,
+          sku: asset.id,
+          category: validCategories.has(asset.category as DecorCategory)
+            ? asset.category as DecorCategory
+            : 'Furniture Stock',
+          image: asset.catalogPhotoUrl || undefined,
+          warehouseStock: asset.warehouseStock,
+        })))
+      })
+      .catch((error: unknown) => {
+        if (active) console.error('Failed to load the planner catalogue:', error)
+      })
     return () => {
       active = false
     }

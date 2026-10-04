@@ -1,3 +1,5 @@
+import { fetchCrewRoster } from '@/features/roster/api'
+
 // Shared crew roster — the single source of truth for crew manning and
 // auto-allocated event deployments. Consumed by the Warehouse "Crew Roster"
 // console and the Ground Crew field app's Schedule tab so both stay in sync.
@@ -136,82 +138,50 @@ export function findCrewByEmail(email: string): CrewMember | null {
   return CREW.find((c) => c.email.toLowerCase() === target) ?? null
 }
 
-// Load and sync the roster from the Supabase database
+function toWeekCode(value: string | undefined): 'on' | 'off' | 'leave' {
+  switch (value?.toLowerCase()) {
+    case 'on':
+    case 'assigned':
+      return 'on'
+    case 'leave':
+    case 'on leave':
+      return 'leave'
+    default:
+      return 'off'
+  }
+}
+
+// Load roster state only through the authenticated API. The server scopes a
+// Ground Crew account to its own record and returns the complete roster only
+// to operational managers.
 export async function loadRosterFromDatabase() {
   try {
-    const { supabase } = await import('./supabase')
-
-    // Fetch crew from database with their event allocations
-    const { data: crewData, error } = await supabase
-      .from('crew_roster')
-      .select(
-        `
-        id,
-        employee_id,
-        name,
-        role,
-        status,
-        week_mon,
-        week_tue,
-        week_wed,
-        week_thu,
-        week_fri,
-        week_sat,
-        week_sun,
-        account_id,
-        allocations (
-          event:event_id (
-            title,
-            venue,
-            date,
-            task
-          )
-        )
-      `,
-      )
-      .neq('status', 'Inactive')
-      .order('employee_id')
-
-    if (error) {
-      console.error('[v0] Failed to load roster from database:', error)
-      return
-    }
-
-    if (!crewData) return
-
-    // Transform database records into CrewMember format
-    const loaded: CrewMember[] = crewData.map((row: any) => {
+    const records = await fetchCrewRoster()
+    const loaded: CrewMember[] = records.map((row) => {
       return {
         id: row.id,
         name: row.name,
-        employeeId: row.employee_id,
-        email: row.email || '',
+        employeeId: row.employeeId,
+        email: row.email,
         role: row.role,
         status: row.status as CrewStatus,
         week: [
-          row.week_mon === 1 ? 'on' : row.week_mon === 2 ? 'leave' : 'off',
-          row.week_tue === 1 ? 'on' : row.week_tue === 2 ? 'leave' : 'off',
-          row.week_wed === 1 ? 'on' : row.week_wed === 2 ? 'leave' : 'off',
-          row.week_thu === 1 ? 'on' : row.week_thu === 2 ? 'leave' : 'off',
-          row.week_fri === 1 ? 'on' : row.week_fri === 2 ? 'leave' : 'off',
-          row.week_sat === 1 ? 'on' : row.week_sat === 2 ? 'leave' : 'off',
-          row.week_sun === 1 ? 'on' : row.week_sun === 2 ? 'leave' : 'off',
+          toWeekCode(row.weekMon),
+          toWeekCode(row.weekTue),
+          toWeekCode(row.weekWed),
+          toWeekCode(row.weekThu),
+          toWeekCode(row.weekFri),
+          toWeekCode(row.weekSat),
+          toWeekCode(row.weekSun),
         ] as ('on' | 'off' | 'leave')[],
-        allocation: row.allocations?.[0]?.event
-          ? {
-              event: row.allocations[0].event.title,
-              venue: row.allocations[0].event.venue,
-              date: row.allocations[0].event.date,
-              task: row.allocations[0].event.task,
-            }
-          : null,
+        allocation: null,
       }
     })
 
-    // Update the in-memory CREW
+    // An empty authenticated response is authoritative; do not retain preset staff.
     CREW.length = 0
     CREW.push(...loaded)
   } catch (err) {
-    console.error('[v0] Error loading roster from database:', err)
+    console.error('Failed to load roster from API:', err)
   }
 }
