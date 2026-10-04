@@ -147,7 +147,7 @@ export function AdminWorkforcePage() {
     }
     return sorted
   }, [staff, query, role, status, sort, lockedIds])
-  const roles = [...new Set(staff.map((s) => s.role))].filter(Boolean)
+  const roles = ['Admin', 'Executive', 'Event Planner', 'Project Manager', 'Warehouse Operations Manager', 'Ground Crew']
 
   // These three figures mirror the System Dashboard's stats (minus System Health), but
   // render as a compact inline strip in the table header rather than standalone cards —

@@ -271,23 +271,7 @@ export function ViewAccountModal({
                   value={draft.role}
                   onChange={(e) => {
                     const newRole = e.target.value as Staff['role']
-                    const isNextSubroleAllowed =
-                      newRole === 'Warehouse Manager' ||
-                      newRole === ('Ground Crew' as any) ||
-                      newRole === ('Ground Crew' as any)
-                    setDraft((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            role: newRole,
-                            subRole: !isNextSubroleAllowed
-                              ? ''
-                              : newRole === 'Warehouse Manager'
-                              ? 'Manning Officer'
-                              : 'Field',
-                          }
-                        : prev,
-                    )
+                    setDraft((prev) => (prev ? { ...prev, role: newRole, subRole: '' } : prev))
                   }}
                   className={`${inputClass} appearance-none`}
                 >
@@ -325,51 +309,6 @@ export function ViewAccountModal({
               </p>
             </div>
 
-            {/* Subrole */}
-            {(() => {
-              const isSubroleAllowed =
-                draft.role === 'Warehouse Manager' ||
-                draft.role === ('Ground Crew' as any) ||
-                draft.role === ('Ground Crew' as any)
-              const womSubroles = ['Manning Officer', 'Warehouse Manager', 'Production Manager', 'Inventory Officer', 'Purchasing Officer']
-              const groundSubroles = ['Warehouse', 'Field', 'Inventory', 'Production', 'EventAdmin']
-              
-              if (!editable && !staff.subRole && !isSubroleAllowed) return null
-
-              return (
-                <div>
-                  <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                    Subrole: {editable && !isSubroleAllowed && <span className="normal-case text-muted-foreground font-normal">(Blocked for this role)</span>}
-                  </label>
-                  {editable ? (
-                    <select
-                      disabled={!isSubroleAllowed}
-                      value={isSubroleAllowed ? (draft.subRole || (draft.role === 'Warehouse Manager' ? 'Manning Officer' : 'Field')) : ''}
-                      onChange={(e) => set('subRole', e.target.value)}
-                      className={`${inputClass} appearance-none disabled:cursor-not-allowed disabled:opacity-50`}
-                    >
-                      {!isSubroleAllowed ? (
-                        <option value="">N/A — Not applicable</option>
-                      ) : draft.role === 'Warehouse Manager' ? (
-                        womSubroles.map((sr) => (
-                          <option key={sr} value={sr}>
-                            {sr}
-                          </option>
-                        ))
-                      ) : (
-                        groundSubroles.map((sr) => (
-                          <option key={sr} value={sr}>
-                            {sr}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  ) : (
-                    readField(staff.subRole || 'N/A')
-                  )}
-                </div>
-              )
-            })()}
 
             {/* Session Status */}
             <div>
