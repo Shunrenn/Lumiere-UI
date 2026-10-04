@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
 import {
   LayoutGrid,
   Boxes,
@@ -8,8 +8,6 @@ import {
   PenTool,
   Sun,
   Moon,
-  PanelLeft,
-  ChevronRight,
   ShieldCheck,
   ScrollText,
   Palette,
@@ -19,8 +17,7 @@ import { useNav } from '@/lib/nav'
 import { useAuth } from '@/lib/auth'
 import { useDarkMode } from '@/lib/theme'
 import type { Route } from '@/lib/types'
-import { getWarehouseModule, type WarehouseModuleId } from '@/lib/warehouse-modules'
-import { WAREHOUSE_DESTINATIONS } from '@/lib/warehouse-modules'
+import { getWarehouseModule, type WarehouseModuleId, WAREHOUSE_DESTINATIONS } from '@/lib/warehouse-modules'
 import { canAccessRoute } from '@/lib/route-guard'
 
 type NavItem = {
@@ -40,13 +37,7 @@ const adminNavItems: NavItem[] = [
 
 const warehouseNavItems: NavItem[] = WAREHOUSE_DESTINATIONS.map((destination) => {
   const module = getWarehouseModule(destination.id as WarehouseModuleId)
-  return {
-    label: destination.label,
-    blurb: module?.blurb ?? `${destination.label} workspace`,
-    icon: destination.icon,
-    route: destination.route,
-    moduleId: module?.id,
-  }
+  return { label: destination.label, blurb: module?.blurb ?? `${destination.label} workspace`, icon: destination.icon, route: destination.route, moduleId: module?.id }
 })
 
 const plannerNavItems: NavItem[] = [
@@ -56,7 +47,6 @@ const plannerNavItems: NavItem[] = [
   { label: 'Asset Catalog', blurb: 'Read-only décor and asset catalog', icon: Boxes, route: 'inventory' },
 ]
 
-/* Sub-routes highlight their parent nav entry. */
 const routeParent: Partial<Record<Route, Route>> = {
   'event-detail': 'design-projects',
   'canvas-workspace': 'design-projects',
@@ -69,292 +59,94 @@ export interface ConsoleSidebarProps {
   onCloseMobile: () => void
 }
 
-export function ConsoleSidebar({
-  mobileOpen,
-  onCloseMobile,
-}: ConsoleSidebarProps) {
+export function ConsoleSidebar({ mobileOpen, onCloseMobile }: ConsoleSidebarProps) {
   const { route, navigate } = useNav()
   const { currentUser, adminName, adminRole, isWarehouse, isPlanner, isAdmin, setConfirmLogout } = useAuth()
   const { dark, toggle } = useDarkMode()
-  const [companionOpen, setCompanionOpen] = useState(false)
 
   const baseNavItems = isAdmin ? adminNavItems : isPlanner ? plannerNavItems : isWarehouse ? warehouseNavItems : warehouseNavItems
   const navItems = baseNavItems.filter((item) => canAccessRoute(currentUser, item.route))
 
-  const activeItem = navItems.find((item) => route === item.route || routeParent[route] === item.route) ?? navItems[0]
-
-  const go = (r: Route) => {
-    const isActive = route === r || routeParent[route] === r
-    if (isActive) {
-      setCompanionOpen((prev) => !prev)
-    } else {
-      navigate(r)
-      setCompanionOpen(true)
+  useEffect(() => {
+    if (!mobileOpen) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCloseMobile()
     }
-  }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [mobileOpen, onCloseMobile])
 
-  const moduleDetail = activeItem.moduleId ? getWarehouseModule(activeItem.moduleId) : null
+  const isActive = (item: NavItem) => route === item.route || routeParent[route] === item.route
+
+  const navigation = (mobile = false) => (
+    <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-4 py-6" aria-label="Console destinations">
+      {navItems.map((item) => {
+        const Icon = item.icon
+        const active = isActive(item)
+        return (
+          <button
+            key={item.label}
+            type="button"
+            onClick={() => {
+              navigate(item.route)
+              if (mobile) onCloseMobile()
+            }}
+            aria-current={active ? 'page' : undefined}
+            className={cn(
+              'flex min-h-11 w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-primary focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar',
+              active
+                ? 'bg-sidebar-primary font-semibold text-sidebar-primary-foreground'
+                : 'text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+            )}
+          >
+            <Icon className="size-4 shrink-0" aria-hidden="true" />
+            <span>{item.label}</span>
+          </button>
+        )
+      })}
+    </nav>
+  )
+
+  const footer = (
+    <div className="flex items-center justify-between gap-3 border-t border-sidebar-border px-5 py-4">
+      <div className="min-w-0">
+        <p className="truncate text-xs font-semibold text-sidebar-foreground">{adminName}</p>
+        <p className="truncate text-[0.62rem] uppercase tracking-[0.14em] text-sidebar-foreground/55">{adminRole}</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <button type="button" onClick={toggle} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-sidebar-foreground/65 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-primary">
+          {dark ? <Sun className="size-4" aria-hidden="true" /> : <Moon className="size-4" aria-hidden="true" />}
+        </button>
+        <button type="button" onClick={() => setConfirmLogout(true)} aria-label="Sign out" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-sidebar-foreground/65 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-primary">
+          <LogOut className="size-4" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  )
 
   return (
     <>
-      {/* ── Desktop Fixed Icon Rail (w-16) ── */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-16 shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar py-4 lg:flex">
-        {/* Brand Mark */}
-        <span
-          className="flex size-8 items-center justify-center font-serif text-lg font-medium leading-none text-sidebar-primary"
-          aria-hidden="true"
-        >
-          L
-        </span>
-
-        {/* Companion Drawer Toggle Button */}
-        <button
-          type="button"
-          onClick={() => setCompanionOpen((prev) => !prev)}
-          aria-label={companionOpen ? 'Close companion panel' : 'Open companion panel'}
-          title={companionOpen ? 'Close companion panel' : 'Open companion panel'}
-          className={cn(
-            'mt-4 flex size-10 items-center justify-center rounded-lg transition-colors',
-            companionOpen
-              ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-          )}
-        >
-          <PanelLeft className="size-4" aria-hidden="true" />
-        </button>
-
-        <div className="my-3 h-px w-8 bg-sidebar-border" aria-hidden="true" />
-
-        {/* Icon Navigation Rail */}
-        <nav className="flex flex-1 flex-col items-center gap-2" aria-label="Console destinations">
-          {navItems.map((item) => {
-            const Icon = item.icon
-            const active = route === item.route || routeParent[route] === item.route
-            return (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => go(item.route)}
-                aria-label={item.label}
-                aria-current={active ? 'true' : undefined}
-                title={item.label}
-                className={cn(
-                  'flex size-10 items-center justify-center rounded-lg transition-colors',
-                  active
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
-                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                )}
-              >
-                <Icon className="size-4" aria-hidden="true" />
-              </button>
-            )
-          })}
-        </nav>
-
-        {/* Bottom Actions: Theme + Logout */}
-        <div className="flex flex-col items-center gap-2 pt-2 border-t border-sidebar-border w-full">
-          <button
-            type="button"
-            onClick={toggle}
-            aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-            title={dark ? 'Light mode' : 'Dark mode'}
-            className="flex size-9 items-center justify-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            {dark ? <Sun className="size-4" aria-hidden="true" /> : <Moon className="size-4" aria-hidden="true" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setConfirmLogout(true)}
-            aria-label="Sign out"
-            title="Sign out"
-            className="flex size-9 items-center justify-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <LogOut className="size-4" aria-hidden="true" />
-          </button>
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[260px] flex-col border-r border-sidebar-border bg-sidebar lg:flex" aria-label="Console navigation">
+        <div className="px-6 pb-5 pt-8">
+          <div className="font-serif text-xl font-medium uppercase tracking-[0.28em] text-sidebar-primary">LUMIERE</div>
         </div>
+        <div className="mx-5 h-px bg-sidebar-border" aria-hidden="true" />
+        {navigation()}
+        {footer}
       </aside>
 
-      {/* ── Companion Panel Drawer (Desktop slide-over next to Icon Rail) ── */}
-      {companionOpen && (
-        <aside
-          className="fixed inset-y-0 left-16 z-40 hidden w-72 flex-col border-r border-border bg-card shadow-2xl transition-all duration-200 lg:flex"
-          aria-label="Companion Panel"
-        >
-          {/* Header */}
-          <div className="flex items-start justify-between border-b border-border px-5 py-5">
-            <div>
-              <p className="text-[0.58rem] font-bold uppercase tracking-[0.2em] text-primary">
-                {isPlanner ? 'Planner Console' : 'Warehouse Module'}
-              </p>
-              <h2 className="mt-1 font-serif text-xl font-medium text-card-foreground">
-                {activeItem.label}
-              </h2>
-              <p className="mt-1 text-xs text-muted-foreground">{activeItem.blurb}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setCompanionOpen(false)}
-              aria-label="Close companion panel"
-              className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
+      <div className={cn('fixed inset-0 z-40 lg:hidden', mobileOpen ? 'pointer-events-auto' : 'pointer-events-none')} aria-hidden={!mobileOpen}>
+        <button type="button" onClick={onCloseMobile} aria-label="Close navigation menu" className={cn('absolute inset-0 cursor-default bg-neutral-950/60 transition-opacity duration-300', mobileOpen ? 'opacity-100' : 'opacity-0')} />
+        <aside className={cn('absolute inset-y-0 left-0 flex w-[260px] max-w-[85%] flex-col overflow-hidden bg-sidebar text-sidebar-foreground shadow-2xl transition-transform duration-300 ease-in-out', mobileOpen ? 'translate-x-0' : '-translate-x-full')} role="dialog" aria-modal="true" aria-label="Navigation menu">
+          <div className="flex items-center justify-between px-6 pb-5 pt-8">
+            <div className="font-serif text-xl font-medium uppercase tracking-[0.28em] text-sidebar-primary">LUMIERE</div>
+            <button type="button" onClick={onCloseMobile} aria-label="Close menu" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-sidebar-foreground/65 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-primary">
               <X className="size-4" aria-hidden="true" />
             </button>
           </div>
-
-          {/* Module preview / sub-navigation items */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-            {moduleDetail && (
-              <div className="rounded-lg border border-border bg-muted/30 p-3.5 space-y-2">
-                <p className="text-[0.56rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                  Module Capabilities
-                </p>
-                <ul className="space-y-1.5 text-xs text-muted-foreground">
-                  {moduleDetail.previewPoints.map((point) => (
-                    <li key={point} className="flex items-center gap-2">
-                      <span className="size-1.5 rounded-full bg-primary" />
-                      <span>{point}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <div className="space-y-1">
-              <p className="px-2 text-[0.56rem] font-bold uppercase tracking-[0.16em] text-muted-foreground mb-2">
-                Console Navigation
-              </p>
-              {navItems.map((item) => {
-                const Icon = item.icon
-                const active = route === item.route || routeParent[route] === item.route
-                return (
-                  <button
-                    key={item.label}
-                    type="button"
-                    onClick={() => {
-                      navigate(item.route)
-                    }}
-                    className={cn(
-                      'flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition-colors',
-                      active
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'text-foreground hover:bg-muted',
-                    )}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <Icon className="size-4 shrink-0" aria-hidden="true" />
-                      <span className="truncate">{item.label}</span>
-                    </div>
-                    <ChevronRight className="size-3.5 opacity-60" />
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* User footer */}
-          <div className="border-t border-border p-4 bg-muted/20 flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="truncate text-xs font-semibold text-foreground">{adminName}</p>
-              <p className="truncate text-[0.62rem] uppercase tracking-wider text-muted-foreground">{adminRole}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setConfirmLogout(true)}
-              className="text-xs font-semibold text-destructive hover:underline"
-            >
-              Sign out
-            </button>
-          </div>
-        </aside>
-      )}
-
-      {/* ── Mobile Drawer ── */}
-      <div
-        className={cn(
-          'fixed inset-0 z-40 lg:hidden',
-          mobileOpen ? 'pointer-events-auto' : 'pointer-events-none',
-        )}
-        aria-hidden={!mobileOpen}
-      >
-        <div
-          onClick={onCloseMobile}
-          className={cn(
-            'absolute inset-0 bg-neutral-900/60 transition-opacity duration-300',
-            mobileOpen ? 'opacity-100' : 'opacity-0',
-          )}
-        />
-        <aside
-          className={cn(
-            'absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col overflow-hidden bg-sidebar text-sidebar-foreground shadow-2xl transition-transform duration-300 ease-in-out',
-            mobileOpen ? 'translate-x-0' : '-translate-x-full',
-          )}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Navigation menu"
-        >
-          <div className="flex items-center justify-between px-6 pt-8 pb-6 border-b border-sidebar-border">
-            <h1 className="font-serif text-xl font-medium tracking-[0.3em] text-sidebar-primary">
-              LUMIÈRE
-            </h1>
-            <button
-              type="button"
-              onClick={onCloseMobile}
-              aria-label="Close menu"
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            >
-              <X className="size-4" aria-hidden="true" />
-            </button>
-          </div>
-
-          <nav className="flex-1 overflow-y-auto p-4 space-y-1.5">
-            {navItems.map((item) => {
-              const Icon = item.icon
-              const active = route === item.route || routeParent[route] === item.route
-              return (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => {
-                    navigate(item.route)
-                    onCloseMobile()
-                  }}
-                  className={cn(
-                    'flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.15em] transition-colors',
-                    active
-                      ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                  )}
-                >
-                  <Icon className="size-4 shrink-0" aria-hidden="true" />
-                  <span>{item.label}</span>
-                </button>
-              )
-            })}
-          </nav>
-
-          <div className="p-4 border-t border-sidebar-border flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-sidebar-accent-foreground">{adminName}</p>
-              <p className="text-[0.6rem] uppercase tracking-wider text-sidebar-foreground/60">{adminRole}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={toggle}
-                className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/60 hover:bg-sidebar-accent"
-              >
-                {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmLogout(true)}
-                className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/60 hover:bg-sidebar-accent"
-              >
-                <LogOut className="size-4" />
-              </button>
-            </div>
-          </div>
+          <div className="mx-5 h-px bg-sidebar-border" aria-hidden="true" />
+          {navigation(true)}
+          {footer}
         </aside>
       </div>
     </>
