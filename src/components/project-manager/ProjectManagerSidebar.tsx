@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { BriefcaseBusiness, ChevronLeft, ChevronRight, Layers3, LayoutDashboard, LogOut, Moon, PanelLeft, Sun, User } from 'lucide-react'
+import { BriefcaseBusiness, CalendarRange, ChevronLeft, ChevronRight, Layers3, LayoutDashboard, LogOut, Moon, PanelLeft, Sun, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
 import { useDarkMode } from '@/lib/theme'
 
-export type ProjectManagerSection = 'dashboard' | 'projects' | 'pitches'
+export type ProjectManagerSection = 'dashboard' | 'projects' | 'event-workspace' | 'pitches'
 
 const sections = [
   { id: 'dashboard' as const, label: 'Project Manager Dashboard', icon: LayoutDashboard },
   { id: 'projects' as const, label: 'Projects', icon: BriefcaseBusiness },
+  { id: 'event-workspace' as const, label: 'Event Workspace', icon: CalendarRange },
   { id: 'pitches' as const, label: 'Pitches & Briefs', icon: Layers3 },
 ]
 
@@ -54,6 +55,7 @@ export function ProjectManagerMobileNav({ activeSection, onSelect }: ProjectMana
 export const projectManagerSectionMeta: Record<ProjectManagerSection, { title: string; description: string }> = {
   dashboard: { title: 'Project Manager Dashboard', description: 'Overview of your projects, priorities, and upcoming work.' },
   projects: { title: 'Projects', description: 'Manage the projects assigned to you.' },
+  'event-workspace': { title: 'Event Workspace', description: 'Search and open events assigned to your project workflow.' },
   pitches: { title: 'Pitches & Briefs', description: 'Manage client proposals and planning briefs.' },
 }
 
