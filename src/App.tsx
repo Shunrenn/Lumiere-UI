@@ -7,7 +7,6 @@ import { AdminGrowthSummaryProvider } from '@/lib/admin-growth-summary'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { LogoutModal } from '@/components/LogoutModal'
 import { OfflineBanner } from '@/components/OfflineBanner'
-import { WelcomeModal } from '@/components/WelcomeModal'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { loadRosterFromDatabase } from '@/lib/roster'
@@ -376,7 +375,6 @@ function Gate() {
             <Router />
           </Suspense>
         </ErrorBoundary>
-        <WelcomeModal />
       </AdminGrowthSummaryProvider>
     </NavProvider>
   )
