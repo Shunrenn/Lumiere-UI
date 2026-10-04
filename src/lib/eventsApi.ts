@@ -509,6 +509,10 @@ export async function updateEventApi(
  * 10-second timeout. Throws on network/server errors to distinguish failure from empty state.
  */
 export async function fetchEventsApi(page = 1, pageSize = 50, statusFilter?: string): Promise<PortalEvent[]> {
+  // The events endpoint is protected; unauthenticated app boot should use the
+  // local/seeded state instead of producing a rejected background request.
+  if (!getAuthToken()) return []
+
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 10000)
   try {
@@ -523,6 +527,7 @@ export async function fetchEventsApi(page = 1, pageSize = 50, statusFilter?: str
       signal: controller.signal,
     })
     clearTimeout(timeoutId)
+    if (res.status === 401) return []
     if (!res.ok) {
       throw new Error(`GET /api/events returned HTTP ${res.status}`)
     }
