@@ -50,9 +50,10 @@ interface AssetCatalogModuleProps {
   onClose?: () => void
   readOnly?: boolean
   embedded?: boolean
+  executiveKiosk?: boolean
 }
 
-export function AssetCatalogModule({ onClose, readOnly = false, embedded = false }: AssetCatalogModuleProps) {
+export function AssetCatalogModule({ onClose, readOnly = false, embedded = false, executiveKiosk = false }: AssetCatalogModuleProps) {
   const { isWarehouseAssociate } = useAuth()
   const effectiveReadOnly = readOnly
   const assets = useCatalogAssets()
@@ -181,8 +182,9 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
           </div>
         )}
 
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative w-full lg:w-64">
+        <div className={cn('flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between', executiveKiosk && 'border-b border-border/70 pb-4')}>
+          {executiveKiosk && <div><h2 className="font-serif text-2xl font-medium tracking-tight text-foreground">All Assets</h2><p className="mt-1 text-xs text-muted-foreground">{filtered.length} items in the current collection</p></div>}
+          <div className={cn('relative w-full lg:w-64', executiveKiosk && 'lg:ml-auto')}>
             <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
               value={query}
@@ -212,15 +214,15 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
                 <List className="size-3.5" />
               </button>
             </div>
-            <button
+            {!executiveKiosk && <button
               type="button"
               onClick={() => setPaintOpen(true)}
               className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-foreground transition hover:bg-accent"
             >
               <Palette className="size-3.5 text-primary" />
               Paint Registry
-            </button>
-            {!effectiveReadOnly && (
+            </button>}
+            {!effectiveReadOnly && !executiveKiosk && (
               <button
                 type="button"
                 onClick={() => setAddOpen(true)}
@@ -233,7 +235,7 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-border/60 pt-3">
+        <div className={cn('flex flex-col gap-3 border-t border-border/60 pt-3', executiveKiosk && 'lg:hidden')}>
           <div className="flex flex-col gap-1.5">
             <p className="text-[0.58rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">Classification</p>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -280,7 +282,9 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
       </div>
 
       {/* Main Content Area (Tier-Grouped Sections with Sticky Headers) */}
-      <div className="flex-1 px-6 py-4 sm:px-10">
+      <div className={cn('flex-1 px-6 py-4 sm:px-10', executiveKiosk && 'lg:grid lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-5')}>
+        {executiveKiosk && <aside className="mb-5 lg:mb-0"><div className="mb-2 flex items-center justify-between"><h3 className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">Classifications</h3><span className="text-[0.62rem] text-muted-foreground">{CATEGORY_FILTERS.length - 1} categories</span></div><div className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">{CATEGORY_FILTERS.map((category) => { const count = category === 'All' ? assets.length : assets.filter((asset) => asset.category === category).length; return <button key={category} type="button" onClick={() => setCategoryFilter(category)} aria-pressed={categoryFilter === category} className={cn('min-w-[150px] rounded-lg border px-3 py-2 text-left transition lg:min-w-0', categoryFilter === category ? 'border-primary bg-primary text-primary-foreground shadow-sm' : 'border-border bg-background text-foreground hover:bg-muted')}><span className="block text-xs font-semibold">{category}</span><span className={cn('mt-0.5 block text-[0.6rem]', categoryFilter === category ? 'text-primary-foreground/75' : 'text-muted-foreground')}>{category === 'All' ? 'Browse collection' : 'Browse collection'} <span className="float-right rounded-full bg-black/10 px-1.5 py-0.5">{count}</span></span></button> })}</div></aside>}
+        <div className={cn(executiveKiosk && 'min-w-0')}>
         {tierGroups.length === 0 ? (
           <div className="mt-10 text-center text-sm font-semibold uppercase tracking-[0.15em] text-muted-foreground">
             No assets match the current filters
@@ -375,6 +379,7 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
             ))}
           </div>
         )}
+        </div>
       </div>
 
       {/* Floating Add Item FAB */}
