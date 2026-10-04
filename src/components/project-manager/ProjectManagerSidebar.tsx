@@ -1,17 +1,15 @@
 import { useState } from 'react'
-import { BookOpen, BriefcaseBusiness, ChevronLeft, ChevronRight, ClipboardCheck, LayoutDashboard, LogOut, Moon, PanelLeft, Sun, User } from 'lucide-react'
+import { BriefcaseBusiness, ChevronLeft, ChevronRight, Layers3, LayoutDashboard, LogOut, Moon, PanelLeft, Sun, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
 import { useDarkMode } from '@/lib/theme'
 
-export type ProjectManagerSection = 'dashboard' | 'actions' | 'projects' | 'pitches' | 'briefs'
+export type ProjectManagerSection = 'dashboard' | 'projects' | 'pitches'
 
 const sections = [
   { id: 'dashboard' as const, label: 'Project Manager Dashboard', icon: LayoutDashboard },
-  { id: 'actions' as const, label: 'Action Center', icon: ClipboardCheck },
-  { id: 'projects' as const, label: 'Assigned Projects', icon: BriefcaseBusiness },
-  { id: 'pitches' as const, label: 'Client Pitches', icon: User },
-  { id: 'briefs' as const, label: 'Concept Briefs', icon: BookOpen },
+  { id: 'projects' as const, label: 'Projects', icon: BriefcaseBusiness },
+  { id: 'pitches' as const, label: 'Pitches & Briefs', icon: Layers3 },
 ]
 
 interface ProjectManagerSidebarProps {
@@ -54,11 +52,9 @@ export function ProjectManagerMobileNav({ activeSection, onSelect }: ProjectMana
 }
 
 export const projectManagerSectionMeta: Record<ProjectManagerSection, { title: string; description: string }> = {
-  dashboard: { title: 'Project Manager Dashboard', description: 'Overview of assigned projects and current workload.' },
-  actions: { title: 'Action Center', description: 'Items requiring your attention.' },
-  projects: { title: 'Assigned Projects', description: 'Manage the event projects assigned to you.' },
-  pitches: { title: 'Client Pitches', description: 'Review and manage client pitch activity.' },
-  briefs: { title: 'Concept Briefs', description: 'Access project concepts and planning briefs.' },
+  dashboard: { title: 'Project Manager Dashboard', description: 'Overview of your projects, priorities, and upcoming work.' },
+  projects: { title: 'Projects', description: 'Manage the projects assigned to you.' },
+  pitches: { title: 'Pitches & Briefs', description: 'Manage client proposals and planning briefs.' },
 }
 
 export function ProjectManagerSectionIcon({ section }: { section: ProjectManagerSection }) {

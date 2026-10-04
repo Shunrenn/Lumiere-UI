@@ -35,6 +35,7 @@ export function ProjectManagerDashboardPage() {
   // Selected event for single-event workspace
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState<ProjectManagerSection>('dashboard')
+  const [pitchesView, setPitchesView] = useState<'pitches' | 'briefs'>('pitches')
 
   // Filters & search
   const [searchQuery, setSearchQuery] = useState('')
@@ -273,24 +274,11 @@ export function ProjectManagerDashboardPage() {
             </p>
           </div>
         </div>
-
+        <section className="rounded-2xl border border-border/80 bg-card/70 p-5 shadow-sm">
+          <div className="mb-4 flex items-end justify-between gap-3"><div><p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-primary">Action Required</p><h3 className="mt-1 font-serif text-xl font-semibold text-foreground">Needs Attention</h3><p className="mt-1 text-sm text-muted-foreground">Resolve current project blockers without leaving your workspace.</p></div></div>
+          <ProjectManagerActionRequired events={events} staff={staff} procurement={procurement} damageExceptions={damageExceptions} pitches={isProjectManagerLite ? [] : pitches} onOpenEvent={(id) => setSelectedEventId(id)} onOpenPitch={(pitchId) => { const p = pitches.find((item) => item.id === pitchId); if (p) { setEditingPitch(p); setPitchModalOpen(true) } }} />
+        </section>
         </>}
-
-        {activeSection === 'actions' && <ProjectManagerActionRequired
-          events={events}
-          staff={staff}
-          procurement={procurement}
-          damageExceptions={damageExceptions}
-          pitches={isProjectManagerLite ? [] : pitches}
-          onOpenEvent={(id) => setSelectedEventId(id)}
-          onOpenPitch={(pitchId) => {
-            const p = pitches.find((item) => item.id === pitchId)
-            if (p) {
-              setEditingPitch(p)
-              setPitchModalOpen(true)
-            }
-          }}
-        />}
 
         {activeSection === 'projects' && <>
         {/* Master Calendar */}
@@ -315,7 +303,8 @@ export function ProjectManagerDashboardPage() {
 
         {activeSection === 'pitches' && !isProjectManagerLite && (
           <>
-            {pitchesError && (
+            <div className="inline-flex w-fit rounded-lg border border-border bg-card p-1"><button type="button" onClick={() => setPitchesView('pitches')} className={`rounded-md px-3 py-2 text-xs font-semibold ${pitchesView === 'pitches' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Client Pitches</button><button type="button" onClick={() => setPitchesView('briefs')} className={`rounded-md px-3 py-2 text-xs font-semibold ${pitchesView === 'briefs' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Concept Briefs</button></div>
+            {pitchesView === 'pitches' && pitchesError && (
               <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-xs font-semibold text-rose-700 dark:text-rose-300 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="size-4 shrink-0" />
@@ -332,7 +321,7 @@ export function ProjectManagerDashboardPage() {
               </div>
             )}
 
-            <ProjectManagerPitchingSummary
+            {pitchesView === 'pitches' && <ProjectManagerPitchingSummary
               pitches={pitches}
               onNewPitch={() => {
                 setEditingPitch(null)
@@ -343,11 +332,11 @@ export function ProjectManagerDashboardPage() {
                 setPitchModalOpen(true)
               }}
               onConvertToEvent={handleConvertToEvent}
-            />
+            />}
           </>
         )}
 
-        {activeSection === 'briefs' && (
+        {activeSection === 'pitches' && pitchesView === 'briefs' && (
           <section className="flex flex-col gap-4">
             {pitches.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">
