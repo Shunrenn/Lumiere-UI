@@ -550,6 +550,39 @@ export async function fetchEventsApi(page = 1, pageSize = 50, statusFilter?: str
 }
 
 /**
+ * Fetches the authenticated planner's event assignments.
+ *
+ * This deliberately does not fall back to the broad /api/events collection:
+ * a planner dashboard must fail closed rather than expose unassigned events
+ * when the assignment-scoped API contract is unavailable.
+ */
+export async function fetchAssignedPlannerEventsApi(): Promise<PortalEvent[]> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10000)
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/planner/events`, {
+      headers: getAuthHeaders(),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    if (!res.ok) {
+      throw new Error(`GET /api/planner/events returned HTTP ${res.status}`)
+    }
+    const body = await res.json()
+    const data: EventResponseDto[] = Array.isArray(body)
+      ? body
+      : Array.isArray(body?.items)
+      ? body.items
+      : []
+    return data.map((dto, idx) => mapEventResponseToPortalEvent(dto, idx))
+  } catch (err) {
+    clearTimeout(timeoutId)
+    console.warn('[eventsApi] GET /api/planner/events failed:', err)
+    throw err
+  }
+}
+
+/**
  * Fetches a single event by ID from GET /api/events/{id}.
  */
 export async function fetchEventByIdApi(eventId: string): Promise<PortalEvent | null> {

@@ -36,6 +36,8 @@ import { useAuth } from '@/lib/auth'
 /* ─── Types ─── */
 interface WorkspaceCard {
   id: string
+  /** Canonical API event ID for an event-derived Design Project. */
+  eventId?: string
   title: string
   type: 'Design' | 'Mood Board'
   designer: string
@@ -61,6 +63,8 @@ interface DroppedAsset {
   name: string
   src: string
   defaultUnit: string
+  /** Server-confirmed fully-reserved assets may be shown only as unallocated placeholders. */
+  atRisk?: boolean
 }
 
 const DRAG_MIME = 'application/lumiere-asset'
@@ -124,7 +128,6 @@ export interface CanonicalCanvasItem {
   category: string
   description?: string
   src: string
-  physicalStock: number
   unit: string
 }
 
@@ -251,32 +254,27 @@ function Slider({ label, value, onChange, min = 0, max = 100 }: { label: string;
 
 function ElementsTab({
   onDropAsset,
-  assets,
   canonicalAssets,
   assetsLoading,
   assetsError,
   onRetryFetch,
-  onRouteToDeficit,
   onSearchChange,
+  serverAvailability,
 }: {
   onDropAsset: (asset: DroppedAsset) => void
-  assets: AllocatedAsset[]
   canonicalAssets: CanonicalCanvasItem[]
   assetsLoading: boolean
   assetsError: string | null
   onRetryFetch?: () => void
-  onRouteToDeficit: (item: { id: string; name: string; unit: string }) => void
   /** Called with the debounced search term so the parent can re-fetch from backend */
   onSearchChange?: (term: string) => void
+  serverAvailability: Record<string, AssetAvailabilityDto | 'loading' | 'error'>
 }) {
   const [query, setQuery] = useState('')
-  const [tooltip, setTooltip] = useState<{ id: string; label: string; src: string; category?: string; stock: number; description?: string } | null>(null)
-  const [blocked, setBlocked] = useState<{ id: string; label: string; unit: string } | null>(null)
+  const [tooltip, setTooltip] = useState<{ id: string; label: string; src: string; category?: string; description?: string; atRisk: boolean } | null>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
-  const blockedRef = useRef<HTMLDivElement>(null)
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useOutsideClick(tooltipRef, () => setTooltip(null))
-  useOutsideClick(blockedRef, () => setBlocked(null))
 
   function handleQueryChange(value: string) {
     setQuery(value)
@@ -313,25 +311,20 @@ function ElementsTab({
     }))
   }, [filteredAssets])
 
-  function getStock(item: CanonicalCanvasItem) {
-    const found = assets.find((a) => a.id === item.id)
-    return found ? found.availableStock : item.physicalStock
+  function isFullyReserved(item: CanonicalCanvasItem) {
+    const availability = serverAvailability[item.id]
+    return typeof availability === 'object' && availability !== null && availability.availableQuantity <= 0
   }
 
-  function handleDragStart(e: React.DragEvent, item: CanonicalCanvasItem, stock: number) {
-    if (stock <= 0) { e.preventDefault(); return }
-    const payload: DroppedAsset = { id: item.id, name: item.name, src: item.src, defaultUnit: item.unit || 'pcs' }
+  function handleDragStart(e: React.DragEvent, item: CanonicalCanvasItem) {
+    const payload: DroppedAsset = { id: item.id, name: item.name, src: item.src, defaultUnit: item.unit || 'pcs', atRisk: isFullyReserved(item) }
     e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload))
     e.dataTransfer.effectAllowed = 'copy'
   }
 
-  function addToCanvas(item: { id: string; label: string; src: string }) {
-    onDropAsset({ id: item.id, name: item.label, src: item.src, defaultUnit: 'pcs' })
+  function addToCanvas(item: { id: string; label: string; src: string; atRisk: boolean }) {
+    onDropAsset({ id: item.id, name: item.label, src: item.src, defaultUnit: 'pcs', atRisk: item.atRisk })
     setTooltip(null)
-  }
-
-  function handleTileClick(item: CanonicalCanvasItem, stock: number) {
-    if (stock <= 0) setBlocked({ id: item.id, label: item.name, unit: item.unit || 'pcs' })
   }
 
   return (
@@ -380,23 +373,22 @@ function ElementsTab({
               <p className="mb-2 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">{cat.label}</p>
               <div className="grid grid-cols-3 gap-1.5">
                 {cat.items.map((item) => {
-                  const stock = getStock(item)
-                  const outOfStock = stock <= 0
+                  const fullyReserved = isFullyReserved(item)
+                  const availability = serverAvailability[item.id]
                   return (
                     <div
                       key={item.id}
-                      className={cn('relative group', outOfStock ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing')}
-                      draggable={!outOfStock}
-                      onDragStart={(e) => handleDragStart(e, item, stock)}
-                      onClick={() => handleTileClick(item, stock)}
+                      className={cn('relative group cursor-grab active:cursor-grabbing', fullyReserved && 'opacity-60')}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, item)}
                     >
-                      <div className={cn('relative aspect-square overflow-hidden rounded-lg border border-border/40 bg-muted/20 transition-all flex items-center justify-center', outOfStock ? 'opacity-40' : 'group-active:scale-95 group-active:opacity-70')}>
+                      <div className={cn('relative aspect-square overflow-hidden rounded-lg border border-border/40 bg-muted/20 transition-all flex items-center justify-center', fullyReserved ? 'bg-muted/60 grayscale' : 'group-active:scale-95 group-active:opacity-70')}>
                         {item.src ? (
                           <img
                             src={item.src}
                             alt={item.name}
                             draggable={false}
-                            className={cn('size-full object-cover mix-blend-multiply dark:mix-blend-normal pointer-events-none', outOfStock && 'grayscale')}
+                            className="size-full object-cover mix-blend-multiply dark:mix-blend-normal pointer-events-none"
                             onError={(e) => {
                               (e.currentTarget as HTMLElement).style.display = 'none'
                             }}
@@ -406,18 +398,20 @@ function ElementsTab({
                         )}
                       </div>
                       <p className="mt-0.5 truncate text-center text-[0.5rem] font-medium text-foreground">{item.name}</p>
-                      {outOfStock ? (
+                      {fullyReserved ? (
                         <span className="mt-0.5 flex w-full items-center justify-center rounded-full bg-destructive/15 px-1 py-0.5 text-center text-[0.45rem] font-bold uppercase tracking-[0.08em] text-destructive">
-                          NOT AVAILABLE
+                          Fully reserved
                         </span>
                       ) : (
-                        <span className="mt-0.5 block text-center text-[0.45rem] font-medium text-muted-foreground/70">{stock} in physical stock</span>
+                        <span className="mt-0.5 block text-center text-[0.45rem] font-medium text-muted-foreground/70">
+                          {availability === 'loading' ? 'Checking availability…' : availability === 'error' ? 'Availability unavailable' : 'Verified checkpoint availability'}
+                        </span>
                       )}
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
-                          setTooltip({ id: item.id, label: item.name, src: item.src, category: item.category, stock, description: item.description })
+                          setTooltip({ id: item.id, label: item.name, src: item.src, category: item.category, description: item.description, atRisk: fullyReserved })
                         }}
                         aria-label={`Info for ${item.name}`}
                         className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-background/80 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-foreground"
@@ -432,29 +426,6 @@ function ElementsTab({
           ))
         )}
       </div>
-      {blocked && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/60 backdrop-blur-sm">
-          <div ref={blockedRef} className="w-60 rounded-2xl border border-border bg-card p-4 shadow-2xl">
-            <div className="mb-2 flex items-center gap-2">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-destructive/15"><AlertTriangle className="size-3.5 text-destructive" /></div>
-              <span className="text-[0.65rem] font-bold uppercase tracking-[0.1em] text-destructive">NOT AVAILABLE</span>
-            </div>
-            <p className="mb-3 text-[0.62rem] text-muted-foreground leading-relaxed">
-              <span className="font-semibold text-foreground">{blocked.label}</span> has zero verified physical stock right now.
-            </p>
-            <div className="flex flex-col gap-1.5">
-              <button type="button" onClick={() => { onRouteToDeficit({ id: blocked.id, name: blocked.label, unit: blocked.unit }); setBlocked(null) }}
-                className="w-full rounded-xl bg-primary py-2 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">
-                Route to Deficit Queue
-              </button>
-              <button type="button" onClick={() => setBlocked(null)}
-                className="w-full rounded-xl border border-border py-2 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted-foreground hover:bg-accent hover:text-foreground transition">
-                Skip
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {tooltip && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/60 backdrop-blur-sm">
           <div ref={tooltipRef} className="w-60 rounded-2xl border border-border bg-card p-4 shadow-2xl">
@@ -478,14 +449,11 @@ function ElementsTab({
                 <span className="text-muted-foreground">Asset ID</span>
                 <span className="font-mono text-foreground">{tooltip.id}</span>
               </div>
-              <div className="flex justify-between text-[0.6rem]">
-                <span className="text-muted-foreground">Physical Stock</span>
-                <span className="text-foreground font-semibold">{tooltip.stock}</span>
-              </div>
               {tooltip.description && (
                 <p className="text-[0.58rem] text-muted-foreground line-clamp-2 pt-1">{tooltip.description}</p>
               )}
             </div>
+            {tooltip.atRisk && <p className="mt-2 rounded-md bg-destructive/10 px-2 py-1.5 text-[0.55rem] font-semibold text-destructive">Fully reserved for this event window. It will be added only as an unallocated, at-risk placeholder.</p>}
             <button type="button" onClick={() => addToCanvas(tooltip)}
               className="mt-3 w-full rounded-lg bg-primary py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">
               Add to Canvas
@@ -1154,6 +1122,7 @@ function LeftPanel({
   assetsError,
   onRetryFetch,
   onSearchChange,
+  serverAvailability,
 }: {
   onDropAsset: (asset: DroppedAsset) => void
   eventAlias?: string
@@ -1173,6 +1142,7 @@ function LeftPanel({
   assetsError: string | null
   onRetryFetch?: () => void
   onSearchChange?: (term: string) => void
+  serverAvailability: Record<string, AssetAvailabilityDto | 'loading' | 'error'>
 }) {
   const [activeTab, setActiveTab] = useState<PanelTab>('elements')
   const [collapsed, setCollapsed] = useState(false)
@@ -1206,13 +1176,12 @@ function LeftPanel({
             {activeTab === 'elements'   && (
               <ElementsTab
                 onDropAsset={onDropAsset}
-                assets={assets}
                 canonicalAssets={canonicalAssets}
                 assetsLoading={assetsLoading}
                 assetsError={assetsError}
                 onRetryFetch={onRetryFetch}
-                onRouteToDeficit={onRouteToDeficit}
                 onSearchChange={onSearchChange}
+                serverAvailability={serverAvailability}
               />
             )}
             {activeTab === 'text'       && <TextTab onPlacePresetText={onPlacePresetText} selectedAsset={selectedAsset} onUpdateFormatting={onUpdateFormatting} onUpdateColor={onUpdateColor} />}
@@ -3032,6 +3001,9 @@ export function CanvasWorkspacePage() {
     try { const raw = sessionStorage.getItem('lumiere-workspace-card'); return raw ? JSON.parse(raw) : null }
     catch { return null }
   })
+  // Event-derived cards must always use the API GUID, not the local card ID
+  // (for example `pc-event-...`) or a planner seed ID.
+  const canonicalEventId = card?.eventId || pipelineEvent?.id || card?.id
 
   const isMoodBoard = card?.type === 'Mood Board'
   const [boardName, setBoardName] = useState(card?.title ?? (isMoodBoard ? 'Untitled Mood Board' : 'Untitled Design'))
@@ -3276,15 +3248,18 @@ export function CanvasWorkspacePage() {
     setAssetsError(null)
     fetchAssetsApi(params)
       .then((items) => {
-        const mapped: CanonicalCanvasItem[] = (items || []).map((item) => ({
-          id: item.id || (item as any).assetId || `asset-${Math.random().toString(36).slice(2, 8)}`,
-          name: item.name || 'Unnamed Asset',
-          category: item.category || 'Event Assets',
+        const mapped: CanonicalCanvasItem[] = (items || []).flatMap((item) => {
+          const id = item.id || (item as any).assetId
+          if (!id) return []
+          return [{
+          id,
+          name: item.name || (item as any).assetName || 'Unnamed Asset',
+          category: item.category || (item as any).categoryName || 'Event Assets',
           description: item.description,
           src: item.image || (item as any).catalogPhotoUrl || '',
-          physicalStock: item.currentStock ?? (item as { quantity?: number }).quantity ?? 0,
           unit: item.unit || 'pcs',
-        }))
+        }]
+        })
         setCanonicalCatalogAssets(mapped)
         setAssetsLoading(false)
       })
@@ -3322,7 +3297,7 @@ export function CanvasWorkspacePage() {
    */
   const getEventWindow = useCallback((): { start: string; end: string } | null => {
     // Try portal events (have ingressDate, targetDate)
-    const activeEventId = pipelineEvent?.id || card?.id
+    const activeEventId = canonicalEventId
     const portalEv = activeEventId ? portalEvents.find((e) => e.id === activeEventId) : null
     if (portalEv) {
       const start = portalEv.ingressDate || portalEv.installationStart || portalEv.targetDate
@@ -3341,7 +3316,7 @@ export function CanvasWorkspacePage() {
       return { start: `${d}T00:00:00Z`, end: `${d}T23:59:59Z` }
     }
     return null
-  }, [pipelineEvent, card, portalEvents])
+  }, [canonicalEventId, pipelineEvent, card, portalEvents])
 
   /**
    * Fetches server-authoritative event-window availability for a single asset.
@@ -3362,7 +3337,7 @@ export function CanvasWorkspacePage() {
     availabilityAbortRef.current[assetId] = controller
 
     setServerAvailability((prev) => ({ ...prev, [assetId]: 'loading' }))
-    const activeEventId = pipelineEvent?.id || card?.id
+    const activeEventId = canonicalEventId
     const result = await getAssetAvailabilityApi(
       { assetId, start: window.start, end: window.end, quantity, eventId: activeEventId || undefined },
       controller.signal,
@@ -3375,7 +3350,31 @@ export function CanvasWorkspacePage() {
       setServerAvailability((prev) => ({ ...prev, [assetId]: 'error' }))
     }
     return false
-  }, [getEventWindow, pipelineEvent, card])
+  }, [getEventWindow, canonicalEventId])
+
+  // The asset side panel always reflects the selected Design Project's event window.
+  // Availability is checkpoint-based; the response contains no reservation-owner data.
+  useEffect(() => {
+    if (!getEventWindow()) return
+    canonicalCatalogAssets.forEach((asset) => { void fetchAssetAvailability(asset.id) })
+  }, [canonicalCatalogAssets, fetchAssetAvailability, getEventWindow])
+
+  const fullyReservedAssetIds = useMemo(() => new Set(
+    Object.entries(serverAvailability)
+      .filter(([, value]) => typeof value === 'object' && value !== null && value.availableQuantity <= 0)
+      .map(([assetId]) => assetId),
+  ), [serverAvailability])
+  const hasAtRiskPlaceholder = droppedAssets.some((asset) => asset.atRisk || fullyReservedAssetIds.has(asset.id))
+
+  // A confirmed fully-reserved asset remains visible only as an unallocated placeholder.
+  useEffect(() => {
+    const riskNames = new Set(droppedAssets.filter((asset) => asset.atRisk || fullyReservedAssetIds.has(asset.id)).map((asset) => asset.name))
+    if (riskNames.size === 0) return
+    setCanvasAssets((previous) => previous.map((asset) => {
+      if (!riskNames.has(asset.label) || asset.label.startsWith('⚠ Unallocated — ')) return asset
+      return { ...asset, label: `⚠ Unallocated — ${asset.label}`, opacity: 35, kind: 'rect', fill: '#9ca3af', strokeColor: '#dc2626' }
+    }))
+  }, [droppedAssets, fullyReservedAssetIds])
 
   // Structured 409 conflict state (from approval rejection)
   const [approval409, setApproval409] = useState<{ message: string; conflicts: AssetConflictDetail[] } | null>(null)
@@ -3415,7 +3414,7 @@ export function CanvasWorkspacePage() {
             quantity: existing?.quantity ?? null,
             unit: c.unit || 'pcs',
             allocated: existing?.allocated ?? false,
-            availableStock: c.physicalStock,
+            availableStock: existing?.availableStock ?? 0,
             existingAllocations: existing?.existingAllocations ?? [],
           }
         })
@@ -3454,7 +3453,8 @@ export function CanvasWorkspacePage() {
       // Persist canvas layout state to PUT /api/canvas/event/{eventId}.
       // Result is checked — backend failure is logged but does not throw (fire-and-forget
       // is intentional for auto-save; user will see stale state on reload if backend is down).
-      const eventId = pipelineEvent?.id || card.id
+      const eventId = canonicalEventId
+      if (!eventId) return
       import('@/lib/canvasApi').then(({ saveCanvasLayoutApi }) => {
         saveCanvasLayoutApi(eventId, JSON.stringify(droppedAssets)).then((result) => {
           if (!result.ok) {
@@ -3467,12 +3467,12 @@ export function CanvasWorkspacePage() {
         })
       })
     }
-  }, [droppedAssets, card?.id, pipelineEvent?.id])
+  }, [droppedAssets, card?.id, canonicalEventId])
 
   // Hydrate canvas layout state from GET /api/canvas/event/{eventId}
   useEffect(() => {
     let active = true
-    const eventId = pipelineEvent?.id || card?.id
+    const eventId = canonicalEventId
     if (!eventId) return
     import('@/lib/canvasApi').then(({ fetchCanvasLayoutApi }) => {
       fetchCanvasLayoutApi(eventId).then((layoutDto) => {
@@ -3490,7 +3490,7 @@ export function CanvasWorkspacePage() {
     return () => {
       active = false
     }
-  }, [pipelineEvent?.id, card?.id])
+  }, [canonicalEventId])
 
   // Part 3 — Debounced toDataURL() thumbnail capture (1000ms interval chosen to eliminate UI lag during active editing)
   useEffect(() => {
@@ -3818,7 +3818,7 @@ export function CanvasWorkspacePage() {
             quantity: null,
             unit: dropped?.defaultUnit ?? canonical?.unit ?? 'pcs',
             allocated: false,
-            availableStock: canonical?.physicalStock ?? 0,
+            availableStock: 0,
             existingAllocations: [],
           })
         }
@@ -3851,7 +3851,11 @@ export function CanvasWorkspacePage() {
   }, [droppedAssets, assets])
 
   async function handleRouteToDeficit(item: { id: string; name: string; unit: string }) {
-    const activeEventId = pipelineEvent?.id || selectedEventId
+    if (hasAtRiskPlaceholder) {
+      showToast('Routing is blocked while the canvas contains fully reserved, unallocated placeholders.')
+      return
+    }
+    const activeEventId = canonicalEventId || selectedEventId
     try {
       await createDeficitItemApi({
         eventId: activeEventId || undefined,
@@ -3864,7 +3868,7 @@ export function CanvasWorkspacePage() {
     setPending((current) => [...current, { id: `pr-${Date.now()}`, name: item.name, requestedQty: 1, unit: item.unit || 'pcs', event: pipelineEvent?.title || 'Current canvas event' }])
   }
 
-  // R5: Real-time asset double-booking conflict detection for canvas placed items
+  // Checkpoint-based asset double-booking conflict detection for canvas placed items
   const allocationConflicts = useMemo(() => {
     const targetDate = pipelineEvent?.date || card?.eventDate || '2026-09-02'
     const eventId = pipelineEvent?.id || card?.id
@@ -3887,9 +3891,13 @@ export function CanvasWorkspacePage() {
   //   - NO success state is applied on a 409
   //   - Planner remains on Canvas to revise
   async function handleApproveCanvas() {
+    if (hasAtRiskPlaceholder) {
+      showToast('Approval is blocked until fully reserved placeholders are removed or resolved.')
+      return
+    }
     setIsApproving(true)
     try {
-      const eventId = pipelineEvent?.id || card?.id
+      const eventId = canonicalEventId
 
       // R5: Pre-approval server canvas validation using canonical asset IDs + quantities
       const window = getEventWindow()
@@ -4111,14 +4119,17 @@ export function CanvasWorkspacePage() {
     }
     const newAsset: CanvasAsset = {
       id: `asset-${Date.now()}`,
-      label: dropped.name,
+      label: dropped.atRisk ? `⚠ Unallocated — ${dropped.name}` : dropped.name,
       src: dropped.src,
       x: x ?? 260,
       y: y ?? 200,
       w: 160,
       h: 160,
       rotation: 0,
-      opacity: 100,
+      opacity: dropped.atRisk ? 35 : 100,
+      kind: dropped.atRisk ? 'rect' : 'image',
+      fill: dropped.atRisk ? '#9ca3af' : undefined,
+      strokeColor: dropped.atRisk ? '#dc2626' : undefined,
       locked: false,
       hidden: false,
       zIndex: canvasAssets.length + 1,
@@ -4333,12 +4344,12 @@ export function CanvasWorkspacePage() {
             <button
               type="button"
               onClick={handleApproveCanvas}
-              disabled={isApproving}
-              title="Approve Canvas & auto-populate warehouse dispatch queue"
+              disabled={isApproving || hasAtRiskPlaceholder}
+              title={hasAtRiskPlaceholder ? 'Resolve or remove fully reserved placeholders before approval.' : 'Approve Canvas & auto-populate warehouse dispatch queue'}
               className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-white transition hover:bg-emerald-700 disabled:opacity-50 shadow-sm"
             >
               <Check className="size-3" />
-              {isApproving ? 'Approving...' : 'Approve & Route'}
+              {hasAtRiskPlaceholder ? 'Resolve placeholders' : isApproving ? 'Approving...' : 'Approve & Route'}
             </button>
           )}
         </div>
@@ -4390,6 +4401,7 @@ export function CanvasWorkspacePage() {
           assetsError={assetsError}
           onRetryFetch={loadCanonicalAssets}
           onSearchChange={setAssetSearchTerm}
+          serverAvailability={serverAvailability}
         />
 
         {/* Canvas + bottom bar */}

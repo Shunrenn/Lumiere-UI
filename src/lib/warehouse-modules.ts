@@ -1,6 +1,7 @@
 import {
   Boxes,
   Hammer,
+  LayoutGrid,
   PackageSearch,
   ShieldAlert,
   Store,
@@ -8,6 +9,8 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
+import type { Route } from '@/lib/types'
+import type { SharedRailDestination } from '@/lib/executive-destinations'
 
 // The six operational modules a Warehouse Operations Manager drills into.
 // Shared between the home-screen module row and the icon rail so both
@@ -84,3 +87,26 @@ export const WAREHOUSE_MODULES: WarehouseModule[] = [
 export function getWarehouseModule(id: WarehouseModuleId) {
   return WAREHOUSE_MODULES.find((module) => module.id === id)
 }
+
+/** Canonical desktop destinations for Warehouse Operations. Keep this as the
+ * single source for dashboard tiles, sidebar order, icons, and active routes. */
+export const WAREHOUSE_MODULE_ROUTES: Record<WarehouseModuleId, Route> = {
+  assets: 'inventory',
+  replenishment: 'replenishment',
+  vendors: 'vendors',
+  manning: 'crew',
+  incidents: 'incidents',
+  dispatch: 'dispatch',
+  production: 'production',
+}
+
+export const WAREHOUSE_DESTINATIONS: readonly SharedRailDestination[] = [
+  { id: 'overview', label: 'Dashboard', icon: LayoutGrid, route: 'overview' },
+  ...WAREHOUSE_MODULES.map((module) => ({
+    id: module.id,
+    label: module.label,
+    icon: module.icon,
+    route: WAREHOUSE_MODULE_ROUTES[module.id],
+  })),
+  { id: 'damage', label: 'Damage Validation', icon: ShieldAlert, route: 'damage' },
+]

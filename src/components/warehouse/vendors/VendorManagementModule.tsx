@@ -13,8 +13,8 @@ const STATUS_FILTERS: Array<VendorStatus | 'All'> = ['All', 'Active', 'On Hold',
 type FetchState =
   | { status: 'loading' }
   | { status: 'success' }
-  | { status: 'auth-error'; message: string }
-  | { status: 'request-error'; message: string }
+  | { status: 'auth-error'; message: string; httpStatus: number }
+  | { status: 'request-error'; message: string; httpStatus: number }
 
 export function VendorManagementModule() {
   const initialVendors = useWarehouseVendors()
@@ -49,9 +49,9 @@ export function VendorManagementModule() {
       })
       setFetchState({ status: 'success' })
     } else if (result.kind === 'auth-error') {
-      setFetchState({ status: 'auth-error', message: result.message })
+      setFetchState({ status: 'auth-error', message: result.message, httpStatus: result.status })
     } else {
-      setFetchState({ status: 'request-error', message: result.message })
+      setFetchState({ status: 'request-error', message: result.message, httpStatus: result.status })
     }
   }, [])
 
@@ -160,7 +160,9 @@ export function VendorManagementModule() {
                         <Lock className="size-5" />
                       </div>
                       <p className="font-medium text-foreground">Authentication Required</p>
-                      <p className="max-w-md text-xs text-muted-foreground">{fetchState.message}</p>
+                      <p className="max-w-md text-xs text-muted-foreground">
+                        GET /api/vendors returned HTTP {fetchState.httpStatus}. {fetchState.message}
+                      </p>
                       <button
                         type="button"
                         onClick={() => loadVendors()}
@@ -176,7 +178,10 @@ export function VendorManagementModule() {
                         <AlertTriangle className="size-5" />
                       </div>
                       <p className="font-medium text-foreground">Vendor Registry Unavailable</p>
-                      <p className="max-w-md text-xs text-muted-foreground">{fetchState.message}</p>
+                      <p className="max-w-md text-xs text-muted-foreground">
+                        {fetchState.httpStatus > 0 ? `GET /api/vendors returned HTTP ${fetchState.httpStatus}. ` : ''}
+                        {fetchState.message}
+                      </p>
                       <button
                         type="button"
                         onClick={() => loadVendors()}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Search, Plus, ChevronDown, Grid2X2, List, PackageSearch, ArrowLeft } from 'lucide-react'
 import { ConsoleLayout } from '@/components/ConsoleLayout'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
+import { PLANNER_RAIL_DESTINATIONS, PLANNER_RAIL_IDENTITY } from '@/lib/executive-destinations'
 import { AdminShell } from '@/components/admin/AdminShell'
 import { AddNewAssetModal } from '@/components/AddNewAssetModal'
 import { AssetInformationModal } from '@/components/AssetInformationModal'
@@ -16,7 +17,7 @@ import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { GridRevealContainer } from '@/components/GridRevealContainer'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
-import { ASSET_CATEGORIES, type InventoryItem, type ProcurementItem, type StockStatus } from '@/lib/types'
+import { ASSET_CATEGORIES, type InventoryItem, type ProcurementItem, type StockStatus, type Route } from '@/lib/types'
 
 const statusMeta: Record<StockStatus, { badge: string; dot: string; bar: string }> = {
   Available: { badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/60', dot: 'bg-emerald-500', bar: 'bg-emerald-600 dark:bg-emerald-500' },
@@ -485,9 +486,14 @@ export function InventoryStockPage() {
 
   const { navigate } = useNav()
 
-  if (isExecutive) {
+  if (isExecutive || isPlanner) {
     return (
-      <ExecutiveShell activeId="dashboard" onSelect={(id) => navigate(id)}>
+      <ExecutiveShell
+        activeId={isPlanner ? 'inventory' : 'dashboard'}
+        onSelect={(id) => navigate(id as Route)}
+        destinations={isPlanner ? PLANNER_RAIL_DESTINATIONS : undefined}
+        identityRoleLabel={isPlanner ? PLANNER_RAIL_IDENTITY.roleLabel : undefined}
+      >
         <div className="mb-4">
           <button
             type="button"
@@ -495,7 +501,7 @@ export function InventoryStockPage() {
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="size-3.5" />
-            Back to Executive Dashboard
+            Back to {isPlanner ? 'Planner Dashboard' : 'Executive Dashboard'}
           </button>
         </div>
         {headerBlock}

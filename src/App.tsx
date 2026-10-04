@@ -20,6 +20,7 @@ import { OverviewPage } from '@/pages/OverviewPage'
 import { AdminSystemDashboardPage } from '@/pages/AdminSystemDashboardPage'
 import { AdminWorkforcePage } from '@/pages/AdminWorkforcePage'
 import { WarehouseHomePage } from '@/pages/WarehouseHomePage'
+import { WarehouseModulePage } from '@/pages/WarehouseModulePage'
 import { GroundCrewPage } from '@/pages/GroundCrewPage'
 import { PinSetupScreen } from '@/pages/PinSetupScreen'
 import { TempPasswordResetScreen } from '@/pages/TempPasswordResetScreen'
@@ -33,6 +34,7 @@ const ReplenishmentPage = lazy(() => import('@/pages/ReplenishmentPage').then((m
 const ActivityLogsPage = lazy(() => import('@/pages/ActivityLogsPage').then((m) => ({ default: m.ActivityLogsPage })))
 const DamageValidationPage = lazy(() => import('@/pages/DamageValidationPage').then((m) => ({ default: m.DamageValidationPage })))
 const InventoryStockPage = lazy(() => import('@/pages/InventoryStockPage').then((m) => ({ default: m.InventoryStockPage })))
+const PlannerAssetCatalogPage = lazy(() => import('@/pages/PlannerAssetCatalogPage').then((m) => ({ default: m.PlannerAssetCatalogPage })))
 const WarehouseLogsPage = lazy(() => import('@/pages/WarehouseLogsPage').then((m) => ({ default: m.WarehouseLogsPage })))
 const CrewRosterPage = lazy(() => import('@/pages/CrewRosterPage').then((m) => ({ default: m.CrewRosterPage })))
 const TaskDeploymentsPage = lazy(() => import('@/pages/TaskDeploymentsPage').then((m) => ({ default: m.TaskDeploymentsPage })))
@@ -170,6 +172,33 @@ function Router() {
     }
   }
 
+  // Full Warehouse Operations accounts use one desktop shell for the dashboard
+  // and every operational module. Scoped associate and mobile routes retain
+  // their dedicated experiences above.
+  if (isWarehouse && hasFullWarehouseAccess) {
+    switch (route) {
+      case 'inventory':
+        return <WarehouseModulePage moduleId="assets" />
+      case 'replenishment':
+        return <WarehouseModulePage moduleId="replenishment" />
+      case 'vendors':
+        return <WarehouseModulePage moduleId="vendors" />
+      case 'crew':
+        return <WarehouseModulePage moduleId="manning" />
+      case 'incidents':
+        return <WarehouseModulePage moduleId="incidents" />
+      case 'dispatch':
+        return <WarehouseModulePage moduleId="dispatch" />
+      case 'production':
+        return <WarehouseModulePage moduleId="production" />
+      case 'damage':
+        return <DamageValidationPage />
+      case 'overview':
+      default:
+        return <WarehouseHomePage />
+    }
+  }
+
   // Client-side role guard for Project Manager:
   // PM is restricted to project manager dashboard and design canvas oversight surfaces.
   // PM cannot mount Admin/Executive operational pages (security-audit, workforce, rbac, executive dashboard/logs).
@@ -182,6 +211,27 @@ function Router() {
       case 'project-manager':
       default:
         return <ProjectManagerDashboardPage />
+    }
+  }
+
+  // Event Planner is intentionally isolated from registry and damage
+  // operations. Dashboard / project / mood-board content is introduced in
+  // later planner phases; for now these shell destinations land on the
+  // existing planner workspace hub.
+  if (currentUser?.role === 'Event Planner') {
+    switch (route) {
+      case 'inventory':
+        return <PlannerAssetCatalogPage />
+      case 'canvas-workspace':
+        return <CanvasWorkspacePage />
+      case 'event-detail':
+        return <EventDetailPage />
+      case 'dashboard':
+      case 'design-projects':
+      case 'mood-boards':
+      case 'canvas':
+      default:
+        return <DesignCanvasHubPage />
     }
   }
 

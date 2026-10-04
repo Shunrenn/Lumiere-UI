@@ -1,11 +1,14 @@
 import type { ReactNode } from 'react'
 import { ExecutiveRail } from '@/components/executive/ExecutiveRail'
 import { ExecutiveTopBar } from '@/components/executive/ExecutiveTopBar'
-import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
+import type { ExecutiveDestinationId, SharedRailDestination } from '@/lib/executive-destinations'
 
-interface ExecutiveShellProps {
-  activeId: ExecutiveDestinationId
-  onSelect: (id: ExecutiveDestinationId) => void
+interface ExecutiveShellProps<T extends string = ExecutiveDestinationId> {
+  activeId: T
+  onSelect: (id: T) => void
+  /** Optional role-specific navigation while retaining the shared rail structure. */
+  destinations?: readonly SharedRailDestination[]
+  identityRoleLabel?: string
   /* Sticky region pinned to the top of the scroll area (title, stat cards, filters). */
   stickyHeader?: ReactNode
   children: ReactNode
@@ -18,10 +21,22 @@ interface ExecutiveShellProps {
 // container, so they never move. Inside the content column only the body
 // scrolls; the optional sticky header stays pinned while the body slides
 // beneath it.
-export function ExecutiveShell({ activeId, onSelect, stickyHeader, children }: ExecutiveShellProps) {
+export function ExecutiveShell<T extends string = ExecutiveDestinationId>({
+  activeId,
+  onSelect,
+  destinations,
+  identityRoleLabel,
+  stickyHeader,
+  children,
+}: ExecutiveShellProps<T>) {
   return (
     <div className="fixed inset-0 flex bg-background">
-      <ExecutiveRail activeId={activeId} onSelect={onSelect} />
+      <ExecutiveRail
+        activeId={activeId}
+        onSelect={onSelect}
+        destinations={destinations}
+        identityRoleLabel={identityRoleLabel}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <ExecutiveTopBar />

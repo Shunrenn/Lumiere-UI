@@ -1,23 +1,18 @@
 import { useState } from 'react'
 import {
   LayoutGrid,
-  ClipboardList,
-  PackageSearch,
   Boxes,
-  Warehouse,
   Users,
-  Truck,
   LogOut,
   X,
   PenTool,
   Sun,
   Moon,
-  AlertTriangle,
   PanelLeft,
   ChevronRight,
   ShieldCheck,
   ScrollText,
-  Store,
+  Palette,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useNav } from '@/lib/nav'
@@ -25,6 +20,7 @@ import { useAuth } from '@/lib/auth'
 import { useDarkMode } from '@/lib/theme'
 import type { Route } from '@/lib/types'
 import { getWarehouseModule, type WarehouseModuleId } from '@/lib/warehouse-modules'
+import { WAREHOUSE_DESTINATIONS } from '@/lib/warehouse-modules'
 import { canAccessRoute } from '@/lib/route-guard'
 
 type NavItem = {
@@ -42,28 +38,28 @@ const adminNavItems: NavItem[] = [
   { label: 'Security Audit Logs', blurb: 'Review security events & system audit trail', icon: ScrollText, route: 'security-audit' },
 ]
 
-const warehouseNavItems: NavItem[] = [
-  { label: 'Overview', blurb: 'Operations metrics & activity dashboard', icon: LayoutGrid, route: 'overview' },
-  { label: 'Inventory Stock', blurb: 'Category-specific asset levels and stock tracking', icon: Boxes, route: 'inventory', moduleId: 'assets' },
-  { label: 'Vendor Management', blurb: 'Vendor directory, lead times & preferred suppliers', icon: Store, route: 'vendors', moduleId: 'vendors' },
-  { label: 'Damage Validation', blurb: 'Item damage history and inspection reports', icon: AlertTriangle, route: 'damage', moduleId: 'incidents' },
-  { label: 'Replenishment', blurb: 'Deficit tracking & reorder requisitions', icon: PackageSearch, route: 'replenishment', moduleId: 'replenishment' },
-  { label: 'Warehouse Logs', blurb: 'Audit trail and ledger entries', icon: Warehouse, route: 'warehouse-logs' },
-  { label: 'Crew Roster', blurb: 'Staff shift roster & auto-allocations', icon: Users, route: 'crew', moduleId: 'manning' },
-  { label: 'Task Deployments', blurb: 'Active event task force deployments', icon: ClipboardList, route: 'deployments' },
-  { label: 'Dispatch Records', blurb: 'Fleet manifests and transit checkpoints', icon: Truck, route: 'dispatch', moduleId: 'dispatch' },
-]
+const warehouseNavItems: NavItem[] = WAREHOUSE_DESTINATIONS.map((destination) => {
+  const module = getWarehouseModule(destination.id as WarehouseModuleId)
+  return {
+    label: destination.label,
+    blurb: module?.blurb ?? `${destination.label} workspace`,
+    icon: destination.icon,
+    route: destination.route,
+    moduleId: module?.id,
+  }
+})
 
 const plannerNavItems: NavItem[] = [
-  { label: 'Design Canvas', blurb: 'Visual 2D/3D event layout canvas hub', icon: PenTool, route: 'canvas' },
-  { label: 'Overview & Events', blurb: 'Event scheduling & project overview', icon: LayoutGrid, route: 'overview' },
-  { label: 'Inventory Catalog', blurb: 'Browse venue décor and asset catalog', icon: Boxes, route: 'inventory' },
+  { label: 'Dashboard', blurb: 'Assigned events and recent design work', icon: LayoutGrid, route: 'dashboard' },
+  { label: 'Design Projects', blurb: 'Assigned event canvases', icon: PenTool, route: 'design-projects' },
+  { label: 'Mood Boards', blurb: 'Creative references and inspiration', icon: Palette, route: 'mood-boards' },
+  { label: 'Asset Catalog', blurb: 'Read-only décor and asset catalog', icon: Boxes, route: 'inventory' },
 ]
 
 /* Sub-routes highlight their parent nav entry. */
 const routeParent: Partial<Record<Route, Route>> = {
-  'event-detail': 'canvas',
-  'canvas-workspace': 'canvas',
+  'event-detail': 'design-projects',
+  'canvas-workspace': 'design-projects',
 }
 
 export interface ConsoleSidebarProps {

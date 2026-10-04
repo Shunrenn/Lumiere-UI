@@ -13,6 +13,8 @@ export const VALID_ROUTES = new Set<Route>([
   'rbac',
   'damage',
   'replenishment',
+  'incidents',
+  'production',
   'inventory',
   'warehouse-logs',
   'crew',
@@ -22,6 +24,8 @@ export const VALID_ROUTES = new Set<Route>([
   'event-detail',
   'canvas',
   'canvas-workspace',
+  'design-projects',
+  'mood-boards',
   'field-ops',
   'warehouse-lead',
   'warehouse-member',
@@ -69,7 +73,7 @@ export function getDefaultRouteForUser(user: PortalAccount | null | undefined): 
   if (role === 'Executive') return 'dashboard'
   if (role === 'Project Manager Lite') return 'project-manager'
   if (role === 'Project Manager') return 'project-manager'
-  if (role === 'Event Planner') return 'canvas'
+  if (role === 'Event Planner') return 'dashboard'
   if (role === 'Warehouse Associate') return 'overview'
   if (role === 'Warehouse Manager' || role === 'Warehouse Operations Manager') return 'overview'
 
@@ -180,16 +184,18 @@ export function canAccessRoute(
   }
 
   // Event Planner:
-  // Allowed: canvas, canvas-workspace, registry, event-detail, inventory, damage
-  // Denied: Admin, Workforce, Security Audit, RBAC, Manning, Warehouse supervisor console
+  // Allowed: planner dashboard, projects, mood boards, read-only catalog, and
+  // canvas sub-surfaces. Event Registry and Damage Validation are deliberately
+  // denied: planners receive API-assigned events and do not administer them.
   if (role === 'Event Planner') {
     return (
+      cleanRoute === 'dashboard' ||
+      cleanRoute === 'design-projects' ||
+      cleanRoute === 'mood-boards' ||
       cleanRoute === 'canvas' ||
       cleanRoute === 'canvas-workspace' ||
-      cleanRoute === 'registry' ||
       cleanRoute === 'event-detail' ||
-      cleanRoute === 'inventory' ||
-      cleanRoute === 'damage'
+      cleanRoute === 'inventory'
     )
   }
 
@@ -212,6 +218,8 @@ export function canAccessRoute(
       cleanRoute === 'overview' ||
       cleanRoute === 'inventory' ||
       cleanRoute === 'replenishment' ||
+      cleanRoute === 'incidents' ||
+      cleanRoute === 'production' ||
       cleanRoute === 'vendors' ||
       cleanRoute === 'dispatch' ||
       cleanRoute === 'warehouse-logs' ||
