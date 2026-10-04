@@ -14,7 +14,7 @@ interface WarehouseShellProps {
 
 /** Shared desktop frame for Warehouse Operations pages. */
 export function WarehouseShell({ activeRoute, children, stickyHeader }: WarehouseShellProps) {
-  const { currentUser } = useAuth()
+  const { currentUser, isExecutive } = useAuth()
   const { navigate } = useNav()
 
   const destinations = WAREHOUSE_DESTINATIONS.filter((destination) => {
@@ -32,8 +32,8 @@ export function WarehouseShell({ activeRoute, children, stickyHeader }: Warehous
         const destination = destinations.find((item) => item.id === id)
         if (destination) navigate(destination.route)
       }}
-      destinations={destinations}
-      identityRoleLabel="WAREHOUSE OPERATIONS"
+      destinations={isExecutive ? undefined : destinations}
+      identityRoleLabel={isExecutive ? 'EXECUTIVE' : 'WAREHOUSE OPERATIONS'}
       stickyHeader={stickyHeader}
     >
       {children}
