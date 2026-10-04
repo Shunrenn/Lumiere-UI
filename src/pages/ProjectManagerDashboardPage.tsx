@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { useProjectPitches, type ProjectPitch } from '@/lib/project-pitch'
 import { ProjectManagerHeader } from '@/components/project-manager/ProjectManagerHeader'
+import { ProjectManagerSidebar, ProjectManagerMobileNav, projectManagerSectionMeta, type ProjectManagerSection } from '@/components/project-manager/ProjectManagerSidebar'
 import { ProjectManagerMasterCalendar } from '@/components/project-manager/ProjectManagerMasterCalendar'
 import { ProjectManagerEventsList } from '@/components/project-manager/ProjectManagerEventsList'
 import { ProjectManagerActionRequired } from '@/components/project-manager/ProjectManagerActionRequired'
@@ -33,6 +34,7 @@ export function ProjectManagerDashboardPage() {
 
   // Selected event for single-event workspace
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
+  const [activeSection, setActiveSection] = useState<ProjectManagerSection>('dashboard')
 
   // Filters & search
   const [searchQuery, setSearchQuery] = useState('')
@@ -170,12 +172,16 @@ export function ProjectManagerDashboardPage() {
   }
 
   // Otherwise, render the PM Command Center Dashboard
-  return (
-    <div className="min-h-screen bg-background text-foreground pb-20">
-      <OfflineBanner />
+  const sectionMeta = projectManagerSectionMeta[activeSection]
 
-      {/* Top Header & Search Bar */}
-      <ProjectManagerHeader
+  return (
+    <div className="flex min-h-screen bg-background text-foreground">
+      <ProjectManagerSidebar activeSection={activeSection} onSelect={setActiveSection} />
+      <div className="min-w-0 flex-1 pb-20">
+        <OfflineBanner />
+
+        {/* Top Header & Search Bar */}
+        <ProjectManagerHeader
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onNewPitch={() => {
@@ -189,7 +195,15 @@ export function ProjectManagerDashboardPage() {
         }}
       />
 
-      <main className="max-w-[94rem] mx-auto px-6 sm:px-8 py-8 flex flex-col gap-8">
+        <ProjectManagerMobileNav activeSection={activeSection} onSelect={setActiveSection} />
+        <main className="max-w-[94rem] mx-auto px-4 sm:px-8 py-6 flex flex-col gap-6">
+          <header className="flex flex-col gap-1 border-b border-border/60 pb-5">
+            <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-primary">Project Manager Workspace</p>
+            <h2 className="font-serif text-2xl font-semibold text-foreground">{sectionMeta.title}</h2>
+            <p className="text-sm text-muted-foreground">{sectionMeta.description}</p>
+          </header>
+
+        {activeSection === 'dashboard' && <>
         {/* Top KPI Metrics Strip */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
@@ -260,8 +274,9 @@ export function ProjectManagerDashboardPage() {
           </div>
         </div>
 
-        {/* Action Required Callouts */}
-        <ProjectManagerActionRequired
+        </>}
+
+        {activeSection === 'actions' && <ProjectManagerActionRequired
           events={events}
           staff={staff}
           procurement={procurement}
@@ -275,8 +290,9 @@ export function ProjectManagerDashboardPage() {
               setPitchModalOpen(true)
             }
           }}
-        />
+        />}
 
+        {activeSection === 'projects' && <>
         {/* Master Calendar */}
         <ProjectManagerMasterCalendar
           events={events}
@@ -295,8 +311,9 @@ export function ProjectManagerDashboardPage() {
           onOpenEvent={(id) => setSelectedEventId(id)}
         />
 
-        {/* Client Pitching Summary Section */}
-        {!isProjectManagerLite && (
+        </>}
+
+        {activeSection === 'pitches' && !isProjectManagerLite && (
           <>
             {pitchesError && (
               <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-xs font-semibold text-rose-700 dark:text-rose-300 flex items-center justify-between gap-3">
@@ -329,7 +346,36 @@ export function ProjectManagerDashboardPage() {
             />
           </>
         )}
+
+        {activeSection === 'briefs' && (
+          <section className="flex flex-col gap-4">
+            {pitches.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">
+                <h3 className="font-serif text-lg font-semibold text-foreground">No concept briefs found</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Existing project concepts and planning briefs will appear here when available.</p>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {pitches.map((pitch) => (
+                  <article key={pitch.id} className="rounded-2xl border border-border/80 bg-card/70 p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[0.65rem] font-bold uppercase tracking-wider text-primary">Concept brief</p>
+                        <h3 className="mt-1 font-serif text-lg font-semibold text-foreground">{pitch.proposal.conceptTitle || 'Untitled concept'}</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">{pitch.brief.clientName || 'Client not specified'}</p>
+                      </div>
+                      <span className="rounded-full bg-muted px-2 py-1 text-[0.65rem] font-semibold text-muted-foreground">{pitch.status}</span>
+                    </div>
+                    {pitch.proposal.conceptSummary && <p className="mt-4 line-clamp-3 text-sm leading-6 text-muted-foreground">{pitch.proposal.conceptSummary}</p>}
+                    <button type="button" onClick={() => { setEditingPitch(pitch); setPitchModalOpen(true) }} className="mt-4 text-xs font-semibold text-primary hover:underline">View brief</button>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </main>
+      </div>
 
       {/* Client Pitch Modal */}
       {!isProjectManagerLite && (

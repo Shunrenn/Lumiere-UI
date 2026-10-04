@@ -3,14 +3,20 @@ import { User, Lock, Eye, EyeOff, HardHat, Sun, Moon, Monitor } from 'lucide-rea
 import { useAuth } from '@/lib/auth'
 import { createAccessRequest } from '@/features/access-requests/api'
 import { useThemeMode, type ThemeMode } from '@/lib/theme'
-import { usePortal } from '@/lib/store'
 
 type View = 'signin' | 'request' | 'sent'
 type RequestType = 'forgot-password' | 'request-password'
 
-export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
+export function LoginPage({
+  onCrewPortal,
+  portalStaff,
+  addUserAction,
+}: {
+  onCrewPortal: () => void
+  portalStaff: ReturnType<typeof import('@/lib/store').usePortal>['staff']
+  addUserAction: ReturnType<typeof import('@/lib/store').usePortal>['addUserAction']
+}) {
   const { login } = useAuth()
-  const { staff: portalStaff, addUserAction } = usePortal()
   const { mode: themeMode, setMode: setThemeMode } = useThemeMode()
   const [view, setView] = useState<View>('signin')
 

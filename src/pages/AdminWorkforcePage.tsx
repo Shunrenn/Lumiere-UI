@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Search, UserPlus, Users, ChevronDown, TrendingUp, ArrowUpDown } from 'lucide-react'
+import { Plus, Search, UserPlus, Users, ChevronDown, TrendingUp, ArrowUpDown, AlertTriangle } from 'lucide-react'
 import { AdminShell } from '@/components/admin/AdminShell'
 import { EmployeeModal } from '@/components/EmployeeModal'
 import { ViewAccountModal } from '@/components/ViewAccountModal'
@@ -47,6 +47,9 @@ export function AdminWorkforcePage() {
   const [createRecordOpen, setCreateRecordOpen] = useState(false)
   const [selected, setSelected] = useState<Staff | null>(null)
   const [editMode, setEditMode] = useState(false)
+  const [pendingAction, setPendingAction] = useState<'suspend' | 'force-logout' | null>(null)
+  const [actionReason, setActionReason] = useState('')
+  const [actionError, setActionError] = useState<string | null>(null)
   const addMenuRef = useRef<HTMLDivElement | null>(null)
 
   const lockedIds = useMemo(() => new Set(userActions.filter((a) => a.type === 'account-locked' && a.status === 'pending').map((a) => a.user)), [userActions])
@@ -217,7 +220,16 @@ export function AdminWorkforcePage() {
           </label>
         </div>
         <p className="text-xs text-muted-foreground">Showing {rows.length} of {staff.length} directory entries. Click a row to view details.</p>
-        <WorkforceTable rows={rows} resolveStatus={(s) => statusFor(s, lockedIds)} onRowClick={(s) => { setSelected(s); setEditMode(false); }} onSuspend={(s) => void toggleSuspend(s.id)} onForceLogout={(s) => forceLogout(s.id)} onEdit={(s) => { setSelected(s); setEditMode(true); }} highlightId={highlightId} stats={tableStats} />
+        <WorkforceTable
+          rows={rows}
+          resolveStatus={(s) => statusFor(s, lockedIds)}
+          onRowClick={(s) => { setSelected(s); setEditMode(false) }}
+          onSuspend={(s) => { setSelected(s); setEditMode(false); setPendingAction('suspend'); setActionReason(''); setActionError(null) }}
+          onForceLogout={(s) => { setSelected(s); setEditMode(false); setPendingAction('force-logout'); setActionReason(''); setActionError(null) }}
+          onEdit={(s) => { setSelected(s); setEditMode(true) }}
+          highlightId={highlightId}
+          stats={tableStats}
+        />
       </div>
       )}
       <EmployeeModal 
@@ -227,7 +239,52 @@ export function AdminWorkforcePage() {
         actionId={prefillActionId}
       />
       <EmployeeRecordModal open={createRecordOpen} onClose={() => setCreateRecordOpen(false)} onCreate={addEmployeeRecord} />
-      <ViewAccountModal open={!!selected} staff={selected} onClose={() => setSelected(null)} editable={editMode} onSave={async (s) => { await updateStaff(s); setSelected(null) }} />
+      <ViewAccountModal open={!!selected && !pendingAction} staff={selected} onClose={() => setSelected(null)} editable={editMode} onSave={async (s) => { await updateStaff(s); setSelected(null) }} />
+      {pendingAction && selected && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-700/70 p-4" role="dialog" aria-modal="true" aria-labelledby="workforce-action-title">
+          <div className="w-full max-w-md overflow-hidden rounded-lg bg-card shadow-2xl">
+            <div className="flex items-center gap-3 bg-destructive px-6 py-4 text-destructive-foreground">
+              <AlertTriangle className="size-5 shrink-0" aria-hidden="true" />
+              <h2 id="workforce-action-title" className="text-sm font-bold uppercase tracking-[0.15em]">
+                {pendingAction === 'suspend' ? (selected.accountStatus === 'Suspended' ? 'Reactivate Account?' : 'Suspend Account?') : 'Force Logout?'}
+              </h2>
+            </div>
+            <form className="space-y-4 px-6 py-6" onSubmit={async (event) => {
+              event.preventDefault()
+              const reason = actionReason.trim()
+              if (!reason) {
+                setActionError(pendingAction === 'suspend' ? 'Please provide a reason for suspending this account.' : 'Please provide a reason for forcing this user to log out.')
+                return
+              }
+              setActionError(null)
+              try {
+                if (pendingAction === 'suspend') await toggleSuspend(selected.id)
+                else await forceLogout(selected.id)
+                setPendingAction(null)
+                setSelected(null)
+                setActionReason('')
+              } catch (error) {
+                setActionError(error instanceof Error ? error.message : 'The account action could not be completed.')
+              }
+            }}>
+              <div className="text-sm text-foreground">
+                <p>You are about to {pendingAction === 'suspend' ? (selected.accountStatus === 'Suspended' ? 'reactivate' : 'suspend') : 'terminate the active session for'}:</p>
+                <p className="mt-1 font-semibold">{selected.fullName || `${selected.firstName} ${selected.surname}`.trim() || '—'}</p>
+                {selected.email && <p className="text-xs text-muted-foreground">{selected.email}</p>}
+              </div>
+              <label className="block text-xs font-semibold text-foreground" htmlFor="workforce-action-reason">
+                Reason <span className="text-destructive">*</span>
+                <textarea id="workforce-action-reason" required value={actionReason} onChange={(event) => setActionReason(event.target.value)} rows={4} placeholder="Describe why this administrative action is required..." className="mt-1.5 w-full resize-none rounded-md border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30" />
+              </label>
+              {actionError && <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">{actionError}</p>}
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={() => { setPendingAction(null); setActionReason(''); setActionError(null) }} className="rounded-md border border-input bg-background px-4 py-2.5 text-xs font-semibold text-foreground hover:bg-muted">Cancel</button>
+                <button type="submit" className="rounded-md bg-destructive px-4 py-2.5 text-xs font-bold text-destructive-foreground hover:opacity-90">{pendingAction === 'suspend' ? (selected.accountStatus === 'Suspended' ? 'Reactivate Account' : 'Suspend Account') : 'Force Logout'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </AdminShell>
   )
 }

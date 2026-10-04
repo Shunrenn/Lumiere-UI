@@ -10,6 +10,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type ReactNode,
@@ -1462,29 +1463,46 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   })
   const [partialEgressesByEvent, setPartialEgressesByEvent] = useState<Record<string, EventEgressResponse>>({})
   const [partialEgressPolicy, setPartialEgressPolicy] = useState<PostEgressPolicyResponse | null>(null)
+  const eventsRequestRef = useRef<Promise<PortalEvent[]> | null>(null)
+  const eventsRef = useRef(events)
+  const lastEventsRequestAtRef = useRef(0)
 
-  // Hydrate events list from backend REST API (GET /api/events)
-  const loadEvents = useCallback(async (): Promise<PortalEvent[]> => {
-    try {
-      const { fetchEventsApi } = await import('@/lib/eventsApi')
-      const remoteEvents = await fetchEventsApi()
-      setEvents(remoteEvents)
+  // Hydrate events list from backend REST API (GET /api/events). Cached state is
+  // rendered immediately; remote hydration stays in the background and is
+  // coalesced so focus events cannot create duplicate requests.
+  const loadEvents = useCallback(async (force = false): Promise<PortalEvent[]> => {
+    const now = Date.now()
+    if (!force && now - lastEventsRequestAtRef.current < 2_000) return eventsRequestRef.current ?? events
+    if (eventsRequestRef.current) return eventsRequestRef.current
+
+    lastEventsRequestAtRef.current = now
+    const request = (async () => {
       try {
-        localStorage.setItem('_lumiere_cached_events', JSON.stringify(remoteEvents))
-      } catch {}
-      return remoteEvents
-    } catch (err) {
-      console.warn('[store] loadEvents failed:', err)
-      return []
-    }
+        const { fetchEventsApi } = await import('@/lib/eventsApi')
+        const remoteEvents = await fetchEventsApi()
+        eventsRef.current = remoteEvents
+        setEvents(remoteEvents)
+        try {
+          localStorage.setItem('_lumiere_cached_events', JSON.stringify(remoteEvents))
+        } catch {}
+        return remoteEvents
+      } catch (err) {
+        console.warn('[store] loadEvents failed:', err)
+        return eventsRef.current
+      } finally {
+        eventsRequestRef.current = null
+      }
+    })()
+    eventsRequestRef.current = request
+    return request
   }, [])
 
   useEffect(() => {
     let active = true
 
-    const syncEvents = () => {
+    const syncEvents = (force = false) => {
       if (!active) return
-      loadEvents()
+      void loadEvents(force)
     }
 
     syncEvents()
@@ -1495,7 +1513,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     window.addEventListener('focus', onFocus)
 
     // Periodic checkpoint refresh (30s polling fallback)
-    const interval = setInterval(syncEvents, 30000)
+    const interval = setInterval(() => syncEvents(true), 30000)
 
     return () => {
       active = false

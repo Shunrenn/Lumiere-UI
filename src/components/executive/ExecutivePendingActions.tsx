@@ -14,6 +14,7 @@ export interface ExecutivePendingItem {
 
 interface ExecutivePendingActionsProps {
   items: ExecutivePendingItem[]
+  onViewDetails?: () => void
 }
 
 const toneStyles = {
@@ -22,14 +23,19 @@ const toneStyles = {
   amber: 'text-amber-400',
 }
 
-export function ExecutivePendingActions({ items }: ExecutivePendingActionsProps) {
+export function ExecutivePendingActions({ items, onViewDetails }: ExecutivePendingActionsProps) {
   const isEmpty = items.length === 0
 
   return (
     <section className="flex h-[24rem] flex-col rounded-xl border border-border bg-card p-5 text-card-foreground">
-      <h2 className="shrink-0 font-serif text-2xl font-medium leading-tight text-foreground text-balance sm:text-3xl">
-        Pending Actions
-      </h2>
+      <div className="flex shrink-0 items-start justify-between gap-3">
+        <h2 className="font-serif text-2xl font-medium leading-tight text-foreground text-balance sm:text-3xl">Pending Actions</h2>
+        {onViewDetails && items.length > 0 && (
+          <button type="button" onClick={onViewDetails} className="rounded-md border border-border px-3 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground hover:bg-muted hover:text-foreground">
+            View all
+          </button>
+        )}
+      </div>
 
       {isEmpty ? (
         <div className="flex flex-1 items-center justify-center">

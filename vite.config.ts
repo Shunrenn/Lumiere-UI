@@ -25,6 +25,13 @@ export default defineConfig(({ mode }) => {
     server: {
       host: true,
       allowedHosts: true,
+      proxy: {
+        '/api': {
+          target: 'https://lumiere-production-f6a1.up.railway.app',
+          changeOrigin: true,
+          secure: true,
+        },
+      },
     },
   }
 })

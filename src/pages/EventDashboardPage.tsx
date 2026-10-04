@@ -17,6 +17,7 @@ import { ErrorFallback } from '@/components/ErrorFallback'
 import { cn } from '@/lib/utils'
 import { ExecutiveLiteDashboard } from '@/components/executive-lite/ExecutiveLiteDashboard'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
+import { ExecutiveSummaryDetailModal, type ExecutiveSummaryDetail } from '@/components/executive/ExecutiveSummaryDetailModal'
 
 type DashboardMetricMode = 'events' | 'reports'
 
@@ -30,6 +31,7 @@ export function EventDashboardPage() {
 
   const { events, damageExceptions } = usePortal()
   const [metricMode, setMetricMode] = useState<DashboardMetricMode>('events')
+  const [summaryDetail, setSummaryDetail] = useState<ExecutiveSummaryDetail | null>(null)
 
   // Event metrics
   const totalEvents = events.length
@@ -222,28 +224,28 @@ export function EventDashboardPage() {
                     label="In Production"
                     value={String(eventCounts['In Production'] ?? 0)}
                     caption="Active staging & execution"
-                    onSelect={() => navigate('registry')}
+                    onSelect={() => setSummaryDetail('in-production')}
                   />
                   <ExecutiveStatCard
                     agentSelector="data-agent-total-events"
                     label="Total Events"
                     value={String(totalEvents)}
                     caption="Registered event portfolios"
-                    onSelect={() => navigate('registry')}
+                    onSelect={() => setSummaryDetail('total-events')}
                   />
                   <ExecutiveStatCard
                     agentSelector="data-agent-completed-events"
                     label="Completed Events"
                     value={String(completedEvents)}
                     caption="Successfully executed"
-                    onSelect={() => navigate('registry')}
+                    onSelect={() => setSummaryDetail('completed-events')}
                   />
                   <ExecutiveStatCard
                     agentSelector="data-agent-ongoing-events"
                     label="Ongoing Events"
                     value={String(ongoingEvents)}
                     caption="Active production & reserved"
-                    onSelect={() => navigate('registry')}
+                    onSelect={() => setSummaryDetail('ongoing-events')}
                   />
                 </>
               ) : (
@@ -253,28 +255,28 @@ export function EventDashboardPage() {
                     label="Audit Exceptions"
                     value={String((reportCounts['Held for Audit'] ?? 0) + (reportCounts['Second Sign-off'] ?? 0))}
                     caption="Held for audit review"
-                    onSelect={() => navigate('damage')}
+                    onSelect={() => setSummaryDetail('audit-exceptions')}
                   />
                   <ExecutiveStatCard
                     agentSelector="data-agent-total-reports"
                     label="Total Reports"
                     value={String(totalReports)}
                     caption="Post-event damage filings"
-                    onSelect={() => navigate('damage')}
+                    onSelect={() => setSummaryDetail('total-reports')}
                   />
                   <ExecutiveStatCard
                     agentSelector="data-agent-resolved-cases"
                     label="Resolved Cases"
                     value={String(resolvedCases)}
                     caption="Closed & validated verdicts"
-                    onSelect={() => navigate('damage')}
+                    onSelect={() => setSummaryDetail('resolved-cases')}
                   />
                   <ExecutiveStatCard
                     agentSelector="data-agent-pending-verdicts"
                     label="Pending Verdicts"
                     value={String(pendingVerdicts)}
                     caption="Awaiting executive review"
-                    onSelect={() => navigate('damage')}
+                    onSelect={() => setSummaryDetail('pending-verdicts')}
                   />
                 </>
               )}
@@ -287,14 +289,14 @@ export function EventDashboardPage() {
                   key="donut-events"
                   compact
                   counts={eventCounts}
-                  onSelect={() => navigate('registry')}
+                  onSelect={() => setSummaryDetail('total-events')}
                 />
               ) : (
                 <ReportDistributionCard
                   key="donut-reports"
                   compact
                   counts={reportCounts}
-                  onSelect={() => navigate('damage')}
+                  onSelect={() => setSummaryDetail('total-reports')}
                 />
               )}
 
@@ -305,7 +307,7 @@ export function EventDashboardPage() {
           {/* Row 2: Pending Actions (30%) + Trend Analytics (70%) */}
           <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-10">
             <div className="lg:col-span-3">
-              <ExecutivePendingActions items={pendingActionItems} />
+              <ExecutivePendingActions items={pendingActionItems} onViewDetails={() => setSummaryDetail('pending-actions')} />
             </div>
             <div className="lg:col-span-7">
               <ExecutiveTrendAnalyticsCard onViewRegistry={() => navigate('registry')} />
@@ -314,6 +316,13 @@ export function EventDashboardPage() {
         </div>
         )}
       </ExecutiveShell>
+      <ExecutiveSummaryDetailModal
+        detail={summaryDetail}
+        events={events}
+        damageExceptions={damageExceptions}
+        pendingActions={pendingActionItems}
+        onClose={() => setSummaryDetail(null)}
+      />
     </>
   )
 }

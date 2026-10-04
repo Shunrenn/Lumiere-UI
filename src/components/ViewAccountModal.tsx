@@ -307,6 +307,24 @@ export function ViewAccountModal({
               )}
             </div>
 
+            {/* Account Status (read-only in View Details) */}
+            <div>
+              <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
+                Status:
+              </label>
+              {readField(staff.accountStatus || '—')}
+            </div>
+
+            {/* Reason / Description is only shown when the existing account model provides one. */}
+            <div>
+              <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
+                Reason / Description:
+              </label>
+              <p className="mt-1.5 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                {'—'}
+              </p>
+            </div>
+
             {/* Subrole */}
             {(() => {
               const isSubroleAllowed =
@@ -369,27 +387,28 @@ export function ViewAccountModal({
               {readField(staff.lastAccess)}
             </div>
 
-            {/* Credential Management */}
-            <div className="rounded-md border border-border/70 bg-muted/20 p-3.5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                    Account Credentials
-                  </span>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Passwords are not stored in plaintext. To issue new access credentials, trigger a temporary password reset.
-                  </p>
+            {editable && (
+              <div className="rounded-md border border-border/70 bg-muted/20 p-3.5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <span className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
+                      Account Credentials
+                    </span>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Passwords are not stored in plaintext. Issue a new temporary password when access needs to be restored.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmReset(true)}
+                    className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-muted"
+                  >
+                    <KeyRound className="size-3.5" />
+                    Reset Temporary Password
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmReset(true)}
-                  className="ml-4 inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-muted"
-                >
-                  <KeyRound className="size-3.5" />
-                  Reset Temporary Password
-                </button>
               </div>
-            </div>
+            )}
           </div>
 
           {error && (

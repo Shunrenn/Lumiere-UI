@@ -506,9 +506,14 @@ export async function updateEventApi(
 
 /**
  * Fetches all events from GET /api/events.
- * 10-second timeout. Throws on network/server errors to distinguish failure from empty state.
+ * 10-second timeout. Read-only failures return an empty result so background
+ * hydration cannot surface an unhandled runtime error in the dashboard.
  */
 export async function fetchEventsApi(page = 1, pageSize = 50, statusFilter?: string): Promise<PortalEvent[]> {
+  // The events endpoint is protected; unauthenticated app boot should use the
+  // local/seeded state instead of producing a rejected background request.
+  if (!getAuthToken()) return []
+
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 10000)
   try {
@@ -523,8 +528,12 @@ export async function fetchEventsApi(page = 1, pageSize = 50, statusFilter?: str
       signal: controller.signal,
     })
     clearTimeout(timeoutId)
+    // Event loading is read-only and should not take down the dashboard when
+    // the API is temporarily unavailable. Keep the existing local snapshot and
+    // let the next checkpoint poll retry instead of surfacing a repeated error.
     if (!res.ok) {
-      throw new Error(`GET /api/events returned HTTP ${res.status}`)
+      console.warn(`[eventsApi] GET /api/events returned HTTP ${res.status}`)
+      return []
     }
     const body = await res.json()
     const data: EventResponseDto[] = Array.isArray(body)
@@ -536,7 +545,7 @@ export async function fetchEventsApi(page = 1, pageSize = 50, statusFilter?: str
   } catch (err) {
     clearTimeout(timeoutId)
     console.warn('[eventsApi] GET /api/events failed:', err)
-    throw err
+    return []
   }
 }
 

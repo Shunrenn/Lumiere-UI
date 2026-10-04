@@ -18,6 +18,7 @@ interface AdminPendingActionsProps {
   // Sub-roles created without their permission table ever being saved.
   subRoleSetups?: PendingSubRoleSetup[]
   onConfigureSubRole?: (setup: PendingSubRoleSetup) => void
+  onSelect?: () => void
 }
 
 // Read-only glance panel: surfaces the pending account items needing an Admin
@@ -30,10 +31,25 @@ export function AdminPendingActions({
   onResolve,
   subRoleSetups = [],
   onConfigureSubRole,
+  onSelect,
 }: AdminPendingActionsProps) {
   const isEmpty = items.length === 0 && subRoleSetups.length === 0
   return (
-    <section className="flex h-[24rem] flex-col rounded-xl border border-border bg-card p-5 text-foreground shadow-sm">
+    <section
+      className="flex h-[24rem] flex-col rounded-xl border border-border bg-card p-5 text-foreground shadow-sm"
+      onClick={(event) => {
+        if (onSelect && !(event.target as HTMLElement).closest('button')) onSelect()
+      }}
+      onKeyDown={(event) => {
+        if (onSelect && (event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) {
+          event.preventDefault()
+          onSelect()
+        }
+      }}
+      tabIndex={onSelect ? 0 : undefined}
+      role={onSelect ? 'button' : undefined}
+      aria-label={onSelect ? 'View pending actions details' : undefined}
+    >
       <h2 className="shrink-0 font-serif text-2xl font-medium leading-tight text-foreground text-balance sm:text-3xl">
         Pending Actions
       </h2>

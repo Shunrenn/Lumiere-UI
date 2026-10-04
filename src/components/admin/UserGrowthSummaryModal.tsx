@@ -68,6 +68,19 @@ export function UserGrowthSummaryModal({ open, staff, onClose, onViewInWorkforce
 
   const groups = allGroups.filter((g) => g.year === selectedYear)
   const totalTracked = groups.reduce((sum, g) => sum + g.members.length, 0)
+  const previousYearTotal = allGroups
+    .filter((g) => g.year === selectedYear - 1)
+    .reduce((sum, g) => sum + g.members.length, 0)
+  const growthThisYear = totalTracked - previousYearTotal
+  const monthlyRows = Array.from({ length: 12 }, (_, month) => {
+    const group = groups.find((entry) => new Date(entry.sortValue).getMonth() === month)
+    const total = group?.members.length ?? 0
+    const previous = month === 0 ? 0 : groups
+      .filter((entry) => new Date(entry.sortValue).getMonth() < month)
+      .reduce((sum, entry) => sum + entry.members.length, 0)
+    return { label: new Date(selectedYear, month, 1).toLocaleDateString('en-US', { month: 'short' }), total, change: total === 0 ? 0 : total - previous }
+  })
+  const maxMonthlyTotal = Math.max(1, ...monthlyRows.map((row) => row.total))
 
   return (
     <div
@@ -135,11 +148,39 @@ export function UserGrowthSummaryModal({ open, staff, onClose, onViewInWorkforce
             </button>
           </div>
 
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="rounded-lg border border-border bg-background px-4 py-3">
+              <p className="text-[0.58rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Registered Users</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{totalTracked}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-background px-4 py-3">
+              <p className="text-[0.58rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Growth This Year</p>
+              <p className={`mt-1 text-2xl font-bold tabular-nums ${growthThisYear >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>{growthThisYear >= 0 ? '+' : ''}{growthThisYear}</p>
+            </div>
+          </div>
           <p className="mt-4 text-center text-xs text-muted-foreground">
-            {totalTracked} onboarded {totalTracked === 1 ? 'account' : 'accounts'} in {selectedYear},
-            grouped by month added. Select a name to view and highlight that record in Workforce
-            Management.
+            {totalTracked} onboarded {totalTracked === 1 ? 'account' : 'accounts'} in {selectedYear}, grouped by month added. Select a name to view and highlight that record in Workforce Management.
           </p>
+          <div className="mt-5 rounded-lg border border-border bg-background p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-foreground">Monthly User Growth</h3>
+              <span className="text-[0.65rem] text-muted-foreground">{selectedYear}</span>
+            </div>
+            <div className="mt-4 flex h-28 items-end gap-1.5 border-b border-border pb-0.5">
+              {monthlyRows.map((row) => (
+                <div key={row.label} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1" title={`${row.label}: ${row.total} users`}>
+                  <div className="w-full rounded-t-sm bg-primary/75 transition-all" style={{ height: `${Math.max(row.total ? 10 : 3, (row.total / maxMonthlyTotal) * 100)}%` }} />
+                  <span className="text-[0.55rem] text-muted-foreground">{row.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mt-5 overflow-hidden rounded-lg border border-border">
+            <div className="grid grid-cols-[1fr_1fr_0.7fr] gap-3 bg-muted px-3 py-2 text-[0.58rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground"><span>Month</span><span>Total Users</span><span>Change</span></div>
+            <div className="divide-y divide-border">
+              {monthlyRows.map((row) => <div key={row.label} className="grid grid-cols-[1fr_1fr_0.7fr] gap-3 px-3 py-2 text-xs"><span className="text-foreground">{new Date(selectedYear, monthlyRows.indexOf(row), 1).toLocaleDateString('en-US', { month: 'long' })}</span><span className="tabular-nums text-muted-foreground">{row.total}</span><span className={`tabular-nums ${row.change > 0 ? 'text-emerald-600 dark:text-emerald-400' : row.change < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{row.change > 0 ? '+' : ''}{row.change || '—'}</span></div>)}
+            </div>
+          </div>
 
           {groups.length === 0 && (
             <p className="mt-6 text-center text-sm italic text-muted-foreground">
