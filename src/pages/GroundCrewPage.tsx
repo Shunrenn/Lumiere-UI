@@ -9,7 +9,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  FileText,
   Layers,
   Lock,
   LogOut,
@@ -70,7 +69,7 @@ import {
 } from '@/components/pwa'
 import type { GroundCrewSubRole, HavaDeclarationState, HavaEvidenceStatus } from '@/lib/types'
 
-type Tab = 'home' | 'tasks' | 'calendar' | 'activity' | 'account'
+type Tab = 'home' | 'schedule' | 'field' | 'account'
 type AccessLevel = 'Ground Crew / Member' | 'Team Lead / Field Lead' | 'Receiver' | 'Event Admin'
 export type CheckpointPhase = 'Dispatch Loading' | 'Venue Arrival' | 'Pre-Event Setup' | 'Post-Event Egress'
 type EventStatus = 'Current' | 'Upcoming' | 'Completed'
@@ -133,6 +132,7 @@ export function GroundCrewPage() {
   const dispatchStore = useDispatchStore(events, staff, procurement)
   const declarations = useGroundCrewDeclarations()
   const [tab, setTab] = useState<Tab>('home')
+  const [fieldSection, setFieldSection] = useState<'tasks' | 'reports' | 'requests' | 'history'>('tasks')
 
   // Canonical Manning operational assignments for authenticated user
   const [myAssignments, setMyAssignments] = useState<MyManningAssignmentDto[]>([])
@@ -798,16 +798,9 @@ export function GroundCrewPage() {
   }, [accessLevel])
 
   const navItems: PwaNavItem[] = [
-    { id: 'home', label: 'Tasks', icon: ClipboardList },
-    { id: 'calendar', label: 'Calendar', icon: CalendarDays },
-    {
-      id: 'tasks',
-      label: 'HAVA',
-      icon: Camera,
-      badgeCount: pendingDeclarationsForCurrentAdmin.length,
-      isCenter: true,
-    },
-    { id: 'activity', label: 'Record', icon: FileText },
+    { id: 'home', label: 'Home', icon: MapPin },
+    { id: 'schedule', label: 'Schedule', icon: CalendarDays },
+    { id: 'field', label: 'Field', icon: ClipboardList, badgeCount: pendingDeclarationsForCurrentAdmin.length, isCenter: true },
     { id: 'account', label: 'Profile', icon: UserCircle2 },
   ]
 
@@ -817,41 +810,31 @@ export function GroundCrewPage() {
       <PwaHeader
         title={
           tab === 'home'
-            ? selectedEvent
-              ? selectedEvent.name
-              : 'Ground Crew Console'
-            : tab === 'tasks'
-              ? 'Confirmation Authority'
-              : tab === 'calendar'
-                ? 'Operations Calendar'
-                : tab === 'activity'
-                  ? 'Operational Record'
-                  : adminName || 'Ground Crew Account'
+            ? 'Ground Crew'
+            : tab === 'schedule'
+              ? 'Schedule'
+              : tab === 'field'
+                ? selectedEvent ? selectedEvent.name : 'Field Console'
+                : adminName || 'Ground Crew Account'
         }
         subtitle={
           tab === 'home'
-            ? selectedEvent
-              ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}`
-              : 'Active shifts & transit checkpoints'
-            : tab === 'tasks'
-              ? 'Condition & damage declaration review'
-              : tab === 'calendar'
-                ? 'Call sheets & event assignments'
-                : tab === 'activity'
-                  ? 'Reports, requests & completed shifts'
-                  : adminEmail || 'Ground Crew Member'
+            ? 'Current and upcoming operational work'
+            : tab === 'schedule'
+              ? 'Calendar, assigned events & shift reminders'
+              : tab === 'field'
+                ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Tasks, reports, requests & history'
+                : adminEmail || 'Ground Crew Member'
         }
         roleName={accessLevel}
         subRole={effectiveRole as GroundCrewSubRole}
         icon={
           tab === 'home' ? (
             <MapPin className="size-5 text-primary" />
-          ) : tab === 'tasks' ? (
-            <ShieldCheck className="size-5 text-primary" />
-          ) : tab === 'calendar' ? (
+          ) : tab === 'schedule' ? (
             <CalendarDays className="size-5 text-primary" />
-          ) : tab === 'activity' ? (
-            <FileText className="size-5 text-primary" />
+          ) : tab === 'field' ? (
+            <ClipboardList className="size-5 text-primary" />
           ) : (
             <UserCircle2 className="size-5 text-primary" />
           )
@@ -878,54 +861,23 @@ export function GroundCrewPage() {
         />
 
         {tab === 'home' && (
-          <>
-            {selectedEvent ? (
-              <EventDetail
-                event={selectedEvent}
-                batches={dispatchStore.get(selectedEvent.id) ?? []}
-                handoffNote={handoffNotes[selectedEvent.id] || ''}
-                onHandoffNoteChange={(val) => setHandoffNotes((prev) => ({ ...prev, [selectedEvent.id]: val }))}
-                egressError={egressErrors[selectedEvent.id] || ''}
-                isLead={isLeadForEvent(selectedEvent.id)}
-                onAdvancePhase={() => advancePhase(selectedEvent.id)}
-                onStartEgress={() => handleStartEgress(selectedEvent.id)}
-                onBack={() => {
-                  setSelectedEventId(null)
-                  setEgressErrors({})
-                }}
-                onReport={openReport}
-              />
-            ) : (
-              <Home
-                events={crewEvents}
-                onOpen={(item) => setSelectedEventId(item.id)}
-                approachingSummary={approachingSummary}
-                assignments={myAssignments}
-                loadingAssignments={loadingAssignments}
-                assignmentError={assignmentError}
-                isCachedData={isCachedData}
-                cacheTimestamp={cacheTimestamp}
-                onRefreshAssignments={loadAssignments}
-                mutatingAssignmentId={mutatingAssignmentId}
-                onUpdateAssignmentStatus={handleUpdateAssignmentStatus}
-                onOpenBlockerModal={handleOpenBlockerModal}
-              />
-            )}
-          </>
-        )}
-
-        {tab === 'tasks' && (
-          <DecisionMode
-            declarations={declarations}
-            accessLevel={accessLevel}
-            adminEventId={adminEventId}
+          <Home
             events={crewEvents}
-            onEventChange={setAdminEventId}
-            onDecision={handleDecision}
+            onOpen={(item) => { setSelectedEventId(item.id); setTab('field') }}
+            approachingSummary={approachingSummary}
+            assignments={myAssignments}
+            loadingAssignments={loadingAssignments}
+            assignmentError={assignmentError}
+            isCachedData={isCachedData}
+            cacheTimestamp={cacheTimestamp}
+            onRefreshAssignments={loadAssignments}
+            mutatingAssignmentId={mutatingAssignmentId}
+            onUpdateAssignmentStatus={handleUpdateAssignmentStatus}
+            onOpenBlockerModal={handleOpenBlockerModal}
           />
         )}
 
-        {tab === 'calendar' && (
+        {tab === 'schedule' && (
           <CalendarView
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
@@ -944,16 +896,31 @@ export function GroundCrewPage() {
           />
         )}
 
-        {tab === 'activity' && (
-          <Activity
-            reports={reports}
-            requests={requests}
-            events={crewEvents}
-            offlineItems={offlineItems}
-            isSyncingQueue={isSyncingQueue}
-            onTriggerSync={handleTriggerSync}
-            onUpdateReport={handleUpdateReport}
-          />
+        {tab === 'field' && (
+          selectedEvent ? (
+            <EventDetail
+              event={selectedEvent}
+              batches={dispatchStore.get(selectedEvent.id) ?? []}
+              handoffNote={handoffNotes[selectedEvent.id] || ''}
+              onHandoffNoteChange={(val) => setHandoffNotes((prev) => ({ ...prev, [selectedEvent.id]: val }))}
+              egressError={egressErrors[selectedEvent.id] || ''}
+              isLead={isLeadForEvent(selectedEvent.id)}
+              onAdvancePhase={() => advancePhase(selectedEvent.id)}
+              onStartEgress={() => handleStartEgress(selectedEvent.id)}
+              onBack={() => setSelectedEventId(null)}
+              onReport={openReport}
+            />
+          ) : (
+            <div className="space-y-4">
+              <PwaCard title="Field Console" subtitle="Open an assigned event or review operational work.">
+                <div className="grid grid-cols-2 gap-2">
+                  {(['tasks', 'reports', 'requests', 'history'] as const).map((section) => <button key={section} type="button" onClick={() => setFieldSection(section)} className={`rounded-xl border px-3 py-3 text-xs font-semibold capitalize ${fieldSection === section ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>{section}</button>)}
+                </div>
+              </PwaCard>
+              {fieldSection === 'tasks' && <DecisionMode declarations={declarations} accessLevel={accessLevel} adminEventId={adminEventId} events={crewEvents} onEventChange={setAdminEventId} onDecision={handleDecision} />}
+              {fieldSection !== 'tasks' && <Activity reports={reports} requests={requests} events={crewEvents} offlineItems={offlineItems} isSyncingQueue={isSyncingQueue} onTriggerSync={handleTriggerSync} onUpdateReport={handleUpdateReport} />}
+            </div>
+          )
         )}
 
         {tab === 'account' && (
@@ -961,6 +928,8 @@ export function GroundCrewPage() {
             name={adminName || 'Ground Crew'}
             email={adminEmail || 'crew@lumiere.internal'}
             requests={requests}
+            accessLevel={accessLevel}
+            effectiveRole={effectiveRole}
             onRequest={() => setRequestOpen(true)}
             onLogout={logout}
           />
@@ -2646,12 +2615,16 @@ function Account({
   name,
   email,
   requests,
+  accessLevel,
+  effectiveRole,
   onRequest,
   onLogout,
 }: {
   name: string
   email: string
   requests: CrewRequest[]
+  accessLevel: AccessLevel
+  effectiveRole: string
   onRequest: () => void
   onLogout: () => void
 }) {
@@ -2682,6 +2655,10 @@ function Account({
             )}
           </div>
         </div>
+      </PwaCard>
+
+      <PwaCard title="Access & Authority">
+        <div className="space-y-2 text-xs text-muted-foreground"><div className="flex items-center justify-between"><span>Assigned role</span><strong className="text-foreground">{effectiveRole}</strong></div><div className="flex items-center justify-between"><span>Access tier</span><strong className="text-foreground">{accessLevel}</strong></div><p className="pt-1 leading-relaxed">Authority is determined by your authenticated account and event assignments.</p></div>
       </PwaCard>
 
       <PwaCard title="Operator Actions">
