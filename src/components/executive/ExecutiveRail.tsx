@@ -1,9 +1,8 @@
 import { useState, useMemo } from 'react'
-import { PanelLeft, Sun, Moon, LogOut, User } from 'lucide-react'
+import { PanelLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EXECUTIVE_DESTINATIONS, type ExecutiveDestinationId, type SharedRailDestination } from '@/lib/executive-destinations'
 import { useAuth } from '@/lib/auth'
-import { useDarkMode } from '@/lib/theme'
 import { canAccessRoute } from '@/lib/route-guard'
 
 interface ExecutiveRailProps<T extends string = ExecutiveDestinationId> {
@@ -25,10 +24,9 @@ export function ExecutiveRail<T extends string = ExecutiveDestinationId>({
   collapsed: externalCollapsed,
   onToggleCollapse: externalToggleCollapse,
   destinations,
-  identityRoleLabel,
+  identityRoleLabel: _identityRoleLabel,
 }: ExecutiveRailProps<T>) {
-  const { canAccessAssetInventory, isExecutiveLite, adminName, adminRole, setConfirmLogout, currentUser } = useAuth()
-  const { dark, toggle: toggleTheme } = useDarkMode()
+  const { canAccessAssetInventory, isExecutiveLite, currentUser } = useAuth()
 
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
     try {
@@ -186,65 +184,6 @@ export function ExecutiveRail<T extends string = ExecutiveDestinationId>({
         })}
       </nav>
 
-      {/* Bottom Profile, Theme & Logout Region */}
-      <div className={cn('pt-2 border-t border-sidebar-border flex flex-col gap-1', effectiveCollapsed ? 'items-center' : '')}>
-        {/* Expanded Profile Info */}
-        {!effectiveCollapsed && (
-          <div className="flex items-center gap-2.5 px-2 py-2 mb-1 rounded-lg bg-sidebar-accent/40">
-            <div className="flex size-7 items-center justify-center rounded-full bg-sidebar-primary/15 text-sidebar-primary shrink-0">
-              <User className="size-3.5" aria-hidden="true" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold text-sidebar-foreground">{adminName || 'Executive'}</p>
-              <p className="truncate text-[0.62rem] uppercase tracking-wider text-sidebar-foreground/60">{identityRoleLabel || adminRole || 'Executive'}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Theme Toggle */}
-        {effectiveCollapsed ? (
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-            title={dark ? 'Light mode' : 'Dark mode'}
-            className="flex size-10 items-center justify-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            {dark ? <Sun className="size-4" aria-hidden="true" /> : <Moon className="size-4" aria-hidden="true" />}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            {dark ? <Sun className="size-4 shrink-0" aria-hidden="true" /> : <Moon className="size-4 shrink-0" aria-hidden="true" />}
-            <span className="truncate">{dark ? 'Light mode' : 'Dark mode'}</span>
-          </button>
-        )}
-
-        {/* Sign Out */}
-        {effectiveCollapsed ? (
-          <button
-            type="button"
-            onClick={() => setConfirmLogout(true)}
-            aria-label="Sign out"
-            title="Sign out"
-            className="flex size-10 items-center justify-center rounded-lg text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive"
-          >
-            <LogOut className="size-4" aria-hidden="true" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setConfirmLogout(true)}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive"
-          >
-            <LogOut className="size-4 shrink-0" aria-hidden="true" />
-            <span className="truncate">Sign out</span>
-          </button>
-        )}
-      </div>
     </aside>
   )
 }

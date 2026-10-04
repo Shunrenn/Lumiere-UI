@@ -1,8 +1,6 @@
 import { useState } from 'react'
-import { BriefcaseBusiness, CalendarRange, ChevronLeft, ChevronRight, Layers3, LayoutDashboard, LogOut, Moon, PanelLeft, Sun, User } from 'lucide-react'
+import { BriefcaseBusiness, CalendarRange, ChevronLeft, ChevronRight, Layers3, LayoutDashboard, PanelLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAuth } from '@/lib/auth'
-import { useDarkMode } from '@/lib/theme'
 
 export type ProjectManagerSection = 'dashboard' | 'projects' | 'event-workspace' | 'pitches'
 
@@ -19,8 +17,6 @@ interface ProjectManagerSidebarProps {
 }
 
 export function ProjectManagerSidebar({ activeSection, onSelect }: ProjectManagerSidebarProps) {
-  const { adminName, adminRole, setConfirmLogout } = useAuth()
-  const { dark, toggle: toggleTheme } = useDarkMode()
   const [collapsed, setCollapsed] = useState(false)
 
   return (
@@ -39,11 +35,6 @@ export function ProjectManagerSidebar({ activeSection, onSelect }: ProjectManage
           return <button key={id} type="button" onClick={() => onSelect(id)} aria-current={active ? 'page' : undefined} aria-label={label} title={label} className={cn('flex items-center rounded-lg text-left text-xs transition-colors', collapsed ? 'size-10 justify-center self-center' : 'w-full gap-3 px-3 py-2.5', active ? 'bg-sidebar-primary font-semibold text-sidebar-primary-foreground shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')}><Icon className="size-4 shrink-0" aria-hidden="true" />{!collapsed && <span className="truncate">{label}</span>}</button>
         })}
       </nav>
-      <div className={cn('flex flex-col gap-1 border-t border-sidebar-border py-3', collapsed ? 'items-center' : '')}>
-        {!collapsed && <div className="mb-1 flex items-center gap-2.5 rounded-lg bg-sidebar-accent/40 px-2 py-2"><div className="flex size-7 items-center justify-center rounded-full bg-sidebar-primary/15 text-sidebar-primary"><User className="size-3.5" /></div><div className="min-w-0"><p className="truncate text-xs font-semibold text-sidebar-foreground">{adminName || 'Project Manager'}</p><p className="truncate text-[0.62rem] uppercase tracking-wider text-sidebar-foreground/60">{adminRole || 'Project Manager'}</p></div></div>}
-        <button type="button" onClick={toggleTheme} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} title={dark ? 'Light mode' : 'Dark mode'} className={cn('flex items-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground', collapsed ? 'size-10 justify-center' : 'w-full gap-3 px-3 py-2 text-xs font-medium')}>{dark ? <Sun className="size-4" /> : <Moon className="size-4" />}{!collapsed && <span>{dark ? 'Light mode' : 'Dark mode'}</span>}</button>
-        <button type="button" onClick={() => setConfirmLogout(true)} aria-label="Sign Out" title="Sign Out" className={cn('flex items-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-destructive', collapsed ? 'size-10 justify-center' : 'w-full gap-3 px-3 py-2 text-xs font-medium')}><LogOut className="size-4" />{!collapsed && <span>Sign Out</span>}</button>
-      </div>
     </aside>
   )
 }
