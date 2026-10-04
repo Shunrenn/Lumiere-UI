@@ -305,7 +305,7 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
                   {/* 6-Column Card Grid for this Tier */}
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                     {tierItems.map((asset) => (
-                      <AssetCard key={asset.id} asset={asset} onOpen={() => setSelectedAsset(asset)} />
+                      <AssetCard key={asset.id} asset={asset} onOpen={() => setSelectedAsset(asset)} executiveKiosk={executiveKiosk} />
                     ))}
                   </div>
                 </div>
