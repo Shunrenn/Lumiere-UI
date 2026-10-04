@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
@@ -85,6 +86,75 @@ function AdminPlaceholder({ id }: { id: AdminDestinationId }) {
   )
 }
 
+type DashboardSummary = 'users' | 'gateway' | 'locked' | 'activations' | 'distribution' | 'pending' | 'trend'
+
+function DashboardDetailModal({
+  summary,
+  staff,
+  lockedAccounts,
+  pendingActivations,
+  pendingItems,
+  roleCounts,
+  isBackendConnected,
+  onClose,
+}: {
+  summary: DashboardSummary | null
+  staff: ReturnType<typeof usePortal>['staff']
+  lockedAccounts: number
+  pendingActivations: number
+  pendingItems: UserAction[]
+  roleCounts: Record<string, number>
+  isBackendConnected: boolean
+  onClose: () => void
+}) {
+  const [query, setQuery] = useState('')
+  if (!summary) return null
+
+  const titles: Record<DashboardSummary, string> = {
+    users: 'Total Users', gateway: 'Gateway Connection', locked: 'Locked Accounts',
+    activations: 'Pending Activations', distribution: 'User Distribution', pending: 'Pending Actions', trend: 'Trend Analytics',
+  }
+  const normalizedQuery = query.trim().toLowerCase()
+  const visibleStaff = staff.filter((person) => {
+    if (summary === 'locked' && person.accountStatus !== 'Locked') return false
+    if (summary === 'activations' && person.accountStatus !== 'Pending') return false
+    if (!normalizedQuery) return true
+    return [person.firstName, person.surname, person.email, person.role, person.subRole].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery)
+  })
+  const rows = summary === 'pending' ? pendingItems : visibleStaff
+  const isRecordList = ['users', 'locked', 'activations', 'pending'].includes(summary)
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="dashboard-detail-title" onClick={onClose}>
+      <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-card shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-start justify-between border-b border-border px-6 py-4">
+          <div>
+            <p className="text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Admin System Dashboard</p>
+            <h2 id="dashboard-detail-title" className="mt-1 font-serif text-xl font-medium text-card-foreground">{titles[summary]}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-muted-foreground hover:text-foreground" aria-label="Close details"><X className="size-5" /></button>
+        </div>
+        <div className="min-h-0 overflow-y-auto px-6 py-5">
+          {isRecordList && (
+            <div className="relative mb-4">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search records" aria-label="Search records" className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30" />
+            </div>
+          )}
+          {summary === 'gateway' && <div className="rounded-lg border border-border bg-background p-4"><p className="text-sm font-semibold text-foreground">Production API gateway</p><p className="mt-1 text-sm text-muted-foreground">{isBackendConnected ? 'Connected' : 'Offline / local cached mode'}</p></div>}
+          {summary === 'locked' && <p className="mb-4 text-sm text-muted-foreground">{lockedAccounts} locked account event{lockedAccounts === 1 ? '' : 's'} currently require attention.</p>}
+          {summary === 'activations' && <p className="mb-4 text-sm text-muted-foreground">{pendingActivations} activation request{pendingActivations === 1 ? '' : 's'} currently pending.</p>}
+          {summary === 'distribution' && <div className="grid gap-2 sm:grid-cols-2">{Object.entries(roleCounts).map(([role, count]) => <div key={role} className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3"><span className="text-sm text-foreground">{role}</span><span className="font-semibold tabular-nums text-foreground">{count}</span></div>)}</div>}
+          {summary === 'trend' && <div className="rounded-lg border border-border bg-background p-4"><p className="text-sm text-muted-foreground">Trend details use the same user-growth data shown on the dashboard chart.</p><p className="mt-3 text-2xl font-bold text-foreground">{staff.length} tracked accounts</p></div>}
+          {isRecordList && rows.length === 0 && <p className="py-8 text-center text-sm italic text-muted-foreground">No records found.</p>}
+          {isRecordList && rows.length > 0 && <div className="overflow-x-auto rounded-lg border border-border"><div className="min-w-[34rem] divide-y divide-border">{rows.map((row) => 'user' in row ? <div key={row.id} className="grid grid-cols-[1.4fr_1fr_1fr] gap-3 px-4 py-3 text-sm"><span className="text-foreground">{row.user}</span><span className="text-muted-foreground">{row.type}</span><span className="text-muted-foreground">{row.status}</span></div> : <div key={row.id} className="grid grid-cols-[1.4fr_1fr_1fr] gap-3 px-4 py-3 text-sm"><span className="truncate text-foreground">{row.firstName} {row.surname}</span><span className="truncate text-muted-foreground">{row.role}{row.subRole ? ` · ${row.subRole}` : ''}</span><span className="text-muted-foreground">{row.accountStatus ?? row.sessionStatus}</span></div>)}</div></div>}
+        </div>
+        <div className="flex justify-end border-t border-border px-6 py-4"><button type="button" onClick={onClose} className="rounded-md border border-input bg-background px-5 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-foreground hover:bg-muted">Close</button></div>
+      </div>
+    </div>
+  )
+}
+
 /* ----------------------------- Page ----------------------------- */
 
 export function AdminSystemDashboardPage() {
@@ -98,6 +168,7 @@ export function AdminSystemDashboardPage() {
   const [confirmItem, setConfirmItem] = useState<UserAction | null>(null)
   const [tempPassword, setTempPassword] = useState('lumierepassword123')
   const [methodologyOpen, setMethodologyOpen] = useState(false)
+  const [detailSummary, setDetailSummary] = useState<DashboardSummary | null>(null)
 
   const totalUsers = staff.length
   const lockedAccounts = userActions.filter(
@@ -204,28 +275,28 @@ export function AdminSystemDashboardPage() {
                 label="Total Users"
                 value={String(totalUsers)}
                 caption="Registered workforce accounts"
-                onSelect={() => navigate('workforce')}
+                onSelect={() => setDetailSummary('users')}
               />
               <StatCard
                 agentSelector="data-agent-system-health"
                 label="Gateway Connection"
                 value={isBackendConnected ? 'Connected' : 'Offline'}
                 caption={isBackendConnected ? 'Production API gateway active' : 'Offline / local cached mode'}
-                onSelect={() => navigate('security-audit')}
+                onSelect={() => setDetailSummary('gateway')}
               />
               <StatCard
                 agentSelector="data-agent-locked-accounts"
                 label="Locked Accounts"
                 value={String(lockedAccounts)}
                 caption="Auto-locked security events"
-                onSelect={() => navigate('workforce')}
+                onSelect={() => setDetailSummary('locked')}
               />
               <StatCard
                 agentSelector="data-agent-pending-activations"
                 label="Pending Activations"
                 value={String(pendingActivations)}
                 caption="Access & password requests"
-                onSelect={() => navigate('workforce')}
+                onSelect={() => setDetailSummary('activations')}
               />
             </div>
             {/* Fixed row height so the feed scrolls internally instead of
@@ -234,7 +305,7 @@ export function AdminSystemDashboardPage() {
               <UserDistributionCard
                 compact
                 counts={roleCounts}
-                onSelect={() => navigate('workforce')}
+                onSelect={() => setDetailSummary('distribution')}
                 drillDownCategory={drillDownCategory}
                 onDrillDown={(cat) => setDrillDownCategory(cat)}
                 onBack={() => setDrillDownCategory(null)}
@@ -251,9 +322,24 @@ export function AdminSystemDashboardPage() {
                 onResolve={handleResolve}
                 subRoleSetups={pendingSubRoleSetups}
                 onConfigureSubRole={handleConfigureSubRole}
+                onSelect={() => setDetailSummary('pending')}
               />
             </div>
-            <div className="lg:col-span-7">
+            <div
+              className="lg:col-span-7"
+              onClick={(event) => {
+                if (!(event.target as HTMLElement).closest('button')) setDetailSummary('trend')
+              }}
+              onKeyDown={(event) => {
+                if ((event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) {
+                  event.preventDefault()
+                  setDetailSummary('trend')
+                }
+              }}
+              tabIndex={0}
+              role="button"
+              aria-label="View trend analytics details"
+            >
               <TrendAnalyticsCard
                 onOpenGrowthSummary={openGrowthSummary}
                 onOpenSecurityAudit={() => navigate('security-audit')}
@@ -303,6 +389,16 @@ export function AdminSystemDashboardPage() {
     />
 
     <SystemHealthMethodologyModal open={methodologyOpen} onClose={() => setMethodologyOpen(false)} />
+    <DashboardDetailModal
+      summary={detailSummary}
+      staff={staff}
+      lockedAccounts={lockedAccounts}
+      pendingActivations={pendingActivations}
+      pendingItems={pendingItems}
+      roleCounts={roleCounts}
+      isBackendConnected={isBackendConnected}
+      onClose={() => setDetailSummary(null)}
+    />
     </>
   )
 }
