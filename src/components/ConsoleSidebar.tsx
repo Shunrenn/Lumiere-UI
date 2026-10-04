@@ -100,7 +100,7 @@ export function ConsoleSidebar({ mobileOpen, onCloseMobile }: ConsoleSidebarProp
             )}
           >
             <Icon className="size-4 shrink-0" aria-hidden="true" />
-            <span>{item.label}</span>
+            <span className="nav-label">{item.label}</span>
           </button>
         )
       })}
@@ -128,7 +128,7 @@ export function ConsoleSidebar({ mobileOpen, onCloseMobile }: ConsoleSidebarProp
     <>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[260px] flex-col border-r border-sidebar-border bg-sidebar lg:flex" aria-label="Console navigation">
         <div className="px-6 pb-5 pt-8">
-          <div className="font-serif text-xl font-medium uppercase tracking-[0.28em] text-sidebar-primary">LUMIERE</div>
+          <div className="font-serif font-medium uppercase tracking-[0.28em] text-sidebar-primary logo-text">LUMIERE</div>
         </div>
         <div className="mx-5 h-px bg-sidebar-border" aria-hidden="true" />
         {navigation()}
@@ -139,7 +139,7 @@ export function ConsoleSidebar({ mobileOpen, onCloseMobile }: ConsoleSidebarProp
         <button type="button" onClick={onCloseMobile} aria-label="Close navigation menu" className={cn('absolute inset-0 cursor-default bg-neutral-950/60 transition-opacity duration-300', mobileOpen ? 'opacity-100' : 'opacity-0')} />
         <aside className={cn('absolute inset-y-0 left-0 flex w-[260px] max-w-[85%] flex-col overflow-hidden bg-sidebar text-sidebar-foreground shadow-2xl transition-transform duration-300 ease-in-out', mobileOpen ? 'translate-x-0' : '-translate-x-full')} role="dialog" aria-modal="true" aria-label="Navigation menu">
           <div className="flex items-center justify-between px-6 pb-5 pt-8">
-            <div className="font-serif text-xl font-medium uppercase tracking-[0.28em] text-sidebar-primary">LUMIERE</div>
+            <div className="font-serif font-medium uppercase tracking-[0.28em] text-sidebar-primary logo-text">LUMIERE</div>
             <button type="button" onClick={onCloseMobile} aria-label="Close menu" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-sidebar-foreground/65 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-primary">
               <X className="size-4" aria-hidden="true" />
             </button>
