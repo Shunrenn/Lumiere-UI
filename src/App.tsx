@@ -2,7 +2,7 @@ import './App.css'
 import { useEffect, useState, lazy, Suspense } from 'react'
 import type { Route } from '@/lib/types'
 import { NavProvider, useNav } from '@/lib/nav'
-import { PortalProvider } from '@/lib/store'
+import { PortalProvider, usePortal } from '@/lib/store'
 import { AdminGrowthSummaryProvider } from '@/lib/admin-growth-summary'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { LogoutModal } from '@/components/LogoutModal'
@@ -258,6 +258,7 @@ function Router() {
 }
 
 function Gate() {
+  const { staff: portalStaff, addUserAction } = usePortal()
   const {
     currentUser,
     isAuthenticated,
@@ -271,7 +272,11 @@ function Gate() {
     return portal === 'crew' ? (
       <GroundCrewLoginPage onStaffPortal={() => setPortal('staff')} />
     ) : (
-      <LoginPage onCrewPortal={() => setPortal('crew')} />
+      <LoginPage
+        onCrewPortal={() => setPortal('crew')}
+        portalStaff={portalStaff}
+        addUserAction={addUserAction}
+      />
     )
   }
 
