@@ -1,15 +1,15 @@
 /**
  * Central configuration for backend REST API base URL.
- * Uses `import.meta.env.VITE_API_URL` when specified.
- * Defaults to 'http://localhost:8080' in development mode only — never in production builds.
+ * Uses `VITE_API_URL` when provided and falls back to the deployed API so
+ * preview builds do not try to call a browser-local backend.
  */
 const envUrl: string | undefined =
   typeof import.meta !== 'undefined' ? (import.meta.env?.VITE_API_URL as string | undefined) : undefined
-const isDev: boolean =
-  typeof import.meta !== 'undefined' ? Boolean(import.meta.env?.DEV) : false
+const DEFAULT_API_URL = 'https://lumiere-production-f6a1.up.railway.app'
+const isDev = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV)
 
 export const API_BASE_URL: string =
-  (envUrl ? envUrl.replace(/\/+$/, '') : '') || (isDev ? 'http://localhost:8080' : '')
+  (envUrl ? envUrl.replace(/\/+$/, '') : '') || (isDev ? '' : DEFAULT_API_URL)
 
 /**
  * Retrieves stored JWT auth token from localStorage or sessionStorage.
