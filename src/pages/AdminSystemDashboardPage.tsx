@@ -123,11 +123,12 @@ function DashboardDetailModal({
   })
   const rows = summary === 'pending' ? pendingItems : visibleStaff
   const isRecordList = ['users', 'locked', 'activations', 'pending'].includes(summary)
+  const recordHeaders = summary === 'pending' ? ['Action', 'Account / entity', 'Status'] : ['Name', 'Role', 'Status']
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-white/50 p-4 backdrop-blur-sm dark:bg-black/60" role="dialog" aria-modal="true" aria-labelledby="dashboard-detail-title" onClick={onClose}>
       <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-card shadow-2xl" onClick={(event) => event.stopPropagation()}>
-        <div className="flex items-start justify-between border-b border-border px-6 py-4">
+        <div className="flex shrink-0 items-start justify-between border-b border-border px-6 py-4">
           <div>
             <p className="text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Admin System Dashboard</p>
             <h2 id="dashboard-detail-title" className="mt-1 font-serif text-xl font-medium text-card-foreground">{titles[summary]}</h2>
@@ -144,12 +145,32 @@ function DashboardDetailModal({
           {summary === 'gateway' && <div className="rounded-lg border border-border bg-background p-4"><p className="text-sm font-semibold text-foreground">Production API gateway</p><p className="mt-1 text-sm text-muted-foreground">{isBackendConnected ? 'Connected' : 'Offline / local cached mode'}</p></div>}
           {summary === 'locked' && <p className="mb-4 text-sm text-muted-foreground">{lockedAccounts} locked account event{lockedAccounts === 1 ? '' : 's'} currently require attention.</p>}
           {summary === 'activations' && <p className="mb-4 text-sm text-muted-foreground">{pendingActivations} activation request{pendingActivations === 1 ? '' : 's'} currently pending.</p>}
-          {summary === 'distribution' && <div className="grid gap-2 sm:grid-cols-2">{Object.entries(roleCounts).map(([role, count]) => <div key={role} className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3"><span className="text-sm text-foreground">{role}</span><span className="font-semibold tabular-nums text-foreground">{count}</span></div>)}</div>}
-          {summary === 'trend' && <div className="rounded-lg border border-border bg-background p-4"><p className="text-sm text-muted-foreground">Trend details use the same user-growth data shown on the dashboard chart.</p><p className="mt-3 text-2xl font-bold text-foreground">{staff.length} tracked accounts</p></div>}
-          {isRecordList && rows.length === 0 && <p className="py-8 text-center text-sm italic text-muted-foreground">No records found.</p>}
-          {isRecordList && rows.length > 0 && <div className="overflow-x-auto rounded-lg border border-border"><div className="min-w-[34rem] divide-y divide-border">{rows.map((row) => 'user' in row ? <div key={row.id} className="grid grid-cols-[1.4fr_1fr_1fr] gap-3 px-4 py-3 text-sm"><span className="text-foreground">{row.user}</span><span className="text-muted-foreground">{row.type}</span><span className="text-muted-foreground">{row.status}</span></div> : <div key={row.id} className="grid grid-cols-[1.4fr_1fr_1fr] gap-3 px-4 py-3 text-sm"><span className="truncate text-foreground">{row.firstName} {row.surname}</span><span className="truncate text-muted-foreground">{row.role}{row.subRole ? ` · ${row.subRole}` : ''}</span><span className="text-muted-foreground">{row.accountStatus ?? row.sessionStatus}</span></div>)}</div></div>}
+          {summary === 'distribution' && (
+            <div className="overflow-hidden rounded-lg border border-border bg-background">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-border bg-muted/40 px-4 py-2.5 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground"><span>Role</span><span>Count</span></div>
+              <div className="divide-y divide-border">{Object.entries(roleCounts).map(([role, count]) => <div key={role} className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-4 py-3 text-sm"><span className="min-w-0 break-words text-foreground">{role || '—'}</span><span className="font-semibold tabular-nums text-foreground">{count}</span></div>)}</div>
+            </div>
+          )}
+          {summary === 'trend' && <div className="rounded-lg border border-border bg-background p-4"><p className="text-sm text-muted-foreground">Trend details use the same user-growth data shown on the dashboard chart.</p><div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-t border-border pt-3"><span className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Tracked accounts</span><span className="text-2xl font-bold tabular-nums text-foreground">{staff.length}</span></div></div>}
+          {isRecordList && rows.length === 0 && <p className="py-8 text-center text-sm italic text-muted-foreground">No matching records found.</p>}
+          {isRecordList && rows.length > 0 && (
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full min-w-[34rem] table-fixed border-collapse text-left">
+                <thead className="sticky top-0 z-10 bg-muted/95 backdrop-blur-sm">
+                  <tr className="border-b border-border">{recordHeaders.map((header) => <th key={header} scope="col" className="px-4 py-2.5 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground first:w-[40%] [&:nth-child(2)]:w-[35%] [&:last-child]:w-[25%]">{header}</th>)}</tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {rows.map((row) => 'user' in row ? (
+                    <tr key={row.id} className="align-top text-sm"><td className="break-words px-4 py-3 text-foreground">{row.type || '—'}</td><td className="break-words px-4 py-3 text-muted-foreground">{row.user || '—'}</td><td className="px-4 py-3 text-muted-foreground">{row.status || '—'}</td></tr>
+                  ) : (
+                    <tr key={row.id} className="align-top text-sm"><td className="break-words px-4 py-3 text-foreground">{`${row.firstName ?? ''} ${row.surname ?? ''}`.trim() || '—'}</td><td className="break-words px-4 py-3 text-muted-foreground">{[row.role, row.subRole].filter(Boolean).join(' · ') || '—'}</td><td className="px-4 py-3 text-muted-foreground">{row.accountStatus ?? row.sessionStatus ?? '—'}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-        <div className="flex justify-end border-t border-border px-6 py-4"><button type="button" onClick={onClose} className="rounded-md border border-input bg-background px-5 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-foreground hover:bg-muted">Close</button></div>
+        <div className="flex shrink-0 justify-end border-t border-border px-6 py-4"><button type="button" onClick={onClose} className="rounded-md border border-input bg-background px-5 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-foreground hover:bg-muted">Close</button></div>
       </div>
     </div>
   )
