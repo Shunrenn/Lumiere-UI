@@ -513,30 +513,34 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true
     import('@/lib/eventsApi').then(({ fetchEventsApi }) => {
-      fetchEventsApi().then((remoteEvents) => {
-        if (!active || !remoteEvents.length) return
-        const mappedPipelineEvents: PipelineEvent[] = remoteEvents.map((pe) => ({
-          id: pe.id,
-          title: pe.title,
-          client: pe.client || 'Not available from backend yet',
-          tier: 'VIP',
-          phase: 'Concept Definition',
-          status: 'Moodboard Phase',
-          date: pe.targetDate,
-          venue: pe.venue,
-          recordId: pe.refId,
-          galaDate: pe.targetDate,
-          daysRemaining: 120,
-          footprint: 'Pending survey',
-          attendance: 'Pending confirmation',
-          pipelineStage: 'Ideation Phase',
-        }))
-        setEvents((prev) => {
-          const existingIds = new Set(prev.map((e) => e.id))
-          const newRemote = mappedPipelineEvents.filter((e) => !existingIds.has(e.id))
-          return [...newRemote, ...prev]
+      fetchEventsApi()
+        .then((remoteEvents) => {
+          if (!active || !remoteEvents.length) return
+          const mappedPipelineEvents: PipelineEvent[] = remoteEvents.map((pe) => ({
+            id: pe.id,
+            title: pe.title,
+            client: pe.client || 'Not available from backend yet',
+            tier: 'VIP',
+            phase: 'Concept Definition',
+            status: 'Moodboard Phase',
+            date: pe.targetDate,
+            venue: pe.venue,
+            recordId: pe.refId,
+            galaDate: pe.targetDate,
+            daysRemaining: 120,
+            footprint: 'Pending survey',
+            attendance: 'Pending confirmation',
+            pipelineStage: 'Ideation Phase',
+          }))
+          setEvents((prev) => {
+            const existingIds = new Set(prev.map((e) => e.id))
+            const newRemote = mappedPipelineEvents.filter((e) => !existingIds.has(e.id))
+            return [...newRemote, ...prev]
+          })
         })
-      })
+        .catch(() => {
+          // Keep the seeded planner data available when the optional API is offline.
+        })
     })
     return () => {
       active = false
