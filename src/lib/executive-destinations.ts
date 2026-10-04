@@ -1,4 +1,4 @@
-import { LayoutGrid, ClipboardList, Boxes, ListFilter, type LucideIcon } from 'lucide-react'
+import { LayoutGrid, ClipboardList, Boxes, ListFilter, ClipboardCheck, type LucideIcon } from 'lucide-react'
 
 // Executive console destinations.
 // Reconciled to client-presented authority:
@@ -16,6 +16,7 @@ export const EXECUTIVE_DESTINATIONS: ExecutiveDestination[] = [
   { id: 'dashboard', label: 'Executive Dashboard', icon: LayoutGrid },
   { id: 'inventory', label: 'Asset Inventory', icon: Boxes },
   { id: 'registry', label: 'Event Operations', icon: ClipboardList },
+  { id: 'damage', label: 'Damage Validation', icon: ClipboardCheck },
   { id: 'logs', label: 'System Audit Trail & Security Logs', icon: ListFilter },
 ]
 
