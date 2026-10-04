@@ -83,9 +83,8 @@ export function AssetCard({ asset, onOpen }: AssetCardProps) {
     <button
       type="button"
       onClick={onOpen}
-      className="group flex flex-col overflow-hidden rounded-xl border border-border/80 bg-white dark:bg-card text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-primary/50 hover:ring-1 hover:ring-primary/20"
+      className="group flex min-w-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-white text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md hover:ring-1 hover:ring-primary/20 dark:bg-card"
     >
-      {/* Aspect Ratio 4:3 image for compact 6-col grid */}
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
         <img
           src={asset.image || '/placeholder.svg'}

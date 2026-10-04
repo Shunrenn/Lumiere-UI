@@ -14,7 +14,7 @@ export function CompactStatStrip({ stats, className }: CompactStatStripProps) {
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center gap-x-5 gap-y-1.5 border-b border-border bg-muted/50 px-4 py-2 text-xs',
+        'grid grid-cols-2 gap-2 border-b border-border bg-muted/30 p-3 sm:grid-cols-3 lg:grid-cols-6',
         className,
       )}
     >

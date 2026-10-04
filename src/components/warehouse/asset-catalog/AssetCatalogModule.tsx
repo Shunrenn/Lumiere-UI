@@ -159,7 +159,7 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
   }
 
   return (
-    <div className="relative flex h-full flex-1 flex-col overflow-y-auto">
+    <div className="relative flex flex-1 flex-col">
       {/* Header controls & filters */}
       <div className={cn('flex flex-col gap-1.5', !embedded && 'border-b border-border px-6 py-2.5 sm:px-10')}>
         {!embedded && (
@@ -233,9 +233,10 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
           </div>
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex flex-col gap-1.5">
-          <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-col gap-3 border-t border-border/60 pt-3">
+          <div className="flex flex-col gap-1.5">
+            <p className="text-[0.58rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">Classification</p>
+            <div className="flex flex-wrap items-center gap-1.5">
             {CATEGORY_FILTERS.map((c) => (
               <button
                 key={c}
@@ -252,8 +253,11 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
                 {c}
               </button>
             ))}
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-col gap-1.5">
+            <p className="text-[0.58rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">Status</p>
+            <div className="flex flex-wrap items-center gap-1.5">
             {STATUS_FILTERS.map((s) => (
               <button
                 key={s}
@@ -270,6 +274,7 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
                 {s}
               </button>
             ))}
+            </div>
           </div>
         </div>
       </div>
@@ -282,7 +287,7 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
           </div>
         ) : viewMode === 'grid' ? (
           /* ─── GRID VIEW: Tier-Grouped Sections with Sticky Headers ─── */
-          <GridRevealContainer maxHeightClass="max-h-[calc(100vh-230px)]">
+          <GridRevealContainer>
             <div className="space-y-6 pb-6">
               {tierGroups.map(([tierName, tierItems]) => (
                 <div key={tierName} className="space-y-3">
@@ -294,7 +299,7 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
                   </div>
 
                   {/* 6-Column Card Grid for this Tier */}
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 sm:gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                     {tierItems.map((asset) => (
                       <AssetCard key={asset.id} asset={asset} onOpen={() => setSelectedAsset(asset)} />
                     ))}

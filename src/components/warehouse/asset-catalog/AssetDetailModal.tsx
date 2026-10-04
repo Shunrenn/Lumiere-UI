@@ -139,63 +139,49 @@ export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: Asse
           {/* ────────────────── 1. PREVIEW TAB (100% Identical Structure for all 5 tiers) ────────────────── */}
           {tab === 'preview' && (
             <div className="flex flex-col gap-5">
-              <div className="aspect-[1.9] w-full overflow-hidden rounded-lg bg-muted">
-                <img
-                  src={asset.image || '/placeholder.svg'}
-                  alt={asset.name}
-                  crossOrigin="anonymous"
-                  className="size-full object-cover"
-                />
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Pill tone={tone}>{asset.status}</Pill>
-                <span className="rounded-full bg-muted px-2.5 py-1 text-[0.55rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                  {asset.category}
-                </span>
-                {asset.subCategory && (
-                  <span className="rounded-full border border-border px-2.5 py-1 text-[0.55rem] font-semibold text-muted-foreground">
-                    {asset.subCategory}
-                  </span>
-                )}
-              </div>
-
-              <div className="rounded-lg border border-border bg-background px-4 py-3.5">
-                <p className="text-[0.58rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                  {glance.kind === 'fraction' ? 'Stock Availability' : 'Current State Summary'}
-                </p>
-                <p className="mt-1 font-serif text-lg font-medium text-card-foreground">{glance.text}</p>
-
-                {glance.kind === 'fraction' && (
-                  <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className={cn(
-                        'h-full rounded-full transition-all',
-                        tone === 'critical' ? 'bg-destructive' : tone === 'caution' ? 'bg-amber-500' : 'bg-primary',
-                      )}
-                      style={{ width: `${glance.percent ?? 0}%` }}
-                    />
+              <div className="grid gap-5 md:grid-cols-[minmax(0,1.15fr)_minmax(15rem,0.85fr)] md:items-stretch">
+                <div className="min-h-56 overflow-hidden rounded-lg bg-muted md:min-h-72">
+                  <img
+                    src={asset.image || '/placeholder.svg'}
+                    alt={asset.name}
+                    crossOrigin="anonymous"
+                    className="size-full object-cover"
+                  />
+                </div>
+                <div className="flex flex-col gap-4 rounded-lg border border-border bg-background p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Pill tone={tone}>{asset.status}</Pill>
+                    {asset.subCategory && (
+                      <span className="rounded-full border border-border px-2.5 py-1 text-[0.55rem] font-semibold text-muted-foreground">
+                        {asset.subCategory}
+                      </span>
+                    )}
                   </div>
-                )}
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-1">
+                    <DetailField label="Classification" value={asset.category} />
+                    <DetailField label="Asset ID" value={asset.assetId} isMono />
+                    <DetailField label={glance.kind === 'fraction' ? 'Quantity / Stock' : 'Current State'} value={glance.text} />
+                  </div>
+                  {glance.kind === 'fraction' && (
+                    <div className="mt-auto h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={cn('h-full rounded-full transition-all', tone === 'critical' ? 'bg-destructive' : tone === 'caution' ? 'bg-amber-500' : 'bg-primary')}
+                        style={{ width: `${glance.percent ?? 0}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
               {asset.status === 'In Maintenance' && (
                 <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-[0.62rem] font-bold uppercase tracking-wider text-indigo-900">
-                        Asset Under Service / Maintenance
-                      </p>
-                      <p className="text-xs text-indigo-700 mt-0.5">
-                        This asset was placed in maintenance following a damage repair verdict.
-                      </p>
+                      <p className="text-[0.62rem] font-bold uppercase tracking-wider text-indigo-900">Asset Under Service / Maintenance</p>
+                      <p className="mt-0.5 text-xs text-indigo-700">This asset was placed in maintenance following a damage repair verdict.</p>
                     </div>
                     {onCompleteMaintenance && (
-                      <button
-                        type="button"
-                        onClick={onCompleteMaintenance}
-                        className="rounded bg-indigo-600 px-3.5 py-1.5 text-[0.65rem] font-bold uppercase tracking-wider text-white shadow-sm hover:bg-indigo-700 transition"
-                      >
+                      <button type="button" onClick={onCompleteMaintenance} className="rounded bg-indigo-600 px-3.5 py-1.5 text-[0.65rem] font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-indigo-700">
                         Complete Maintenance / Return to Stock
                       </button>
                     )}
@@ -204,8 +190,8 @@ export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: Asse
               )}
 
               {asset.description && (
-                <div className="rounded-lg border border-border/60 bg-muted/20 p-3.5 text-xs text-muted-foreground leading-relaxed">
-                  <p className="font-semibold text-card-foreground mb-0.5">Asset Description</p>
+                <div className="border-t border-border/60 pt-4 text-xs leading-relaxed text-muted-foreground">
+                  <p className="mb-1 font-semibold text-card-foreground">Asset Description</p>
                   {asset.description}
                 </div>
               )}
