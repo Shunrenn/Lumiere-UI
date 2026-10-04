@@ -8,6 +8,10 @@ const envUrl: string | undefined =
 const isDev: boolean =
   typeof import.meta !== 'undefined' ? Boolean(import.meta.env?.DEV) : false
 
+if (!isDev && !envUrl) {
+  throw new Error('VITE_API_URL is required for production builds.')
+}
+
 export const API_BASE_URL: string =
   (envUrl ? envUrl.replace(/\/+$/, '') : '') || (isDev ? 'http://localhost:8080' : '')
 

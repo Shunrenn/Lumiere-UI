@@ -3,6 +3,7 @@ import * as damageApi from '@/lib/damageApi'
 import * as partialEgressApi from '@/lib/partialEgressApi'
 import { fetchAuditLogs } from '@/lib/auditApi'
 import { API_BASE_URL, getAuthToken } from '@/lib/apiConfig'
+import { completeAccessRequest, fetchAccessRequests } from '@/features/access-requests/api'
 import {
   createContext,
   useCallback,
@@ -42,7 +43,6 @@ import type {
   UserAction,
   Vendor,
 } from '@/lib/types'
-import { supabase } from '@/lib/supabase'
 import {
   GROUND_CREW_TREE_SEED,
   PARENT_ROLES,
@@ -1610,24 +1610,21 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     let active = true
 
     const loadAccessRequests = async () => {
-      const { data, error } = await supabase
-        .from('access_requests')
-        .select('id, email, type, status')
-        .order('created_at', { ascending: false })
-
       if (!active) return
-      if (error) {
-        console.error('[v0] Failed to load access requests:', error)
-        return
-      }
-      if (data) {
-        const fromDb: UserAction[] = data.map((row: any) => ({
+      try {
+        const data = await fetchAccessRequests()
+        if (!active) return
+        const fromApi: UserAction[] = data.map((row) => ({
           id: row.id,
-          type: row.type as UserAction['type'],
-          user: row.email,
-          status: row.status as UserAction['status'],
+          type: row.requestedRole === 'Password Recovery' ? 'forgot-password' : 'access-request',
+          user: row.fullName,
+          email: row.email,
+          status: row.status.toLowerCase() === 'completed' ? 'completed' : 'pending',
         }))
-        setUserActions([...fromDb, ...seedUserActions])
+        setUserActions(fromApi)
+      } catch (error) {
+        console.error('[AccessRequests] Failed to load requests from API:', error)
+        setUserActions([])
       }
     }
 
@@ -1829,13 +1826,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
       setStaff((prev) => prev.filter((s) => s.id !== id))
 
-      if (target?.employeeId && supabase) {
-        try {
-          await supabase.from('crew_roster').update({ status: 'Inactive' }).eq('employee_id', target.employeeId)
-        } catch (err) {
-          console.warn('[Workforce] Soft-deactivating crew_roster row failed silently:', err)
-        }
-      }
       if (target) {
         pushLog({
           account: target.employeeId,
@@ -2204,38 +2194,24 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
   const resolveUserAction = useCallback(
     (id: string) => {
-      setUserActions((prev) =>
-        prev.map((a) => {
-          if (a.id !== id || a.status === 'completed') return a
-          pushLog({
-            account: a.user,
-            initiatorRole: 'Admin',
-            action:
-              a.type === 'access-request'
-                ? 'Access Request Approved & Account Created'
-                : a.type === 'forgot-password'
-                  ? 'Temporary Password Generated'
-                  : 'Account Unlocked & Temp Password Sent',
-            detail:
-              a.type === 'access-request'
-                ? `Access request approved for ${a.user}. Account created.`
-                : a.type === 'forgot-password'
-                  ? `Temporary password generated and dispatched to ${a.user}. User must reset on next login.`
-                  : `Account ${a.user} unlocked. Temporary password issued pending reset.`,
-            ip: randomIp(),
-            status: 'Success',
-          })
-          // Persist the resolution so the request leaves the pending queue.
-          void supabase
-            .from('access_requests')
-            .update({ status: 'completed' })
-            .eq('id', id)
-            .then(({ error }) => {
-              if (error) console.error('[v0] Failed to resolve access request:', error)
-            })
-          return { ...a, status: 'completed' }
-        }),
-      )
+      void completeAccessRequest(id)
+        .then(() => {
+          setUserActions((prev) =>
+            prev.map((a) => {
+              if (a.id !== id || a.status === 'completed') return a
+              pushLog({
+                account: a.user,
+                initiatorRole: 'Admin',
+                action: 'Access Request Marked Complete',
+                detail: `Access request marked complete for ${a.user}. Account provisioning remains a separate workflow.`,
+                ip: randomIp(),
+                status: 'Success',
+              })
+              return { ...a, status: 'completed' }
+            }),
+          )
+        })
+        .catch((error) => console.error('[AccessRequests] Failed to resolve request through API:', error))
     },
     [pushLog],
   )

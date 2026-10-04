@@ -10,6 +10,17 @@ SPA repo for Lumiere. Product docs for this tree live in `docs/`. The API and th
 - Do not treat git-history writeups as requirements.
 - No AI attribution tags on commits, PRs, or file headers (Cursor, Claude, Codex, Antigravity, Copilot). Optional hook: `core.hooksPath .githooks`. Do not run `git config` from an agent unless a human asked.
 
+
+## Frontend architecture guardrails
+
+- The browser is not an authorization authority. Server responses and JWT-backed API checks decide access.
+- Do not add or extend browser-held credentials, PINs, vendor keys, or authorization decisions. Any migration away from existing browser token/session handling must preserve logout, expiry, refresh, and offline behavior through tested API contracts.
+- Do not add direct browser CRUD calls to Supabase. Migrate remaining manning and preset-squad behavior behind versioned API contracts before removing the legacy client paths.
+- Do not add SignalR, WebSocket, or Supabase Realtime behavior. Remove an existing real-time path only after polling and focus-refetch behavior has been verified for the affected workflow.
+- Client-side chroma-key work may be labelled only as a preview. It must never be represented as a production catalog cutout.
+- Do not add direct database access from Vercel functions. The SPA and its hosting functions communicate with the Railway API; EF owns the Postgres schema.
+- Preserve intentional route-level lazy loading. When changing large UI areas, check build output for unwanted static/dynamic import mixing and oversized entry chunks.
+
 SAD-A2 materializes to `.cursor/rules/sad-spa-production-wire.mdc`. Canonical card is `docs/sad-lumiere.md` in the API repo.
 
 ## Tools, CLIs, and MCP
