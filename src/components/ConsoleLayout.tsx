@@ -13,7 +13,6 @@ interface Props {
 
 export function ConsoleLayout({ children }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
   const { isPlanner } = useAuth()
   const { route, navigate } = useNav()
 
@@ -44,8 +43,6 @@ export function ConsoleLayout({ children }: Props) {
   return (
     <div className="flex min-h-screen bg-background">
       <ConsoleSidebar
-        collapsed={collapsed}
-        onToggleCollapse={() => setCollapsed((c) => !c)}
         mobileOpen={mobileOpen}
         onCloseMobile={() => setMobileOpen(false)}
       />

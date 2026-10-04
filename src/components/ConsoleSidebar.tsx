@@ -8,7 +8,6 @@ import {
   PenTool,
   Sun,
   Moon,
-  PanelLeft,
   ChevronRight,
   ShieldCheck,
   ScrollText,
@@ -63,8 +62,6 @@ const routeParent: Partial<Record<Route, Route>> = {
 }
 
 export interface ConsoleSidebarProps {
-  collapsed: boolean
-  onToggleCollapse: () => void
   mobileOpen: boolean
   onCloseMobile: () => void
 }
@@ -107,23 +104,7 @@ export function ConsoleSidebar({
           L
         </span>
 
-        {/* Companion Drawer Toggle Button */}
-        <button
-          type="button"
-          onClick={() => setCompanionOpen((prev) => !prev)}
-          aria-label={companionOpen ? 'Close companion panel' : 'Open companion panel'}
-          title={companionOpen ? 'Close companion panel' : 'Open companion panel'}
-          className={cn(
-            'mt-4 flex size-10 items-center justify-center rounded-lg transition-colors',
-            companionOpen
-              ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-          )}
-        >
-          <PanelLeft className="size-4" aria-hidden="true" />
-        </button>
-
-        <div className="my-3 h-px w-8 bg-sidebar-border" aria-hidden="true" />
+        <div className="my-4 h-px w-8 bg-sidebar-border" aria-hidden="true" />
 
         {/* Icon Navigation Rail */}
         <nav className="flex flex-1 flex-col items-center gap-2" aria-label="Console destinations">
