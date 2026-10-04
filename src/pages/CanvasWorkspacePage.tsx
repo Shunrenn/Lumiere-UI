@@ -1106,8 +1106,6 @@ function EventReferencePanel({ eventAlias }: { eventAlias: string }) {
 function LeftPanel({
   onDropAsset,
   eventAlias,
-  assets,
-  onRouteToDeficit,
   onApplyBackground,
   activeTool,
   onToolChange,
@@ -1126,8 +1124,6 @@ function LeftPanel({
 }: {
   onDropAsset: (asset: DroppedAsset) => void
   eventAlias?: string
-  assets: AllocatedAsset[]
-  onRouteToDeficit: (item: { id: string; name: string; unit: string }) => void
   onApplyBackground: (color: string | null, photoDataUrl: string | null) => void
   activeTool: CanvasTool
   onToolChange: (tool: CanvasTool) => void
@@ -3850,23 +3846,6 @@ export function CanvasWorkspacePage() {
     }
   }, [droppedAssets, assets])
 
-  async function handleRouteToDeficit(item: { id: string; name: string; unit: string }) {
-    if (hasAtRiskPlaceholder) {
-      showToast('Routing is blocked while the canvas contains fully reserved, unallocated placeholders.')
-      return
-    }
-    const activeEventId = canonicalEventId || selectedEventId
-    try {
-      await createDeficitItemApi({
-        eventId: activeEventId || undefined,
-        itemName: item.name,
-        quantityNeeded: 1,
-      })
-    } catch (err) {
-      console.warn('[handleRouteToDeficit] Failed to route item to deficit queue API:', err)
-    }
-    setPending((current) => [...current, { id: `pr-${Date.now()}`, name: item.name, requestedQty: 1, unit: item.unit || 'pcs', event: pipelineEvent?.title || 'Current canvas event' }])
-  }
 
   // Checkpoint-based asset double-booking conflict detection for canvas placed items
   const allocationConflicts = useMemo(() => {
@@ -4385,8 +4364,6 @@ export function CanvasWorkspacePage() {
         <LeftPanel
           onDropAsset={handleDropFromPanel}
           eventAlias={card?.eventAlias}
-          assets={assets}
-          onRouteToDeficit={handleRouteToDeficit}
           onApplyBackground={handleApplyBackground}
           activeTool={activeTool}
           onToolChange={setActiveTool}

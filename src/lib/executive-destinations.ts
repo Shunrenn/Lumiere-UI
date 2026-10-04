@@ -1,4 +1,4 @@
-import { LayoutGrid, ClipboardList, Boxes, ListFilter, PenTool, Palette, type LucideIcon } from 'lucide-react'
+import { LayoutGrid, ClipboardList, ClipboardCheck, Boxes, ListFilter, PenTool, Palette, type LucideIcon } from 'lucide-react'
 import type { Route } from '@/lib/types'
 
 // Executive console destinations.
