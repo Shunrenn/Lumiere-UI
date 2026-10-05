@@ -22,9 +22,10 @@ interface ProductionGanttViewProps {
   items: ProductionItem[]
   onOpenItem: (item: ProductionItem) => void
   onFlagDelay: (item: ProductionItem) => void
+  onSchedule: () => void
 }
 
-export function ProductionGanttView({ items, onOpenItem, onFlagDelay }: ProductionGanttViewProps) {
+export function ProductionGanttView({ items, onOpenItem, onFlagDelay, onSchedule }: ProductionGanttViewProps) {
   const { staff } = usePortal()
   const [viewMode, setViewMode] = useState<'grouped' | 'consolidated'>('grouped')
   const [startDateOffset, setStartDateOffset] = useState(0) // in days
@@ -119,7 +120,7 @@ export function ProductionGanttView({ items, onOpenItem, onFlagDelay }: Producti
                 viewMode === 'grouped' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
               )}
             >
-              Event-Grouped
+              By Event
             </button>
             <button
               type="button"
@@ -129,7 +130,7 @@ export function ProductionGanttView({ items, onOpenItem, onFlagDelay }: Producti
                 viewMode === 'consolidated' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
               )}
             >
-              Consolidated
+              All Jobs
             </button>
           </div>
         </div>
@@ -222,15 +223,25 @@ export function ProductionGanttView({ items, onOpenItem, onFlagDelay }: Producti
                 )}
                 title={`${ca.allocatedWorkers} workers assigned / ${ca.availableCrew} available`}
               >
-                {ca.allocatedWorkers > 0 ? `${ca.allocatedWorkers} / ${ca.availableCrew}` : '—'}
+                {ca.allocatedWorkers > 0 ? `${ca.allocatedWorkers} / ${ca.availableCrew}` : 'None'}
               </div>
             ))}
           </div>
 
           {/* Job Rows Grouped by Event */}
           {items.length === 0 ? (
-            <div className="p-12 text-center text-sm text-muted-foreground">
-              No bespoke production jobs scheduled.
+            <div className="flex flex-col items-center gap-3 p-12 text-center">
+              <div>
+                <p className="text-sm font-medium text-card-foreground">No production jobs are scheduled for these dates.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Add a bespoke job to start building the workshop timeline.</p>
+              </div>
+              <button
+                type="button"
+                onClick={onSchedule}
+                className="rounded-md bg-primary px-4 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90"
+              >
+                Schedule a Job
+              </button>
             </div>
           ) : (
             groupedSections.map((section) => (

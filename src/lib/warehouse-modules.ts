@@ -34,7 +34,7 @@ export interface WarehouseModule {
 export const WAREHOUSE_MODULES: WarehouseModule[] = [
   {
     id: 'assets',
-    label: 'Asset Catalog',
+    label: 'Asset Inventory',
     icon: Boxes,
     blurb: 'Category-specific asset views, stock levels, and condition tracking.',
     previewPoints: ['Category-specific asset layouts', 'Stock & threshold tracking', 'Condition and maintenance flags'],

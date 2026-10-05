@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, User, X } from 'lucide-react'
-import { nextStage, type DispatchBatch, type ReconciliationStatus } from '@/lib/event-detail'
+import { nextStage, type BatchCrewMember, type DispatchBatch, type ReconciliationStatus } from '@/lib/event-detail'
 import { DispatchStepper } from '@/components/warehouse/event-detail/DispatchStepper'
 import { toneClasses, toneDot, type Tone } from '@/components/warehouse/event-detail/status-tone'
 import { cn } from '@/lib/utils'
@@ -24,6 +24,8 @@ interface BatchDetailViewProps {
   onStall?: (reason: string) => void
   onResume?: () => void
   onUpdateInfo?: (info: Partial<Pick<DispatchBatch, 'vehicleType' | 'plateNumber' | 'driverName'>>) => void
+  availableCrew?: BatchCrewMember[]
+  onCrewChange?: (crew: BatchCrewMember[]) => void
   onExportPdf?: () => void
   onCreateReturnBatch?: () => void
   onDelete?: () => void
@@ -42,6 +44,8 @@ export function BatchDetailView({
   onStall,
   onResume,
   onUpdateInfo,
+  availableCrew = [],
+  onCrewChange,
   onExportPdf,
   onCreateReturnBatch,
   onDelete,
@@ -54,6 +58,7 @@ export function BatchDetailView({
   const [editVehicle, setEditVehicle] = useState(batch.vehicleType)
   const [editPlate, setEditPlate] = useState(batch.plateNumber)
   const [editDriver, setEditDriver] = useState(batch.driverName || '')
+  const [isEditingCrew, setIsEditingCrew] = useState(false)
 
   const finalStage = batch.direction === 'outbound' ? 'Delivered' : 'Returned'
   const isFinal = batch.stage === finalStage
@@ -79,7 +84,7 @@ export function BatchDetailView({
         <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
           <div>
             <p className="text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              Batch detail
+              Trip details
             </p>
             <div className="mt-1 flex items-center gap-2.5">
               <span
@@ -95,7 +100,7 @@ export function BatchDetailView({
               <div>
                 <h2 className="font-serif text-xl font-medium text-card-foreground">{batch.vehicleType}</h2>
                 <p className="text-[0.65rem] uppercase tracking-[0.08em] text-muted-foreground">
-                  {batch.plateNumber} · Driver: <span className="font-semibold text-foreground">{batch.driverName || 'Unassigned'}</span> · {batch.direction === 'outbound' ? 'Outbound / egress' : 'Return / ingress'}
+                  {batch.plateNumber} · Driver: <span className="font-semibold text-foreground">{batch.driverName || 'Unassigned'}</span> · {batch.direction === 'outbound' ? 'Delivery' : 'Return'}
                 </p>
               </div>
             </div>
@@ -107,7 +112,7 @@ export function BatchDetailView({
                 onClick={onExportPdf}
                 className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-card-foreground hover:bg-accent"
               >
-                Export Manifest (PDF)
+                Export Delivery List (PDF)
               </button>
             )}
             {onDelete && (
@@ -116,7 +121,7 @@ export function BatchDetailView({
                 onClick={() => setConfirmDeleteModal(true)}
                 className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-destructive hover:bg-destructive/20"
               >
-                Cancel / Delete Batch
+                Cancel / Delete Trip
               </button>
             )}
             <button
@@ -139,7 +144,7 @@ export function BatchDetailView({
                   <AlertTriangle className="size-5" />
                 </span>
                 <div>
-                  <h3 className="font-serif text-lg font-bold text-card-foreground">Delete Batch?</h3>
+                  <h3 className="font-serif text-lg font-bold text-card-foreground">Delete this trip?</h3>
                   <p className="text-xs text-muted-foreground">
                     Deleting {batch.vehicleType} ({batch.plateNumber}) will release all reserved quantities back into the available pool.
                   </p>
@@ -151,7 +156,7 @@ export function BatchDetailView({
                   onClick={() => setConfirmDeleteModal(false)}
                   className="rounded-md border border-border px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-accent"
                 >
-                  Keep Batch
+                  Keep Trip
                 </button>
                 <button
                   type="button"
@@ -161,7 +166,7 @@ export function BatchDetailView({
                   }}
                   className="rounded-md bg-destructive px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-destructive-foreground shadow-sm hover:opacity-90"
                 >
-                  Yes, Delete Batch
+                  Yes, Delete Trip
                 </button>
               </div>
             </div>
@@ -174,10 +179,10 @@ export function BatchDetailView({
             <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                  Outbound Batch Delivered
+                  Delivery trip completed
                 </p>
                 <p className="text-[0.68rem] text-muted-foreground mt-0.5">
-                  All items delivered on-site. Create the corresponding Return Batch (Ingress) for this vehicle.
+                  All items arrived on-site. Create the return trip for this vehicle.
                 </p>
               </div>
               <button
@@ -185,7 +190,7 @@ export function BatchDetailView({
                 onClick={onCreateReturnBatch}
                 className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-emerald-700 shadow-sm"
               >
-                + Create Return Batch
+                + Create Return Trip
               </button>
             </div>
           )}
@@ -261,7 +266,7 @@ export function BatchDetailView({
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                Dispatch stage
+                Delivery status
               </p>
               {!batch.stalled && !isFinal && (
                 <button
@@ -319,16 +324,47 @@ export function BatchDetailView({
                 aria-invalid={handoffError}
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-card-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
-              {handoffError && <p className="mt-2 text-[0.65rem] font-medium text-destructive" role="alert">Add a handoff note before starting Egress</p>}
+              {handoffError && <p className="mt-2 text-[0.65rem] font-medium text-destructive" role="alert">Add a handoff note before starting the trip</p>}
             </div>
           )}
 
           <div>
-            <p className="mb-2 text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              Assigned crew
-            </p>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Crew on this trip
+              </p>
+              {onCrewChange && availableCrew.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingCrew((current) => !current)}
+                  className="text-[0.6rem] font-bold uppercase tracking-wider text-primary hover:underline"
+                >
+                  {isEditingCrew ? 'Done' : 'Manage crew'}
+                </button>
+              )}
+            </div>
+            {isEditingCrew && (
+              <div className="mb-3 grid gap-2 rounded-lg border border-border bg-background p-3 sm:grid-cols-2">
+                {availableCrew.map((member) => {
+                  const assigned = batch.crew.some((crewMember) => crewMember.id === member.id)
+                  return (
+                    <label key={member.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-card-foreground hover:bg-accent">
+                      <input
+                        type="checkbox"
+                        checked={assigned}
+                        onChange={() => onCrewChange?.(assigned
+                          ? batch.crew.filter((crewMember) => crewMember.id !== member.id)
+                          : [...batch.crew, member])}
+                        className="size-4 accent-primary"
+                      />
+                      <span>{member.name}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
             {batch.crew.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No crew assigned to this batch.</p>
+              <p className="text-sm text-muted-foreground">No crew assigned to this trip.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {batch.crew.map((member) => (
@@ -348,7 +384,7 @@ export function BatchDetailView({
 
           <div>
             <p className="mb-2 text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              Item reconciliation
+              Item check
             </p>
             <div className="overflow-hidden rounded-lg border border-border">
               <table className="w-full text-left">
@@ -385,7 +421,7 @@ export function BatchDetailView({
                               )}
                             >
                               <span className={cn('size-1.5 rounded-full', toneDot[tone])} aria-hidden="true" />
-                              {row.status}
+                              {row.status === 'Pahabol' ? 'Added Item' : row.status}
                             </span>
                           </td>
                         </tr>
@@ -417,7 +453,7 @@ export function BatchDetailView({
             </div>
             {missingJustifications && (
               <p className="mt-2 text-[0.65rem] font-medium text-destructive">
-                All pahabol items require a justification before this batch can be marked {finalStage.toLowerCase()}.
+                Every added item needs a reason before this trip can be marked {finalStage.toLowerCase()}.
               </p>
             )}
           </div>

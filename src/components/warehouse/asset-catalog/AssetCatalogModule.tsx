@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, Grid2X2, List, Plus, Search, X, Palette } from 'lucide-react'
+import { Grid2X2, List, Palette, Plus, Search, X } from 'lucide-react'
 import {
   addCatalogAsset,
   useCatalogAssets,
@@ -34,17 +34,15 @@ const STATUS_FILTERS: Array<AssetStatus | 'All'> = [
   'Lost In Action',
 ]
 
-const CATEGORY_ARTWORK: Record<AssetCategory, string> = {
-  'Event Assets': '/assets/inventory/floral-arch.png',
-  'Production Assets': '/images/elements/chandelier.png',
-  'Stockroom Assets': '/assets/inventory/pillar-candles.png',
-  'Rental Assets': '/assets/inventory/tiffany-chair.png',
-  'Administrative Assets': '/images/decor/minimalist-table.png',
+const CATEGORY_FILTER_LABELS: Record<AssetCategory, string> = {
+  'Event Assets': 'Event Asset',
+  'Production Assets': 'Bespoke',
+  'Stockroom Assets': 'Stockroom',
+  'Rental Assets': 'Rental',
+  'Administrative Assets': 'Office Asset',
 }
 
-function classificationLabel(category: AssetCategory | 'All') {
-  return category === 'All' ? 'All Assets' : category.replace(/s$/, '')
-}
+const PRIMARY_STATUS_FILTERS: Array<AssetStatus | 'All'> = ['All', 'Available', 'Low Stock', 'Critical Deficit']
 
 function hashOf(value: string) {
   return Math.abs(value.split('').reduce((sum, char) => sum + char.charCodeAt(0) * 31, 7))
@@ -79,26 +77,10 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
     })
   }, [assets, query, categoryFilter, statusFilter])
 
-  // Group items by Tier in fixed order
+  // Keep the gallery as one inventory collection. Category pills define the view.
   const tierGroups = useMemo(() => {
-    const map = new Map<AssetCategory, CatalogAsset[]>()
-    FIXED_TIER_ORDER.forEach((t) => map.set(t, []))
-    filtered.forEach((asset) => {
-      const list = map.get(asset.category) ?? []
-      list.push(asset)
-      map.set(asset.category, list)
-    })
-    return Array.from(map.entries()).filter(([_, items]) => items.length > 0)
+    return filtered.length > 0 ? [['Inventory', filtered] as const] : []
   }, [filtered])
-
-  const categoryCounts = useMemo(
-    () =>
-      FIXED_TIER_ORDER.reduce((counts, category) => {
-        counts[category] = assets.filter((asset) => asset.category === category).length
-        return counts
-      }, {} as Record<AssetCategory, number>),
-    [assets],
-  )
 
   const handleCreate = (draft: NewAssetDraft) => {
     const seed = hashOf(`${draft.name}-${Date.now()}`)
@@ -174,14 +156,14 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      {/* Kiosk-style inventory header */}
+      {/* Inventory heading and filter controls */}
       <div className={cn('flex flex-col', !embedded && 'border-b border-border px-0 py-7')}>
         {!embedded && (
           <div className="flex items-start justify-between gap-4">
             <WarehouseModuleHeader
-              eyebrow="Asset Kiosk"
+              eyebrow="Warehouse Module"
               title={isWarehouseAssociate ? 'Inventory' : 'Asset Inventory'}
-              description="Browse, search, and inspect assets by classification and availability."
+              description="Category-specific asset views, stock levels, and condition tracking."
             />
             {onClose && (
               <button
@@ -196,119 +178,58 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
           </div>
         )}
 
-        <div className="mt-5 flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-end">
-          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+        <div className="mt-7 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex max-w-3xl flex-col gap-2">
+            <div className="flex flex-wrap gap-2" aria-label="Filter assets by category">
+              <button type="button" onClick={() => setCategoryFilter('All')} aria-pressed={categoryFilter === 'All'} className={cn('rounded-full border px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] transition', categoryFilter === 'All' ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/60 hover:text-foreground')}>All</button>
+              {FIXED_TIER_ORDER.map((category) => (
+                <button key={category} type="button" onClick={() => setCategoryFilter(category)} aria-pressed={categoryFilter === category} className={cn('rounded-full border px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] transition', categoryFilter === category ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/60 hover:text-foreground')}>{CATEGORY_FILTER_LABELS[category]}</button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2" aria-label="Filter assets by stock status">
+              {PRIMARY_STATUS_FILTERS.map((status) => (
+                <button key={status} type="button" onClick={() => setStatusFilter(status)} aria-pressed={statusFilter === status} className={cn('rounded-full border px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] transition', statusFilter === status ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/60 hover:text-foreground')}>{status}</button>
+              ))}
+              {STATUS_FILTERS.filter((status) => !PRIMARY_STATUS_FILTERS.includes(status)).map((status) => (
+                <button key={status} type="button" onClick={() => setStatusFilter(status)} aria-pressed={statusFilter === status} className={cn('rounded-full border px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] transition', statusFilter === status ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/60 hover:text-foreground')}>{status}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 xl:max-w-md xl:justify-end">
+            <div className="inline-flex shrink-0 rounded-lg border border-border bg-background p-1" aria-label="Asset view">
+              <button type="button" aria-label="Grid view" aria-pressed={viewMode === 'grid'} onClick={() => setViewMode('grid')} className={cn('rounded-md p-2 transition', viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}><Grid2X2 className="size-3.5" /></button>
+              <button type="button" aria-label="List view" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')} className={cn('rounded-md p-2 transition', viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}><List className="size-3.5" /></button>
+            </div>
+            <button type="button" onClick={() => setPaintOpen(true)} title="Open Paint Registry" aria-label="Open Paint Registry" className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:border-primary/60 hover:text-foreground"><Palette className="size-3.5" /></button>
             {!effectiveReadOnly && (
-              <button
-                type="button"
-                onClick={() => setAddOpen(true)}
-                className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-primary px-3 text-[0.58rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90"
-              >
-                <Plus className="size-3.5" />
-                Add Item
-              </button>
+              <button type="button" onClick={() => setAddOpen(true)} className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-primary px-3 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90"><Plus className="size-3.5" />Add Item</button>
             )}
             <div className="relative w-full sm:w-80">
               <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by name, tag, classification…"
-                className="h-9 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-xs text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-ring/30"
-              />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search assets..." className="h-9 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-xs text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-ring/30" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Classification rail plus gallery */}
+      {/* Inventory gallery */}
       <div className="min-h-0 flex-1 overflow-y-auto px-0 py-7">
-        <div className="grid gap-6 xl:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]">
-          <aside aria-label="Asset classifications" className="min-w-0">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">Classifications</p>
-              <span className="text-xs text-muted-foreground">5 categories</span>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-              <button
-                type="button"
-                onClick={() => setCategoryFilter('All')}
-                aria-pressed={categoryFilter === 'All'}
-                className={cn('flex min-w-0 items-center gap-3 rounded-xl border p-2 text-left transition', categoryFilter === 'All' ? 'border-primary bg-primary/15' : 'border-border bg-card hover:border-primary/50')}
-              >
-                <div className="size-11 shrink-0 overflow-hidden rounded-lg bg-muted"><img src="/assets/inventory/crystal-chandelier.png" alt="" className="size-full object-cover" /></div>
-                <span className="min-w-0 flex-1"><span className="block whitespace-normal text-[0.9rem] font-semibold leading-tight text-foreground">All</span><span className="block text-xs text-muted-foreground">Browse collection</span></span>
-                <span className="rounded-full bg-background/70 px-2 py-1 text-xs font-bold text-muted-foreground">{assets.length}</span>
-              </button>
-              {FIXED_TIER_ORDER.map((category) => (
-                <button
-                  key={category}
-                  type="button"
-                  onClick={() => setCategoryFilter(category)}
-                  aria-pressed={categoryFilter === category}
-                  className={cn('flex min-w-0 items-center gap-3 rounded-xl border p-2 text-left transition', categoryFilter === category ? 'border-primary bg-primary/15' : 'border-border bg-card hover:border-primary/50')}
-                >
-                  <div className="size-11 shrink-0 overflow-hidden rounded-lg bg-muted"><img src={CATEGORY_ARTWORK[category]} alt="" className="size-full object-cover" /></div>
-                  <span className="min-w-0 flex-1"><span className="block whitespace-normal text-[0.9rem] font-semibold leading-tight text-foreground">{category}</span><span className="block text-xs text-muted-foreground">Browse collection</span></span>
-                  <span className="rounded-full bg-muted px-2 py-1 text-xs font-bold text-muted-foreground">{categoryCounts[category]}</span>
-                </button>
-              ))}
-            </div>
-          </aside>
-
-          <section className="min-w-0">
-            <div className="mb-4 flex flex-col gap-3 min-[700px]:flex-row min-[700px]:items-center min-[700px]:justify-between">
-              <div><h2 className="font-serif text-2xl font-medium text-foreground">{classificationLabel(categoryFilter)}</h2><p className="mt-1 text-xs text-muted-foreground">{filtered.length} item{filtered.length === 1 ? '' : 's'} shown</p></div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className={cn('relative h-10 w-48 rounded-lg border bg-background', statusFilter === 'All' ? 'border-border' : 'border-primary bg-primary/10')}>
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-foreground">Status:</span>
-                  <select
-                    aria-label="Filter assets by status"
-                    value={statusFilter}
-                    onChange={(event) => setStatusFilter(event.target.value as AssetStatus | 'All')}
-                    className="size-full appearance-none rounded-lg bg-transparent pl-[4.35rem] pr-9 text-xs font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                  >
-                    {STATUS_FILTERS.map((status) => <option key={status} value={status}>{status}</option>)}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setPaintOpen(true)}
-                  title="Open Paint Registry"
-                  aria-label="Open Paint Registry"
-                  className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:border-primary/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                ><Palette className="size-4" /></button>
-                <div className="inline-flex shrink-0 rounded-lg border border-border bg-background p-1" aria-label="Asset view">
-                  <button
-                    type="button"
-                    aria-label="Grid view"
-                    aria-pressed={viewMode === 'grid'}
-                    onClick={() => setViewMode('grid')}
-                    className={cn('rounded-md p-2 transition', viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
-                  ><Grid2X2 className="size-3.5" /></button>
-                  <button type="button" aria-label="List view" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')} className={cn('rounded-md p-2 transition', viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}><List className="size-3.5" /></button>
-                </div>
-              </div>
+        <section className="min-w-0">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">{filtered.length} item{filtered.length === 1 ? '' : 's'} total</p>
             </div>
             {tierGroups.length === 0 ? (
               <div className="mt-10 text-center text-sm font-semibold uppercase tracking-[0.15em] text-muted-foreground">
                 No assets match the current filters
               </div>
             ) : viewMode === 'grid' ? (
-              /* ─── GRID VIEW: Tier-Grouped Sections with Sticky Headers ─── */
+              /* ─── GRID VIEW ─── */
               <GridRevealContainer>
                 <div className="space-y-8 pb-8">
                   {tierGroups.map(([tierName, tierItems]) => (
                     <div key={tierName} className="space-y-3">
-                      {/* Sticky Section Header */}
-                      {categoryFilter === 'All' && <div className="sticky top-0 z-10 border-b border-border/80 bg-background/95 py-3 backdrop-blur-sm">
-                        <span className="text-[0.65rem] font-bold uppercase tracking-[0.15em] text-primary">
-                          {tierName} ({tierItems.length})
-                        </span>
-                      </div>}
-
-                      {/* 6-Column Card Grid for this Tier */}
+                      {/* Responsive inventory grid */}
                       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                         {tierItems.map((asset) => (
                           <AssetCard key={asset.id} asset={asset} onOpen={() => setSelectedAsset(asset)} executiveKiosk={executiveKiosk} />
@@ -319,17 +240,10 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
                 </div>
               </GridRevealContainer>
             ) : (
-              /* ─── LIST VIEW: Tier-Grouped Sections with Sticky Headers ─── */
+              /* ─── LIST VIEW ─── */
               <div className="space-y-6 pr-1">
                 {tierGroups.map(([tierName, tierItems]) => (
                   <div key={tierName} className="space-y-2">
-                    {/* Sticky Section Header */}
-                    {categoryFilter === 'All' && <div className="sticky top-0 z-10 border-b border-border/80 bg-background/95 py-2 backdrop-blur-sm">
-                      <span className="text-[0.65rem] font-bold uppercase tracking-[0.15em] text-primary">
-                        {tierName} ({tierItems.length})
-                      </span>
-                    </div>}
-
                     <div className="overflow-x-auto rounded-xl border border-border bg-card">
                       <table className="w-full min-w-[720px] text-left">
                         <thead>
@@ -385,8 +299,7 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
                 ))}
               </div>
             )}
-          </section>
-        </div>
+        </section>
       </div>
 
       {/* Floating Add Item FAB */}

@@ -39,8 +39,9 @@ export function SearchableVendorSelect({
 
   const filteredVendors = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return vendors
-    return (vendors || []).filter(
+    const activeVendors = (vendors || []).filter((v) => v?.status === 'Active')
+    if (!q) return activeVendors
+    return activeVendors.filter(
       (v) =>
         v &&
         ((v.name || '').toLowerCase().includes(q) ||
