@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BriefcaseBusiness, CalendarRange, ChevronLeft, ChevronRight, Layers3, LayoutDashboard, PanelLeft } from 'lucide-react'
+import { BriefcaseBusiness, CalendarRange, Layers3, LayoutDashboard, PanelLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type ProjectManagerSection = 'dashboard' | 'projects' | 'event-workspace' | 'pitches'
@@ -24,15 +24,12 @@ export function ProjectManagerSidebar({ activeSection, onSelect }: ProjectManage
       <div className={cn('flex items-center py-4', collapsed ? 'justify-center' : 'justify-between px-2')}>
         {!collapsed && <div className="flex items-center gap-2.5"><span className="flex size-8 items-center justify-center rounded-md bg-sidebar-primary/10 font-serif text-lg text-sidebar-primary">L</span><span className="font-serif text-sm font-semibold tracking-[0.2em] text-sidebar-primary">LUMIÈRE</span></div>}
         {collapsed && <span className="flex size-9 items-center justify-center rounded-lg bg-sidebar-primary/10 font-serif text-xl font-bold text-sidebar-primary">L</span>}
-        <button type="button" onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-          {collapsed ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
-        </button>
       </div>
       <div className="h-px bg-sidebar-border" />
       <nav className="flex flex-1 flex-col gap-1.5 overflow-y-auto py-4" aria-label="Project Manager destinations">
         {sections.map(({ id, label, icon: Icon }) => {
           const active = activeSection === id
-          return <button key={id} type="button" onClick={() => onSelect(id)} aria-current={active ? 'page' : undefined} aria-label={label} title={label} className={cn('flex items-center rounded-lg text-left text-xs transition-colors', collapsed ? 'size-10 justify-center self-center' : 'w-full gap-3 px-3 py-2.5', active ? 'bg-sidebar-primary font-semibold text-sidebar-primary-foreground shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')}><Icon className="size-4 shrink-0" aria-hidden="true" />{!collapsed && <span className="truncate">{label}</span>}</button>
+          return <button key={id} type="button" onClick={() => { if (active) setCollapsed((value) => !value); else onSelect(id) }} aria-current={active ? 'page' : undefined} aria-label={label} title={label} className={cn('flex items-center rounded-lg text-left text-xs transition-colors', collapsed ? 'size-10 justify-center self-center' : 'w-full gap-3 px-3 py-2.5', active ? 'bg-sidebar-primary font-semibold text-sidebar-primary-foreground shadow-sm' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')}><Icon className="size-4 shrink-0" aria-hidden="true" />{!collapsed && <span className="truncate">{label}</span>}</button>
         })}
       </nav>
     </aside>

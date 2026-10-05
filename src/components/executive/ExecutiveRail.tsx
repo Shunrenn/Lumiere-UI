@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react'
-import { PanelLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EXECUTIVE_DESTINATIONS, type ExecutiveDestinationId, type SharedRailDestination } from '@/lib/executive-destinations'
 import { useAuth } from '@/lib/auth'
@@ -86,51 +85,10 @@ export function ExecutiveRail<T extends string = ExecutiveDestinationId>({
       )}
       aria-label="Executive Navigation Sidebar"
     >
-      {/* Brand & Toggle header */}
-      {effectiveCollapsed ? (
-        <div className="flex flex-col items-center gap-3">
-          <span
-            className="flex size-9 items-center justify-center rounded-lg bg-amber-500/10 font-serif text-xl font-bold leading-none text-amber-600 dark:text-amber-400 shadow-sm ring-1 ring-amber-500/20"
-            aria-hidden="true"
-          >
-            L
-          </span>
-          {!isExecutiveLite && (
-            <button
-              type="button"
-              onClick={handleToggle}
-              aria-label="Expand sidebar"
-              title="Expand sidebar"
-              className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            >
-              <PanelLeft className="size-4" aria-hidden="true" />
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="flex items-center justify-between px-2 pb-1">
-          <div className="flex items-center gap-2.5">
-            <span
-              className="flex size-8 items-center justify-center rounded-md bg-sidebar-primary/10 font-serif text-lg font-medium leading-none text-sidebar-primary"
-              aria-hidden="true"
-            >
-              L
-            </span>
-            <span className="font-serif text-sm font-semibold tracking-[0.2em] text-sidebar-primary">
-              LUMIÈRE
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={handleToggle}
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-            className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <PanelLeft className="size-4" aria-hidden="true" />
-          </button>
-        </div>
-      )}
+      <div className={cn('flex items-center px-2 pb-1', effectiveCollapsed ? 'justify-center' : 'gap-2.5')}>
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 font-serif text-lg font-bold leading-none text-amber-600 shadow-sm ring-1 ring-amber-500/20 dark:text-amber-400" aria-hidden="true">L</span>
+        {!effectiveCollapsed && <span className="font-serif text-sm font-semibold tracking-[0.2em] text-sidebar-primary">LUMIÈRE</span>}
+      </div>
 
       <div className={cn('my-3 h-px bg-sidebar-border', effectiveCollapsed ? 'w-8' : 'w-full')} aria-hidden="true" />
 
@@ -145,7 +103,7 @@ export function ExecutiveRail<T extends string = ExecutiveDestinationId>({
               <button
                 key={destination.id}
                 type="button"
-                onClick={() => onSelect(destination.id as T)}
+                onClick={() => { if (active && !isExecutiveLite) handleToggle(); else onSelect(destination.id as T) }}
                 aria-label={destination.label}
                 aria-current={active ? 'true' : undefined}
                 title={destination.label}
@@ -167,7 +125,7 @@ export function ExecutiveRail<T extends string = ExecutiveDestinationId>({
             <button
               key={destination.id}
               type="button"
-              onClick={() => onSelect(destination.id as T)}
+              onClick={() => { if (active && !isExecutiveLite) handleToggle(); else onSelect(destination.id as T) }}
               aria-current={active ? 'true' : undefined}
               title={destination.label}
               className={cn(
