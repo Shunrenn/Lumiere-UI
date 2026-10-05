@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Search, X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
@@ -197,12 +197,17 @@ export function AdminSystemDashboardPage() {
     [staff],
   )
   const totalActiveUsers = activeUsers.length
-  const lockedAccounts = userActions.filter(
-    (a) => a.status === 'pending' && a.type === 'account-locked',
+  const recoveryEmails = new Set(
+    userActions
+      .filter((action) => action.status === 'pending' && action.type === 'forgot-password')
+      .map((action) => action.email?.trim().toLowerCase())
+      .filter((email): email is string => Boolean(email)),
+  )
+  const lockedAccounts = staff.filter(
+    (person) => person.accountStatus === 'Locked' || recoveryEmails.has(person.email.trim().toLowerCase()),
   ).length
-  const pendingActivations = userActions.filter(
-    (a) => a.status === 'pending' && a.type !== 'account-locked',
-  ).length
+  // Pending Activation is an account lifecycle state, not an admin action queue.
+  const pendingActivations = staff.filter((person) => person.accountStatus === 'Pending').length
 
   const roleCounts = useMemo(() => {
     const categories = ['Admin', 'Executive', 'Project Manager', 'Warehouse Operations Manager', 'Event Planner', 'Ground Crew', 'Inactive Account']
@@ -236,13 +241,18 @@ export function AdminSystemDashboardPage() {
   // recently completed so the "✓ Completed" state is visible on the glance screen.
   const pendingItems: UserAction[] = useMemo(() => {
     const relevant = userActions.filter(
-      (a) => a.type === 'forgot-password' || a.type === 'account-locked' || a.type === 'access-request',
+      (a) => a.status === 'pending' && (a.type === 'forgot-password' || a.type === 'account-locked' || a.type === 'access-request'),
     )
-    return [...relevant].sort((a, b) => {
+    const previewRecords: UserAction[] = [
+      { id: 'preview-account-locked-out', type: 'account-locked', user: 'Sample Executive', email: 'sample.executive@lumiere.com', status: 'pending', accountType: 'Executive' },
+      { id: 'preview-forgot-password', type: 'forgot-password', user: 'Sample Project Manager', email: 'sample.pm@lumiere.com', status: 'pending', accountType: 'Project Manager' },
+    ]
+    return [...relevant, ...previewRecords].sort((a, b) => {
       if (a.status === b.status) return 0
       return a.status === 'pending' ? -1 : 1
     })
   }, [userActions])
+
 
   const handleResolve = (item: UserAction) => {
     if (item.type === 'access-request') {
@@ -280,7 +290,6 @@ export function AdminSystemDashboardPage() {
         <h1 className="mt-1 font-serif text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">System Dashboard</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">A read-only glance at users, access requests, and system health.</p>
       </div>
-      <button type="button" onClick={() => window.print()} className="inline-flex min-h-[44px] w-fit items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Download className="size-4" aria-hidden="true" />PDF Export</button>
     </div>
   ) : (
     <h1 className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
@@ -363,7 +372,6 @@ export function AdminSystemDashboardPage() {
               onResolve={handleResolve}
               subRoleSetups={pendingSubRoleSetups}
               onConfigureSubRole={handleConfigureSubRole}
-              onSelect={() => setDetailSummary('pending')}
             />
           </div>
         </div>

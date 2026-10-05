@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { MoreVertical, PauseCircle, PlayCircle, LogOut, Pencil } from 'lucide-react'
+import { MoreVertical, PauseCircle, PlayCircle, LogOut, Pencil, Trash2 } from 'lucide-react'
 import type { AccountStatus, Staff } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { RoleBadge, StatusBadge } from './WorkforceBadges'
@@ -13,6 +13,7 @@ interface Props {
   onSuspend: (s: Staff) => void
   onForceLogout: (s: Staff) => void
   onEdit: (s: Staff) => void
+  onDelete: (s: Staff) => void
   // Deep-linked staff id (from ?highlight=) to scroll to and visually pulse.
   highlightId?: string | null
   // Compact inline counters rendered in the table header strip, replacing the
@@ -32,6 +33,7 @@ export function WorkforceTable({
   onSuspend,
   onForceLogout,
   onEdit,
+  onDelete,
   highlightId,
   stats,
 }: Props) {
@@ -201,6 +203,18 @@ export function WorkforceTable({
                           >
                             <Pencil className="size-3.5" />
                             Edit
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setMenuId(null)
+                              onDelete(s)
+                            }}
+                            className="flex w-full items-center gap-2.5 border-t border-border px-3 py-2 text-left text-xs text-destructive transition hover:bg-destructive/10"
+                          >
+                            <Trash2 className="size-3.5" />
+                            Delete Account
                           </button>
                         </div>
                       )}

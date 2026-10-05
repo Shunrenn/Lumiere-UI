@@ -3,8 +3,8 @@ import type { Route } from '@/lib/types'
 
 // Executive console destinations.
 // Reconciled to client-presented authority:
-// Executive Dashboard, Asset Inventory (conditional permission),
-// Event Operations, and System Audit Trail & Security Logs.
+// Executive Dashboard, Asset Inventory, Event Operations, Damage Reports,
+// and Operational Audit Logs.
 export type ExecutiveDestinationId = 'dashboard' | 'inventory' | 'registry' | 'damage' | 'logs'
 
 export interface ExecutiveDestination {
@@ -36,8 +36,8 @@ export const EXECUTIVE_DESTINATIONS: ExecutiveDestination[] = [
   { id: 'dashboard', label: 'Executive Dashboard', icon: LayoutGrid },
   { id: 'inventory', label: 'Asset Inventory', icon: Boxes },
   { id: 'registry', label: 'Event Operations', icon: ClipboardList },
-  { id: 'damage', label: 'Damage Validation', icon: ClipboardCheck },
-  { id: 'logs', label: 'System Audit Trail & Security Logs', icon: ListFilter },
+  { id: 'damage', label: 'Damage Reports', icon: ClipboardCheck },
+  { id: 'logs', label: 'Operational Audit Logs', icon: ListFilter },
 ]
 
 export function getExecutiveDestination(id: ExecutiveDestinationId) {

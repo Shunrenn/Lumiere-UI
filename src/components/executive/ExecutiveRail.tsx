@@ -69,7 +69,9 @@ export function ExecutiveRail<T extends string = ExecutiveDestinationId>({
         })
     }
     return EXECUTIVE_DESTINATIONS.filter((destination) => {
-      if (destination.id === 'inventory' && !canAccessAssetInventory) return false
+      // Standard Executive navigation always exposes the five authoritative destinations.
+      // Asset capability still controls the page contents and API authorization.
+      if (destination.id === 'inventory') return true
       return canAccessRoute(currentUser, destination.id)
     })
   }, [destinations, isExecutiveLite, canAccessAssetInventory, currentUser])

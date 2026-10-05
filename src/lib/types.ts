@@ -164,7 +164,7 @@ export type RecordKind = 'full-account' | 'employee-record'
 // session state. Locked is derived from an open account-locked request.
 export type AccountStatus = 'Active' | 'Pending' | 'Locked' | 'Suspended'
 
-export type EmploymentType = 'On-call' | 'Seasonal'
+export type EmploymentType = 'Full Time' | 'On-call' | 'Seasonal'
 
 export interface Staff {
   id: string
@@ -187,7 +187,10 @@ export interface Staff {
   recordKind?: RecordKind
   accountStatus?: AccountStatus
   employmentType?: EmploymentType
-  // Present (unclaimed) only for a Pending full account awaiting first login.
+  // Server-backed first-login lifecycle flags. These must never be inferred from UI state.
+  mustChangePassword?: boolean
+  activationStatus?: 'PendingActivation' | 'Active' | 'Suspended' | 'Inactive' | string
+  // Present only in the one-time creation response; never persisted by the client.
   tempPassword?: string
   // Employee records can be archived and reactivated later.
   archived?: boolean
@@ -201,6 +204,7 @@ export interface NewStaffDraft {
   email: string
   contact: string
   role: StaffRole | ''
+  employmentType: 'Full Time'
   subRole?: string
   tempPassword?: string
 }
@@ -296,6 +300,7 @@ export interface UserAction {
   email?: string
   status: UserActionStatus
   accountType?: StaffRole
+  requestedAt?: string
 }
 
 /* ---------- Event Updates ---------- */

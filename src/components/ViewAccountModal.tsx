@@ -22,7 +22,7 @@ export function ViewAccountModal({
   editable = false,
   onSave,
 }: Props) {
-  const { resetStaffPassword } = usePortal()
+  const { resetStaffPassword, addUserAction, userActions } = usePortal()
   const [draft, setDraft] = useState<Staff | null>(staff)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -49,8 +49,11 @@ export function ViewAccountModal({
     setIsResetting(true)
     setError(null)
     try {
-      const res = await resetStaffPassword(staff.id)
-      setShowConfirmReset(false)
+    const res = await resetStaffPassword(staff.id)
+    if (!isPendingActivation && staff.email && !userActions.some((action) => action.status === 'pending' && action.type === 'forgot-password' && action.email?.toLowerCase() === staff.email.toLowerCase())) {
+      addUserAction({ type: 'forgot-password', user: displayFullName, email: staff.email, status: 'pending' })
+    }
+    setShowConfirmReset(false)
       setResetResult({ tempPassword: res.tempPassword })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset password')
@@ -58,6 +61,10 @@ export function ViewAccountModal({
       setIsResetting(false)
     }
   }
+
+  const isPendingActivation = staff?.accountStatus === 'Pending'
+  const requestLabel = isPendingActivation ? 'Generate Temporary Password' : 'Generate New Temporary Password'
+  const displayFullName = [staff?.firstName, staff?.middleName, staff?.surname].filter(Boolean).join(' ') || staff?.fullName || staff?.email || 'Account'
 
   const copyToClipboard = async () => {
     if (!resetResult?.tempPassword) return
@@ -94,7 +101,7 @@ export function ViewAccountModal({
               {editable ? 'Edit Account' : 'Account Details'}
             </h2>
             <p className="mt-1 text-[0.65rem] text-primary-foreground/80">
-              {staff.fullName || `${staff.firstName} ${staff.surname}`.trim() || staff.email}
+              {displayFullName}
             </p>
           </div>
           <button
@@ -153,12 +160,12 @@ export function ViewAccountModal({
           ) : showConfirmReset ? (
             <div className="space-y-4">
               <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-xs text-destructive">
-                <p className="font-bold uppercase tracking-wider">Confirm Password Reset</p>
+                <p className="font-bold uppercase tracking-wider">{isPendingActivation ? 'Generate New Temporary Password' : 'Request New Password'}</p>
                 <p className="mt-1 text-foreground">
-                  Are you sure you want to generate a new temporary password for <strong>{staff.fullName || staff.email}</strong>?
+                  {isPendingActivation ? 'Generate a new temporary password for' : 'Request a password reset for'} <strong>{staff.fullName || staff.email}</strong>?
                 </p>
                 <p className="mt-1 text-muted-foreground">
-                  This will immediately terminate any active sessions and require the user to configure a new password upon their next login.
+                  {isPendingActivation ? 'The previous activation credential will no longer be valid. The new credential is displayed once and is not stored in plaintext.' : 'This uses the existing password recovery pathway and does not reveal the current password.'}
                 </p>
               </div>
 
@@ -177,72 +184,32 @@ export function ViewAccountModal({
                   disabled={isResetting}
                   className="inline-flex items-center gap-1.5 rounded-md bg-destructive px-5 py-2 text-xs font-bold uppercase tracking-wider text-destructive-foreground hover:opacity-90 disabled:opacity-50"
                 >
-                  {isResetting ? 'Resetting...' : 'Confirm Reset'}
+                  {isResetting ? 'Processing...' : requestLabel}
                 </button>
               </div>
             </div>
           ) : (
             <>
-              <div className="space-y-4">
-                {/* Employee ID (always read-only) */}
-                <div>
-                  <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                    Employee ID:
-                  </label>
-              {readField(staff.employeeId || '—')}
-            </div>
+              <div className="space-y-6">
+                <section aria-labelledby="personal-information-heading">
+                  <h3 id="personal-information-heading" className="border-b border-border pb-2 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Personal Information</h3>
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div><label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">First Name:</label>{readField(staff.firstName || '—')}</div>
+                    <div><label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">Middle Name:</label>{readField(staff.middleName || '—')}</div>
+                    <div><label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">Last Name:</label>{readField(staff.surname || '—')}</div>
+                    <div className="sm:col-span-2"><label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">Contact Number:</label>{readField(staff.contact || '—')}</div>
+                  </div>
+                </section>
 
-            {/* Full Name */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                  {editable && <span className="text-destructive mr-0.5">*</span>}First Name:
-                </label>
-                {editable ? (
-                  <input
-                    type="text"
-                    value={draft.firstName}
-                    onChange={(e) => set('firstName', e.target.value)}
-                    className={inputClass}
-                  />
-                ) : (
-                  readField(staff.firstName || staff.fullName || '—')
-                )}
-              </div>
-              <div>
-                <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                  {editable && <span className="text-destructive mr-0.5">*</span>}Surname:
-                </label>
-                {editable ? (
-                  <input
-                    type="text"
-                    value={draft.surname}
-                    onChange={(e) => set('surname', e.target.value)}
-                    className={inputClass}
-                  />
-                ) : (
-                  readField(staff.surname || '—')
-                )}
-              </div>
-            </div>
+                <section aria-labelledby="account-information-heading">
+                  <h3 id="account-information-heading" className="border-b border-border pb-2 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Account Information</h3>
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {/* Employee ID (always read-only) */}
+                    <div>
+                      <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">Employee ID:</label>
+                      {readField(staff.employeeId || '—')}
+                    </div>
 
-            {/* Contact Number */}
-            <div>
-              <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                {editable && <span className="text-destructive mr-0.5">*</span>}Contact Number:
-              </label>
-              {editable ? (
-                <input
-                  type="text"
-                  value={draft.contact}
-                  onChange={(e) => set('contact', e.target.value)}
-                  className={inputClass}
-                  placeholder="09123456789"
-                />
-              ) : (
-                readField(staff.contact)
-              )}
-            </div>
 
             {/* Email */}
             <div>
@@ -299,55 +266,20 @@ export function ViewAccountModal({
               {readField(staff.accountStatus || '—')}
             </div>
 
-            {/* Reason / Description is only shown when the existing account model provides one. */}
-            <div>
-              <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                Reason / Description:
-              </label>
-              <p className="mt-1.5 whitespace-pre-wrap break-words text-sm text-muted-foreground">
-                {'—'}
-              </p>
             </div>
+                </section>
 
-
-            {/* Session Status */}
-            <div>
-              <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                Session Status:
-              </label>
-              {readField(staff.sessionStatus)}
-            </div>
-
-            {/* Last Access */}
-            <div>
-              <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                Last Access:
-              </label>
-              {readField(staff.lastAccess)}
-            </div>
-
-            {editable && (
-              <div className="rounded-md border border-border/70 bg-muted/20 p-3.5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <span className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                      Account Credentials
-                    </span>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Passwords are not stored in plaintext. Issue a new temporary password when access needs to be restored.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmReset(true)}
-                    className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-muted"
-                  >
-                    <KeyRound className="size-3.5" />
-                    Reset Temporary Password
-                  </button>
+            <section className="rounded-md border border-border/70 bg-muted/20 p-3.5" aria-labelledby="account-access-heading">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 id="account-access-heading" className="text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">Account Access</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">Status: {isPendingActivation ? 'Pending activation' : 'Password established'}</p>
+                  {isPendingActivation ? <p className="mt-1 text-xs text-muted-foreground">The activation credential cannot be retrieved. Generate a new temporary password if the employee no longer has the original.</p> : <p className="mt-1 text-xs text-muted-foreground">The employee&apos;s permanent password is never available to administrators.</p>}
                 </div>
+                {!editable && <button type="button" onClick={() => setShowConfirmReset(true)} className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-muted"><KeyRound className="size-3.5" />{requestLabel}</button>}
               </div>
-            )}
+            </section>
+
           </div>
 
           {error && (

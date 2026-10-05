@@ -121,7 +121,7 @@ export function UserDistributionCard({
       <div className={cn('flex flex-1 items-center justify-center', compact ? 'mt-4' : 'mt-6')}>
         <div className="relative inline-flex items-center justify-center">
           <svg
-            className={cn('-rotate-90', compact ? 'h-24 w-24' : 'h-32 w-32')}
+            className={cn('-rotate-90', compact ? 'h-24 w-24' : 'h-36 w-36 sm:h-40 sm:w-40')}
             viewBox="0 0 100 100"
             role="img"
             aria-label="User distribution by account type"

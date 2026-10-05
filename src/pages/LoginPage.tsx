@@ -74,12 +74,19 @@ export function LoginPage({
       (s: any) => s.email && s.email.trim().toLowerCase() === normalized
     )
 
-    if (existingStaff) {
-      // Redirect existing user to Forgot Password flow
-      setRequestType('forgot-password')
-      setRequestError('An account already exists for this email address. Redirected to Password Recovery mode.')
-      return
-    }
+  if (existingStaff) {
+    addUserAction({
+      type: 'forgot-password',
+      user: normalized,
+      email: normalized,
+      status: 'pending',
+    })
+    setRequestEmail('')
+    setRequestName('')
+    setView('sent')
+    return
+  }
+
 
     setSubmittingRequest(true)
     try {
