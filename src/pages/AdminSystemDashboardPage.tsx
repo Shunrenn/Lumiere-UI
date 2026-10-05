@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Download, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePortal } from '@/lib/store'
@@ -100,6 +100,16 @@ function DashboardDetailModal({
   onClose: () => void
 }) {
   const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    if (!summary) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose, summary])
+
   if (!summary) return null
 
   const titles: Record<DashboardSummary, string> = {
@@ -325,10 +335,10 @@ export function AdminSystemDashboardPage() {
       ) : isLoading ? (
         <LoadingSkeleton variant="dashboard" />
       ) : isDashboard ? (
-        <div className="flex flex-col gap-4">
-          {/* Upper dashboard row: balanced KPI block beside the two tall overview cards. */}
-          <div data-testid="admin-dashboard-stats" className="grid items-stretch gap-4 lg:grid-cols-2">
-            <div className="grid min-h-[20rem] grid-cols-2 gap-3">
+        <div className="flex flex-col gap-6">
+          {/* Keep the overview cards in one explicit row so the lower row always starts after it. */}
+          <div data-testid="admin-dashboard-stats" className="grid items-stretch gap-4 lg:grid-cols-4">
+            <div className="grid min-h-[21rem] grid-cols-2 gap-3 lg:col-span-2">
               <StatCard
                 agentSelector="data-agent-system-health"
                 label="System Health"
@@ -360,7 +370,7 @@ export function AdminSystemDashboardPage() {
             </div>
             {/* Fixed row height so the feed scrolls internally instead of
                 stretching the donut card with trailing blank space. */}
-            <div className="grid h-[21rem] grid-cols-2 gap-3">
+            <div className="grid h-[21rem] grid-cols-2 gap-3 lg:col-span-2">
               <UserDistributionCard
                 compact
                 counts={roleCounts}
