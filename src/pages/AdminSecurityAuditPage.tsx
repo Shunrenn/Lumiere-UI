@@ -47,7 +47,6 @@ export function AdminSecurityAuditPage() {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<StatusFilter>('All')
   const [account, setAccount] = useState('All')
-  const [action, setAction] = useState('All')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -68,16 +67,15 @@ export function AdminSecurityAuditPage() {
   }), [storeLogs])
 
   const accountFilters = useMemo(() => ['All', ...Array.from(new Set(securityLogs.map((entry) => entry.role)))], [securityLogs])
-  const actionFilters = useMemo(() => ['All', ...Array.from(new Set(securityLogs.map((entry) => entry.action)))], [securityLogs])
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
     const fromTime = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : -Infinity
     const toTime = toDate ? new Date(`${toDate}T23:59:59.999`).getTime() : Infinity
     return securityLogs.filter((entry) => {
       const matchesQuery = !q || [entry.action, entry.employeeId, entry.logId, entry.role, entry.note].some((value) => value.toLowerCase().includes(q))
-      return !invalidDateRange && matchesQuery && (status === 'All' || entry.status === status) && (account === 'All' || entry.role === account) && (action === 'All' || entry.action === action) && eventTime(entry) >= fromTime && eventTime(entry) <= toTime
+      return !invalidDateRange && matchesQuery && (status === 'All' || entry.status === status) && (account === 'All' || entry.role === account) && eventTime(entry) >= fromTime && eventTime(entry) <= toTime
     })
-  }, [securityLogs, query, status, account, action, fromDate, toDate, invalidDateRange])
+  }, [securityLogs, query, status, account, fromDate, toDate, invalidDateRange])
 
   const exportCsv = () => {
     if (invalidDateRange) return
@@ -92,7 +90,7 @@ export function AdminSecurityAuditPage() {
     URL.revokeObjectURL(url)
   }
 
-  const resetFilters = () => { setQuery(''); setAccount('All'); setAction('All'); setStatus('All'); setFromDate(''); setToDate(''); setExpanded(null) }
+  const resetFilters = () => { setQuery(''); setAccount('All'); setStatus('All'); setFromDate(''); setToDate(''); setExpanded(null) }
   const railSelect = (id: AdminDestinationId) => { if (id === 'system-dashboard') navigate('overview'); else if (id === 'workforce') navigate('workforce'); else if (id === 'security-audit') setExpanded(null); else if (id === 'rbac') navigate('rbac') }
   const handleRefetch = async () => { setIsError(false); setIsLoading(true); try { await new Promise((resolve) => setTimeout(resolve, 200)) } catch { setIsError(true) } finally { setIsLoading(false) } }
   useEffect(() => { handleRefetch() }, [])
@@ -108,15 +106,14 @@ export function AdminSecurityAuditPage() {
         <button type="button" onClick={exportCsv} disabled={invalidDateRange} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><Download className="size-3.5" aria-hidden="true" />Export CSV</button>
       </section>
       <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(14rem,1.5fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_auto] lg:items-end">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(14rem,1.5fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(12rem,1fr)_auto] lg:items-end">
           <label className="flex flex-col gap-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground">Search<input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Action, employee, log ID" className="h-10 rounded-md border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground outline-none focus:border-primary" /></label>
           <label className="flex flex-col gap-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground">From<input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-normal tracking-normal text-foreground outline-none focus:border-primary" /></label>
           <label className="flex flex-col gap-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground">To<input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-normal tracking-normal text-foreground outline-none focus:border-primary" /></label>
           <label className="flex flex-col gap-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground">Role<select value={account} onChange={(e) => setAccount(e.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-xs font-normal normal-case tracking-normal text-foreground outline-none focus:border-primary" aria-label="Filter by role">{accountFilters.map((value) => <option key={value} value={value}>{value === 'All' ? 'All roles' : value}</option>)}</select></label>
           <label className="flex flex-col gap-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground">Status<select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} className="h-10 rounded-md border border-input bg-background px-3 text-xs font-normal normal-case tracking-normal text-foreground outline-none focus:border-primary" aria-label="Filter by status">{STATUS_FILTERS.map((value) => <option key={value} value={value}>{value === 'All' ? 'All statuses' : value}</option>)}</select></label>
-          <button type="button" onClick={resetFilters} disabled={!query && account === 'All' && action === 'All' && status === 'All' && !fromDate && !toDate} className="h-10 rounded-md border border-border px-4 text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40">Reset</button>
+          <button type="button" onClick={resetFilters} disabled={!query && account === 'All' && status === 'All' && !fromDate && !toDate} className="h-10 rounded-md border border-border px-4 text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40">Reset</button>
         </div>
-        <div className="mt-3 flex flex-col gap-1.5 sm:max-w-xs"><label className="text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground">Action</label><select value={action} onChange={(e) => setAction(e.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-xs text-foreground outline-none focus:border-primary" aria-label="Filter by action">{actionFilters.map((value) => <option key={value} value={value}>{value === 'All' ? 'All actions' : value}</option>)}</select></div>
         {invalidDateRange && <p className="mt-3 text-xs text-destructive" role="alert">From date cannot be later than To date.</p>}
       </section>
       <section className="min-w-0 rounded-xl border border-border bg-card">

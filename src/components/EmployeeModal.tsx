@@ -66,15 +66,21 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
       setDraft({
         ...emptyDraft,
         employeeId: generateEmployeeId(),
-        email: prefillEmail || '',
+            email: prefillEmail ? prefillEmail.replace(/@lumiere\.com$/i, '') : '',
       })
     }
   }, [open, prefillEmail, staff?.length])
 
   if (!open) return null
 
-  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())
-  const isValidContact = draft.contact.length === 11
+  const normalizedEmail = (() => {
+    const value = draft.email.trim().toLowerCase()
+    if (!value) return ''
+    const localPart = value.replace(/@lumiere\.com$/i, '').trim()
+    return localPart ? `${localPart}@lumiere.com` : ''
+  })()
+  const isValidEmail = /^[a-z0-9._%+-]+@lumiere\.com$/.test(normalizedEmail)
+  const isValidContact = /^09\d{9}$/.test(draft.contact)
 
   const canProceed =
     draft.employeeId &&
@@ -90,7 +96,8 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
     try {
       setIsSubmitting(true)
       setError(null)
-      const res = await addStaff(draft)
+      const submission = { ...draft, email: normalizedEmail, contact: draft.contact.replace(/\D/g, '').slice(0, 11) }
+      const res = await addStaff(submission)
       if (actionId) {
         resolveUserAction(actionId)
       } else if (draft.email) {
@@ -211,13 +218,13 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
                   id="email"
                   type="email"
                   className={inputClass}
-                  placeholder="e.g. juandelacruz@gmail.com"
+                  placeholder="e.g. juandelacruz"
                   value={draft.email}
-                  onChange={(e) => set('email', e.target.value)}
+                  onChange={(e) => set('email', e.target.value.replace(/\s/g, ''))}
                 />
                 {draft.email && !isValidEmail && (
                   <p className="mt-1 text-[0.65rem] text-rose-600">
-                    Please enter a valid email address (e.g. name@gmail.com)
+                    Enter a Lumière email local part (for example, juandelacruz).
                   </p>
                 )}
               </div>
@@ -227,14 +234,17 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
                 </label>
                 <input
                   id="contact"
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={11}
                   className={inputClass}
                   placeholder="09123456789"
                   value={draft.contact}
-                  onChange={(e) => set('contact', e.target.value)}
+                  onChange={(e) => set('contact', e.target.value.replace(/\D/g, '').slice(0, 11))}
                 />
                 {draft.contact && !isValidContact && (
                   <p className="mt-1 text-[0.65rem] text-rose-600">
-                    Contact number must be exactly 11 digits
+                    Enter an 11-digit mobile number beginning with 09.
                   </p>
                 )}
               </div>

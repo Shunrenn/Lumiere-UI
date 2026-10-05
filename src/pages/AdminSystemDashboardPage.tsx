@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Search, X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
@@ -198,7 +198,7 @@ export function AdminSystemDashboardPage() {
   )
   const totalActiveUsers = activeUsers.length
   const lockedAccounts = userActions.filter(
-    (a) => a.status === 'pending' && a.type === 'account-locked',
+    (a) => a.status === 'pending' && (a.type === 'account-locked' || a.type === 'forgot-password'),
   ).length
   // Pending Activation is an account lifecycle state, not an admin action queue.
   const pendingActivations = staff.filter((person) => person.accountStatus === 'Pending').length
@@ -237,15 +237,7 @@ export function AdminSystemDashboardPage() {
     const relevant = userActions.filter(
       (a) => a.status === 'pending' && (a.type === 'forgot-password' || a.type === 'account-locked' || a.type === 'access-request'),
     )
-    const previewItem: UserAction = {
-      id: 'preview-account-locked-out',
-      type: 'account-locked',
-      user: 'sample.executive@lumiere.com',
-      email: 'sample.executive@lumiere.com',
-      status: 'pending',
-      accountType: 'Executive',
-    }
-    return [...relevant, previewItem].sort((a, b) => {
+    return [...relevant].sort((a, b) => {
       if (a.status === b.status) return 0
       return a.status === 'pending' ? -1 : 1
     })
@@ -288,7 +280,6 @@ export function AdminSystemDashboardPage() {
         <h1 className="mt-1 font-serif text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">System Dashboard</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">A read-only glance at users, access requests, and system health.</p>
       </div>
-      <button type="button" onClick={() => window.print()} className="inline-flex min-h-[44px] w-fit items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Download className="size-4" aria-hidden="true" />PDF Export</button>
     </div>
   ) : (
     <h1 className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
