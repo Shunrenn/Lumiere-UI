@@ -222,12 +222,12 @@ export function AdminSystemDashboardPage() {
   ).length
 
   const roleCounts = useMemo(() => {
-    const categories = ['Admin', 'Executive', 'Warehouse Operations Manager', 'Event Planner', 'Ground Crew', 'Inactive Account']
+    const categories = ['Admin', 'Executive', 'Project Manager', 'Warehouse Operations Manager', 'Event Planner', 'Ground Crew', 'Inactive Account']
     const tally = Object.fromEntries(categories.map((category) => [category, 0])) as Record<string, number>
     staff.forEach((person) => {
       if (person.accountStatus !== 'Active') { tally['Inactive Account'] += 1; return }
       const role = person.role.toLowerCase()
-      const category = role.includes('admin') ? 'Admin' : role.includes('executive') ? 'Executive' : role.includes('warehouse manager') || role === 'warehouse operations manager' ? 'Warehouse Operations Manager' : role.includes('planner') ? 'Event Planner' : role === 'ground crew' ? 'Ground Crew' : null
+      const category = role.includes('admin') ? 'Admin' : role.includes('executive') ? 'Executive' : role.includes('project manager') ? 'Project Manager' : role.includes('warehouse manager') || role === 'warehouse operations manager' ? 'Warehouse Operations Manager' : role.includes('planner') ? 'Event Planner' : role === 'ground crew' ? 'Ground Crew' : null
       if (category) tally[category] += 1
     })
     return tally
@@ -311,9 +311,9 @@ export function AdminSystemDashboardPage() {
         <LoadingSkeleton variant="dashboard" />
       ) : isDashboard ? (
         <div className="flex flex-col gap-4">
-          {/* Row 1: 4 small stat cards (left) + User Distribution / Live Security Feed (right) */}
-          <div data-testid="admin-dashboard-stats" className="grid items-stretch gap-4 lg:grid-cols-2">
-            <div className="grid h-[21rem] grid-cols-2 gap-3">
+          {/* Row 1: summary metrics stay together, so the visual panels below do not collide. */}
+          <div data-testid="admin-dashboard-stats" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="contents">
               <StatCard
                 agentSelector="data-agent-system-health"
                 label="System Health"
@@ -343,22 +343,21 @@ export function AdminSystemDashboardPage() {
                 onSelect={() => setDetailSummary('activations')}
               />
             </div>
-            {/* Fixed row height so the feed scrolls internally instead of
-                stretching the donut card with trailing blank space. */}
-            <div className="grid h-[21rem] grid-cols-2 gap-3">
-              <UserDistributionCard
-                compact
-                counts={roleCounts}
-                onSelect={() => setDetailSummary('distribution')}
-                drillDownCategory={drillDownCategory}
-                onDrillDown={(cat) => setDrillDownCategory(cat)}
-                onBack={() => setDrillDownCategory(null)}
-              />
-              <AdminSecurityFeed logs={logs} onSystemLogs={() => navigate('security-audit')} />
-            </div>
           </div>
 
-          {/* Row 2: Pending Actions + Security Audit */}
+          {/* Row 2: User Distribution + Live Security Feed */}
+          <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
+            <UserDistributionCard
+              counts={roleCounts}
+              onSelect={() => setDetailSummary('distribution')}
+              drillDownCategory={drillDownCategory}
+              onDrillDown={(cat) => setDrillDownCategory(cat)}
+              onBack={() => setDrillDownCategory(null)}
+            />
+            <AdminSecurityFeed logs={logs} onSystemLogs={() => navigate('security-audit')} />
+          </div>
+
+          {/* Row 3: Pending Actions + Security Audit */}
           <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-10">
             <div className="lg:col-span-3">
               <AdminPendingActions

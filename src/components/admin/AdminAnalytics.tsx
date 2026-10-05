@@ -17,6 +17,7 @@ export type SegmentItem = {
 export const MAIN_ROLE_SEGMENTS: SegmentItem[] = [
   { label: 'Admin', color: 'text-emerald-500', dot: 'bg-emerald-500', isDrillable: false },
   { label: 'Executive', color: 'text-sky-500', dot: 'bg-sky-500', isDrillable: false },
+  { label: 'Project Manager', color: 'text-violet-500', dot: 'bg-violet-500', isDrillable: false },
   { label: 'Warehouse Operations Manager', color: 'text-amber-500', dot: 'bg-amber-500', isDrillable: false },
   { label: 'Event Planner', color: 'text-rose-500', dot: 'bg-rose-500', isDrillable: false },
   { label: 'Ground Crew', color: 'text-indigo-500', dot: 'bg-indigo-500', isDrillable: false },
@@ -88,7 +89,7 @@ export function UserDistributionCard({
 
   const total = segments.reduce((sum, r) => sum + (activeCounts[r.label] ?? 0), 0)
   const circumference = 2 * Math.PI * 45
-  const { flashing } = useClickFlash(onSelect)
+  const { flashing, trigger } = useClickFlash(onSelect)
 
   let offset = 0
   const arcs = segments.map((seg) => {
@@ -102,8 +103,19 @@ export function UserDistributionCard({
 
   return (
     <div
+      role={onSelect ? 'button' : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      aria-label={onSelect ? 'View user distribution account counts' : undefined}
+      onClick={onSelect ? trigger : undefined}
+      onKeyDown={onSelect ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          trigger()
+        }
+      } : undefined}
       className={cn(
         'flex h-full flex-col rounded-xl border border-border bg-card text-left',
+        onSelect && 'cursor-pointer transition hover:border-primary/40 hover:bg-muted/40',
         compact ? 'p-4' : 'p-5',
         flashing && 'ring-2 ring-primary/60 border-primary/60',
       )}
