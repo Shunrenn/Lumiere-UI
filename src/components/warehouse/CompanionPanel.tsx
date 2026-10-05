@@ -6,7 +6,7 @@ import { VendorManagementModule } from '@/components/warehouse/vendors/VendorMan
 import { ManningModule } from '@/components/warehouse/manning/ManningModule'
 import { DispatchModule } from '@/components/warehouse/dispatch/DispatchModule'
 import { ProductionModule } from '@/components/warehouse/production/ProductionModule'
-import { IncidentReportingModule } from '@/components/warehouse/incidents/IncidentReportingModule'
+import { WarehouseModuleHeader } from '@/components/warehouse/WarehouseModuleHeader'
 
 import { useAuth } from '@/lib/auth'
 import { canAccessWarehouseModule } from '@/lib/route-guard'
@@ -30,15 +30,11 @@ export function CompanionPanel({ moduleId, onClose }: CompanionPanelProps) {
   }
 
   if (moduleId === 'replenishment') {
-    return <ReplenishmentModule onClose={onClose} />
+    return <ReplenishmentModule />
   }
 
   if (moduleId === 'manning') {
     return <ManningModule onClose={onClose} />
-  }
-
-  if (moduleId === 'incidents') {
-    return <IncidentReportingModule onClose={onClose} />
   }
 
   if (moduleId === 'dispatch') {
@@ -52,12 +48,8 @@ export function CompanionPanel({ moduleId, onClose }: CompanionPanelProps) {
   if (moduleId === 'vendors') {
     return (
       <div className="flex h-full flex-1 flex-col overflow-y-auto">
-        <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5 sm:px-10">
-          <div>
-            <p className="text-[0.6rem] font-bold uppercase tracking-[0.24em] text-primary">Warehouse module</p>
-            <h1 className="mt-1 font-serif text-2xl font-medium text-foreground">{module.label}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{module.blurb}</p>
-          </div>
+        <div className="flex items-start justify-between gap-4 border-b border-border px-0 py-7">
+          <WarehouseModuleHeader title={module.label} description={module.blurb} />
           <button
             type="button"
             onClick={onClose}
@@ -67,7 +59,7 @@ export function CompanionPanel({ moduleId, onClose }: CompanionPanelProps) {
             <X className="size-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="flex-1 px-6 py-6 sm:px-10">
+        <div className="flex-1 px-0 py-7">
           <VendorManagementModule />
         </div>
       </div>
@@ -78,8 +70,7 @@ export function CompanionPanel({ moduleId, onClose }: CompanionPanelProps) {
     <div className="flex h-full flex-1 flex-col overflow-y-auto">
       <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5 sm:px-10">
         <div>
-          <p className="text-[0.6rem] font-bold uppercase tracking-[0.24em] text-primary">Warehouse module</p>
-          <h1 className="mt-1 font-serif text-2xl font-medium text-foreground">{module.label}</h1>
+          <h1 className="font-serif text-3xl font-medium leading-none tracking-tight text-foreground sm:text-4xl">{module.label}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{module.blurb}</p>
         </div>
         <button

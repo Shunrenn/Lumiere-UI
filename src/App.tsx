@@ -184,8 +184,6 @@ function Router() {
         return <WarehouseModulePage moduleId="vendors" />
       case 'crew':
         return <WarehouseModulePage moduleId="manning" />
-      case 'incidents':
-        return <WarehouseModulePage moduleId="incidents" />
       case 'dispatch':
         return <WarehouseModulePage moduleId="dispatch" />
       case 'production':

@@ -4,7 +4,7 @@ import { isTeamLead, isTeamLeadToday, QUALIFIED_LEAD_ROLES } from '@/lib/warehou
 import { removeManningApi, removeManningOverrideApi } from './manningApi'
 
 // =====================================================================
-// Manning Delegation + Incident Reporting data access
+// Manning delegation data access
 // (WOM / Manning designated modules). All persistence is Supabase.
 // =====================================================================
 
@@ -24,15 +24,6 @@ export type ManningTaskStatus =
   | 'Escalated'
   | 'Rejected'
 
-export type IncidentStatus = 'Submitted' | 'Under Review' | 'Resolved' | 'Dismissed'
-export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical'
-export type IncidentCategory =
-  | 'General'
-  | 'Safety'
-  | 'Equipment'
-  | 'Personnel'
-  | 'Security'
-  | 'Logistics'
 
 export interface ManningAssignment {
   id: string
@@ -96,136 +87,6 @@ export interface ManningWarning {
   acknowledged_at: string | null
 }
 
-export interface IncidentReport {
-  id: string
-  reference: string
-  title: string
-  category: IncidentCategory
-  severity: IncidentSeverity
-  description: string
-  location: string | null
-  reported_by_name: string
-  reported_by_email: string | null
-  occurred_at: string | null
-  status: IncidentStatus
-  resolution_notes: string | null
-  resolved_by: string | null
-  resolved_at: string | null
-  created_at: string
-  image_url?: string | null
-}
-
-
-const PRESET_INCIDENTS: IncidentReport[] = [
-  {
-    id: 'incident-2026-001',
-    reference: 'INC-26001',
-    title: 'Forklift contact with outbound staging rack',
-    category: 'Safety',
-    severity: 'High',
-    description: 'During the 06:40 outbound preparation, a forklift clipped the lower guard rail of Rack B-14 while reversing from the loading lane. No injury was reported, but two cases were displaced and the aisle was isolated pending inspection. The operator stopped work, notified the shift lead, and preserved the area for review.',
-    location: 'North loading bay · Rack B-14',
-    reported_by_name: 'Lucia Mendes',
-    reported_by_email: 'lucia.mendes@lumiere.example',
-    occurred_at: '2026-08-20T06:40:00.000Z',
-    status: 'Submitted',
-    resolution_notes: null,
-    resolved_by: null,
-    resolved_at: null,
-    created_at: '2026-08-20T06:54:00.000Z',
-    image_url: '/incidents/forklift-rack.png',
-  },
-  {
-    id: 'incident-2026-002',
-    reference: 'INC-26002',
-    title: 'Cold-chain scanner battery failure',
-    category: 'Equipment',
-    severity: 'Medium',
-    description: 'The handheld scanner assigned to the cold-chain lane shut down during a temperature verification round. The battery indicator had shown 40 percent earlier in the shift. A spare device was issued and the affected pallet checks were repeated manually before release.',
-    location: 'Cold-chain lane 2',
-    reported_by_name: 'Noah Williams',
-    reported_by_email: 'noah.williams@lumiere.example',
-    occurred_at: '2026-08-20T08:15:00.000Z',
-    status: 'Under Review',
-    resolution_notes: null,
-    resolved_by: null,
-    resolved_at: null,
-    created_at: '2026-08-20T08:31:00.000Z',
-    image_url: '/incidents/scanner-battery.png',
-  },
-  {
-    id: 'incident-2026-003',
-    reference: 'INC-26003',
-    title: 'Contractor access badge not returned',
-    category: 'Security',
-    severity: 'High',
-    description: 'A temporary contractor left the site at the end of the evening shift without returning a visitor access badge. Security checked the sign-out desk, vehicle staging area, and supervisor locker. The badge was recovered from the contractor van the following morning and deactivated until reconciliation was complete.',
-    location: 'Security desk · East entrance',
-    reported_by_name: 'Sofia Reyes',
-    reported_by_email: 'sofia.reyes@lumiere.example',
-    occurred_at: '2026-08-19T22:10:00.000Z',
-    status: 'Resolved',
-    resolution_notes: 'Badge recovered and deactivated. Visitor sign-out checklist updated for the evening team.',
-    resolved_by: 'Amara Okafor',
-    resolved_at: '2026-08-20T07:20:00.000Z',
-    created_at: '2026-08-19T22:26:00.000Z',
-    image_url: '/incidents/access-badge.png',
-  },
-  {
-    id: 'incident-2026-004',
-    reference: 'INC-26004',
-    title: 'Two crew members missing from event call sheet',
-    category: 'Personnel',
-    severity: 'Medium',
-    description: 'The 12:00 event call sheet listed two crew members against the wrong deployment zone. The discrepancy was found during the pre-opening roll call and corrected before doors opened. Both crew members received the revised briefing and the printed call sheets were replaced.',
-    location: 'Briefing room A',
-    reported_by_name: 'Amara Okafor',
-    reported_by_email: 'amara.okafor@lumiere.example',
-    occurred_at: '2026-08-20T11:45:00.000Z',
-    status: 'Submitted',
-    resolution_notes: null,
-    resolved_by: null,
-    resolved_at: null,
-    created_at: '2026-08-20T11:58:00.000Z',
-    image_url: '/incidents/call-sheet.png',
-  },
-  {
-    id: 'incident-2026-005',
-    reference: 'INC-26005',
-    title: 'Inbound delivery arrived without seal record',
-    category: 'Logistics',
-    severity: 'Low',
-    description: 'A scheduled inbound delivery arrived with the trailer seal intact, but the seal number was absent from the advance paperwork. Receiving held the load for a secondary count and photographed the seal before breaking it. The count matched the manifest with no variance.',
-    location: 'Inbound receiving dock 3',
-    reported_by_name: 'Daniel Price',
-    reported_by_email: 'daniel.price@lumiere.example',
-    occurred_at: '2026-08-20T09:05:00.000Z',
-    status: 'Dismissed',
-    resolution_notes: 'No stock variance found. Supplier paperwork issue logged for follow-up outside the incident queue.',
-    resolved_by: 'Amara Okafor',
-    resolved_at: '2026-08-20T10:10:00.000Z',
-    created_at: '2026-08-20T09:18:00.000Z',
-    image_url: '/incidents/inbound-seal.png',
-  },
-  {
-    id: 'incident-2026-006',
-    reference: 'INC-26006',
-    title: 'Water ingress near electrical distribution panel',
-    category: 'General',
-    severity: 'Critical',
-    description: 'Water was observed on the floor within two metres of the temporary electrical distribution panel after heavy rain. Power to the affected bay was isolated, the area was cordoned off, and facilities were called to inspect the roof and cable protection. No one entered the cordoned area after isolation.',
-    location: 'South warehouse · Bay 7',
-    reported_by_name: 'Marcus Chen',
-    reported_by_email: 'marcus.chen@lumiere.example',
-    occurred_at: '2026-08-20T13:22:00.000Z',
-    status: 'Submitted',
-    resolution_notes: null,
-    resolved_by: null,
-    resolved_at: null,
-    created_at: '2026-08-20T13:29:00.000Z',
-    image_url: '/incidents/water-ingress.png',
-  },
-]
 
 let localAssignments: ManningAssignment[] = []
 let localTasks: ManningTask[] = []
@@ -245,8 +106,6 @@ function dedupeActiveAssignments(assignments: ManningAssignment[]): ManningAssig
   })
 }
 let localWarnings: ManningWarning[] = []
-let localIncidents = [...PRESET_INCIDENTS]
-let incidentsUsingPreset = false
 
 // ---- Task helpers -----------------------------------------------------
 
@@ -823,156 +682,6 @@ export function nextWarningTier(existing: ManningWarning[], subjectName: string)
   return Math.min(count + 1, 3) as 1 | 2 | 3
 }
 
-// ---- Incidents -------------------------------------------------------
-
-export async function fetchIncidents(): Promise<IncidentReport[]> {
-  try {
-    const { data, error } = await supabase
-      .from('incident_reports')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (error) throw error
-    localIncidents = (data ?? []) as IncidentReport[]
-    return localIncidents
-  } catch (error) {
-    incidentsUsingPreset = true
-    console.warn('[v0] Incident reports unavailable; using preset example data.', error)
-    return localIncidents
-  }
-}
-
-export async function createIncident(
-  input: Pick<IncidentReport, 'title' | 'description' | 'reported_by_name'> &
-    Partial<
-      Pick<IncidentReport, 'category' | 'severity' | 'location' | 'reported_by_email' | 'occurred_at'>
-    >,
-): Promise<IncidentReport> {
-  const reference = `INC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`
-  const category: IncidentCategory = input.category ?? 'General'
-  const severity: IncidentSeverity = input.severity ?? 'Medium'
-  const payload = { ...input, reference, category, severity }
-  const { data, error } = await supabase
-    .from('incident_reports')
-    .insert(payload)
-    .select('*')
-    .single()
-  if (!error && data) {
-    localIncidents = [data as IncidentReport, ...localIncidents]
-    return data as IncidentReport
-  }
-
-  const now = new Date().toISOString()
-  const fallback: IncidentReport = {
-    id: `preset-incident-${Date.now()}`,
-    reference,
-    title: payload.title,
-    category: payload.category ?? 'General',
-    severity: payload.severity ?? 'Medium',
-    description: payload.description,
-    location: payload.location ?? null,
-    reported_by_name: payload.reported_by_name,
-    reported_by_email: payload.reported_by_email ?? null,
-    occurred_at: payload.occurred_at ?? now,
-    status: 'Submitted',
-    resolution_notes: null,
-    resolved_by: null,
-    resolved_at: null,
-    created_at: now,
-  }
-  localIncidents = [fallback, ...localIncidents]
-  incidentsUsingPreset = true
-  console.warn('[v0] Incident save unavailable; applied the report to preset data.', error)
-  return fallback
-}
-
-export async function reviewIncident(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('incident_reports')
-    .update({ status: 'Under Review' })
-    .eq('id', id)
-  if (!error) return
-
-  const presetIncident = localIncidents.some((incident) => incident.id === id)
-  if (presetIncident) {
-    localIncidents = localIncidents.map((incident) =>
-      incident.id === id ? { ...incident, status: 'Under Review' } : incident,
-    )
-    incidentsUsingPreset = true
-    console.warn('[v0] Review update unavailable; applied the change to preset incident data.', error)
-    return
-  }
-
-  throw error
-}
-
-export async function resolveIncident(
-  id: string,
-  status: 'Resolved' | 'Dismissed',
-  resolutionNotes: string,
-  resolvedBy: string,
-): Promise<void> {
-  const resolvedAt = new Date().toISOString()
-  const { error } = await supabase
-    .from('incident_reports')
-    .update({
-      status,
-      resolution_notes: resolutionNotes,
-      resolved_by: resolvedBy,
-      resolved_at: resolvedAt,
-    })
-    .eq('id', id)
-  if (!error) {
-    localIncidents = localIncidents.map((incident) =>
-      incident.id === id
-        ? { ...incident, status, resolution_notes: resolutionNotes, resolved_by: resolvedBy, resolved_at: resolvedAt }
-        : incident,
-    )
-    return
-  }
-
-  if (localIncidents.some((incident) => incident.id === id)) {
-    localIncidents = localIncidents.map((incident) =>
-      incident.id === id
-        ? { ...incident, status, resolution_notes: resolutionNotes, resolved_by: resolvedBy, resolved_at: resolvedAt }
-        : incident,
-    )
-    incidentsUsingPreset = true
-    console.warn('[v0] Incident resolution unavailable; applied the change to preset data.', error)
-    return
-  }
-
-  throw error
-}
-
-// ---- Settings (incident review PIN) ---------------------------------
-
-export const DEFAULT_WOM_REVIEW_PIN = '246810'
-
-export async function fetchIncidentPin(): Promise<string> {
-  try {
-    const { data, error } = await supabase
-      .from('manning_settings')
-      .select('incident_pin')
-      .eq('id', 1)
-      .single()
-    if (error) throw error
-
-    const configuredPin = String(data?.incident_pin ?? '').trim()
-    return configuredPin || DEFAULT_WOM_REVIEW_PIN
-  } catch (error) {
-    // The settings table is optional for the preset/demo workspace.
-    console.warn('[v0] WOM settings unavailable; using the default review PIN.', error)
-    return DEFAULT_WOM_REVIEW_PIN
-  }
-}
-
-export async function updateIncidentPin(pin: string): Promise<void> {
-  const { error } = await supabase
-    .from('manning_settings')
-    .update({ incident_pin: pin, updated_at: new Date().toISOString() })
-    .eq('id', 1)
-  if (error) throw error
-}
 
 // ---- Hook: manning workspace ----------------------------------------
 
@@ -1051,41 +760,6 @@ export function useManningData(): ManningData {
   return { assignments, tasks, warnings, loading, error, usingPreset, reload }
 }
 
-// ---- Hook: incidents workspace --------------------------------------
-
-export interface IncidentData {
-  incidents: IncidentReport[]
-  loading: boolean
-  error: string | null
-  usingPreset: boolean
-  reload: () => Promise<void>
-}
-
-export function useIncidentData(): IncidentData {
-  const [incidents, setIncidents] = useState<IncidentReport[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [usingPreset, setUsingPreset] = useState(false)
-
-  const reload = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      setUsingPreset(false)
-      setIncidents(await withManningTimeout(fetchIncidents(), 'Incident workspace'))
-      setUsingPreset(incidentsUsingPreset)
-    } catch (err) {
-      console.warn('[v0] Incident tables unavailable; using preset incident data.', err)
-      setIncidents(localIncidents)
-      setUsingPreset(true)
-      setError(null)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  return { incidents, loading, error, usingPreset, reload }
-}
 
 // ---- Manning Overrides (Supabase + Local Fallback) -------------------
 

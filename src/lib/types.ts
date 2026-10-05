@@ -10,7 +10,6 @@ export type Route =
   | 'rbac'
   | 'damage'
   | 'replenishment'
-  | 'incidents'
   | 'production'
   // Warehouse supervisor console
   | 'inventory'

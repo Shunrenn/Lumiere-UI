@@ -22,7 +22,6 @@ export type WarehouseModuleId =
   | 'manning'
   | 'dispatch'
   | 'production'
-  | 'incidents'
 
 export interface WarehouseModule {
   id: WarehouseModuleId
@@ -62,13 +61,6 @@ export const WAREHOUSE_MODULES: WarehouseModule[] = [
     previewPoints: ['Daily shift grid (AM/PM/OFF)', 'Event schedule & squad assignments', 'Crew deployment rosters & warning ledger'],
   },
   {
-    id: 'incidents',
-    label: 'Incident Reporting',
-    icon: ShieldAlert,
-    blurb: 'Crew-filed incident reports with a PIN-gated WOM review queue.',
-    previewPoints: ['Categorised incident intake', 'PIN-gated WOM review', 'Resolve / dismiss with audit notes'],
-  },
-  {
     id: 'dispatch',
     label: 'Dispatch & Logistics',
     icon: Truck,
@@ -95,7 +87,6 @@ export const WAREHOUSE_MODULE_ROUTES: Record<WarehouseModuleId, Route> = {
   replenishment: 'replenishment',
   vendors: 'vendors',
   manning: 'crew',
-  incidents: 'incidents',
   dispatch: 'dispatch',
   production: 'production',
 }

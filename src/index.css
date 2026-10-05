@@ -112,3 +112,23 @@
   }
 }
 
+/* Canvas editor density scale: keeps its controls readable without altering app-wide type. */
+.canvas-editor {
+  --canvas-topbar: 3.5rem;
+  --canvas-bottombar: 3rem;
+  --canvas-control: 2.25rem;
+  --canvas-type-label: 0.6875rem;
+  --canvas-type-body: 0.75rem;
+  --canvas-type-heading: 0.75rem;
+}
+
+/* Legacy editor labels used fractional rem utilities. Clamp those to the
+   editor's readable minimum without affecting larger, intentionally styled text. */
+.canvas-editor [class*="text-[0."] {
+  font-size: var(--canvas-type-label) !important;
+  line-height: 1.4;
+}
+
+.canvas-editor .text-sm {
+  font-size: var(--canvas-type-body);
+}

@@ -13,7 +13,6 @@ export const VALID_ROUTES = new Set<Route>([
   'rbac',
   'damage',
   'replenishment',
-  'incidents',
   'production',
   'inventory',
   'warehouse-logs',
@@ -218,7 +217,6 @@ export function canAccessRoute(
       cleanRoute === 'overview' ||
       cleanRoute === 'inventory' ||
       cleanRoute === 'replenishment' ||
-      cleanRoute === 'incidents' ||
       cleanRoute === 'production' ||
       cleanRoute === 'vendors' ||
       cleanRoute === 'dispatch' ||
@@ -253,7 +251,7 @@ export function canAccessWarehouseModule(
 
   // Warehouse Associate:
   // Allowed: assets, replenishment, vendors, dispatch
-  // Denied: manning, production, incidents
+  // Denied: manning and production
   if (user.role === 'Warehouse Associate') {
     return (
       moduleId === 'assets' ||

@@ -554,7 +554,8 @@ export async function fetchEventsApi(page = 1, pageSize = 50, statusFilter?: str
  *
  * This deliberately does not fall back to the broad /api/events collection:
  * a planner dashboard must fail closed rather than expose unassigned events
- * when the assignment-scoped API contract is unavailable.
+ * when the assignment-scoped API contract is unavailable. The caller receives
+ * an empty assignment set so the dashboard can remain usable.
  */
 export async function fetchAssignedPlannerEventsApi(): Promise<PortalEvent[]> {
   const controller = new AbortController()
@@ -566,7 +567,8 @@ export async function fetchAssignedPlannerEventsApi(): Promise<PortalEvent[]> {
     })
     clearTimeout(timeoutId)
     if (!res.ok) {
-      throw new Error(`GET /api/planner/events returned HTTP ${res.status}`)
+      console.warn(`[eventsApi] GET /api/planner/events returned HTTP ${res.status}`)
+      return []
     }
     const body = await res.json()
     const data: EventResponseDto[] = Array.isArray(body)
@@ -578,7 +580,7 @@ export async function fetchAssignedPlannerEventsApi(): Promise<PortalEvent[]> {
   } catch (err) {
     clearTimeout(timeoutId)
     console.warn('[eventsApi] GET /api/planner/events failed:', err)
-    throw err
+    return []
   }
 }
 

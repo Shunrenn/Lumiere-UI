@@ -38,6 +38,7 @@ import {
   type ManningAssignment,
 } from '@/lib/manning'
 import { cn } from '@/lib/utils'
+import { WarehouseModuleHeader } from '@/components/warehouse/WarehouseModuleHeader'
 import { exportCrewRosterPdf } from '@/lib/pdf-exporter'
 
 function Avatar({ name }: { name: string }) {
@@ -147,15 +148,9 @@ export function ManningModule({ onClose }: ManningModuleProps) {
   return (
     <div className="flex h-full flex-1 flex-col overflow-y-auto bg-background">
       {/* ─── Header & Title ─── */}
-      <div className="flex flex-col gap-4 border-b border-border px-6 py-5 sm:px-10">
+      <div className="flex flex-col gap-4 border-b border-border px-0 py-7">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[0.6rem] font-bold uppercase tracking-[0.24em] text-primary">Warehouse module</p>
-            <h1 className="mt-1 font-serif text-2xl font-medium text-foreground">Manning Delegation</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Ground crew scheduling, event deployments, and zone duty rosters.
-            </p>
-          </div>
+          <WarehouseModuleHeader title="Manning Delegation" description="Ground crew scheduling, event deployments, and zone duty rosters." />
           <button
             type="button"
             onClick={onClose}
@@ -380,7 +375,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
       )}
 
       {/* ─── Main Content Area ─── */}
-      <div className="flex-1 px-6 py-6 sm:px-10">
+      <div className="flex-1 px-0 py-7">
         {topTab === 'daily' ? (
           dailyViewMode === 'matrix' ? (
             <CrewOpsGrid staff={staff} />
