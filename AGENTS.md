@@ -1,41 +1,95 @@
-# AGENTS.md
+# Lumiere-UI Agent Guide
 
-SPA repo for Lumiere. Product docs for this tree live in `docs/`. The API and the rest of the suite live in [Shunrenn/Lumiere](https://github.com/Shunrenn/Lumiere).
+## Project Overview
 
-## Guardrails
+Frontend project: `Lumiere-UI`. 
+React + TypeScript + Vite SPA.
 
-- Login and API calls use `VITE_API_URL` in new code. Do not add `localhost:8080` hardcodes.
-- Catalog cutouts are the API `IBackgroundRemovalService`. The modal chroma-key is not the model. No vision vendor key in this SPA.
-- State Synchronization: Synchronization is **checkpoint-based synchronization via periodic polling and focus-triggered refetch** (30s polling + window focus refetch), not WebSockets or real-time streaming. Do not describe Lumière sync as "real-time" — use "current verified state" or "checkpoint-based".
+## Tech Stack
+
+- React 19
+- TypeScript
+- Vite
+- pnpm
+- Custom frontend routing
+
+## Commands
+
+- **Package Manager:** Use `pnpm`. Do not introduce npm lockfiles, yarn, or bun unless intentionally migrating the project.
+- **Installation:** `pnpm install`
+- **Development:** `pnpm run dev`
+- **Build:** `pnpm run build`. Build must succeed before considering work complete.
+- **Lint:** `pnpm run lint`
+
+## Source Layout
+
+- `src/features/`: Contains domain-specific feature modules (e.g. `admin`, `inventory`, `warehouse`).
+- `src/shared/`: Shared, cross-domain code (e.g. types, utility functions, shared API config).
+- `src/pages/`: Top-level route components.
+- `src/components/`: Reusable UI components.
+- `src/lib/`: Remaining providers and domain modules (legacy dumping ground, do not add generic APIs here).
+
+## Architecture Rules
+
+- **Shared Code:** Only truly cross-domain code should go in `src/shared/`. Do not move feature-specific code into shared merely for convenience.
+- **Routing:** Preserve existing routes unless explicitly requested. Do not mass-rewrite router architecture unnecessarily.
+
+## API Rules
+
+- **Backend Boundary:** New frontend database behavior must go through the C# API. Do not add new direct PostgreSQL/Supabase table operations in browser code.
+- **API Placement:** New feature APIs belong in `src/features/<feature>/api/`. Shared API infrastructure belongs in `src/shared/api/`. Do not recreate the old generic API dumping ground in `src/lib/`.
+
+## Authentication Rules
+
+- **Architecture:** Preserve the existing custom JWT architecture (`AuthProvider`, `useAuth`, backend `/api/auth/login`, localStorage/sessionStorage persistence, role-aware access).
+- **Restrictions:** 
+  - Do not use `useAuth()` outside `AuthProvider`.
+  - Do not replace JWT auth with Supabase Auth.
+  - Do not bypass role checks, hardcode auth tokens, or create alternate login systems.
+  - Do not change auth architecture without explicit requirement.
+
+## State and Providers
+
+- Synchronization is checkpoint-based via periodic polling and focus-triggered refetch. Do not add SignalR, WebSocket, or Supabase Realtime behavior.
+
+## Legacy Boundaries
+
+- **LEGACY — DO NOT EXPAND:** Direct Supabase modules (`src/lib/manning.ts` and `src/lib/warehouse-crew.ts`) remain. They should eventually move behind C# API contracts. Clarify Supabase environment variables are legacy while direct dependencies remain.
+
+## Styling and UI
+
+- TailwindCSS is used for styling.
+- Catalog cutouts are generated only by the API. Client chroma-key processing is preview-only.
+
+## Build and Validation
+
+- Build must succeed with `pnpm run build`.
+- **Build Warnings:** SignalR PURE annotation warning and Vite large chunk warning are known non-fatal warnings. Do not tell future agents to hide warnings instead of fixing actual regressions.
+- **Validation:** Never report a task as done based only on a clean build. Verify changes via authenticated HTTP evidence against the API origin or actual browser test screenshots.
+
+## Deployment
+
+- **Target:** Railway is the active deployment target.
+- **Production Server:** `sirv dist --host 0.0.0.0 --port $PORT --single`
+- **Restrictions:** Do not recreate `vercel.json`, `api/` serverless functions, or Vercel deployment docs unless explicitly instructed.
+- **Environment Variables:** Only document actively used variables (`VITE_API_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`). Do not expose server secrets with `VITE_*`.
+
+## Git Safety
+
+- Never automatically run destructive commands (e.g. `git reset --hard`, `git clean -fd`, `git checkout .`) when a working tree contains user work.
+- Always inspect `git status -s` and `git diff` before destructive changes.
+- Do not commit `node_modules/`, `dist/`, logs, or temporary migration scripts unless explicitly required.
+
+## Do Not
+
+- Do not redesign the application or rewrite unrelated frontend features.
+- Do not modify the C# backend.
+- Do not tell future agents to expand direct browser database access.
 - Do not treat git-history writeups as requirements.
-- No AI attribution tags on commits, PRs, or file headers (Cursor, Claude, Codex, Antigravity, Copilot). Optional hook: `core.hooksPath .githooks`. Do not run `git config` from an agent unless a human asked.
 
+## Definition of Done
 
-## Frontend architecture guardrails
-
-- The browser is not an authorization authority. Server responses and JWT-backed API checks decide access.
-- Do not add or extend browser-held credentials, PINs, vendor keys, or authorization decisions. Any migration away from existing browser token/session handling must preserve logout, expiry, refresh, and offline behavior through tested API contracts.
-- Do not add direct browser CRUD calls to Supabase. Migrate remaining manning and preset-squad behavior behind versioned API contracts before removing the legacy client paths.
-- Do not add SignalR, WebSocket, or Supabase Realtime behavior. Remove an existing real-time path only after polling and focus-refetch behavior has been verified for the affected workflow.
-- Client-side chroma-key work may be labelled only as a preview. It must never be represented as a production catalog cutout.
-- Do not add direct database access from Vercel functions. The SPA and its hosting functions communicate with the Railway API; EF owns the Postgres schema.
-- Preserve intentional route-level lazy loading. When changing large UI areas, check build output for unwanted static/dynamic import mixing and oversized entry chunks.
-
-SAD-A2 materializes to `.cursor/rules/sad-spa-production-wire.mdc`. Canonical card is `docs/sad-lumiere.md` in the API repo.
-
-## Tools, CLIs, and MCP
-
-This tree is the Vercel SPA. API deploy is Railway in Shunrenn/Lumiere.
-
-- `pnpm` install, dev, build
-- `gh` pull requests
-- `vercel` for env, deploy, logs (`vercel env`, `vercel logs`, `vercel --prod`). Never set JWT or `BackgroundRemoval__ApiKey` here. Only `VITE_API_URL`.
-- Vercel MCP `plugin-vercel-vercel` when authenticated (`mcp_auth` if `needsAuth`). Inspect projects and deployments. Do not print secrets.
-- Supabase MCP is for the API/data plane. Do not treat browser Supabase as login identity.
-
-Full list: API repo `docs/build-lumiere.md` §7.
-
-## Standing Verification Rule
-
-STANDING VERIFICATION RULE: Never report a task as done, complete, verified, or working based only on a clean build (pnpm build passing) or a successful deploy. These only prove the code compiles — not that the feature works. Before claiming any task complete: (1) run a real curl/HTTP test against the live production API and show raw request/response, or a real browser test with actual screenshots — not text descriptions of what should render; (2) show the actual git diff of every changed file; (3) if a claim can't be verified this way, say so explicitly instead of guessing or fabricating plausible-sounding output. This rule applies to every task, every session, without exception.
-
+- Code satisfies user requirements.
+- Build succeeds (`pnpm run build`).
+- Functional test verifies the change works against real endpoints/browser.
+- No unexpected architectural regressions or mixed static/dynamic lazy boundaries.
