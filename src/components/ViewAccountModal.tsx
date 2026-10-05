@@ -59,6 +59,9 @@ export function ViewAccountModal({
     }
   }
 
+  const isPendingActivation = staff?.accountStatus === 'Pending'
+  const requestLabel = isPendingActivation ? 'Generate New Temporary Password' : 'Request New Password'
+
   const copyToClipboard = async () => {
     if (!resetResult?.tempPassword) return
     try {
@@ -153,12 +156,12 @@ export function ViewAccountModal({
           ) : showConfirmReset ? (
             <div className="space-y-4">
               <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-xs text-destructive">
-                <p className="font-bold uppercase tracking-wider">Confirm Password Reset</p>
+                <p className="font-bold uppercase tracking-wider">{isPendingActivation ? 'Generate New Temporary Password' : 'Request New Password'}</p>
                 <p className="mt-1 text-foreground">
-                  Are you sure you want to generate a new temporary password for <strong>{staff.fullName || staff.email}</strong>?
+                  {isPendingActivation ? 'Generate a new temporary password for' : 'Request a password reset for'} <strong>{staff.fullName || staff.email}</strong>?
                 </p>
                 <p className="mt-1 text-muted-foreground">
-                  This will immediately terminate any active sessions and require the user to configure a new password upon their next login.
+                  {isPendingActivation ? 'The previous activation credential will no longer be valid. The new credential is displayed once and is not stored in plaintext.' : 'This uses the existing password recovery pathway and does not reveal the current password.'}
                 </p>
               </div>
 
@@ -177,7 +180,7 @@ export function ViewAccountModal({
                   disabled={isResetting}
                   className="inline-flex items-center gap-1.5 rounded-md bg-destructive px-5 py-2 text-xs font-bold uppercase tracking-wider text-destructive-foreground hover:opacity-90 disabled:opacity-50"
                 >
-                  {isResetting ? 'Resetting...' : 'Confirm Reset'}
+                  {isResetting ? 'Processing...' : requestLabel}
                 </button>
               </div>
             </div>
@@ -298,6 +301,17 @@ export function ViewAccountModal({
               </label>
               {readField(staff.accountStatus || '—')}
             </div>
+
+            <section className="rounded-md border border-border/70 bg-muted/20 p-3.5" aria-labelledby="account-access-heading">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 id="account-access-heading" className="text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">Account Access</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">Status: {isPendingActivation ? 'Pending activation' : 'Password established'}</p>
+                  {isPendingActivation ? <p className="mt-1 text-xs text-muted-foreground">The activation credential cannot be retrieved. Generate a new temporary password if the employee no longer has the original.</p> : <p className="mt-1 text-xs text-muted-foreground">The employee&apos;s permanent password is never available to administrators.</p>}
+                </div>
+                {!editable && <button type="button" onClick={() => setShowConfirmReset(true)} className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-muted"><KeyRound className="size-3.5" />{requestLabel}</button>}
+              </div>
+            </section>
 
             {/* Reason / Description is only shown when the existing account model provides one. */}
             <div>

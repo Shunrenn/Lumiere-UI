@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Search, UserPlus, Users, ChevronDown, TrendingUp, ArrowUpDown, AlertTriangle } from 'lucide-react'
+import { Plus, Search, UserPlus, Users, ChevronDown, ArrowUpDown, AlertTriangle } from 'lucide-react'
 import { AdminShell } from '@/components/admin/AdminShell'
 import { EmployeeModal } from '@/components/EmployeeModal'
 import { ViewAccountModal } from '@/components/ViewAccountModal'
@@ -8,7 +8,6 @@ import { WorkforceTable } from '@/components/admin/workforce/WorkforceTable'
 import type { AdminDestinationId } from '@/lib/admin-destinations'
 import { useNav } from '@/lib/nav'
 import { usePortal } from '@/lib/store'
-import { useGrowthSummary } from '@/lib/admin-growth-summary'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -19,7 +18,7 @@ function statusFor(staff: Staff, lockedIds: Set<string>): AccountStatus {
   return staff.accountStatus ?? (staff.sessionStatus === 'Suspended' ? 'Suspended' : 'Active')
 }
 
-// Status filter options rendered as pills (spec: All / Active / Pending / Locked / Suspended).
+// Status options are the authoritative workforce filter.
 const STATUS_FILTERS = ['All', 'Active', 'Pending', 'Locked', 'Suspended'] as const
 type StatusFilter = (typeof STATUS_FILTERS)[number]
 
@@ -38,7 +37,6 @@ function parseDateAdded(value: string | undefined): number {
 export function AdminWorkforcePage() {
   const { navigate, intent, clearIntent } = useNav()
   const { staff, userActions, addEmployeeRecord, toggleSuspend, forceLogout, updateStaff, removeStaff } = usePortal()
-  const { openGrowthSummary } = useGrowthSummary()
   const [query, setQuery] = useState('')
   const [role, setRole] = useState('All Roles')
   const [status, setStatus] = useState<StatusFilter>('All')
@@ -197,8 +195,7 @@ export function AdminWorkforcePage() {
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><span className="sr-only">Role</span><select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2.5 text-xs text-foreground"><option>All Roles</option>{roles.map((r) => <option key={r}>{r}</option>)}</select></label>
             <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><span className="sr-only">Status</span><select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} className="rounded-md border border-input bg-background px-3 py-2.5 text-xs text-foreground">{STATUS_FILTERS.map((s) => <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>)}</select></label>
-            <button type="button" onClick={() => { setQuery(''); setRole('All Roles'); setStatus('All') }} className="rounded-md border border-input bg-background px-3 py-2.5 text-xs font-semibold text-foreground transition hover:bg-muted">Reset</button>
-            <button type="button" onClick={openGrowthSummary} className="button-secondary"><TrendingUp className="size-3.5 text-primary" /> User Growth Summary</button>
+            <button type="button" onClick={() => { setQuery(''); setRole('All Roles'); setStatus('All') }} className="rounded-md border border-input bg-background px-3 py-2.5 text-xs font-semibold text-foreground transition hover:bg-muted">Clear Filters</button>
             <div className="relative" ref={addMenuRef}>
               <button type="button" onClick={() => setAddMenuOpen((v) => !v)} className="button-primary" aria-haspopup="menu" aria-expanded={addMenuOpen}><Plus className="size-3.5" /> Add New User <ChevronDown className="size-3.5" /></button>
               {addMenuOpen && (
