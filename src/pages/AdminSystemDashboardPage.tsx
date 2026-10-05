@@ -310,9 +310,9 @@ export function AdminSystemDashboardPage() {
       ) : isLoading ? (
         <LoadingSkeleton variant="dashboard" />
       ) : isDashboard ? (
-        <div className="flex flex-col gap-4">
+        <div className="grid gap-4 lg:grid-cols-10">
           {/* Row 1: 4 small stat cards (left) + User Distribution / Live Security Feed (right) */}
-          <div data-testid="admin-dashboard-stats" className="grid items-stretch gap-4 lg:grid-cols-2">
+          <div data-testid="admin-dashboard-stats" className="grid items-stretch gap-4 lg:col-span-10 lg:grid-cols-2">
             <div className="grid h-[21rem] grid-cols-2 gap-3">
               <StatCard
                 agentSelector="data-agent-system-health"
@@ -359,7 +359,7 @@ export function AdminSystemDashboardPage() {
           </div>
 
           {/* Row 2: Pending Actions + Security Audit */}
-          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-10">
+          <div className="grid grid-cols-1 items-start gap-4 lg:col-span-10 lg:grid-cols-10">
             <div className="lg:col-span-3">
               <AdminPendingActions
                 items={pendingItems}
