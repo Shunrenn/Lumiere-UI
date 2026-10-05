@@ -23,19 +23,19 @@ const ACCESS_LEVEL_META: Record<
   { label: string; badge: string; description: string }
 > = {
   CO_EDIT: {
-    label: 'Can edit (CO_EDIT)',
+    label: 'Can edit',
     badge: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
-    description: 'Active Canvas write capability: place assets, edit layouts, and manage staging configuration.',
+    description: 'Can add and edit items on the canvas.',
   },
   COMMENT: {
-    label: 'Can review / annotate (COMMENT)',
+    label: 'Can comment',
     badge: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30',
-    description: 'Non-destructive visual inspection & annotations (read-only canvas layout with review notes).',
+    description: 'Can view the canvas and leave comments, but cannot edit it.',
   },
   VIEW: {
-    label: 'Can view (VIEW)',
+    label: 'Can view',
     badge: 'bg-muted text-muted-foreground border-border',
-    description: 'Read-only access: view canvas stage and layout without mutation privileges.',
+    description: 'Can view the canvas without making changes.',
   },
 }
 
@@ -184,10 +184,10 @@ export function CanvasCollaborationModal({
             </span>
             <div>
               <h2 id="collaboration-title" className="font-serif text-sm font-semibold text-foreground">
-                Canvas Collaborators &amp; Access
+                Share canvas
               </h2>
               <p className="text-[0.62rem] text-muted-foreground">
-                {eventTitle ? `Managing access for "${eventTitle}"` : 'Event Canvas Access Control'}
+                {eventTitle ? `Invite people to "${eventTitle}"` : 'Invite people and choose what they can do.'}
               </p>
             </div>
           </div>
@@ -228,7 +228,7 @@ export function CanvasCollaborationModal({
           <section className="rounded-xl border border-border bg-muted/30 p-4">
             <h3 className="flex items-center gap-1.5 text-[0.68rem] font-bold uppercase tracking-[0.14em] text-foreground mb-3">
               <UserPlus className="size-3.5 text-primary" />
-              Add Collaborator
+              Invite people
             </h3>
 
             <form onSubmit={handleGrantAccess} className="space-y-3">
@@ -236,7 +236,7 @@ export function CanvasCollaborationModal({
                 {/* Candidate Selector */}
                 <div>
                   <label className="block text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                    Select Account / Team Member *
+                    Add people
                   </label>
                   <select
                     value={selectedCandidateId}
@@ -244,7 +244,7 @@ export function CanvasCollaborationModal({
                     required
                     className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-ring/30"
                   >
-                    <option value="">Choose an eligible candidate...</option>
+                    <option value="">Choose a person...</option>
                     {eligibleCandidates.map((c) => (
                       <option key={c.userId} value={c.userId}>
                         {c.displayName} ({c.role}){c.isEventPlanner ? ' ★ Event Planner' : ''}
@@ -261,16 +261,16 @@ export function CanvasCollaborationModal({
                 {/* Access Level Selector */}
                 <div>
                   <label className="block text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                    Access Level *
+                    Permission
                   </label>
                   <select
                     value={selectedAccessLevel}
                     onChange={(e) => setSelectedAccessLevel(e.target.value as CanvasAccessLevel)}
                     className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-ring/30"
                   >
-                    <option value="CO_EDIT">Can edit (CO_EDIT) — Active stage &amp; layout write</option>
-                    <option value="COMMENT">Can review / annotate (COMMENT) — Non-destructive review</option>
-                    <option value="VIEW">Can view (VIEW) — Read-only canvas access</option>
+                    <option value="CO_EDIT">Can edit</option>
+                    <option value="COMMENT">Can comment</option>
+                    <option value="VIEW">Can view</option>
                   </select>
                 </div>
               </div>
@@ -287,7 +287,7 @@ export function CanvasCollaborationModal({
                   className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90 disabled:opacity-40 cursor-pointer"
                 >
                   <UserPlus className="size-3.5" />
-                  {isGranting ? 'Granting...' : 'Grant Access'}
+                  {isGranting ? 'Sharing...' : 'Share'}
                 </button>
               </div>
             </form>
@@ -298,7 +298,7 @@ export function CanvasCollaborationModal({
             <div className="flex items-center justify-between mb-3">
               <h3 className="flex items-center gap-1.5 text-[0.68rem] font-bold uppercase tracking-[0.14em] text-foreground">
                 <Shield className="size-3.5 text-primary" />
-                Current Collaborators ({collaborators.length})
+                People with access ({collaborators.length})
               </h3>
               <button
                 type="button"
@@ -334,7 +334,7 @@ export function CanvasCollaborationModal({
                 <Users className="size-6 mx-auto mb-2 text-muted-foreground/60" />
                 <p className="font-medium text-foreground/80">No additional collaborators</p>
                 <p className="text-[0.62rem] mt-0.5">
-                  Only the primary Event Planner currently holds access to this canvas.
+                  Only you have access right now.
                 </p>
               </div>
             ) : (
@@ -409,9 +409,9 @@ export function CanvasCollaborationModal({
                                 meta.badge,
                               )}
                             >
-                              <option value="CO_EDIT">Can edit (CO_EDIT)</option>
-                              <option value="COMMENT">Can review (COMMENT)</option>
-                              <option value="VIEW">Can view (VIEW)</option>
+                              <option value="CO_EDIT">Can edit</option>
+                              <option value="COMMENT">Can comment</option>
+                              <option value="VIEW">Can view</option>
                             </select>
 
                             <button
@@ -438,7 +438,7 @@ export function CanvasCollaborationModal({
         {/* Footer */}
         <div className="flex shrink-0 items-center justify-between border-t border-border bg-muted/40 px-6 py-3 text-muted-foreground">
           <p className="text-[0.58rem]">
-            Changes are persisted server-side with EventViewer records.
+            Permissions update as soon as you share or change them.
           </p>
           <button
             type="button"

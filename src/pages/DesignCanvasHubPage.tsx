@@ -32,7 +32,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { usePortal } from '@/lib/store'
-import { fetchEventsApi } from '@/lib/eventsApi'
+import { fetchAssignedPlannerEventsApi } from '@/lib/eventsApi'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { PLANNER_RAIL_DESTINATIONS, PLANNER_RAIL_IDENTITY } from '@/lib/executive-destinations'
 import { useThemeMode } from '@/lib/theme'
@@ -41,6 +41,8 @@ import { ErrorFallback } from '@/components/ErrorFallback'
 import { EmptyState } from '@/components/EmptyState'
 import { DashboardCalendarCard } from '@/components/dashboard/DashboardCalendarCard'
 import { UpcomingEventsPanel } from '@/components/dashboard/UpcomingEventsPanel'
+import { DashboardRoleHeader } from '@/components/dashboard/DashboardRoleHeader'
+import type { PortalEvent } from '@/lib/types'
 
 
 /* ─── Calendar helpers ─── */
@@ -295,32 +297,6 @@ const STATUS_LABEL_COLORS: Record<string, string> = {
   'Planning':           'text-amber-400',
   'Active':             'text-emerald-400',
   'Unknown':            'text-muted-foreground',
-}
-
-const STATUS_DOT_COLORS: Record<string, string> = {
-  'Initialized': 'bg-amber-400', 'Planning': 'bg-amber-400',
-  'In Production': 'bg-sky-400', 'Reserved': 'bg-primary',
-  'Completed': 'bg-emerald-400', 'Settled': 'bg-emerald-400', 'Active': 'bg-emerald-400',
-  'On Hold': 'bg-rose-400', 'Cancelled': 'bg-muted-foreground', 'Unknown': 'bg-muted-foreground',
-}
-
-function ShapeIndicator({ kind, color }: { kind: ShapeKind; color: string }) {
-  if (kind === 'actual') {
-    return (
-      <Star
-        style={{ color }}
-        className="size-2.5 shrink-0 fill-current"
-        aria-hidden="true"
-      />
-    )
-  }
-  return (
-    <span
-      style={{ backgroundColor: color }}
-      className="inline-block size-2 rounded-full shrink-0"
-      aria-hidden="true"
-    />
-  )
 }
 
 /* ─── Profile Settings Sidebar ─── */
@@ -1143,7 +1119,7 @@ function Dropdown({
 export function DesignCanvasHubPage() {
   const { adminName } = useAuth()
   const { navigate, route } = useNav()
-  const { events: portalEvents, staff } = usePortal()
+  const { staff } = usePortal()
 
   const dbDesigners = useMemo(() => {
     const designerStaff = (staff || []).filter((s) => {
@@ -1153,11 +1129,25 @@ export function DesignCanvasHubPage() {
     const names = designerStaff.map((s) => `${s.firstName || ''} ${s.surname || ''}`.trim()).filter(Boolean)
     return Array.from(new Set(names))
   }, [staff])
-  const [isLoading] = useState(false)
+  const [assignedEvents, setAssignedEvents] = useState<PortalEvent[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [isError, setIsError] = useState(false)
 
   useEffect(() => {
-    fetchEventsApi().catch(() => {})
+    let active = true
+    setIsLoading(true)
+    setIsError(false)
+    fetchAssignedPlannerEventsApi()
+      .then((events) => {
+        if (active) setAssignedEvents(events)
+      })
+      .catch(() => {
+        if (active) setIsError(true)
+      })
+      .finally(() => {
+        if (active) setIsLoading(false)
+      })
+    return () => { active = false }
   }, [])
 
 
@@ -1168,7 +1158,7 @@ export function DesignCanvasHubPage() {
 
   // Map real backend events into calendar grid events for visible month/year
   const calEvents = useMemo(() => {
-    const source = (portalEvents && portalEvents.length > 0) ? portalEvents : (import.meta.env.DEV ? REAL_10_SEEDED_EVENTS : [])
+    const source = assignedEvents.length > 0 ? assignedEvents : (import.meta.env.DEV ? REAL_10_SEEDED_EVENTS : [])
     const events: CalendarEvent[] = []
 
     source.forEach((ev, index) => {
@@ -1195,16 +1185,13 @@ export function DesignCanvasHubPage() {
     })
 
     return events
-  }, [portalEvents, calYear, calMonth])
+  }, [assignedEvents, calYear, calMonth])
 
   const firstDow = new Date(calYear, calMonth, 1).getDay()
   const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate()
-  const totalCells = firstDow + daysInMonth
-  const padEndLength = Math.max(0, 42 - totalCells)
   const calCells: (number | null)[] = [
     ...Array(firstDow).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-    ...Array(padEndLength).fill(null),
   ]
 
   function prevMonth() {
@@ -1233,15 +1220,15 @@ export function DesignCanvasHubPage() {
   const knownEventIdsRef = useRef<Set<string> | null>(null)
 
   useEffect(() => {
-    if (!portalEvents || portalEvents.length === 0) return
+    if (!assignedEvents.length) return
 
-    const currentIds = new Set(portalEvents.map((e) => e.id))
+    const currentIds = new Set(assignedEvents.map((e) => e.id))
 
     if (knownEventIdsRef.current === null) {
       knownEventIdsRef.current = currentIds
     } else {
       let newlyAddedEvent: any = null
-      for (const ev of portalEvents) {
+      for (const ev of assignedEvents) {
         if (!knownEventIdsRef.current.has(ev.id)) {
           newlyAddedEvent = ev
           break
@@ -1254,22 +1241,21 @@ export function DesignCanvasHubPage() {
 
       knownEventIdsRef.current = currentIds
     }
-  }, [portalEvents])
+  }, [assignedEvents])
 
   // Combine real events as project cards with local card state
   const effectiveCards = useMemo(() => {
-    const source = (portalEvents && portalEvents.length > 0) ? portalEvents : (import.meta.env.DEV ? REAL_10_SEEDED_EVENTS : [])
+    const source = assignedEvents.length > 0 ? assignedEvents : (import.meta.env.DEV ? REAL_10_SEEDED_EVENTS : [])
     const realCards = mapPortalEventsToCards(source, cards, adminName || 'Lumière Creatives')
     const userCards = cards.filter((c) => c.id.startsWith('mb-') || c.id.startsWith('pc-custom-') || (!c.id.startsWith('pc-event-') && !realCards.some(rc => rc.id === c.id)))
     return [...realCards, ...userCards]
-  }, [portalEvents, cards, adminName])
+  }, [assignedEvents, cards, adminName])
 
   const [searchQuery, setSearchQuery] = useState('')
   const [designer, setDesigner] = useState('All Designers')
   const [projectType, setProjectType] = useState('All Types')
   const [sortBy, setSortBy] = useState('Last Activity')
   const [view, setView] = useState<'grid' | 'row'>('grid')
-  const [statusFilter, setStatusFilter] = useState('All')
   const [projectStatusFilter, setProjectStatusFilter] = useState('All')
   const [moodBoardFilter, setMoodBoardFilter] = useState<'All' | 'Linked to an event' | 'Standalone'>('All')
   const [moodBoardDialogOpen, setMoodBoardDialogOpen] = useState(false)
@@ -1419,7 +1405,7 @@ export function DesignCanvasHubPage() {
 
   // Events across upcoming months, sorted chronologically (soonest first)
   const upcomingEvents = useMemo(() => {
-    const source = (portalEvents && portalEvents.length > 0) ? portalEvents : (import.meta.env.DEV ? REAL_10_SEEDED_EVENTS : [])
+    const source = assignedEvents.length > 0 ? assignedEvents : (import.meta.env.DEV ? REAL_10_SEEDED_EVENTS : [])
     const all: CalendarEvent[] = []
 
     source.forEach((ev, index) => {
@@ -1448,15 +1434,11 @@ export function DesignCanvasHubPage() {
       if (a.month !== b.month) return a.month - b.month
       return a.day - b.day
     })
-  }, [portalEvents])
+  }, [assignedEvents])
 
   const groupedUpcomingEvents = useMemo(() => {
-    const filtered = statusFilter === 'All'
-      ? upcomingEvents
-      : upcomingEvents.filter((e) => e.status === statusFilter)
-
     const groups: { monthLabel: string; events: CalendarEvent[] }[] = []
-    for (const ev of filtered) {
+    for (const ev of upcomingEvents) {
       const label = `${MONTH_NAMES[ev.month]} ${ev.year}`
       let group = groups.find((g) => g.monthLabel === label)
       if (!group) {
@@ -1471,7 +1453,7 @@ export function DesignCanvasHubPage() {
     }
 
     return groups
-  }, [upcomingEvents, statusFilter])
+  }, [upcomingEvents])
 
   function handleOpenCalendarEvent(ev: CalendarEvent) {
     const matchingCard = effectiveCards.find((c) => c.eventAlias === ev.alias || c.title.includes(ev.name))
@@ -1520,10 +1502,9 @@ export function DesignCanvasHubPage() {
         ) : (
           <>
             {route === 'dashboard' && (
-              <header className="mb-7">
-                <h1 className="font-serif text-3xl font-semibold tracking-tight text-foreground">Dashboard</h1>
-                <p className="mt-1 text-sm text-muted-foreground">Your assigned design work, current verified at each checkpoint.</p>
-              </header>
+              <div className="mb-7">
+                <DashboardRoleHeader roleLabel="Event Planner" name={adminName} />
+              </div>
             )}
             {route === 'mood-boards' && (
               <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
@@ -1537,7 +1518,7 @@ export function DesignCanvasHubPage() {
             {/* ── Calendar + Upcoming Events ── */}
         {route === 'dashboard' && <section aria-label="Assigned event calendar" className="mb-7 grid items-stretch gap-6 min-[1100px]:grid-cols-[minmax(0,1.35fr)_minmax(380px,1fr)]">
           {/* Calendar (primary column) */}
-          <DashboardCalendarCard icon={Calendar} title={`${MONTH_NAMES[calMonth]} ${calYear}`} subtitle="Monthly Event Roster" className="h-[35rem]" controls={<><button type="button" onClick={prevMonth} aria-label="Previous month" className="flex size-8.5 items-center justify-center rounded-lg border border-border bg-background/80 text-foreground transition hover:bg-accent"><ChevronLeft className="size-4" /></button><button type="button" onClick={nextMonth} aria-label="Next month" className="flex size-8.5 items-center justify-center rounded-lg border border-border bg-background/80 text-foreground transition hover:bg-accent"><ChevronRight className="size-4" /></button></>} legend={<div className="flex flex-wrap items-center gap-3"><span className="text-[0.58rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Legend:</span><span className="text-[0.58rem] text-muted-foreground">Status is indicated by the event dot.</span></div>}>
+          <DashboardCalendarCard icon={Calendar} title={`${MONTH_NAMES[calMonth]} ${calYear}`.toUpperCase()} subtitle="Monthly Assigned Event Roster" className="h-[35rem]" controls={<><button type="button" onClick={prevMonth} aria-label="Previous month" className="flex size-8.5 items-center justify-center rounded-lg border border-border bg-background/80 text-foreground transition-all duration-150 hover:border-primary/40 hover:bg-accent"><ChevronLeft className="size-4" /></button><button type="button" onClick={nextMonth} aria-label="Next month" className="flex size-8.5 items-center justify-center rounded-lg border border-border bg-background/80 text-foreground transition-all duration-150 hover:border-primary/40 hover:bg-accent"><ChevronRight className="size-4" /></button></>} legend={<div className="flex flex-wrap items-center gap-5 text-xs text-muted-foreground"><span className="text-[0.62rem] font-bold uppercase tracking-wider">Legend:</span><span className="flex items-center gap-1.5 text-[0.65rem] font-semibold text-card-foreground"><Star className="size-3.5 fill-amber-500 text-amber-500" /> Assigned Event</span></div>}>
             <div className="hidden">
               <h2 className="font-display text-lg tracking-[0.15em] text-foreground">
                 {MONTH_NAMES[calMonth]} {calYear}
@@ -1563,16 +1544,16 @@ export function DesignCanvasHubPage() {
             </div>
 
             {/* Day-of-week headers */}
-            <div className="grid grid-cols-7 mb-1 shrink-0">
-              {DAY_LABELS.map((d) => (
-                <div key={d} className="py-1 text-center text-[0.58rem] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+            <div className="grid grid-cols-7 gap-1 text-center text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+              {DAY_LABELS.map((d, colIdx) => (
+                <div key={d} className={cn('rounded-md py-1.5', (colIdx === 0 || colIdx === 6) && 'bg-muted/20 font-bold text-muted-foreground/75')}>
                   {d}
                 </div>
               ))}
             </div>
 
             {/* Calendar grid */}
-            <div className="grid flex-1 grid-cols-7 grid-rows-6 gap-1.5">
+            <div className="mt-1.5 grid min-h-0 flex-1 grid-cols-7 auto-rows-fr gap-1.5">
               {calCells.map((day, idx) => {
                 const dayEvents = day ? calEvents.filter((e) => e.day === day) : []
                 const isToday = day === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear()
@@ -1580,35 +1561,37 @@ export function DesignCanvasHubPage() {
                   <div
                     key={idx}
                     className={cn(
-                      'flex h-full min-h-0 flex-col gap-0.5 overflow-hidden rounded-lg border border-border/80 bg-background p-1.5',
+                      'group flex min-h-0 flex-col overflow-hidden rounded-lg border border-border/80 bg-background p-1.5 transition-all duration-150 hover:border-primary/50 hover:bg-accent/40',
                       !day && 'border-border/30 bg-muted/10',
+                      isToday && 'border-primary/50 bg-primary/10 ring-1.5 ring-primary/40',
                     )}
                   >
                     {day && (
                       <>
                         <span
                           className={cn(
-                            'self-end text-[0.65rem] font-semibold leading-none mb-0.5',
+                            'mb-0.5 text-[0.65rem] font-bold leading-none',
                             isToday
-                              ? 'flex size-4.5 items-center justify-center rounded-full bg-primary text-primary-foreground'
-                              : 'text-muted-foreground',
+                              ? 'flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xs'
+                              : 'text-muted-foreground group-hover:text-foreground',
                           )}
                         >
                           {day}
                         </span>
-                        {dayEvents.slice(0, 6).map((ev) => (
+                        <div className="mt-1 flex max-h-[3.3rem] flex-col gap-1 overflow-y-auto">
+                        {dayEvents.map((ev) => (
                           <button
                             key={ev.id}
                             type="button"
                             onClick={() => handleOpenCalendarEvent(ev)}
                             title={`${ev.name} — ${ev.status}`}
                             aria-label={`Open design project for ${ev.name}, status ${ev.status}`}
-                            className="flex min-w-0 items-center gap-1 overflow-hidden rounded border border-border/60 bg-card px-1 py-0.5 text-left focus:outline-none focus:ring-1 focus:ring-primary hover:bg-accent/70"
+                            className="flex w-full min-w-0 items-center gap-1 truncate rounded border border-border/60 bg-card px-1 py-0.5 text-left text-[0.55rem] font-semibold text-card-foreground shadow-xs transition hover:border-primary hover:bg-primary/10 hover:text-primary"
                           >
-                            <span className={cn('size-1.5 shrink-0 rounded-full', STATUS_DOT_COLORS[ev.status] || 'bg-muted-foreground')} aria-hidden="true" />
-                            <span className="truncate text-[0.5rem] leading-none text-foreground">{ev.alias}</span>
+                            <Star className="size-2.5 shrink-0 fill-amber-500 text-amber-500" aria-hidden="true" />
+                            <span className="truncate opacity-85">{ev.name}</span>
                           </button>
-                        ))}
+                        ))}</div>
                       </>
                     )}
                   </div>
@@ -1619,39 +1602,19 @@ export function DesignCanvasHubPage() {
           </DashboardCalendarCard>
 
           {/* Upcoming Events (sidebar column) */}
-          <UpcomingEventsPanel title="Upcoming Events" count={groupedUpcomingEvents.reduce((total, group) => total + group.events.length, 0)} subtitle="Month-Grouped Roster" className="h-[35rem]" headerAction={
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter events by status" className="h-7 shrink-0 cursor-pointer rounded-md border border-border bg-background px-2 text-[0.65rem] font-medium text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20"><option value="All">All Statuses</option>{Array.from(new Set(upcomingEvents.map((e) => e.status).filter(Boolean))).map((st) => <option key={st} value={st}>{st}</option>)}</select>}>
-              <div className="hidden">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Pencil className="size-3.5 text-primary shrink-0" aria-hidden="true" />
-                  <h2 className="font-display text-sm tracking-[0.12em] text-foreground truncate">Upcoming Events</h2>
-                </div>
-
-                {/* Status filter dropdown */}
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  aria-label="Filter events by status"
-                  className="h-7 rounded-md border border-border bg-background px-2 text-[0.65rem] font-medium text-foreground outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20 shrink-0 cursor-pointer"
-                >
-                  <option value="All">All Statuses</option>
-                  {Array.from(new Set(upcomingEvents.map((e) => e.status).filter(Boolean))).map((st) => (
-                    <option key={st} value={st}>{st}</option>
-                  ))}
-                </select>
-              </div>
+          <UpcomingEventsPanel title="Upcoming Events" count={groupedUpcomingEvents.reduce((total, group) => total + group.events.length, 0)} subtitle="Month-Grouped Roster" className="h-[35rem]">
 
               <div className="px-0.5 py-1">
                 {groupedUpcomingEvents.length === 0 ? (
                   <p className="px-4 py-8 text-center text-xs text-muted-foreground">
-                    No events found with status &ldquo;{statusFilter}&rdquo;.
+                    No upcoming assigned events found.
                   </p>
                 ) : (
                   groupedUpcomingEvents.map((group) => (
                     <div key={group.monthLabel} className="relative mb-2">
                       {/* Sticky Month Header */}
-                      <div className="sticky top-0 z-10 rounded-md border-b border-t first:border-t-0 border-border/60 bg-muted/95 px-3.5 py-1.5 backdrop-blur-sm my-1">
-                        <span className="font-display text-[0.65rem] font-bold uppercase tracking-[0.15em] text-foreground">
+                      <div className="sticky top-0 z-10 border-b border-border/80 bg-card/95 py-1.5 backdrop-blur-sm">
+                        <span className="text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary">
                           {group.monthLabel}
                           <span className="ml-1.5 text-[0.6rem] font-normal tracking-normal text-muted-foreground">
                             ({group.events.length})
@@ -1659,25 +1622,25 @@ export function DesignCanvasHubPage() {
                         </span>
                       </div>
 
-                      <div className="space-y-2 pt-0.5">
+                      <div className="space-y-2.5">
                         {group.events.map((ev) => {
                           return (
                             <button
                               key={ev.id}
                               type="button"
                               onClick={() => handleOpenCalendarEvent(ev)}
-                              className="flex w-full items-center gap-3 rounded-xl border border-border/80 bg-background/90 px-3.5 py-2.5 text-left transition hover:bg-accent/60 focus:bg-accent/60 focus:outline-none"
+                              className="group flex w-full flex-col gap-1.5 rounded-xl border border-border/80 bg-background/90 p-3.5 text-left shadow-xs transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-accent/40 hover:shadow-sm focus:outline-none"
                             >
-                              <ShapeIndicator kind={ev.kind} color={EVENT_PALETTE[ev.colorIndex]} />
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-xs font-semibold text-foreground">{ev.name}</p>
-                                <p className="truncate text-[0.68rem] text-muted-foreground mt-0.5">
-                                  {ev.venue || 'Venue TBD'} · {MONTH_NAMES[ev.month].slice(0, 3)} {ev.day}
-                                </p>
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="min-w-0 flex-1 truncate font-serif text-sm font-medium text-card-foreground transition-colors group-hover:text-primary">{ev.name}</p>
+                                <span className={cn('shrink-0 rounded-full border px-2.5 py-0.5 text-[0.55rem] uppercase tracking-wider', STATUS_LABEL_COLORS[ev.status])}>{ev.status}</span>
                               </div>
-                              <span className={cn('shrink-0 rounded-full border border-current/30 bg-card px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.05em]', STATUS_LABEL_COLORS[ev.status])}>
-                                {ev.status}
-                              </span>
+                              <div className="flex items-center justify-between gap-2 text-[0.62rem] text-muted-foreground">
+                                <span className="min-w-0 flex-1 truncate font-semibold text-card-foreground">{ev.venue || 'Venue TBD'}</span>
+                                <span className="shrink-0 whitespace-nowrap font-medium text-muted-foreground">
+                                  · {MONTH_NAMES[ev.month].slice(0, 3)} {ev.day}
+                                </span>
+                              </div>
                             </button>
                           )
                         })}
@@ -1689,8 +1652,9 @@ export function DesignCanvasHubPage() {
           </UpcomingEventsPanel>
         </section>}
 
-        {/* ── Recents ── */}
-        <section aria-label={route === 'design-projects' ? 'Design projects' : route === 'mood-boards' ? 'Mood boards' : 'Recent projects'}>
+        {/* Design Projects and Mood Boards retain their dedicated browsing views. */}
+        {route !== 'dashboard' && (
+        <section aria-label={route === 'design-projects' ? 'Design projects' : 'Mood boards'}>
           {route === 'design-projects' && selectedDesignProject && (
             <div className="mb-6 rounded-xl border border-border bg-card p-4">
               <h2 className="font-serif text-lg font-semibold text-foreground">Mood Boards</h2>
@@ -1846,6 +1810,7 @@ export function DesignCanvasHubPage() {
                 </div>
           )}
         </section>
+        )}
         </>
         )}
       </main>

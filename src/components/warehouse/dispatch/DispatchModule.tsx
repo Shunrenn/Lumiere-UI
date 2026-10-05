@@ -27,6 +27,7 @@ import { BatchDetailView } from '@/components/warehouse/event-detail/BatchDetail
 import { ConfirmArchiveBatchModal } from '@/components/warehouse/dispatch/ConfirmArchiveBatchModal'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { cn } from '@/lib/utils'
+import { WarehouseModuleHeader } from '@/components/warehouse/WarehouseModuleHeader'
 
 type ViewMode = 'grouped' | 'consolidated'
 
@@ -137,15 +138,9 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-y-auto">
-      <div className="flex flex-col gap-4 border-b border-border px-6 py-5 sm:px-10">
+      <div className="flex flex-col gap-4 border-b border-border px-0 py-7">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[0.6rem] font-bold uppercase tracking-[0.24em] text-primary">Warehouse module</p>
-            <h1 className="mt-1 font-serif text-2xl font-medium text-foreground">Dispatch &amp; Logistics</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Dispatch manifests, vehicle assignments, and transit checkpoints.
-            </p>
-          </div>
+          <WarehouseModuleHeader title="Dispatch & Logistics" description="Dispatch manifests, vehicle assignments, and transit checkpoints." />
           <button
             type="button"
             onClick={onClose}
@@ -209,7 +204,7 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
         )}
       </div>
 
-      <div className="flex-1 px-6 py-6 sm:px-10">
+      <div className="flex-1 px-0 py-7">
         {viewMode === 'consolidated' ? (
           <ConsolidatedBatchTable summaries={summaries} onOpenBatch={openBatch} />
         ) : selectedEvent ? (

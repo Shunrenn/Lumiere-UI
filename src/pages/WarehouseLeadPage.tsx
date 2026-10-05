@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { useWarehouse, LEAD_NOTIFICATIONS, type WarehouseEvent, type WarehouseTask } from '@/lib/warehouse'
-import { FeedbackForm, IncidentForm } from '@/components/PwaWorkflows'
+import { FeedbackForm } from '@/components/PwaWorkflows'
 import {
   PwaBadge,
   PwaBottomNav,
@@ -728,7 +728,7 @@ function Activity({
 }
 
 function Account({ name, email, onLogout }: { name: string; email: string; onLogout: () => void }) {
-  const [form, setForm] = useState<'feedback' | 'incident' | null>(null)
+  const [form, setForm] = useState<'feedback' | null>(null)
   const [message, setMessage] = useState('')
 
   return (
@@ -745,12 +745,9 @@ function Account({ name, email, onLogout }: { name: string; email: string; onLog
 
       <PwaCard title="Lead Actions">
         <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-2">
+          <div>
             <PwaButton onClick={() => setForm('feedback')} variant="outline" size="md" className="w-full">
               Feedback
-            </PwaButton>
-            <PwaButton onClick={() => setForm('incident')} variant="outline" size="md" className="w-full">
-              Incident Report
             </PwaButton>
           </div>
           {message && <p className="text-xs text-primary font-medium text-center">{message}</p>}
@@ -771,16 +768,6 @@ function Account({ name, email, onLogout }: { name: string; email: string; onLog
         </PwaModal>
       )}
 
-      {form === 'incident' && (
-        <PwaModal
-          isOpen={Boolean(form)}
-          onClose={() => setForm(null)}
-          title="Submit Incident Report"
-          subtitle="File emergency or operational incident"
-        >
-          <IncidentForm onClose={() => setForm(null)} onSubmitted={setMessage} />
-        </PwaModal>
-      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, CheckCircle2, XCircle, Clock3, Scale, MoreVertical, Wrench, Ban, UserCheck2, AlertTriangle, Camera } from 'lucide-react'
+import { Search, CheckCircle2, XCircle, Clock3, Scale, MoreVertical, Wrench, Ban, UserCheck2, AlertTriangle } from 'lucide-react'
 import { WarehouseShell } from '@/components/warehouse/WarehouseShell'
 import { DamageVerdictModal } from '@/components/DamageVerdictModal'
 import { CompactStatStrip } from '@/components/CompactStatStrip'
@@ -37,16 +37,50 @@ const statusIcon: Record<DamageVerdict, typeof Clock3> = {
 type Filter = 'All' | 'Reviewable' | 'Pending' | 'Held for Audit' | 'Second Sign-off' | 'Validated' | 'Dismissed'
 const filters: Filter[] = ['All', 'Reviewable', 'Pending', 'Held for Audit', 'Second Sign-off', 'Validated', 'Dismissed']
 
+function damagePreviewFallback(assetName: string) {
+  const asset = assetName.toLowerCase()
+  if (asset.includes('chair')) return '/damage/chair-leg-fracture.png'
+  if (asset.includes('linen') || asset.includes('drapery')) return '/damage/linen-runner-stain.png'
+  if (asset.includes('bar')) return '/damage/bar-counter-chip.png'
+  return '/damage/crystal-vase-fracture.png'
+}
+
+function DamageReportPreview({ report }: { report: DamageException }) {
+  const fallback = damagePreviewFallback(report.assetName)
+  const initialSource = report.imageUrl || report.images?.[0] || fallback
+  const [source, setSource] = useState(initialSource)
+
+  useEffect(() => setSource(report.imageUrl || report.images?.[0] || fallback), [report.id, report.imageUrl, report.images, fallback])
+
+  return (
+    <div className="relative size-16 overflow-hidden rounded-lg border border-border bg-muted shadow-sm">
+      <img
+        src={source}
+        alt={`Damage report evidence for ${report.assetName}`}
+        className="size-full object-cover"
+        onError={() => {
+          if (source !== fallback) setSource(fallback)
+        }}
+      />
+      {report.noPhotographicEvidence && (
+        <span className="absolute inset-x-0 bottom-0 bg-background/85 px-1 py-0.5 text-center text-[0.42rem] font-bold uppercase tracking-[0.08em] text-muted-foreground backdrop-blur-sm">Reference</span>
+      )}
+    </div>
+  )
+}
+
 export function DamageValidationPage() {
   const { damageExceptions: items, isBackendConnected, resolveDamage, staff, subRolesByParent, setSubRolesByParent } = usePortal()
-  const { isExecutive, isWarehouse, adminRole, adminEmail, adminName, subRole: userSubRole } = useAuth()
+  const { isWarehouse, isWarehouseLead, hasFullWarehouseAccess, adminRole, adminEmail, adminName, subRole: userSubRole } = useAuth()
   const { intent, clearIntent } = useNav()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('All')
   const [active, setActive] = useState<DamageException | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
-  const canEvaluate = isWarehouse && !isExecutive
+  // This controls the client affordance only. The authenticated Railway API
+  // remains the authority that accepts or rejects a verdict.
+  const canEvaluate = isWarehouse || isWarehouseLead || hasFullWarehouseAccess
 
   const currentWomSubRole = useMemo(() => {
     const womList = subRolesByParent['warehouse-ops-manager'] ?? []
@@ -128,8 +162,7 @@ export function DamageValidationPage() {
             Damage Validation
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Post-event asset damage reports, photographic evidence review, and executive verdict
-            sign-offs.
+            Post-event asset damage reports, photographic evidence review, and WOM verdicts.
           </p>
         </div>
         <div className="relative">
@@ -303,19 +336,7 @@ export function DamageValidationPage() {
                   >
                     {/* Preview */}
                     <td className="px-4 py-4">
-                      {i.imageUrl || (i.images && i.images.length > 0) ? (
-                        <div className="size-7 overflow-hidden rounded border border-border/80 bg-muted">
-                          <img
-                            src={i.imageUrl || i.images![0]}
-                            alt={i.assetName}
-                            className="size-full object-cover"
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex size-7 items-center justify-center rounded border border-border/80 bg-muted text-muted-foreground">
-                          <Camera className="size-3.5 opacity-60" />
-                        </div>
-                      )}
+                      <DamageReportPreview report={i} />
                     </td>
                     {/* Log ID */}
                     <td className="px-4 py-4">
@@ -427,7 +448,7 @@ export function DamageValidationPage() {
                             ? 'Review (Provisional)'
                             : pending
                               ? canEvaluate
-                                ? 'Evaluate Report'
+                                ? 'Provide Verdict'
                                 : 'View Report'
                               : 'View Report'}
                         </button>

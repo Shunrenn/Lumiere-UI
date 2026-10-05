@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Plus, Search, X } from 'lucide-react'
+import { ChevronDown, Download, Plus, Search } from 'lucide-react'
 import { usePortal } from '@/lib/store'
 import { lineCost, type DeficitLine } from '@/lib/warehouse-replenishment'
 import { createDeficitItemApi, fetchDeficitQueueApi, updateDeficitStatusApi } from '@/lib/deficitApi'
@@ -7,17 +7,13 @@ import { DeficitTable } from '@/components/warehouse/replenishment/DeficitTable'
 import { GeneratePOModal } from '@/components/warehouse/replenishment/GeneratePOModal'
 import { AddMasterItemModal, type MasterItemDraft } from '@/components/warehouse/replenishment/AddMasterItemModal'
 import { BulkGenerateFlow } from '@/components/warehouse/replenishment/BulkGenerateFlow'
-import { KebabMenu } from '@/components/warehouse/shared/KebabMenu'
+import { WarehouseModuleHeader } from '@/components/warehouse/WarehouseModuleHeader'
 import { cn } from '@/lib/utils'
 import { exportReplenishmentDeficitPdf } from '@/lib/pdf-exporter'
 
 type ViewMode = 'grouped' | 'consolidated'
 
-interface ReplenishmentModuleProps {
-  onClose: () => void
-}
-
-export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
+export function ReplenishmentModule() {
   const { events } = usePortal()
   const [lines, setLines] = useState<DeficitLine[]>([])
   const [loading, setLoading] = useState(true)
@@ -30,6 +26,7 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
   const [addPresetEvent, setAddPresetEvent] = useState<{ id: string; title: string } | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null)
 
   const loadDeficits = () => {
     setLoading(true)
@@ -167,35 +164,27 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
   }
 
   const openCandidates = lines.filter((line) => line.status === 'Not Purchased')
+  const openDeficits = filtered.filter((line) => line.status !== 'Received')
+  const criticalDeficits = openDeficits.filter((line) => line.priority === 'Critical')
+  const highPriorityDeficits = openDeficits.filter((line) => line.priority === 'High')
 
   return (
-    <div className="flex h-full flex-1 flex-col overflow-y-auto">
-      <div className="flex flex-col gap-4 border-b border-border px-6 py-5 sm:px-10">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[0.6rem] font-bold uppercase tracking-[0.24em] text-primary">Warehouse module</p>
-            <h1 className="mt-1 font-serif text-2xl font-medium text-foreground">Replenishment / Deficits</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Automated deficit detection, inventory replenishment alerts, and purchase order drafting.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close and return to dashboard"
-            className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </button>
+    <div className="flex h-full min-h-0 flex-1 flex-col">
+      <div className="flex flex-col border-b border-border px-0 py-7">
+        <div>
+          <WarehouseModuleHeader
+            title="Replenishment / Deficits"
+            description="Automated deficit detection, inventory replenishment alerts, and order preparation."
+          />
         </div>
 
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="inline-flex rounded-lg border border-border bg-card p-1">
+        <div className="mt-5 flex flex-col gap-3 min-[1700px]:flex-row min-[1700px]:items-center min-[1700px]:justify-between">
+          <div className="inline-flex h-10 w-fit rounded-[0.6rem] border border-border bg-card/50 p-1">
             <button
               type="button"
               onClick={() => setViewMode('grouped')}
               className={cn(
-                'rounded-md px-4 py-2 text-xs font-bold uppercase tracking-[0.08em] transition',
+                'h-8 rounded-lg px-3 text-[0.68rem] font-semibold uppercase tracking-[0.08em] transition whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                 viewMode === 'grouped'
                   ? 'bg-foreground text-background shadow-sm'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -207,7 +196,7 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
               type="button"
               onClick={() => setViewMode('consolidated')}
               className={cn(
-                'rounded-md px-4 py-2 text-xs font-bold uppercase tracking-[0.08em] transition',
+                'h-8 rounded-lg px-3 text-[0.68rem] font-semibold uppercase tracking-[0.08em] transition whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                 viewMode === 'consolidated'
                   ? 'bg-foreground text-background shadow-sm'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -217,54 +206,58 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
+          <div className="flex w-full flex-wrap items-center gap-2 min-[1700px]:min-w-0 min-[1700px]:flex-1 min-[1700px]:flex-nowrap min-[1700px]:justify-end">
+            <div className="relative min-w-[240px] flex-1 min-[1700px]:min-w-[240px]">
               <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search items or events…"
-                className="w-56 rounded-md border border-input bg-background py-2.5 pl-9 pr-3 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                className="h-10 w-full rounded-lg border border-input bg-card/50 pl-10 pr-3 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-ring/30"
               />
             </div>
 
             <button
               type="button"
               onClick={() => setAddOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3.5 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-foreground hover:bg-muted"
+              className="inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-border bg-card/50 px-3 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              <Plus className="size-3.5" />
               Add Item
             </button>
-
-            {openCandidates.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setBulkOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90"
-              >
-                Draft Master PO ({openCandidates.length})
-              </button>
-            )}
 
             <button
               type="button"
               onClick={exportReport}
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-border bg-background px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-accent"
+              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border bg-card/50 px-3 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-card-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <Download className="size-3.5" />
-              Export Deficit Report (PDF)
+              Export Report (PDF)
             </button>
 
-            <KebabMenu
-              label="More replenishment actions"
-              actions={[{ label: 'Bulk Generate Master PO', onSelect: () => setBulkOpen(true) }]}
-            />
+            {openCandidates.length > 0 && <button type="button" onClick={() => setBulkOpen(true)} className="inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-lg bg-primary px-3 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">Prepare Order ({openCandidates.length})</button>}
           </div>
         </div>
       </div>
 
-      <div className="flex-1 px-6 py-6 sm:px-10">
+      <div className="min-h-0 flex-1 overflow-y-auto px-0 py-7">
+        {!loading && !error && (
+          <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {[
+              { label: 'Open Deficits', value: openDeficits.length, dot: 'bg-destructive' },
+              { label: 'Critical', value: criticalDeficits.length, dot: 'bg-destructive' },
+              { label: 'High Priority', value: highPriorityDeficits.length, dot: 'bg-amber-500' },
+              { label: 'Order Candidates', value: openCandidates.length, dot: 'bg-primary' },
+            ].map((metric) => (
+              <div key={metric.label} className="rounded-xl border border-border bg-card px-4 py-3.5">
+                <div className="flex items-center gap-2 text-[0.58rem] font-bold uppercase tracking-[0.11em] text-muted-foreground">
+                  <span className={cn('size-2 rounded-full', metric.dot)} />
+                  {metric.label}
+                </div>
+                <p className="mt-2 font-serif text-xl font-medium text-card-foreground">{metric.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
         {loading ? (
           <div className="flex flex-col items-center justify-center p-16 text-center">
             <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -313,51 +306,25 @@ export function ReplenishmentModule({ onClose }: ReplenishmentModuleProps) {
             )}
             {grouped.groups.map(([eventId, group]) => {
               const activeLines = group.lines.filter((l) => l.status !== 'Received')
-              const receivedCount = group.lines.length - activeLines.length
               const activeTotalCost = activeLines.reduce((sum, l) => sum + lineCost(l), 0)
+              const criticalCount = activeLines.filter((line) => line.priority === 'Critical').length
+              const highCount = activeLines.filter((line) => line.priority === 'High').length
+              const isExpanded = expandedEventId === eventId
               return (
-                <div key={eventId} className="overflow-hidden rounded-xl border border-border bg-card">
-                  <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div key={eventId} className="overflow-hidden rounded-2xl border border-border bg-card">
+                  <button type="button" onClick={() => setExpandedEventId((current) => current === eventId ? null : eventId)} aria-expanded={isExpanded} className="flex w-full flex-col gap-3 px-6 py-5 text-left transition hover:bg-accent/40 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h2 className="font-serif text-lg font-bold text-card-foreground">{group.title}</h2>
-                      <p className="text-[0.6rem] uppercase tracking-[0.08em] text-muted-foreground">
-                        {activeLines.length} active line{activeLines.length === 1 ? '' : 's'} · {receivedCount} Received
+                      <h2 className="font-serif text-lg font-medium text-card-foreground">{group.title}</h2>
+                      <p className="mt-1 text-[0.55rem] uppercase tracking-[0.1em] text-muted-foreground">
+                        {activeLines.length} deficit item{activeLines.length === 1 ? '' : 's'} · {criticalCount} critical · {highCount} high
                       </p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="text-right sm:pr-2">
-                        <p className="text-[0.58rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">Active Deficit Total</p>
-                        <p className="text-lg font-semibold text-card-foreground">₱{activeTotalCost.toLocaleString()}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAddPresetEvent({ id: eventId, title: group.title })
-                          setAddOpen(true)
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary transition hover:bg-primary/20"
-                      >
-                        <Plus className="size-3" />
-                        + Add Item
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => exportReplenishmentDeficitPdf(group.lines, `Deficit Report — ${group.title}`)}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-accent"
-                      >
-                        <Download className="size-3" />
-                        Export Report
-                      </button>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right"><p className="text-[0.58rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">Active Deficit</p><p className="font-serif text-lg font-medium text-card-foreground">₱{activeTotalCost.toLocaleString()}</p></div>
+                      <span className="flex size-10 items-center justify-center rounded-lg border border-primary/40 text-primary"><ChevronDown className={cn('size-4 transition-transform', isExpanded && 'rotate-180')} /></span>
                     </div>
-                  </div>
-                  <DeficitTable
-                    lines={group.lines}
-                    selectedIds={selectedIds}
-                    onRowClick={setPoLine}
-                    onEdit={setEditLine}
-                    onRemove={handleRemove}
-                    onTagForDispatch={handleTagForDispatch}
-                  />
+                  </button>
+                  {isExpanded && <div className="border-t border-border"><div className="flex justify-end gap-2 border-b border-border px-5 py-3"><button type="button" onClick={() => { setAddPresetEvent({ id: eventId, title: group.title }); setAddOpen(true) }} className="inline-flex items-center gap-1 rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary"><Plus className="size-3" />Add item</button><button type="button" onClick={() => exportReplenishmentDeficitPdf(group.lines, `Deficit Report — ${group.title}`)} className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-card-foreground"><Download className="size-3" />Export</button></div><DeficitTable lines={group.lines} selectedIds={selectedIds} onRowClick={setPoLine} onEdit={setEditLine} onRemove={handleRemove} onTagForDispatch={handleTagForDispatch} /></div>}
                 </div>
               )
             })}

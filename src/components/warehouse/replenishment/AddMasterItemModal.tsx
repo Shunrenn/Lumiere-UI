@@ -6,6 +6,8 @@ import { SearchableVendorSelect } from '@/components/warehouse/shared/Searchable
 
 const PRIORITIES: DeficitPriority[] = ['Low', 'Medium', 'High', 'Critical']
 const TRIGGERS: TriggerSource[] = ['Canvas', 'Batch Pahabol', 'Manual Audit', 'Auto-Threshold']
+const CATEGORIES = ['Event Asset', 'Production Asset', 'Stockroom Asset', 'Rental Asset', 'Administrative Asset', 'General']
+const UNITS = ['pcs', 'sets', 'units', 'lots', 'packs', 'rolls', 'panels', 'sheets', 'meters', 'strands']
 
 export interface MasterItemDraft {
   itemName: string
@@ -85,19 +87,23 @@ export function AddMasterItemModal({ initial, presetEvent, onClose, onSave }: Ad
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">Category</span>
-            <input
+            <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="rounded-md border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
-            />
+            >
+              {CATEGORIES.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">Unit</span>
-            <input
+            <select
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
               className="rounded-md border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
-            />
+            >
+              {UNITS.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">Current stock</span>
@@ -163,9 +169,11 @@ export function AddMasterItemModal({ initial, presetEvent, onClose, onSave }: Ad
               value={primaryVendorId}
               onChange={setPrimaryVendorId}
               placeholder="Search or select primary vendor…"
+              allowAdd={false}
+              inlineSearch
             />
             <span className="text-[0.6rem] text-muted-foreground">
-              Pulled live from the Vendor Registry — type to filter or create a new vendor inline.
+              Select an existing vendor from the Vendor Registry.
             </span>
           </div>
         </div>

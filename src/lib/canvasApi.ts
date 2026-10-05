@@ -533,10 +533,16 @@ export function normalizeCandidateDto(raw: any): CollaboratorCandidateDto {
     }
   }
 
-  const userId = String(raw.userId ?? raw.UserId ?? raw.id ?? raw.Id ?? '')
-  const displayName = String(raw.displayName ?? raw.DisplayName ?? raw.name ?? raw.Name ?? raw.userName ?? raw.UserName ?? 'Candidate')
+  const userId = String(raw.userId ?? raw.UserId ?? raw.id ?? raw.Id ?? raw.user?.id ?? raw.user?.Id ?? '')
+  const firstName = raw.firstName ?? raw.FirstName ?? raw.givenName ?? raw.GivenName ?? raw.user?.firstName ?? raw.user?.FirstName
+  const lastName = raw.lastName ?? raw.LastName ?? raw.surname ?? raw.Surname ?? raw.user?.lastName ?? raw.user?.LastName
+  const fullName = raw.fullName ?? raw.FullName ?? raw.user?.fullName ?? raw.user?.FullName
+  const email = raw.email ?? raw.Email ?? raw.user?.email ?? raw.user?.Email ?? undefined
+  const nameFromParts = [firstName, lastName].filter(Boolean).join(' ').trim()
+  const displayName = String(
+    raw.displayName ?? raw.DisplayName ?? raw.name ?? raw.Name ?? raw.userName ?? raw.UserName ?? fullName ?? nameFromParts ?? email?.split('@')[0] ?? 'Unnamed team member',
+  )
   const role = String(raw.role ?? raw.Role ?? 'Staff')
-  const email = raw.email ?? raw.Email ?? undefined
   const isEventPlanner = role.toLowerCase().includes('planner') || role.toLowerCase().includes('creative')
 
   return {
