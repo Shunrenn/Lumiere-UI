@@ -14,10 +14,10 @@ import {
 import { usePlanner, type PipelineEvent } from '@/lib/planner'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { PartialEgressSection } from '@/components/warehouse/PartialEgressSection'
-import { fetchCanvasAccessApi, type CanvasCollaboratorDto } from '@/lib/canvasApi'
-import type { PortalEvent } from '@/lib/types'
+import { fetchCanvasAccessApi, type CanvasCollaboratorDto } from '@/features/canvas/api/canvasApi'
+import type { PortalEvent } from '@/shared/types'
 
 const PIPELINE_STEPS = [
   { step: '01', label: 'Initialization', state: 'complete' },

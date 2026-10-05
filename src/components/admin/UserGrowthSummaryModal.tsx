@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, TrendingUp, X } from 'lucide-react'
-import type { Staff } from '@/lib/types'
+import type { Staff } from '@/shared/types'
 
 interface Props {
   open: boolean

@@ -1,6 +1,6 @@
 // Canonical derivation layer for Replenishment & Deficits.
 // Eliminates synthetic deficit generation. Uses canonical deficit queue data.
-import type { PortalEvent, DeficitStatus } from '@/lib/types'
+import type { PortalEvent, DeficitStatus } from '@/shared/types'
 import { getCatalogAssets, type CatalogAsset } from '@/lib/warehouse-catalog'
 
 export type TriggerSource = 'Canvas' | 'Batch Pahabol' | 'Manual Audit' | 'Auto-Threshold'

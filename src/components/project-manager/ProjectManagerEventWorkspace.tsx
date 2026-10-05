@@ -27,16 +27,16 @@ import {
   ChevronUp,
   RefreshCw,
 } from 'lucide-react'
-import type { PortalEvent, ProcurementItem, Staff, DamageException } from '@/lib/types'
+import type { PortalEvent, ProcurementItem, Staff, DamageException } from '@/shared/types'
 import type { ProjectPitch } from '@/lib/project-pitch'
-import { fetchEventBudget, type EventBudgetData, type BudgetLineItem } from '@/lib/budgetApi'
-import { fetchManningForEvent, type ManningRecordDto } from '@/lib/manningApi'
-import { fetchDamageReportsForEvent, checkSettlementBlockedBackend } from '@/lib/damageApi'
-import { fetchReservationsForEvent, type ReservationResponseDto } from '@/lib/reservationsApi'
-import { fetchGanttScheduleForEvent, type GanttScheduleResponseDto } from '@/lib/productionApi'
-import { fetchCanvasLayoutApi, type CanvasResponseDto } from '@/lib/canvasApi'
-import { fetchDeficitQueueApi, type DeficitQueueItemDto } from '@/lib/deficitApi'
-import { cn } from '@/lib/utils'
+import { fetchEventBudget, type EventBudgetData, type BudgetLineItem } from '@/features/budget/api/budgetApi'
+import { fetchManningForEvent, type ManningRecordDto } from '@/features/manning/api/manningApi'
+import { fetchDamageReportsForEvent, checkSettlementBlockedBackend } from '@/features/damage/api/damageApi'
+import { fetchReservationsForEvent, type ReservationResponseDto } from '@/features/events/api/reservationsApi'
+import { fetchGanttScheduleForEvent, type GanttScheduleResponseDto } from '@/features/production/api/productionApi'
+import { fetchCanvasLayoutApi, type CanvasResponseDto } from '@/features/canvas/api/canvasApi'
+import { fetchDeficitQueueApi, type DeficitQueueItemDto } from '@/features/inventory/api/deficitApi'
+import { cn } from '@/shared/utils'
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat('en-PH', {

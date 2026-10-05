@@ -5,7 +5,7 @@ import {
   blobToDataUrl,
 } from './offlineQueue'
 import { getEvidenceBlob } from './offline/db'
-import { submitDamageReportApi } from './damageApi'
+import { submitDamageReportApi } from '@/features/damage/api/damageApi'
 
 type SyncListener = (pendingCount: number, syncing: boolean) => void
 const syncListeners = new Set<SyncListener>()

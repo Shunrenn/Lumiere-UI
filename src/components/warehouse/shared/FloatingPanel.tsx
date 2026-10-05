@@ -7,7 +7,7 @@
 // panel itself scrolls when its content is taller than the viewport gap.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 const GAP = 6
 const MIN_SPACE = 140

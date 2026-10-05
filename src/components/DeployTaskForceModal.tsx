@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X, AlertCircle, MapPin, Users, Truck, Target, CalendarDays, Pencil, Check, Sparkles, Crown } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { usePortal } from '@/lib/store'
 
 interface Props {

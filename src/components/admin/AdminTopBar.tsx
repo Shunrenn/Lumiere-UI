@@ -3,7 +3,7 @@ import { LogOut, Menu, Moon, Sun, User, ShieldAlert, UserPlus, Activity, KeyRoun
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { usePortal } from '@/lib/store'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { useDarkMode } from '@/lib/theme'
 import { NotificationsBell, type NotificationEntry } from '@/components/NotificationsBell'
 import { SECURITY_EVENTS, type SecurityEvent } from '@/lib/security-events'

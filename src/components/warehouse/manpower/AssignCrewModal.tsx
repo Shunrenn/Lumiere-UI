@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { AlertTriangle, RefreshCw, ShieldAlert, UserCheck, X } from 'lucide-react'
-import type { PortalEvent } from '@/lib/types'
+import type { PortalEvent } from '@/shared/types'
 import {
   assignCrewToEvent,
   checkSymmetricConflict,
@@ -13,7 +13,7 @@ import {
 import { useAuth } from '@/lib/auth'
 import { usePortal } from '@/lib/store'
 import { useGroundCrewDeclarations } from '@/lib/ground-crew-declarations'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { FifoSelector } from './shared/FifoSelector'
 import { PresetSelector } from './shared/PresetSelector'
 import { ManualCrewPicker } from './shared/ManualCrewPicker'
@@ -24,7 +24,7 @@ import {
   canPerformRoutineAssignment,
   canPerformResourceOverride,
   type ManningRecordDto,
-} from '@/lib/manningApi'
+} from '@/features/manning/api/manningApi'
 
 const FIELD_TASKS = [
   'Load-in & setup',

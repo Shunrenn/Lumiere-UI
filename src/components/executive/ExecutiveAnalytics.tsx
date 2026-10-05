@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { usePortal } from '@/lib/store'
 import { useClickFlash } from '@/lib/use-click-flash'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { aggregateEventActivity, aggregateDamageOversight } from '@/lib/trend-aggregator'
 import { AnalyticsDetailModal } from '@/components/AnalyticsDetailModal'
 

@@ -1,5 +1,5 @@
-import type { ActivityLog } from './types'
-import { API_BASE_URL, getAuthToken } from './apiConfig'
+import type { ActivityLog } from '@/shared/types'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
 
 export interface BackendAuditLog {
   id: string

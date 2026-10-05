@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { X, MapPin, Briefcase, Users, Truck, Clock, AlertCircle } from 'lucide-react'
 import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface Deployment {
   id: string

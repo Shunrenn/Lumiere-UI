@@ -8,9 +8,9 @@ import {
   canManagePaintRegistry,
   type PaintBrand,
   type PaintColor,
-} from '@/lib/paintApi'
+} from '@/features/inventory/api/paintApi'
 import { useAuth } from '@/lib/auth'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface WarehousePaintRegistryModalProps {
   onClose: () => void

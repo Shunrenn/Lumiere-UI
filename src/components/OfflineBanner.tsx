@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { WifiOff, RefreshCw, CheckCircle2 } from 'lucide-react'
 import { subscribeOfflineSync, triggerOfflineReplay } from '@/lib/offlineReplay'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 export function OfflineBanner() {
   const [isOnline, setIsOnline] = useState<boolean>(() =>

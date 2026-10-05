@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { addVendor, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
-import { createVendorApi } from '@/lib/vendorApi'
+import { createVendorApi } from '@/features/vendors/api/vendorApi'
 
 const STATUSES: VendorStatus[] = ['Active', 'On Hold', 'Inactive']
 

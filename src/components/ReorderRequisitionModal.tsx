@@ -11,8 +11,8 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { usePortal } from '@/lib/store'
-import { cn } from '@/lib/utils'
-import type { ProcurementItem, Vendor } from '@/lib/types'
+import { cn } from '@/shared/utils'
+import type { ProcurementItem, Vendor } from '@/shared/types'
 
 interface Props {
   item: ProcurementItem | null

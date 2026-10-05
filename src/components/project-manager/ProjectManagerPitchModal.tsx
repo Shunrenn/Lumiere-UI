@@ -7,7 +7,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import type { ProjectPitch, PitchStatus, ClientBrief, ProposalDetails } from '@/lib/project-pitch'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface ProjectManagerPitchModalProps {
   open: boolean

@@ -1,5 +1,5 @@
 import type { CrewRow } from '@/lib/warehouse-crew'
-import type { Staff } from '@/lib/types'
+import type { Staff } from '@/shared/types'
 import { isTeamLead } from '@/lib/warehouse-crew'
 
 function Avatar({ name }: { name: string }) {

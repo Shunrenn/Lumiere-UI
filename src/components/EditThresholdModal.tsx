@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { usePortal } from '@/lib/store'
-import type { ProcurementItem } from '@/lib/types'
+import type { ProcurementItem } from '@/shared/types'
 
 interface Props {
   item: ProcurementItem | null

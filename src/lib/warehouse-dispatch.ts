@@ -4,7 +4,7 @@
 // in-memory state so stage advances, new batches, and reconciliation edits
 // made from this module persist across the 3-level drilldown.
 import { useSyncExternalStore } from 'react'
-import type { PortalEvent, ProcurementItem, Staff } from '@/lib/types'
+import type { PortalEvent, ProcurementItem, Staff } from '@/shared/types'
 import {
   getEventDetailSnapshot,
   nextStage,

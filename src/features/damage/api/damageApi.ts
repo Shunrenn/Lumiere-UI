@@ -6,9 +6,9 @@ import type {
   HavaDeclarationState,
   HavaEvidenceStatus,
   DamageReportAmendment,
-} from './types'
-import { API_BASE_URL, getAuthToken } from './apiConfig'
-import { isGuid } from './eventsApi'
+} from '@/shared/types'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
+import { isGuid } from '@/features/events/api/eventsApi'
 
 const BASE_URL = `${API_BASE_URL}/api/damage-reports`
 const HAVA_URL = `${API_BASE_URL}/api/hava`

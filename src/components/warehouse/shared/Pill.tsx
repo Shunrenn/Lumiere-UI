@@ -1,5 +1,5 @@
 import { toneClasses, toneDot, type Tone } from '@/components/warehouse/event-detail/status-tone'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface PillProps {
   tone: Tone

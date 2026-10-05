@@ -1,5 +1,5 @@
 import * as signalR from '@microsoft/signalr'
-import { API_BASE_URL, getAuthToken } from './apiConfig'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
 
 let hubConnection: signalR.HubConnection | null = null
 let connectionPromise: Promise<signalR.HubConnection | null> | null = null

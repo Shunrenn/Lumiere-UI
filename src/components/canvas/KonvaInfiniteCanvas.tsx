@@ -4,7 +4,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import { Image as KonvaImage, Layer, Line, Rect, Circle, Stage, Transformer, Group, Text as KonvaText } from 'react-konva'
 import Konva from 'konva'
 import { MoveUp, MoveDown, Eye, EyeOff, Copy, Trash2, Plus } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 export type CanvasTool = 'select' | 'draw' | 'shapes' | 'lines' | 'sticky' | 'text'
 

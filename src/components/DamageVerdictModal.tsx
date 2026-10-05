@@ -22,8 +22,8 @@ import {
   FileEdit,
   RefreshCw,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import type { DamageException, DamageVerdict } from '@/lib/types'
+import { cn } from '@/shared/utils'
+import type { DamageException, DamageVerdict } from '@/shared/types'
 import { StatusBadge } from '@/components/StatusBadge'
 import { usePortal } from '@/lib/store'
 

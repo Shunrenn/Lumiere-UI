@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { WAREHOUSE_MODULES, type WarehouseModuleId } from '@/lib/warehouse-modules'
 import { useAuth } from '@/lib/auth'
 

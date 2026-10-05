@@ -1,4 +1,4 @@
-import type { Route } from './types'
+import type { Route } from '@/shared/types'
 import type { PortalAccount } from './auth'
 import type { WarehouseModuleId } from './warehouse-modules'
 import { womModuleAccessLevel } from './rbac'

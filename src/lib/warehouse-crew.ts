@@ -2,7 +2,7 @@
 // Maintains genuine database-backed staff roster. Eliminates synthetic hashOf shift/status generation.
 import { useSyncExternalStore } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { PortalEvent, Staff } from '@/lib/types'
+import type { PortalEvent, Staff } from '@/shared/types'
 import { expandDateRange, handleCrewLeaveAutoRelease } from '@/lib/manning'
 import { logAuditEvent } from '@/lib/audit-logger'
 

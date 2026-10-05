@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { LayoutGrid, Rows3 } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import type { EventStatus, PortalEvent } from '@/lib/types'
+import { cn } from '@/shared/utils'
+import type { EventStatus, PortalEvent } from '@/shared/types'
 import { useDeployments } from '@/lib/deployments'
 
 function thumbnailFor(event: PortalEvent): string {

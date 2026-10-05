@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { X, KeyRound, Copy, Check, ShieldAlert } from 'lucide-react'
-import { SELECTABLE_STAFF_ROLES, type Staff } from '@/lib/types'
+import { SELECTABLE_STAFF_ROLES, type Staff } from '@/shared/types'
 import { usePortal } from '@/lib/store'
 
 interface Props {

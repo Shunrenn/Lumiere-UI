@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
-import type { Route } from '@/lib/types'
+import type { Route } from '@/shared/types'
 import { WAREHOUSE_DESTINATIONS } from '@/lib/warehouse-modules'
 import { canAccessRoute, canAccessWarehouseModule } from '@/lib/route-guard'
 

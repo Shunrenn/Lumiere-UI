@@ -1,5 +1,5 @@
-import { API_BASE_URL, getAuthToken } from './apiConfig'
-import type { CatalogAsset } from './warehouse-catalog'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
+import type { CatalogAsset } from '@/lib/warehouse-catalog'
 
 export interface BackendAssetPayload {
   name: string

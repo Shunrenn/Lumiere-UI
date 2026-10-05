@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, User, X }
 import { nextStage, type DispatchBatch, type ReconciliationStatus } from '@/lib/event-detail'
 import { DispatchStepper } from '@/components/warehouse/event-detail/DispatchStepper'
 import { toneClasses, toneDot, type Tone } from '@/components/warehouse/event-detail/status-tone'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 const RECONCILIATION_TONE: Record<ReconciliationStatus, Tone> = {
   Matched: 'positive',

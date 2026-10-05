@@ -1,7 +1,7 @@
 // Canonical data layer for Production & Fabrication.
 // Renders authoritative backend production records. Zero frontend fixture records.
 import { useSyncExternalStore } from 'react'
-import type { PortalEvent, Staff } from '@/lib/types'
+import type { PortalEvent, Staff } from '@/shared/types'
 import { getBespokeSubCategoryConfigs, type CatalogAsset } from '@/lib/warehouse-catalog'
 import { getCrewPool } from '@/lib/warehouse-crew'
 

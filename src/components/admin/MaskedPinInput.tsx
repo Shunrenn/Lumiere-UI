@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 // Shared 6-digit PIN field used everywhere a confirmation PIN is entered
 // (RBAC create/delete confirmation, and Set/Change PIN in the profile menu).

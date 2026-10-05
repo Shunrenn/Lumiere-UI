@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { ADMIN_DESTINATIONS, type AdminDestinationId } from '@/lib/admin-destinations'
 interface AdminRailProps {
   activeId: AdminDestinationId

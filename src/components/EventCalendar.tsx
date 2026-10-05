@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import type { PortalEvent } from '@/lib/types'
+import { cn } from '@/shared/utils'
+import type { PortalEvent } from '@/shared/types'
 
 interface Props {
   /* Currently selected date string, e.g. "Oct 14, 2026" */

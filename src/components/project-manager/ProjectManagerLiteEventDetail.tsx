@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Calendar, MapPin, User, Edit3, RefreshCw, ShieldCheck } from 'lucide-react'
-import type { PortalEvent, ProcurementItem, Staff } from '@/lib/types'
+import type { PortalEvent, ProcurementItem, Staff } from '@/shared/types'
 import {
   getEventDetailSnapshot,
   resolveCatalogAssetForItem,
   type AllocatedItemStatus,
   type EventAllocatedItem,
 } from '@/lib/event-detail'
-import { fetchReservationsForEvent, type ReservationResponseDto } from '@/lib/reservationsApi'
+import { fetchReservationsForEvent, type ReservationResponseDto } from '@/features/events/api/reservationsApi'
 import { ItemsPanel } from '@/components/warehouse/event-detail/ItemsPanel'
 import { AssetDetailModal } from '@/components/warehouse/asset-catalog/AssetDetailModal'
 import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 const eventStatusVariants: Record<string, StatusVariant> = {
   Initialized: 'warning',

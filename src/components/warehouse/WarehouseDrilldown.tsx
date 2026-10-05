@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { PortalEvent } from '@/lib/types'
+import type { PortalEvent } from '@/shared/types'
 import type { WarehouseModuleId } from '@/lib/warehouse-modules'
 import { useNav } from '@/lib/nav'
 import { WarehouseRail } from '@/components/warehouse/WarehouseRail'

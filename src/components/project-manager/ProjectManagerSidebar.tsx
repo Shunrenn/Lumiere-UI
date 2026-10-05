@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { BriefcaseBusiness, CalendarRange, Layers3, LayoutDashboard, PanelLeft } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 export type ProjectManagerSection = 'dashboard' | 'projects' | 'event-workspace' | 'pitches'
 

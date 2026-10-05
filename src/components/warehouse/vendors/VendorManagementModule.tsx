@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Lock, Plus, RefreshCw, Search } from 'lucide-react'
 import { mapVendorDtoToWarehouseVendor, updateVendor, useWarehouseVendors, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
-import { fetchVendorsResultApi } from '@/lib/vendorApi'
+import { fetchVendorsResultApi } from '@/features/vendors/api/vendorApi'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { VENDOR_STATUS_TONE } from '@/components/warehouse/replenishment/tone'
 import { VendorDetailModal } from '@/components/warehouse/vendors/VendorDetailModal'
 import { AddVendorModal } from '@/components/warehouse/vendors/AddVendorModal'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 const STATUS_FILTERS: Array<VendorStatus | 'All'> = ['All', 'Active', 'On Hold', 'Inactive']
 

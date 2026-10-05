@@ -11,9 +11,9 @@ import {
   HelpCircle,
   CheckCircle2,
 } from 'lucide-react'
-import { fetchEventBudget, type EventBudgetData, type BudgetLineItem } from '@/lib/budgetApi'
-import { cn } from '@/lib/utils'
-import type { PortalEvent } from '@/lib/types'
+import { fetchEventBudget, type EventBudgetData, type BudgetLineItem } from '@/features/budget/api/budgetApi'
+import { cn } from '@/shared/utils'
+import type { PortalEvent } from '@/shared/types'
 
 function currency(n: number) {
   return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n)

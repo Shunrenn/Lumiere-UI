@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X, Pencil, AlertTriangle } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { ASSET_CATEGORIES } from '@/lib/types'
+import { cn } from '@/shared/utils'
+import { ASSET_CATEGORIES } from '@/shared/types'
 
 export interface Asset {
   id: string

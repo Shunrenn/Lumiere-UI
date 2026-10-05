@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { MoreVertical } from 'lucide-react'
 import { FloatingPanel } from '@/components/warehouse/shared/FloatingPanel'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 export interface KebabMenuAction {
   label: string

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, ScrollText } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { useClickFlash } from '@/lib/use-click-flash'
-import type { ActivityLog } from '@/lib/types'
+import type { ActivityLog } from '@/shared/types'
 
 interface AdminSecurityFeedProps {
   logs: ActivityLog[]

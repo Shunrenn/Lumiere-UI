@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AlertTriangle, Archive, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface ConfirmArchiveBatchModalProps {
   isOpen: boolean

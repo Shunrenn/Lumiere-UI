@@ -1,4 +1,4 @@
-import type { Staff, PortalEvent, DamageException } from '@/lib/types'
+import type { Staff, PortalEvent, DamageException } from '@/shared/types'
 
 export interface TrendPoint {
   label: string

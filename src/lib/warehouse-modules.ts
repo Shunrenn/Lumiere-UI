@@ -9,7 +9,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
-import type { Route } from '@/lib/types'
+import type { Route } from '@/shared/types'
 import type { SharedRailDestination } from '@/lib/executive-destinations'
 
 // The six operational modules a Warehouse Operations Manager drills into.

@@ -1,6 +1,6 @@
 import { ScrollText } from 'lucide-react'
 import { usePortal } from '@/lib/store'
-import type { EventUpdateStatus } from '@/lib/types'
+import type { EventUpdateStatus } from '@/shared/types'
 
 // Colored status dot per operations feed entry.
 const statusDot: Record<EventUpdateStatus, string> = {

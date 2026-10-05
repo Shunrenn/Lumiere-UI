@@ -13,7 +13,7 @@ import { getVendorById } from '@/lib/warehouse-vendors'
 import { ASSET_STATUS_TONE, getTierGlanceDisplay } from '@/components/warehouse/asset-catalog/AssetCard'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import type { Tone } from '@/components/warehouse/event-detail/status-tone'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 type TabId = 'preview' | 'detailed' | 'history' | 'simulation'
 

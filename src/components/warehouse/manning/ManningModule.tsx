@@ -18,7 +18,7 @@ import {
   canPerformOverrideRemoval,
   canPerformResourceOverride,
   overrideAssignmentApi,
-} from '@/lib/manningApi'
+} from '@/features/manning/api/manningApi'
 import {
   useCrewRows,
   getPresetSquads,
@@ -37,7 +37,7 @@ import {
   useManningData,
   type ManningAssignment,
 } from '@/lib/manning'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { WarehouseModuleHeader } from '@/components/warehouse/WarehouseModuleHeader'
 import { exportCrewRosterPdf } from '@/lib/pdf-exporter'
 

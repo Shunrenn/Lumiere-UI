@@ -9,8 +9,8 @@ import {
   Building2,
   Clock,
 } from 'lucide-react'
-import type { PortalEvent, ProcurementItem, Staff } from '@/lib/types'
-import { cn } from '@/lib/utils'
+import type { PortalEvent, ProcurementItem, Staff } from '@/shared/types'
+import { cn } from '@/shared/utils'
 
 interface ProjectManagerEventsListProps {
   events: PortalEvent[]

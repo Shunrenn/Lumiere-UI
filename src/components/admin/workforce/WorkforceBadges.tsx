@@ -1,4 +1,4 @@
-import type { AccountStatus, StaffRole } from '@/lib/types'
+import type { AccountStatus, StaffRole } from '@/shared/types'
 
 // Categorical role encoding. Subtle tints keep the warm-neutral console intact
 // while still making each role scannable at a glance.

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { EXECUTIVE_DESTINATIONS, type ExecutiveDestinationId, type SharedRailDestination } from '@/lib/executive-destinations'
 import { useAuth } from '@/lib/auth'
 import { canAccessRoute } from '@/lib/route-guard'

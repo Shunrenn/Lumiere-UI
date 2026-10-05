@@ -3,10 +3,10 @@ import { X, FileText, Building2, Palette, CalendarDays, Plus, AlertTriangle, Inf
 import { usePortal, checkEventConflicts, checkDateAdvisory } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { EventCalendar } from '@/components/EventCalendar'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import type { NewEventDraft, PortalEvent } from '@/lib/types'
+import type { NewEventDraft, PortalEvent } from '@/shared/types'
 
 type DrawerMode = 'create' | 'view' | 'edit'
 

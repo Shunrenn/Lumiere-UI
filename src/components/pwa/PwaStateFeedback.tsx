@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { AlertTriangle, Inbox, RefreshCw } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { PwaButton } from './PwaButton'
 
 interface PwaLoadingStateProps {

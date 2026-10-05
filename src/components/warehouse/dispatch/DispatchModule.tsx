@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Archive, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ChevronRight, Clock, Download, PackageCheck, Truck, User, X } from 'lucide-react'
 import { usePortal } from '@/lib/store'
-import { getPreparation, type DispatchPreparationResponse } from '@/lib/dispatchApi'
+import { getPreparation, type DispatchPreparationResponse } from '@/features/warehouse/api/dispatchApi'
 import {
   addNewCustomBatch,
   advanceBatchStage,
@@ -26,7 +26,7 @@ import { exportDispatchConsolidatedPdf, exportDispatchEventPdf } from '@/lib/pdf
 import { BatchDetailView } from '@/components/warehouse/event-detail/BatchDetailView'
 import { ConfirmArchiveBatchModal } from '@/components/warehouse/dispatch/ConfirmArchiveBatchModal'
 import { Pill } from '@/components/warehouse/shared/Pill'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { WarehouseModuleHeader } from '@/components/warehouse/WarehouseModuleHeader'
 
 type ViewMode = 'grouped' | 'consolidated'

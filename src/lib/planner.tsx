@@ -7,10 +7,10 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { approveCanvasApi } from '@/lib/canvasApi'
+import { approveCanvasApi } from '@/features/canvas/api/canvasApi'
 import { populateWarehouseDispatchFromCanvas } from '@/lib/warehouse-dispatch'
 import { fetchPlannerCatalog } from '@/features/planner/api'
-import { fetchEventsApi, createEventApi } from '@/lib/eventsApi'
+import { fetchEventsApi, createEventApi } from '@/features/events/api/eventsApi'
 
 /* ============================================================
    Event Planner domain — pipeline portfolios, design canvases,

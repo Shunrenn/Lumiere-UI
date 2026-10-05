@@ -9,7 +9,7 @@ import { CrewCalendarView } from '@/components/warehouse/manpower/CrewCalendarVi
 import { CrewOpsGrid } from '@/components/warehouse/manpower/CrewOpsGrid'
 import { AssignCrewModal } from '@/components/warehouse/manpower/AssignCrewModal'
 import { CrewInfoModal } from '@/components/warehouse/event-detail/CrewInfoModal'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 // Maps the Manpower module's own status vocabulary onto the Event Detail
 // panel's EventCrewAssignment status so the same CrewInfoModal (built for

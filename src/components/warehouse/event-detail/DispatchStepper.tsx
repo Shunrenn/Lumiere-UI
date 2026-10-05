@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react'
 import { stageSequenceFor, type BatchDirection, type BatchStage } from '@/lib/event-detail'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface DispatchStepperProps {
   direction: BatchDirection

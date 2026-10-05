@@ -5,8 +5,8 @@ import { RegisterEventDrawer } from '@/components/RegisterEventDrawer'
 import { EmptyState } from '@/components/EmptyState'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
-import { cn } from '@/lib/utils'
-import type { PortalEvent, EventStatus } from '@/lib/types'
+import { cn } from '@/shared/utils'
+import type { PortalEvent, EventStatus } from '@/shared/types'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 
 const statuses: (EventStatus | 'All')[] = [

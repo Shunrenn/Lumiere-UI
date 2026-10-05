@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, MapPin, ExternalLink } from 'lucide-react'
-import type { PortalEvent } from '@/lib/types'
-import { cn } from '@/lib/utils'
+import type { PortalEvent } from '@/shared/types'
+import { cn } from '@/shared/utils'
 
 interface ProjectManagerMasterCalendarProps {
   events: PortalEvent[]

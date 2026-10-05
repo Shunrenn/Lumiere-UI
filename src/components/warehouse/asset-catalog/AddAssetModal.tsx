@@ -7,7 +7,7 @@ import type {
 } from '@/lib/warehouse-catalog'
 import { addCatalogAsset } from '@/lib/warehouse-catalog'
 import { SearchableVendorSelect } from '@/components/warehouse/shared/SearchableVendorSelect'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 const CATEGORIES: AssetCategory[] = [
   'Event Assets',

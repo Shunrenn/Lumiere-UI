@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Bell, CheckCheck, RefreshCw, AlertCircle, Sparkles, type LucideIcon } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import {
   fetchNotificationsApi,
   markNotificationReadApi,
   markAllNotificationsReadApi,
   type NotificationDto,
-} from '@/lib/notificationsApi'
+} from '@/features/notifications/api/notificationsApi'
 
 export interface NotificationEntry {
   id: string

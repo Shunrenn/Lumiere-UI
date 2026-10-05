@@ -13,11 +13,11 @@ import {
   ScrollText,
   Palette,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { useNav } from '@/lib/nav'
 import { useAuth } from '@/lib/auth'
 import { useDarkMode } from '@/lib/theme'
-import type { Route } from '@/lib/types'
+import type { Route } from '@/shared/types'
 import { getWarehouseModule, type WarehouseModuleId } from '@/lib/warehouse-modules'
 import { WAREHOUSE_DESTINATIONS } from '@/lib/warehouse-modules'
 import { canAccessRoute } from '@/lib/route-guard'

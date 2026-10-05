@@ -1,7 +1,7 @@
 import { WAREHOUSE_MODULES, type WarehouseModuleId } from '@/lib/warehouse-modules'
 import { useAuth } from '@/lib/auth'
 import { canAccessWarehouseModule } from '@/lib/route-guard'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface ModuleEntryRowProps {
   onOpenModule: (id: WarehouseModuleId) => void

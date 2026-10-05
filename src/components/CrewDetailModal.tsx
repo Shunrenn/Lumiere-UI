@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { X, Mail, Phone, CalendarDays, MapPin, Briefcase, Sparkles } from 'lucide-react'
 import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 export type CrewStatus = 'Available' | 'Assigned' | 'On Leave'
 

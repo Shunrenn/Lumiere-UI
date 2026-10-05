@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { X, Upload, AlertTriangle, Plus, Trash2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { ASSET_CATEGORIES } from '@/lib/types'
+import { cn } from '@/shared/utils'
+import { ASSET_CATEGORIES } from '@/shared/types'
 
 interface VendorEntry {
   store: string

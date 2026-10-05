@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
-import type { EmploymentType, NewEmployeeRecordDraft } from '@/lib/types'
+import type { EmploymentType, NewEmployeeRecordDraft } from '@/shared/types'
 
 interface Props {
   open: boolean

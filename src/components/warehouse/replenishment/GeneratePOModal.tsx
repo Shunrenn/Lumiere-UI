@@ -4,7 +4,7 @@ import type { DeficitLine } from '@/lib/warehouse-replenishment'
 import { getVendorById } from '@/lib/warehouse-vendors'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { DEFICIT_STATUS_TONE } from '@/components/warehouse/replenishment/tone'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface GeneratePOModalProps {
   line: DeficitLine

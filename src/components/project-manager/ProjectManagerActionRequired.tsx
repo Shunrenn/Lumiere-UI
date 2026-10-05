@@ -1,9 +1,9 @@
 import { useMemo, useState, useEffect } from 'react'
 import { ArrowRight, CheckCircle2 } from 'lucide-react'
-import type { PortalEvent, ProcurementItem, Staff, DamageException } from '@/lib/types'
+import type { PortalEvent, ProcurementItem, Staff, DamageException } from '@/shared/types'
 import type { ProjectPitch } from '@/lib/project-pitch'
-import { fetchDeficitQueueApi, type DeficitQueueItemDto } from '@/lib/deficitApi'
-import { cn } from '@/lib/utils'
+import { fetchDeficitQueueApi, type DeficitQueueItemDto } from '@/features/inventory/api/deficitApi'
+import { cn } from '@/shared/utils'
 
 export interface ActionItem {
   id: string

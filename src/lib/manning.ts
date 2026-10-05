@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { isTeamLead, isTeamLeadToday, QUALIFIED_LEAD_ROLES } from '@/lib/warehouse-crew'
-import { removeManningApi, removeManningOverrideApi } from './manningApi'
+import { removeManningApi, removeManningOverrideApi } from '@/features/manning/api/manningApi'
 
 // =====================================================================
 // Manning delegation data access

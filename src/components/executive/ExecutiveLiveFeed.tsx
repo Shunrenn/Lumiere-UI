@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { ChevronDown, ScrollText, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { usePortal } from '@/lib/store'
 import { useClickFlash } from '@/lib/use-click-flash'
-import type { EventUpdateStatus } from '@/lib/types'
+import type { EventUpdateStatus } from '@/shared/types'
 
 const statusDot: Record<EventUpdateStatus, string> = {
   Scheduled: 'bg-sky-500',

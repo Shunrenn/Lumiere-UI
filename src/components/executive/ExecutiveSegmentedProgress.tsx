@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { ArrowLeft, CheckCircle2, Calendar, PackageCheck, Layers } from 'lucide-react'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
-import { cn } from '@/lib/utils'
-import type { EventStatus } from '@/lib/types'
+import { cn } from '@/shared/utils'
+import type { EventStatus } from '@/shared/types'
 
 // Event Progress Track Phases (Ends at Egress)
 export const EVENT_PROGRESS_STAGES = [

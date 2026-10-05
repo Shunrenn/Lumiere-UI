@@ -1,6 +1,6 @@
 import type { EventDispatchSummary } from '@/lib/warehouse-dispatch'
 import type { DeficitLine } from '@/lib/warehouse-replenishment'
-import type { ProcurementItem } from '@/lib/types'
+import type { ProcurementItem } from '@/shared/types'
 
 // ─── Authoritative Brand Theme Tokens (from src/index.css) ───
 const BRAND = {

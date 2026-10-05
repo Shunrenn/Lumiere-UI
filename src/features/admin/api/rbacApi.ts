@@ -1,5 +1,5 @@
-import { API_BASE_URL, getAuthToken } from './apiConfig'
-import type { SubRoleEmergencyUnblockMetadata } from './types'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
+import type { SubRoleEmergencyUnblockMetadata } from '@/shared/types'
 
 function getAuthHeaders(): HeadersInit {
   const token = getAuthToken()

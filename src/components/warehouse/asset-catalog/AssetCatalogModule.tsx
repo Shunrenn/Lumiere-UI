@@ -13,7 +13,7 @@ import { AddAssetModal, type NewAssetDraft } from '@/components/warehouse/asset-
 import { WarehousePaintRegistryModal } from '@/components/warehouse/paint/WarehousePaintRegistryModal'
 import { GridRevealContainer } from '@/components/GridRevealContainer'
 import { Pill } from '@/components/warehouse/shared/Pill'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { useAuth } from '@/lib/auth'
 import { WarehouseModuleHeader } from '@/components/warehouse/WarehouseModuleHeader'
 

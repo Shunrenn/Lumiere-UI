@@ -7,8 +7,8 @@ import { RegisterEventDrawer } from '@/components/RegisterEventDrawer'
 import { EventCalendar } from '@/components/EventCalendar'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
-import { cn } from '@/lib/utils'
-import type { PortalEvent, EventStatus } from '@/lib/types'
+import { cn } from '@/shared/utils'
+import type { PortalEvent, EventStatus } from '@/shared/types'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 
 const statusBadgeStyles: Record<EventStatus, string> = {

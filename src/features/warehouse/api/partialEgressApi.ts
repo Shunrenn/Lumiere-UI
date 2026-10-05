@@ -1,4 +1,4 @@
-import { API_BASE_URL, getAuthToken } from './apiConfig'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
 import type {
   EventEgressResponse,
   InitiatePartialEgressRequest,
@@ -7,7 +7,7 @@ import type {
   EscalatePartialEgressRequest,
   PostEgressPolicyResponse,
   UpdatePostEgressPolicyRequest,
-} from './types'
+} from '@/shared/types'
 
 const BASE_URL = `${API_BASE_URL}/api/partial-egress`
 

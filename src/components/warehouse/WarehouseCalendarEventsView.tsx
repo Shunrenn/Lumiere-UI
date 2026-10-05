@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Circle, Star, Calendar as CalendarIcon } from 'lucide-react'
-import type { PortalEvent } from '@/lib/types'
-import { cn } from '@/lib/utils'
+import type { PortalEvent } from '@/shared/types'
+import { cn } from '@/shared/utils'
 import { DashboardCalendarCard } from '@/components/dashboard/DashboardCalendarCard'
 import { UpcomingEventsPanel } from '@/components/dashboard/UpcomingEventsPanel'
 

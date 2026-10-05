@@ -10,7 +10,7 @@ import {
   PackageCheck,
   RefreshCw,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 export type ProductionConfirmationAction =
   | 'verify-materials'

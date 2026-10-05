@@ -1,5 +1,5 @@
 import { type ButtonHTMLAttributes, type ReactNode } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface PwaButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive'

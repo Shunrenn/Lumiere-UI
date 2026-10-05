@@ -5,8 +5,8 @@ import { AssetInformationModal } from '@/components/AssetInformationModal'
 import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
-import { cn } from '@/lib/utils'
-import type { InventoryItem } from '@/lib/types'
+import { cn } from '@/shared/utils'
+import type { InventoryItem } from '@/shared/types'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 
 export function ExecutiveLiteAssetAllocation() {

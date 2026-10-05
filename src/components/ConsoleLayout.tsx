@@ -5,7 +5,7 @@ import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { PLANNER_RAIL_DESTINATIONS, PLANNER_RAIL_IDENTITY } from '@/lib/executive-destinations'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
-import type { Route } from '@/lib/types'
+import type { Route } from '@/shared/types'
 
 interface Props {
   children: ReactNode

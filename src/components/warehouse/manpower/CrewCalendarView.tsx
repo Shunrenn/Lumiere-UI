@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
-import type { PortalEvent } from '@/lib/types'
+import type { PortalEvent } from '@/shared/types'
 import type { CrewRow } from '@/lib/warehouse-crew'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface CrewCalendarViewProps {
   rows: CrewRow[]

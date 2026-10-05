@@ -12,12 +12,12 @@ import {
   Users,
   X,
 } from 'lucide-react'
-import type { PortalEvent } from '@/lib/types'
+import type { PortalEvent } from '@/shared/types'
 import { usePortal } from '@/lib/store'
 import { useCrewRows } from '@/lib/warehouse-crew'
 import { useDispatchStore } from '@/lib/warehouse-dispatch'
 import { getEventDetailSnapshot } from '@/lib/event-detail'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface WomInputSummaryModalProps {
   event: PortalEvent | null

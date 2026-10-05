@@ -1,5 +1,5 @@
-import { API_BASE_URL, getAuthToken } from './apiConfig'
-import type { PortalEvent } from './types'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
+import type { PortalEvent } from '@/shared/types'
 
 export function isGuid(id?: string | null): boolean {
   if (!id) return false

@@ -3,7 +3,7 @@
 // production, replenishment, and dispatch snapshot is derived from the
 // event record plus the existing staff/procurement rosters, so the same
 // event always renders the same detail (no random flicker on re-render).
-import type { PortalEvent, ProcurementItem, Staff } from '@/lib/types'
+import type { PortalEvent, ProcurementItem, Staff } from '@/shared/types'
 import { getCatalogAssets, type CatalogAsset } from '@/lib/warehouse-catalog'
 import type { ProductionItem } from '@/lib/warehouse-production'
 

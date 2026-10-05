@@ -1,5 +1,5 @@
 import { ArrowLeft, Bell } from 'lucide-react'
-import type { PortalEvent } from '@/lib/types'
+import type { PortalEvent } from '@/shared/types'
 import type { EventOverallStatus } from '@/lib/event-detail'
 import { toneClasses, toneDot, type Tone } from '@/components/warehouse/event-detail/status-tone'
 

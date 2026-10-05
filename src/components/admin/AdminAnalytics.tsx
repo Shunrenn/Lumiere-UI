@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { useClickFlash } from '@/lib/use-click-flash'
 import { usePortal } from '@/lib/store'
 import { aggregateUserGrowth } from '@/lib/trend-aggregator'

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ArrowRight, Check, X } from 'lucide-react'
 import type { DeficitLine } from '@/lib/warehouse-replenishment'
 import { lineCost } from '@/lib/warehouse-replenishment'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 type Step = 'select' | 'queue' | 'finalize'
 

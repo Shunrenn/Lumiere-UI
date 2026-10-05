@@ -12,7 +12,7 @@ import {
   X,
 } from 'lucide-react'
 import type { DispatchBannerState, DispatchBatch } from '@/lib/event-detail'
-import type { PortalEvent } from '@/lib/types'
+import type { PortalEvent } from '@/shared/types'
 import { EventDetailSection, SectionButton } from '@/components/warehouse/event-detail/EventDetailSection'
 import { StateBanner } from '@/components/warehouse/event-detail/StateBanner'
 import { DispatchStepper } from '@/components/warehouse/event-detail/DispatchStepper'
@@ -24,9 +24,9 @@ import {
   dispatchEvent,
   type DispatchPreparationResponse,
   type DispatchPreparationItemDto,
-} from '@/lib/dispatchApi'
+} from '@/features/warehouse/api/dispatchApi'
 import { useAuth } from '@/lib/auth'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 const BANNER_TONE: Record<DispatchBannerState, Tone> = {
   'No Dispatch Yet': 'neutral',

@@ -1,6 +1,6 @@
 import { KeyRound, Lock, ShieldQuestion, UserPlus } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import type { UserAction } from '@/lib/types'
+import { cn } from '@/shared/utils'
+import type { UserAction } from '@/shared/types'
 
 // A newly created sub-role whose permission table has never been saved.
 export interface PendingSubRoleSetup {

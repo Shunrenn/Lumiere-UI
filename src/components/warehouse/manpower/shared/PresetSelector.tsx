@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { ArrowLeftRight, Plus, Settings, Trash2, X, XCircle } from 'lucide-react'
 import type { CrewRow, PresetSquad } from '@/lib/warehouse-crew'
-import type { Staff } from '@/lib/types'
+import type { Staff } from '@/shared/types'
 import { checkSymmetricConflict, crewHasConflict, isTeamLead, savePresetSquad, deletePresetSquad } from '@/lib/warehouse-crew'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 const FIELD_TASKS = [
   'Setup & Staging',

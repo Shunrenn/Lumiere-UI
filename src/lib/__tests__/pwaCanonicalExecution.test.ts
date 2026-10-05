@@ -6,7 +6,7 @@
 import {
   normalizeMyAssignmentRecord,
   type MyManningAssignmentDto,
-} from '../manningApi'
+} from '@/features/manning/api/manningApi'
 import {
   getApproachingDeclarationsSummary,
   type GroundCrewDeclaration,

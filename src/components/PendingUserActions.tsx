@@ -1,5 +1,5 @@
 import { CheckCircle2, type LucideIcon } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 export type PendingActionTone = 'rose' | 'amber' | 'emerald' | 'sky'
 

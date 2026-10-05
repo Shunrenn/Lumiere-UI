@@ -1,10 +1,10 @@
 import { logAuditEvent } from '@/lib/audit-logger'
-import * as damageApi from '@/lib/damageApi'
-import * as partialEgressApi from '@/lib/partialEgressApi'
-import { fetchAuditLogs } from '@/lib/auditApi'
-import { API_BASE_URL, getAuthToken } from '@/lib/apiConfig'
+import * as damageApi from '@/features/damage/api/damageApi'
+import * as partialEgressApi from '@/features/warehouse/api/partialEgressApi'
+import { fetchAuditLogs } from '@/features/audit/api/auditApi'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
 import { completeAccessRequest, fetchAccessRequests } from '@/features/access-requests/api'
-import { fetchEventsApi, createEventApi, updateEventApi, isGuid } from '@/lib/eventsApi'
+import { fetchEventsApi, createEventApi, updateEventApi, isGuid } from '@/features/events/api/eventsApi'
 import {
   createContext,
   useCallback,
@@ -44,7 +44,7 @@ import type {
   UpdatePostEgressPolicyRequest,
   UserAction,
   Vendor,
-} from '@/lib/types'
+} from '@/shared/types'
 import {
   GROUND_CREW_TREE_SEED,
   PARENT_ROLES,

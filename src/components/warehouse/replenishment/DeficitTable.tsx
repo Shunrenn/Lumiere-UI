@@ -5,7 +5,7 @@ import { Pill } from '@/components/warehouse/shared/Pill'
 import { KebabMenu } from '@/components/warehouse/shared/KebabMenu'
 import { FloatingPanel } from '@/components/warehouse/shared/FloatingPanel'
 import { PRIORITY_TONE, DEFICIT_STATUS_TONE } from '@/components/warehouse/replenishment/tone'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 const TRIGGER_EXPLANATION: Record<TriggerSource, string> = {
   Canvas: 'Flagged automatically — a Canvas allocation exceeded projected stock for this event.',

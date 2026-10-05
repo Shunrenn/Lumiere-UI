@@ -12,7 +12,7 @@ import {
   formatSmartDuration,
 } from '@/lib/warehouse-catalog'
 import { usePortal } from '@/lib/store'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface ScheduleBespokeModalProps {
   onClose: () => void

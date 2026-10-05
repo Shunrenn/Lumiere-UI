@@ -4,7 +4,7 @@ import type { WarehouseVendor } from '@/lib/warehouse-vendors'
 import { getCatalogAssets } from '@/lib/warehouse-catalog'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { VENDOR_STATUS_TONE } from '@/components/warehouse/replenishment/tone'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface VendorDetailModalProps {
   vendor: WarehouseVendor

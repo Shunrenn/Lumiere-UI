@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { Check, ChevronDown, Plus, Search, X } from 'lucide-react'
 import { useWarehouseVendors } from '@/lib/warehouse-vendors'
 import { AddVendorModal } from '@/components/warehouse/vendors/AddVendorModal'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface SearchableVendorSelectProps {
   value: string

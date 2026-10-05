@@ -7,7 +7,7 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import type { ProjectPitch, PitchStatus } from '@/lib/project-pitch'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface ProjectManagerPitchingSummaryProps {
   pitches: ProjectPitch[]

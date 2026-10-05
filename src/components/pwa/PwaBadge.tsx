@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/utils'
-import type { GroundCrewSubRole } from '@/lib/types'
+import { cn } from '@/shared/utils'
+import type { GroundCrewSubRole } from '@/shared/types'
 
 interface PwaBadgeProps {
   subRole?: GroundCrewSubRole | string

@@ -8,10 +8,10 @@ import {
   type ReactNode,
 } from 'react'
 import { womModuleAccessLevel } from './rbac'
-import { type GroundCrewSubRole, normalizeGroundCrewSubRole } from './types'
-import { API_BASE_URL } from './apiConfig'
+import { type GroundCrewSubRole, normalizeGroundCrewSubRole } from '@/shared/types'
+import { API_BASE_URL } from '@/shared/api/apiConfig'
 import { useIdleTimeout } from './useIdleTimeout'
-import { fetchAuthCapabilities } from './adminPermissionsApi'
+import { fetchAuthCapabilities } from '@/features/admin/api/adminPermissionsApi'
 import { getDefaultRouteForUser } from './route-guard'
 import { getRealtimeConnection, stopRealtimeConnection } from './realtime'
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
-import type { PortalEvent } from '@/lib/types'
+import type { PortalEvent } from '@/shared/types'
 import type { ExecutivePendingItem } from './ExecutivePendingActions'
 
 export type ExecutiveSummaryDetail =

@@ -3,7 +3,7 @@ import { X, Inbox, Building2, CalendarDays, Check, Crown } from 'lucide-react'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { usePlanner, type NewPortfolioDraft, type PortfolioTier } from '@/lib/planner'
 import { usePortal } from '@/lib/store'
-import type { ExperienceTier } from '@/lib/types'
+import type { ExperienceTier } from '@/shared/types'
 
 interface Props {
   open: boolean

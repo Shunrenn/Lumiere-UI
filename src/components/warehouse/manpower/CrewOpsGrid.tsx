@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight, Save, RotateCcw, Check, X } from 'lucide-react'
-import type { Staff } from '@/lib/types'
+import type { Staff } from '@/shared/types'
 import {
   batchUpdateShifts,
   dayLabel,
@@ -9,7 +9,7 @@ import {
   useShiftGrid,
   type ShiftCode,
 } from '@/lib/warehouse-crew'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 const SHIFT_STYLE: Record<string, string> = {
   AM: 'bg-primary/15 text-primary',

@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
-import type { Staff } from '@/lib/types'
+import type { Staff } from '@/shared/types'
 import type { CrewAssignmentStatus, EventCrewAssignment } from '@/lib/event-detail'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 const STATUS_OPTIONS: CrewAssignmentStatus[] = ['Confirmed', 'Pending', 'Unavailable']
 

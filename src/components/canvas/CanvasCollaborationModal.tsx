@@ -9,8 +9,8 @@ import {
   type CanvasAccessLevel,
   type CanvasCollaboratorDto,
   type CollaboratorCandidateDto,
-} from '@/lib/canvasApi'
-import { cn } from '@/lib/utils'
+} from '@/features/canvas/api/canvasApi'
+import { cn } from '@/shared/utils'
 
 interface CanvasCollaborationModalProps {
   eventId: string

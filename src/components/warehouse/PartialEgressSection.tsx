@@ -15,8 +15,8 @@ import { queueOfflineEgressItemCompletion } from '@/lib/offline/checklistOutbox'
 import type {
   EventEgressItemResponse,
   EventEgressResponse,
-} from '@/lib/types'
-import { cn } from '@/lib/utils'
+} from '@/shared/types'
+import { cn } from '@/shared/utils'
 
 interface PartialEgressSectionProps {
   eventId: string

@@ -1,4 +1,4 @@
-import { API_BASE_URL, getAuthToken } from './apiConfig'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
 
 export type CanonicalPrepStatus = 'Awaiting Production' | 'Pending Pull' | 'Prepping' | 'Completed'
 

@@ -1,6 +1,6 @@
 import { type LucideIcon, CheckCircle2 } from 'lucide-react'
 import { EmptyState } from '@/components/EmptyState'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 export interface ExecutivePendingItem {
   id: string

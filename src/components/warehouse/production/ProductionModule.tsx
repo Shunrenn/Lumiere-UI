@@ -16,14 +16,14 @@ import { Pill } from '@/components/warehouse/shared/Pill'
 import {
   formatProductionStatus,
   getProductionStatusTone,
-} from '@/lib/productionApi'
+} from '@/features/production/api/productionApi'
 import { ProductionDetailModal } from '@/components/warehouse/production/ProductionDetailModal'
 import { QuotaEstimationModal } from '@/components/warehouse/production/QuotaEstimationModal'
 import { ProductionGanttView } from '@/components/warehouse/production/ProductionGanttView'
 import { ScheduleBespokeModal } from '@/components/warehouse/production/ScheduleBespokeModal'
 import { SubCategorySettingsModal } from '@/components/warehouse/production/SubCategorySettingsModal'
 import { FlagDelayModal } from '@/components/warehouse/production/FlagDelayModal'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { WarehouseModuleHeader } from '@/components/warehouse/WarehouseModuleHeader'
 
 type MainModuleView = 'gantt' | 'kanban' | 'workload'

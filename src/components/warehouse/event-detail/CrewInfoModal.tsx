@@ -1,6 +1,6 @@
 import { X, Mail, Phone, IdCard, Clock, Lock, ShieldAlert } from 'lucide-react'
 import type { CrewAssignmentStatus, EventCrewAssignment } from '@/lib/event-detail'
-import type { Staff } from '@/lib/types'
+import type { Staff } from '@/shared/types'
 import { toneClasses, toneDot, type Tone } from '@/components/warehouse/event-detail/status-tone'
 
 const STATUS_TONE: Record<CrewAssignmentStatus, Tone> = {

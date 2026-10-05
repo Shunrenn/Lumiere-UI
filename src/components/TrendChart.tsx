@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { usePortal } from '@/lib/store'
 import { aggregateUserGrowth } from '@/lib/trend-aggregator'
 import { AnalyticsDetailModal } from '@/components/AnalyticsDetailModal'

@@ -7,7 +7,7 @@
 // each company can switch on or off, because not every company staffs every
 // function.
 
-import type { SubRoleEmergencyUnblockMetadata } from '@/lib/types'
+import type { SubRoleEmergencyUnblockMetadata } from '@/shared/types'
 
 export type AccessLevel = 'View' | 'Interact' | 'Modify' | 'None'
 

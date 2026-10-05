@@ -2,7 +2,7 @@
 // Renders authoritative backend/database-backed asset records.
 // Fallback state preserves only the 3 canonical DB assets with zero synthesized fixture state.
 import { useEffect, useSyncExternalStore } from 'react'
-import { createAssetApi, fetchAssetsApi, updateAssetApi } from './assetsApi'
+import { createAssetApi, fetchAssetsApi, updateAssetApi } from '@/features/inventory/api/assetsApi'
 
 import type { WarehouseZone } from '@/lib/warehouse-crew'
 

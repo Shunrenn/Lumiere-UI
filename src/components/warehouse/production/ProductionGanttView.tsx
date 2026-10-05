@@ -16,7 +16,7 @@ import {
 import { formatSmartDuration } from '@/lib/warehouse-catalog'
 import { usePortal } from '@/lib/store'
 import { getCrewPool } from '@/lib/warehouse-crew'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface ProductionGanttViewProps {
   items: ProductionItem[]

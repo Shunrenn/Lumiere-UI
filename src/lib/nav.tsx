@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { Route } from '@/lib/types'
+import type { Route } from '@/shared/types'
 import { VALID_ROUTES } from '@/lib/route-guard'
 
 // A cross-page instruction: navigating from a dashboard "Open" button can

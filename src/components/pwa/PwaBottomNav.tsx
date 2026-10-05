@@ -1,5 +1,5 @@
 import type { ElementType } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 export interface PwaNavItem {
   id: string

@@ -16,7 +16,7 @@ import {
 import { getUserMutations, type MutationOutboxEntry } from '@/lib/offline/db'
 import { getPendingQueue } from '@/lib/offlineQueue'
 import { subscribeOfflineSync, triggerOfflineReplay } from '@/lib/offlineReplay'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 interface PwaSyncStatusBarProps {
   userId: string | null
