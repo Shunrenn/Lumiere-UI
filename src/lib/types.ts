@@ -296,6 +296,7 @@ export interface UserAction {
   email?: string
   status: UserActionStatus
   accountType?: StaffRole
+  requestedAt?: string
 }
 
 /* ---------- Event Updates ---------- */
