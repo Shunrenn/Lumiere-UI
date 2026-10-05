@@ -310,6 +310,7 @@ function Gate() {
     currentUser,
     isAuthenticated,
     isTempPassword,
+    isAdmin,
     hasConfirmationPin,
     canAccessAssetInventory,
   } = useAuth()
@@ -331,7 +332,7 @@ function Gate() {
     return <TempPasswordResetScreen />
   }
 
-  if (!hasConfirmationPin) {
+  if (!isAdmin && !hasConfirmationPin) {
     return <PinSetupScreen />
   }
 
