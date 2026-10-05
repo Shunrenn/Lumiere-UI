@@ -22,7 +22,7 @@ export function ViewAccountModal({
   editable = false,
   onSave,
 }: Props) {
-  const { resetStaffPassword } = usePortal()
+  const { resetStaffPassword, addUserAction, userActions } = usePortal()
   const [draft, setDraft] = useState<Staff | null>(staff)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -49,8 +49,11 @@ export function ViewAccountModal({
     setIsResetting(true)
     setError(null)
     try {
-      const res = await resetStaffPassword(staff.id)
-      setShowConfirmReset(false)
+    const res = await resetStaffPassword(staff.id)
+    if (!isPendingActivation && staff.email && !userActions.some((action) => action.status === 'pending' && action.type === 'forgot-password' && action.email?.toLowerCase() === staff.email.toLowerCase())) {
+      addUserAction({ type: 'forgot-password', user: displayFullName, email: staff.email, status: 'pending' })
+    }
+    setShowConfirmReset(false)
       setResetResult({ tempPassword: res.tempPassword })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset password')
