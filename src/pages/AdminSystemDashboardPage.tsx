@@ -363,7 +363,6 @@ export function AdminSystemDashboardPage() {
               onResolve={handleResolve}
               subRoleSetups={pendingSubRoleSetups}
               onConfigureSubRole={handleConfigureSubRole}
-              onSelect={() => setDetailSummary('pending')}
             />
           </div>
         </div>
