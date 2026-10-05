@@ -23,8 +23,8 @@ Read `AGENTS.md`, the feature's current UI/state files, API client conventions, 
 
 ## Do not
 
-- Put vendor keys, database credentials, or service-role tokens in browser code or Vercel variables.
-- Create direct browser mutations to Postgres, Supabase, or a Vercel database handler.
+- Put vendor keys, database credentials, or service-role tokens in browser code or environment variables.
+- Create direct browser mutations to Postgres, Supabase, or external databases.
 - Claim client preview processing is the production background-removal result.
 
 ## Verify

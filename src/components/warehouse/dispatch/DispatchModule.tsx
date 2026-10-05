@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Archive, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ChevronRight, Clock, Download, PackageCheck, Truck, User, X } from 'lucide-react'
 import { usePortal } from '@/lib/store'
-import { getPreparation, type DispatchPreparationResponse } from '@/lib/dispatchApi'
+import { getPreparation, type DispatchPreparationResponse } from '@/features/warehouse/api/dispatchApi'
 import {
   addNewCustomBatch,
   advanceBatchStage,

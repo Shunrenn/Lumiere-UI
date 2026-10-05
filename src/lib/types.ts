@@ -562,3 +562,154 @@ export interface UpdatePostEgressPolicyRequest {
   completionWindowMinutes: number
   expectedVersion: number
 }
+
+/* ---------- Warehouse Catalog & Bespoke Models ---------- */
+
+export type AssetStatus =
+  | 'Available'
+  | 'Low Stock'
+  | 'Critical Deficit'
+  | 'Deployed'
+  | 'Lost In Action'
+  | 'In Maintenance'
+
+export type BespokeStage = 'Unprepped' | 'Prepping' | 'Ready'
+
+export interface AssetDimensions {
+  height: string
+  width: string
+  depth: string
+  weight: string
+}
+
+export type LedgerEntryType =
+  | 'Registered'
+  | 'Reserved'
+  | 'Packed'
+  | 'Dispatched'
+  | 'Returned'
+  | 'Damaged'
+  | 'Repaired'
+  | 'Reconciled'
+  | 'Retired'
+
+export type ReconciliationTag = 'Matched' | 'Short' | 'Pahabol'
+
+export interface CatalogLedgerEntry {
+  id: string
+  timestamp: string
+  type: LedgerEntryType
+  note: string
+  declaredBy: string
+  linkedBatchRef?: string
+  reconciliationTag?: ReconciliationTag
+}
+
+export type StockHealthState = 'Low Stock' | 'Healthy Stock' | 'Over Stock'
+
+export interface BespokeSimulationAttempt {
+  id: string
+  attemptNumber: number
+  durationMinutes: number
+  rawInput: string
+  loggedAt: string
+  loggedBy?: string
+}
+
+export interface BespokeSubCategoryConfig {
+  subCategory: string
+  maxParallelWorkers: number
+  description?: string
+}
+
+export interface CatalogAsset {
+  id: string
+  assetId: string
+  name: string
+  itemCallName?: string
+  category: AssetCategory
+  subCategory?: string
+  description?: string
+  status: AssetStatus
+  image: string
+  unit: string
+  warehouseZone?: string
+
+  // Shared Base Fields
+  dimensions: AssetDimensions
+  is_circular?: boolean
+  shape?: string
+  circumference?: string
+  material?: string
+  colorType?: 'mono' | 'multi' | 'changeable'
+  colorPrimary?: string
+  colorSecondary?: string[]
+  colorNotes?: string
+  tags?: string[]
+
+  purchaseCost: number
+  costPerUnit: number
+  dateAdded: string
+  primaryVendorId: string
+  backupVendorId?: string
+
+  // Event Asset Specific
+  currentStock?: number
+  threshold?: number
+  lifeSpan?: string
+  damageReplacementCost?: number
+
+  // Bespoke Specific
+  bespokeStage?: BespokeStage
+  bespokeCrew?: string
+  rawMaterials?: string[]
+  manCount?: number
+  finishTimeMinutes?: number
+  revisionTimeMinutes?: number
+
+  // Bespoke Simulation State
+  simulationHeadcount?: number
+  simulationAttempts?: BespokeSimulationAttempt[]
+  baseSingleWorkerTimeMinutes?: number
+
+  // Stockroom Specific
+  criticalThreshold?: number
+  ceilingCap?: number
+  pricePerPack?: number
+
+  // Rental Specific
+  onLoanDueDate?: string
+  rentalVendorName?: string
+  supplierDetails?: string
+  supplierContact?: string
+  lengthOfRent?: string
+  overduePenaltyFee?: number
+
+  // Office Asset Specific
+  custodian?: string
+  vendorDetails?: string
+  deviceModel?: string
+  serialNumber?: string
+  deviceSpecs?: string
+}
+
+/* ---------- Portal Account & Authentication Models ---------- */
+
+export type PortalKind = 'web' | 'pwa'
+
+export interface PortalAccount {
+  id: string
+  email: string
+  name: string
+  role: string
+  portal: PortalKind
+  subRole?: string
+  groundCrewSubRole?: GroundCrewSubRole
+  fullWarehouseAccess?: boolean
+  temporaryPassword: boolean
+  mustChangePassword?: boolean
+  activationStatus?: string
+  token?: string
+  canAccessAssetInventoryAndAllocation?: boolean
+}
+

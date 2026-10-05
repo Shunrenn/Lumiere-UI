@@ -1,7 +1,7 @@
 // Canonical data layer for the Vendor Management module.
 // Renders authoritative backend vendor records only. Zero frontend fixture records.
 import { useEffect, useSyncExternalStore } from 'react'
-import { createVendorApi, fetchVendorsApi, type VendorDto } from './vendorApi'
+import { createVendorApi, fetchVendorsApi, type VendorDto } from '@/features/vendors/api/vendorApi'
 
 export function deriveContactName(v: VendorDto): string {
   if (v.contactName && v.contactName.trim()) return v.contactName.trim()

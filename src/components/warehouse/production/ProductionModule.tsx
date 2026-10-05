@@ -16,7 +16,7 @@ import { Pill } from '@/components/warehouse/shared/Pill'
 import {
   formatProductionStatus,
   getProductionStatusTone,
-} from '@/lib/productionApi'
+} from '@/features/production/api/productionApi'
 import { ProductionDetailModal } from '@/components/warehouse/production/ProductionDetailModal'
 import { QuotaEstimationModal } from '@/components/warehouse/production/QuotaEstimationModal'
 import { ProductionGanttView } from '@/components/warehouse/production/ProductionGanttView'

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { KeyRound, Lock, X } from 'lucide-react'
 import { ConsoleLayout } from '@/components/ConsoleLayout'
-import { PendingUserActions, type PendingActionItem } from '@/components/PendingUserActions'
-import { SecurityIncidents } from '@/components/SecurityIncidents'
-import { TrendChart } from '@/components/TrendChart'
+import { PendingUserActions, type PendingActionItem } from '@/components/dashboard/PendingUserActions'
+import { SecurityIncidents } from '@/components/dashboard/SecurityIncidents'
+import { TrendChart } from '@/components/dashboard/TrendChart'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
 

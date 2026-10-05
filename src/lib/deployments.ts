@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { API_BASE_URL } from './apiConfig'
+import { API_BASE_URL } from '@/shared/api/apiConfig'
 
 export type DeploymentStatus = 'In Progress' | 'Awaiting Setup' | 'Completed'
 

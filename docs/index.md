@@ -24,17 +24,16 @@ SPA docs for this repository. Each file is usable alone. The API lives in Shunre
 | File | Version | Status |
 |------|---------|--------|
 | [howto-local-dev.md](howto-local-dev.md) | 0.1 | Draft |
-| [howto-deploy-vercel.md](howto-deploy-vercel.md) | 0.1 | Draft |
 
 ## 2. Health check
 
-- **API Base URL Routing:** API integration configured using `import.meta.env.VITE_API_URL` via `src/lib/apiConfig.ts` across `auth.tsx`, `damageApi.ts`, and `deployments.ts` (with `http://localhost:8080` fallback in local dev).
+- **API Base URL Routing:** API integration configured using `import.meta.env.VITE_API_URL` via `src/shared/api/apiConfig.ts` (with `http://localhost:8080` fallback in local dev).
 - Create Event stays in React memory.
 - Canvas reservation API wiring is now in-scope (current-sprint priority).
 - Catalog cutout in the modal is a chroma-key, not the API model (known limitation/blocker for manuscripts/defense).
 
 ## 3. Current status
 
-- **Canonical Production Hostname:** `lumieredemo-seven.vercel.app`
+- **Production Target:** Railway deployment (`sirv dist --host 0.0.0.0 --port $PORT --single`)
 - **Confirmed Next Task:** Canvas Reservation API Wiring (`POST /api/reservations/bulk`).
 - **Backend CORS & Security:** Backend (`Shunrenn/Lumiere`) CORS policy locks allowed origins dynamically and disables `login-debug` in Production.

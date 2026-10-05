@@ -1,10 +1,28 @@
 // Canonical derivation layer for Manpower & Crew.
 // Maintains genuine database-backed staff roster. Eliminates synthetic hashOf shift/status generation.
 import { useSyncExternalStore } from 'react'
-import { supabase } from '@/lib/supabase'
+import {
+  fetchPresetSquadsApi,
+  createPresetSquadApi,
+  updatePresetSquadApi,
+  deletePresetSquadApi,
+} from '@/features/manning/api/manningApi'
 import type { PortalEvent, Staff } from '@/lib/types'
-import { expandDateRange, handleCrewLeaveAutoRelease } from '@/lib/manning'
+import { expandDateRange } from '@/lib/utils'
 import { logAuditEvent } from '@/lib/audit-logger'
+
+export type CrewLeaveHandler = (
+  staffId: string,
+  staffName: string,
+  date: string,
+  source?: 'Shift Grid' | 'Daily Duty Attendance',
+) => void | Promise<void>
+
+let crewLeaveHandler: CrewLeaveHandler | null = null
+
+export function registerCrewLeaveHandler(handler: CrewLeaveHandler): void {
+  crewLeaveHandler = handler
+}
 
 export type CrewRowStatus = 'Available' | 'Assigned' | 'On Leave'
 
@@ -98,12 +116,14 @@ export function updateDailyDutyAttendance(
     grid = { ...grid, [key]: 'OFF' }
     publish()
 
-    void handleCrewLeaveAutoRelease(
-      existing.staffId,
-      existing.staffName,
-      existing.date,
-      'Daily Duty Attendance',
-    )
+    if (crewLeaveHandler) {
+      void crewLeaveHandler(
+        existing.staffId,
+        existing.staffName,
+        existing.date,
+        'Daily Duty Attendance',
+      )
+    }
   }
 }
 
@@ -318,22 +338,19 @@ export function getPresetSquads(staff: Staff[]): PresetSquad[] {
 
 export async function fetchPresetSquads(staff: Staff[]): Promise<PresetSquad[]> {
   try {
-    const { data, error } = await supabase
-      .from('manning_preset_squads')
-      .select('*')
-      .order('created_at', { ascending: true })
+    const data = await fetchPresetSquadsApi()
 
-    if (!error && data && data.length > 0) {
+    if (data && data.length > 0) {
       localPresetSquads = data.map((d: any) => ({
         id: d.id,
         name: d.name,
-        memberIds: d.member_ids || [],
-        defaultTask: d.default_task || 'Setup & Staging',
+        memberIds: d.memberIds || d.memberUserIds || [],
+        defaultTask: d.defaultTask || 'Setup & Staging',
       }))
       return localPresetSquads
     }
   } catch (e) {
-    console.warn('[warehouse-crew] Supabase preset squads unavailable; using local cache/defaults.', e)
+    console.warn('[warehouse-crew] Backend preset squads unavailable; using local cache/defaults.', e)
   }
 
   return getPresetSquads(staff)
@@ -347,15 +364,24 @@ export async function savePresetSquad(
   const isNew = !localPresetSquads.some((s) => s.id === squad.id)
 
   try {
-    const payload = {
-      id: squad.id,
-      name: squad.name,
-      member_ids: squad.memberIds,
-      default_task: squad.defaultTask || 'Setup & Staging',
+    const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(squad.id)
+    if (isGuid && !isNew) {
+      const updated = await updatePresetSquadApi(squad.id, {
+        name: squad.name,
+        memberIds: squad.memberIds,
+        defaultTask: squad.defaultTask || 'Setup & Staging',
+      })
+      squad.id = updated.id
+    } else {
+      const created = await createPresetSquadApi({
+        name: squad.name,
+        memberIds: squad.memberIds,
+        defaultTask: squad.defaultTask || 'Setup & Staging',
+      })
+      squad.id = created.id
     }
-    await supabase.from('manning_preset_squads').upsert(payload)
   } catch (e) {
-    console.warn('[warehouse-crew] Failed to save preset squad to Supabase; using local store.', e)
+    console.warn('[warehouse-crew] Failed to save preset squad to backend API; using local store.', e)
   }
 
   const idx = localPresetSquads.findIndex((s) => s.id === squad.id)
@@ -386,9 +412,12 @@ export async function deletePresetSquad(
   const targetSquad = localPresetSquads.find((s) => s.id === squadId)
 
   try {
-    await supabase.from('manning_preset_squads').delete().eq('id', squadId)
+    const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(squadId)
+    if (isGuid) {
+      await deletePresetSquadApi(squadId)
+    }
   } catch (e) {
-    console.warn('[warehouse-crew] Failed to delete preset squad from Supabase; using local store.', e)
+    console.warn('[warehouse-crew] Failed to delete preset squad from backend API; using local store.', e)
   }
 
   localPresetSquads = localPresetSquads.filter((s) => s.id !== squadId)
@@ -508,7 +537,9 @@ export function getShift(staffId: string, date: string): ShiftCode | undefined {
 function triggerAutoReleaseIfOff(staffId: string, date: string, shift: ShiftCode, staffName?: string) {
   if (shift !== 'OFF') return
   const name = staffName || staffId
-  void handleCrewLeaveAutoRelease(staffId, name, date, 'Shift Grid')
+  if (crewLeaveHandler) {
+    void crewLeaveHandler(staffId, name, date, 'Shift Grid')
+  }
 }
 
 export function cycleShift(staffId: string, date: string, staffName?: string) {

@@ -6,7 +6,7 @@ import {
   markNotificationReadApi,
   markAllNotificationsReadApi,
   type NotificationDto,
-} from '@/lib/notificationsApi'
+} from '@/features/notifications/api/notificationsApi'
 
 export interface NotificationEntry {
   id: string

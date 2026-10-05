@@ -31,7 +31,7 @@ import {
   fetchMyManningAssignments,
   updateMyAssignmentExecutionStatus,
   type MyManningAssignmentDto,
-} from '@/lib/manningApi'
+} from '@/features/manning/api/manningApi'
 import { useDispatchStore } from '@/lib/warehouse-dispatch'
 import type { DispatchBatch } from '@/lib/event-detail'
 import { PartialEgressSection } from '@/components/warehouse/PartialEgressSection'

@@ -18,7 +18,7 @@ import {
   canPerformOverrideRemoval,
   canPerformResourceOverride,
   overrideAssignmentApi,
-} from '@/lib/manningApi'
+} from '@/features/manning/api/manningApi'
 import {
   useCrewRows,
   getPresetSquads,

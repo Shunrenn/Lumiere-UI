@@ -14,7 +14,7 @@ import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import type { DamageException, DamageVerdict } from '@/lib/types'
-import { API_BASE_URL } from '@/lib/apiConfig'
+import { API_BASE_URL } from '@/shared/api/apiConfig'
 
 const statusStyles: Record<DamageVerdict, string> = {
   'Pending Verdict': 'border border-primary/40 bg-primary/10 text-primary',

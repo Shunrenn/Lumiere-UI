@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { HavaDeclarationState, HavaEvidenceStatus } from './types'
-import { fetchDamageReportsAllEvents, submitDamageReportApi, editDamageReportApi } from './damageApi'
+import { fetchDamageReportsAllEvents, submitDamageReportApi, editDamageReportApi } from '@/features/damage/api/damageApi'
 import { getPendingQueue, enqueueDeclaration } from './offlineQueue'
 
 export type DeclarationStatus = 'Pending Event Admin' | 'Confirmed' | 'Rejected' | 'Escalated to Manning'

@@ -5,8 +5,8 @@ import {
   removeMutation,
   type MutationOutboxEntry,
 } from './db'
-import { API_BASE_URL, getAuthToken } from '../apiConfig'
-import { type MyManningAssignmentDto, normalizeMyAssignmentRecord } from '../manningApi'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
+import { type MyManningAssignmentDto, normalizeMyAssignmentRecord } from '@/features/manning/api/manningApi'
 
 export interface ManningMutationPayload {
   assignmentId: string

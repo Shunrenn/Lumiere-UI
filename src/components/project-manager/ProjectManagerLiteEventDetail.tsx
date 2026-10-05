@@ -7,7 +7,7 @@ import {
   type AllocatedItemStatus,
   type EventAllocatedItem,
 } from '@/lib/event-detail'
-import { fetchReservationsForEvent, type ReservationResponseDto } from '@/lib/reservationsApi'
+import { fetchReservationsForEvent, type ReservationResponseDto } from '@/features/events/api/reservationsApi'
 import { ItemsPanel } from '@/components/warehouse/event-detail/ItemsPanel'
 import { AssetDetailModal } from '@/components/warehouse/asset-catalog/AssetDetailModal'
 import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'

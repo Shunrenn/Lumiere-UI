@@ -1,5 +1,4 @@
-import type { Route } from './types'
-import type { PortalAccount } from './auth'
+import type { Route, PortalAccount } from './types'
 import type { WarehouseModuleId } from './warehouse-modules'
 import { womModuleAccessLevel } from './rbac'
 
