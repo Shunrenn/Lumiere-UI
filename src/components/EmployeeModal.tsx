@@ -18,6 +18,7 @@ const emptyDraft: NewStaffDraft = {
   email: '',
   contact: '',
   role: '',
+  employmentType: 'Full Time',
   subRole: '',
 }
 
@@ -336,7 +337,10 @@ function VerifyStep({
           <Row label="Email:" value={draft.email} />
           <Row label="Contact:" value={draft.contact} />
         </div>
-        <Row label="Role:" value={draft.role} />
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <Row label="Role:" value={draft.role} />
+          <Row label="Employment Type:" value={draft.employmentType} />
+        </div>
         <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
           <p className="font-semibold text-foreground">Next Step:</p>
           <p className="mt-1">The server will provision this account, generate a secure temporary password, and display it once for secure handoff.</p>

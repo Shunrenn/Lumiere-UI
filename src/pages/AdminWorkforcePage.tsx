@@ -157,7 +157,7 @@ export function AdminWorkforcePage() {
   // render as a compact inline strip in the table header rather than standalone cards —
   // that keeps table rows visible on load instead of pushed below the fold.
   const lockedAccounts = userActions.filter((a) => a.status === 'pending' && a.type === 'account-locked').length
-  const pendingActivations = userActions.filter((a) => a.status === 'pending' && a.type !== 'account-locked').length
+  const pendingActivations = staff.filter((person) => person.accountStatus === 'Pending').length
   const tableStats = [
     { label: 'Active Users', value: staff.filter((s) => (s.accountStatus ?? s.sessionStatus) === 'Active').length },
     { label: 'Locked Accounts', value: lockedAccounts },

@@ -89,8 +89,11 @@ function rowToStaff(row: any): Staff {
     : ((row.session_status ?? row.sessionStatus ?? 'Offline Session') as Staff['sessionStatus'])
 
   const unclaimedTemp = Boolean(row.temporaryPassword ?? row.temporary_password)
+  const mustChangePassword = Boolean(row.mustChangePassword ?? row.must_change_password)
+  const activationStatus = String(row.activationStatus ?? row.activation_status ?? '').trim()
+  const isPendingActivation = activationStatus.toLowerCase() === 'pendingactivation' || unclaimedTemp || mustChangePassword
   const accountStatus: AccountStatus =
-    sessionStatus === 'Suspended' ? 'Suspended' : unclaimedTemp ? 'Pending' : 'Active'
+    sessionStatus === 'Suspended' ? 'Suspended' : isPendingActivation ? 'Pending' : 'Active'
 
   const rawDate = row.updatedAt ?? row.updated_at ?? row.createdAt ?? row.created_at
   const lastAccess = rawDate
@@ -116,6 +119,9 @@ function rowToStaff(row: any): Staff {
     lastAccess,
     recordKind: 'full-account',
     accountStatus,
+    employmentType: (row.employmentType ?? row.employment_type ?? 'Full Time') as Staff['employmentType'],
+    mustChangePassword,
+    activationStatus: activationStatus || undefined,
     tempPassword: undefined,
   }
 }
@@ -1789,9 +1795,10 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       const payload = {
         email,
         fullName,
-        roleName: role,
-        contactNumber,
-        employeeId,
+    roleName: role,
+    employmentType: 'Full Time',
+    contactNumber,
+    employeeId,
         subRole,
       }
 

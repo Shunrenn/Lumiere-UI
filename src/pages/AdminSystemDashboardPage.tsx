@@ -200,9 +200,8 @@ export function AdminSystemDashboardPage() {
   const lockedAccounts = userActions.filter(
     (a) => a.status === 'pending' && a.type === 'account-locked',
   ).length
-  const pendingActivations = userActions.filter(
-    (a) => a.status === 'pending' && a.type !== 'account-locked',
-  ).length
+  // Pending Activation is an account lifecycle state, not an admin action queue.
+  const pendingActivations = staff.filter((person) => person.accountStatus === 'Pending').length
 
   const roleCounts = useMemo(() => {
     const categories = ['Admin', 'Executive', 'Project Manager', 'Warehouse Operations Manager', 'Event Planner', 'Ground Crew', 'Inactive Account']
