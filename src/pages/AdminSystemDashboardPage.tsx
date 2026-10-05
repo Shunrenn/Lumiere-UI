@@ -311,9 +311,9 @@ export function AdminSystemDashboardPage() {
         <LoadingSkeleton variant="dashboard" />
       ) : isDashboard ? (
         <div className="flex flex-col gap-4">
-          {/* Row 1: 4 small stat cards (left) + User Distribution / Live Security Feed (right) */}
-          <div data-testid="admin-dashboard-stats" className="grid items-stretch gap-4 lg:grid-cols-2">
-            <div className="grid h-[21rem] grid-cols-2 gap-3">
+          {/* Upper region: two stacked KPI rows on the left, two row-spanning cards on the right. */}
+          <div data-testid="admin-dashboard-stats" className="grid min-h-0 items-stretch gap-4 lg:grid-cols-4 lg:grid-rows-2">
+            <div className="grid min-h-0 grid-cols-1 gap-4 sm:grid-cols-2 sm:grid-rows-2 lg:col-span-2 lg:row-span-2">
               <StatCard
                 agentSelector="data-agent-system-health"
                 label="System Health"
@@ -343,9 +343,7 @@ export function AdminSystemDashboardPage() {
                 onSelect={() => setDetailSummary('activations')}
               />
             </div>
-            {/* Fixed row height so the feed scrolls internally instead of
-                stretching the donut card with trailing blank space. */}
-            <div className="grid h-[21rem] grid-cols-2 gap-3">
+            <div className="grid min-h-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2 lg:row-span-2">
               <UserDistributionCard
                 compact
                 counts={roleCounts}
