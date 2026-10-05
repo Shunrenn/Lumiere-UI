@@ -222,12 +222,27 @@ export function AdminSystemDashboardPage() {
   ).length
 
   const roleCounts = useMemo(() => {
-    const categories = ['Admin', 'Executive', 'Warehouse Operations Manager', 'Event Planner', 'Ground Crew', 'Inactive Account']
+    const categories = ['Admin', 'Executive', 'Project Manager', 'Warehouse Operations Manager', 'Event Planner', 'Ground Crew', 'Inactive Account']
     const tally = Object.fromEntries(categories.map((category) => [category, 0])) as Record<string, number>
     staff.forEach((person) => {
-      if (person.accountStatus !== 'Active') { tally['Inactive Account'] += 1; return }
+      if (person.accountStatus !== 'Active') {
+        tally['Inactive Account'] += 1
+        return
+      }
       const role = person.role.toLowerCase()
-      const category = role.includes('admin') ? 'Admin' : role.includes('executive') ? 'Executive' : role.includes('warehouse manager') || role === 'warehouse operations manager' ? 'Warehouse Operations Manager' : role.includes('planner') ? 'Event Planner' : role === 'ground crew' ? 'Ground Crew' : null
+      const category = role.includes('admin')
+        ? 'Admin'
+        : role.includes('executive')
+          ? 'Executive'
+          : role.includes('project manager') || role === 'project_manager'
+            ? 'Project Manager'
+            : role.includes('warehouse manager') || role === 'warehouse operations manager'
+              ? 'Warehouse Operations Manager'
+              : role.includes('planner')
+                ? 'Event Planner'
+                : role.includes('ground crew')
+                  ? 'Ground Crew'
+                  : null
       if (category) tally[category] += 1
     })
     return tally
@@ -311,9 +326,9 @@ export function AdminSystemDashboardPage() {
         <LoadingSkeleton variant="dashboard" />
       ) : isDashboard ? (
         <div className="flex flex-col gap-4">
-          {/* Row 1: 4 small stat cards (left) + User Distribution / Live Security Feed (right) */}
+          {/* Upper dashboard row: balanced KPI block beside the two tall overview cards. */}
           <div data-testid="admin-dashboard-stats" className="grid items-stretch gap-4 lg:grid-cols-2">
-            <div className="grid h-[21rem] grid-cols-2 gap-3">
+            <div className="grid min-h-[20rem] grid-cols-2 gap-3">
               <StatCard
                 agentSelector="data-agent-system-health"
                 label="System Health"
