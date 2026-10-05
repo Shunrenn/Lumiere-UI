@@ -68,10 +68,7 @@ export function ExecutiveRail<T extends string = ExecutiveDestinationId>({
           return canAccessRoute(currentUser, destination.id)
         })
     }
-    return EXECUTIVE_DESTINATIONS.filter((destination) => {
-      if (destination.id === 'inventory') return canAccessAssetInventory && canAccessRoute(currentUser, destination.id)
-      return canAccessRoute(currentUser, destination.id)
-    })
+    return EXECUTIVE_DESTINATIONS
   }, [destinations, isExecutiveLite, canAccessAssetInventory, currentUser])
 
   // Executive Lite uses a fixed compact dark rail per client references
