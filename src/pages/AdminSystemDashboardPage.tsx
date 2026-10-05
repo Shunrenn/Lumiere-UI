@@ -43,7 +43,7 @@ function StatCard({
       type={onSelect ? 'button' : undefined}
       onClick={onSelect ? trigger : undefined}
       className={cn(
-        'flex flex-col rounded-xl border border-border bg-card p-4 text-left',
+        'flex h-full flex-col rounded-xl border border-border bg-card p-4 text-left',
         onSelect && 'cursor-pointer transition hover:border-primary/40 hover:bg-muted/40',
         flashing && 'ring-2 ring-primary/60 border-primary/60 glow-primary',
       )}
@@ -311,41 +311,40 @@ export function AdminSystemDashboardPage() {
         <LoadingSkeleton variant="dashboard" />
       ) : isDashboard ? (
         <div className="flex flex-col gap-4">
-          {/* Row 1: 4 small stat cards (left) + User Distribution / Live Security Feed (right) */}
-          <div data-testid="admin-dashboard-stats" className="grid items-stretch gap-4 lg:grid-cols-2">
-            <div className="grid h-[21rem] grid-cols-2 gap-3">
-              <StatCard
-                agentSelector="data-agent-system-health"
-                label="System Health"
-                value={isBackendConnected ? 'Connected' : 'Offline'}
-                caption={isBackendConnected ? 'Production API gateway active' : 'Offline / local cached mode'}
-                onSelect={() => setDetailSummary('gateway')}
-              />
-              <StatCard
-                agentSelector="data-agent-total-users"
-                label="Total Users"
-                value={String(totalActiveUsers)}
-                caption="Active workforce accounts"
-                onSelect={() => setDetailSummary('users')}
-              />
-              <StatCard
-                agentSelector="data-agent-locked-accounts"
-                label="Locked Accounts"
-                value={String(lockedAccounts)}
-                caption="Auto-locked security events"
-                onSelect={() => setDetailSummary('locked')}
-              />
-              <StatCard
-                agentSelector="data-agent-pending-activations"
-                label="Pending Activations"
-                value={String(pendingActivations)}
-                caption="Access & password requests"
-                onSelect={() => setDetailSummary('activations')}
-              />
-            </div>
-            {/* Fixed row height so the feed scrolls internally instead of
-                stretching the donut card with trailing blank space. */}
-            <div className="grid h-[21rem] grid-cols-2 gap-3">
+          {/* Upper region: four explicit desktop columns and two equal rows. */}
+          <div
+            data-testid="admin-dashboard-stats"
+            className="grid gap-4 lg:h-[21rem] lg:grid-cols-4 lg:grid-rows-2"
+          >
+            <StatCard
+              agentSelector="data-agent-system-health"
+              label="System Health"
+              value={isBackendConnected ? 'Connected' : 'Offline'}
+              caption={isBackendConnected ? 'Production API gateway active' : 'Offline / local cached mode'}
+              onSelect={() => setDetailSummary('gateway')}
+            />
+            <StatCard
+              agentSelector="data-agent-total-users"
+              label="Total Users"
+              value={String(totalActiveUsers)}
+              caption="Active workforce accounts"
+              onSelect={() => setDetailSummary('users')}
+            />
+            <StatCard
+              agentSelector="data-agent-locked-accounts"
+              label="Locked Accounts"
+              value={String(lockedAccounts)}
+              caption="Auto-locked security events"
+              onSelect={() => setDetailSummary('locked')}
+            />
+            <StatCard
+              agentSelector="data-agent-pending-activations"
+              label="Pending Activations"
+              value={String(pendingActivations)}
+              caption="Access & password requests"
+              onSelect={() => setDetailSummary('activations')}
+            />
+            <div className="min-h-0 lg:col-start-3 lg:row-span-2">
               <UserDistributionCard
                 compact
                 counts={roleCounts}
@@ -354,11 +353,13 @@ export function AdminSystemDashboardPage() {
                 onDrillDown={(cat) => setDrillDownCategory(cat)}
                 onBack={() => setDrillDownCategory(null)}
               />
+            </div>
+            <div className="min-h-0 lg:col-start-4 lg:row-span-2">
               <AdminSecurityFeed logs={logs} onSystemLogs={() => navigate('security-audit')} />
             </div>
           </div>
 
-          {/* Row 2: Pending Actions + Security Audit */}
+          {/* Lower region starts after the complete two-row upper grid. */}
           <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-10">
             <div className="lg:col-span-3">
               <AdminPendingActions
