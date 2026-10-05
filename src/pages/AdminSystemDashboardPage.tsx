@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Download, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePortal } from '@/lib/store'
@@ -43,7 +43,7 @@ function StatCard({
       type={onSelect ? 'button' : undefined}
       onClick={onSelect ? trigger : undefined}
       className={cn(
-        'flex h-full flex-col rounded-xl border border-border bg-card p-4 text-left',
+        'flex flex-col rounded-xl border border-border bg-card p-4 text-left',
         onSelect && 'cursor-pointer transition hover:border-primary/40 hover:bg-muted/40',
         flashing && 'ring-2 ring-primary/60 border-primary/60 glow-primary',
       )}
@@ -100,6 +100,16 @@ function DashboardDetailModal({
   onClose: () => void
 }) {
   const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    if (!summary) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose, summary])
+
   if (!summary) return null
 
   const titles: Record<DashboardSummary, string> = {
@@ -168,33 +178,6 @@ function DashboardDetailModal({
   )
 }
 
-function auditDateTime(entry: { date: string; timestamp: string }) {
-  return new Date(`${entry.date} ${entry.timestamp}`).getTime()
-}
-
-function SecurityAuditCard({ logs, onViewAll }: { logs: ReturnType<typeof usePortal>['logs']; onViewAll: () => void }) {
-  const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  const tomorrowStart = todayStart + 86400000
-  const yesterdayStart = todayStart - 86400000
-  const rangeLogs = logs.filter((entry) => {
-    const time = auditDateTime(entry)
-    return time >= yesterdayStart && time < tomorrowStart
-  }).sort((a, b) => auditDateTime(b) - auditDateTime(a))
-  const dateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-  const rangeLabel = `${dateFormatter.format(new Date(yesterdayStart))} – ${dateFormatter.format(new Date(todayStart))}`
-
-  return (
-    <section className="flex h-[24rem] min-h-0 flex-col rounded-xl border border-border bg-card p-5">
-      <div className="flex shrink-0 items-start justify-between gap-3">
-        <div><h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">Security Audit</h3><p className="mt-1 text-xs text-muted-foreground">{rangeLabel}</p></div>
-        <button type="button" onClick={onViewAll} className="shrink-0 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary hover:bg-primary hover:text-primary-foreground">View All Audit Logs</button>
-      </div>
-      <div className="mt-4 min-h-0 flex-1 overflow-y-auto rounded-lg border border-border"><div className="divide-y divide-border">{rangeLogs.length === 0 ? <p className="p-6 text-center text-sm italic text-muted-foreground">No security audit records for this date range.</p> : rangeLogs.map((entry) => <div key={entry.id} className="grid gap-1 px-3 py-3 text-xs sm:grid-cols-[4.5rem_minmax(0,8rem)_minmax(0,1fr)_auto] sm:items-center"><span className="text-muted-foreground">{entry.timestamp}</span><span className="truncate font-medium text-foreground">{entry.account || '—'}</span><span className="truncate text-muted-foreground" title={entry.action}>{entry.action}</span><span className="w-fit rounded-full bg-muted px-2 py-1 text-[0.58rem] font-semibold text-foreground">{entry.status || '—'}</span></div>)}</div></div>
-    </section>
-  )
-}
-
 /* ----------------------------- Page ----------------------------- */
 
 export function AdminSystemDashboardPage() {
@@ -222,12 +205,27 @@ export function AdminSystemDashboardPage() {
   ).length
 
   const roleCounts = useMemo(() => {
-    const categories = ['Admin', 'Executive', 'Warehouse Operations Manager', 'Event Planner', 'Ground Crew', 'Inactive Account']
+    const categories = ['Admin', 'Executive', 'Project Manager', 'Warehouse Operations Manager', 'Event Planner', 'Ground Crew', 'Inactive Account']
     const tally = Object.fromEntries(categories.map((category) => [category, 0])) as Record<string, number>
     staff.forEach((person) => {
-      if (person.accountStatus !== 'Active') { tally['Inactive Account'] += 1; return }
+      if (person.accountStatus !== 'Active') {
+        tally['Inactive Account'] += 1
+        return
+      }
       const role = person.role.toLowerCase()
-      const category = role.includes('admin') ? 'Admin' : role.includes('executive') ? 'Executive' : role.includes('warehouse manager') || role === 'warehouse operations manager' ? 'Warehouse Operations Manager' : role.includes('planner') ? 'Event Planner' : role === 'ground crew' ? 'Ground Crew' : null
+      const category = role.includes('admin')
+        ? 'Admin'
+        : role.includes('executive')
+          ? 'Executive'
+          : role.includes('project manager') || role === 'project_manager'
+            ? 'Project Manager'
+            : role.includes('warehouse manager') || role === 'warehouse operations manager'
+              ? 'Warehouse Operations Manager'
+              : role.includes('planner')
+                ? 'Event Planner'
+                : role.includes('ground crew')
+                  ? 'Ground Crew'
+                  : null
       if (category) tally[category] += 1
     })
     return tally
@@ -310,41 +308,42 @@ export function AdminSystemDashboardPage() {
       ) : isLoading ? (
         <LoadingSkeleton variant="dashboard" />
       ) : isDashboard ? (
-        <div className="flex flex-col gap-4">
-          {/* Upper region: four explicit desktop columns and two equal rows. */}
-          <div
-            data-testid="admin-dashboard-stats"
-            className="grid gap-4 lg:h-[21rem] lg:grid-cols-4 lg:grid-rows-2"
-          >
-            <StatCard
-              agentSelector="data-agent-system-health"
-              label="System Health"
-              value={isBackendConnected ? 'Connected' : 'Offline'}
-              caption={isBackendConnected ? 'Production API gateway active' : 'Offline / local cached mode'}
-              onSelect={() => setDetailSummary('gateway')}
-            />
-            <StatCard
-              agentSelector="data-agent-total-users"
-              label="Total Users"
-              value={String(totalActiveUsers)}
-              caption="Active workforce accounts"
-              onSelect={() => setDetailSummary('users')}
-            />
-            <StatCard
-              agentSelector="data-agent-locked-accounts"
-              label="Locked Accounts"
-              value={String(lockedAccounts)}
-              caption="Auto-locked security events"
-              onSelect={() => setDetailSummary('locked')}
-            />
-            <StatCard
-              agentSelector="data-agent-pending-activations"
-              label="Pending Activations"
-              value={String(pendingActivations)}
-              caption="Access & password requests"
-              onSelect={() => setDetailSummary('activations')}
-            />
-            <div className="min-h-0 lg:col-start-3 lg:row-span-2">
+        <div className="flex flex-col gap-6">
+          {/* Keep the overview cards in one explicit row so the lower row always starts after it. */}
+          <div data-testid="admin-dashboard-stats" className="grid items-stretch gap-4 lg:grid-cols-4">
+            <div className="grid min-h-[21rem] grid-cols-2 gap-3 lg:col-span-2">
+              <StatCard
+                agentSelector="data-agent-system-health"
+                label="System Health"
+                value={isBackendConnected ? 'Connected' : 'Offline'}
+                caption={isBackendConnected ? 'Production API gateway active' : 'Offline / local cached mode'}
+                onSelect={() => setDetailSummary('gateway')}
+              />
+              <StatCard
+                agentSelector="data-agent-total-users"
+                label="Total Users"
+                value={String(totalActiveUsers)}
+                caption="Active workforce accounts"
+                onSelect={() => setDetailSummary('users')}
+              />
+              <StatCard
+                agentSelector="data-agent-locked-accounts"
+                label="Locked Accounts"
+                value={String(lockedAccounts)}
+                caption="Auto-locked security events"
+                onSelect={() => setDetailSummary('locked')}
+              />
+              <StatCard
+                agentSelector="data-agent-pending-activations"
+                label="Pending Activations"
+                value={String(pendingActivations)}
+                caption="Access & password requests"
+                onSelect={() => setDetailSummary('activations')}
+              />
+            </div>
+            {/* Fixed row height so the feed scrolls internally instead of
+                stretching the donut card with trailing blank space. */}
+            <div className="grid h-[21rem] grid-cols-2 gap-3 lg:col-span-2">
               <UserDistributionCard
                 compact
                 counts={roleCounts}
@@ -353,24 +352,19 @@ export function AdminSystemDashboardPage() {
                 onDrillDown={(cat) => setDrillDownCategory(cat)}
                 onBack={() => setDrillDownCategory(null)}
               />
-            </div>
-            <div className="min-h-0 lg:col-start-4 lg:row-span-2">
               <AdminSecurityFeed logs={logs} onSystemLogs={() => navigate('security-audit')} />
             </div>
           </div>
 
-          {/* Lower region starts after the complete two-row upper grid. */}
-          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-10">
-            <div className="lg:col-span-3">
-              <AdminPendingActions
-                items={pendingItems}
-                onResolve={handleResolve}
-                subRoleSetups={pendingSubRoleSetups}
-                onConfigureSubRole={handleConfigureSubRole}
-                onSelect={() => setDetailSummary('pending')}
-              />
-            </div>
-            <div className="lg:col-span-7"><SecurityAuditCard logs={logs} onViewAll={() => navigate('security-audit')} /></div>
+          {/* Keep a deliberate dashboard gap before the full-width action queue. */}
+          <div className="w-full">
+            <AdminPendingActions
+              items={pendingItems}
+              onResolve={handleResolve}
+              subRoleSetups={pendingSubRoleSetups}
+              onConfigureSubRole={handleConfigureSubRole}
+              onSelect={() => setDetailSummary('pending')}
+            />
           </div>
         </div>
       ) : (
