@@ -190,11 +190,12 @@ export function AdminWorkforcePage() {
         <LoadingSkeleton variant="table" />
       ) : (
         <div className="flex flex-col gap-5">
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search workforce..." aria-label="Search workforce" className="w-full rounded-md border border-input bg-background py-2.5 pl-9 pr-3 text-sm text-foreground outline-none focus:border-primary" /></div>
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-4">
+          <div className="relative min-w-[min(100%,16rem)] flex-1 basis-full lg:basis-0"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search workforce..." aria-label="Search workforce" className="w-full rounded-md border border-input bg-background py-2.5 pl-9 pr-3 text-sm text-foreground outline-none focus:border-primary" /></div>
+          <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
             <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><span className="sr-only">Role</span><select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2.5 text-xs text-foreground"><option>All Roles</option>{roles.map((r) => <option key={r}>{r}</option>)}</select></label>
             <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><span className="sr-only">Status</span><select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} className="rounded-md border border-input bg-background px-3 py-2.5 text-xs text-foreground">{STATUS_FILTERS.map((s) => <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>)}</select></label>
+            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><ArrowUpDown className="size-3.5" aria-hidden="true" /><span className="sr-only">Sort by</span><select aria-label="Sort by" value={sort} onChange={(e) => setSort(e.target.value as SortOption)} className="rounded-md border border-input bg-background px-3 py-2.5 text-xs text-foreground">{SORT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}</select></label>
             <button type="button" onClick={() => { setQuery(''); setRole('All Roles'); setStatus('All') }} className="rounded-md border border-input bg-background px-3 py-2.5 text-xs font-semibold text-foreground transition hover:bg-muted">Clear Filters</button>
             <div className="relative" ref={addMenuRef}>
               <button type="button" onClick={() => setAddMenuOpen((v) => !v)} className="button-primary" aria-haspopup="menu" aria-expanded={addMenuOpen}><Plus className="size-3.5" /> Add New User <ChevronDown className="size-3.5" /></button>
@@ -206,15 +207,6 @@ export function AdminWorkforcePage() {
               )}
             </div>
           </div>
-        </div>
-        <div className="flex justify-end">
-          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <ArrowUpDown className="size-3.5" aria-hidden="true" />
-            <span>Sort by</span>
-            <select value={sort} onChange={(e) => setSort(e.target.value as SortOption)} className="rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground">
-              {SORT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </label>
         </div>
         <p className="text-xs text-muted-foreground">Showing {rows.length} of {staff.length} directory entries. Click a row to view details.</p>
         <WorkforceTable
