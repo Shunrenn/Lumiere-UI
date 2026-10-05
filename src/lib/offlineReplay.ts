@@ -5,6 +5,7 @@ import {
   blobToDataUrl,
 } from './offlineQueue'
 import { getEvidenceBlob } from './offline/db'
+import { submitDamageReportApi } from './damageApi'
 
 type SyncListener = (pendingCount: number, syncing: boolean) => void
 const syncListeners = new Set<SyncListener>()
@@ -38,7 +39,6 @@ export async function triggerOfflineReplay(): Promise<{ syncedCount: number; err
 
   try {
     const pendingItems = await getPendingQueue()
-    const { submitDamageReportApi } = await import('./damageApi')
 
     for (const item of pendingItems) {
       await updateQueuedDeclaration(item.id, { syncStatus: 'syncing' })

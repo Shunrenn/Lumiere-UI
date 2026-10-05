@@ -4,6 +4,7 @@ import * as partialEgressApi from '@/lib/partialEgressApi'
 import { fetchAuditLogs } from '@/lib/auditApi'
 import { API_BASE_URL, getAuthToken } from '@/lib/apiConfig'
 import { completeAccessRequest, fetchAccessRequests } from '@/features/access-requests/api'
+import { fetchEventsApi, createEventApi, updateEventApi, isGuid } from '@/lib/eventsApi'
 import {
   createContext,
   useCallback,
@@ -1478,7 +1479,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     lastEventsRequestAtRef.current = now
     const request = (async () => {
       try {
-        const { fetchEventsApi } = await import('@/lib/eventsApi')
         const remoteEvents = await fetchEventsApi()
         eventsRef.current = remoteEvents
         setEvents(remoteEvents)
@@ -2083,7 +2083,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       initiatorRole = 'Executive',
       allowConflictOverride = false,
     ): Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }> => {
-      const { createEventApi, isGuid } = await import('@/lib/eventsApi')
 
       const sanitizeToIsoDate = (val?: string): string => {
         if (!val) return ''
@@ -2174,7 +2173,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       initiatorRole = 'Executive',
       allowConflictOverride = false,
     ): Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }> => {
-      const { updateEventApi } = await import('@/lib/eventsApi')
       const result = await updateEventApi(id, draft, allowConflictOverride)
 
       if (result.conflict) {
