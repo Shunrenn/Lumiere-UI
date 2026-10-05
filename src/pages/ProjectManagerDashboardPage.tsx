@@ -35,6 +35,7 @@ export function ProjectManagerDashboardPage() {
   // Selected event for single-event workspace
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState<ProjectManagerSection>('dashboard')
+  const [pitchesView, setPitchesView] = useState<'pitches' | 'briefs'>('pitches')
 
   // Filters & search
   const [searchQuery, setSearchQuery] = useState('')
@@ -110,65 +111,49 @@ export function ProjectManagerDashboardPage() {
 
   // If inside an event, render the dedicated Event Workspace
   if (activeEvent) {
-    if (isProjectManagerLite) {
-      return (
-        <div className="min-h-screen bg-background text-foreground">
-          <OfflineBanner />
-          <ProjectManagerLiteEventDetail
-            event={activeEvent}
-            staff={staff}
-            procurement={procurement}
-            onBack={() => setSelectedEventId(null)}
-            onEditEvent={() => {
-              setActiveRegisterEvent(activeEvent)
-              setRegisterDrawerMode('edit')
-              setRegisterDrawerOpen(true)
-            }}
-          />
-
-          <RegisterEventDrawer
-            open={registerDrawerOpen}
-            onClose={() => {
-              setRegisterDrawerOpen(false)
-              setActiveRegisterEvent(null)
-            }}
-            event={activeRegisterEvent}
-            mode={registerDrawerMode}
-          />
-        </div>
-      )
-    }
+    const workspaceContent = isProjectManagerLite ? (
+      <ProjectManagerLiteEventDetail
+        event={activeEvent}
+        staff={staff}
+        procurement={procurement}
+        onBack={() => setSelectedEventId(null)}
+        onEditEvent={() => {
+          setActiveRegisterEvent(activeEvent)
+          setRegisterDrawerMode('edit')
+          setRegisterDrawerOpen(true)
+        }}
+      />
+    ) : (
+      <ProjectManagerEventWorkspace
+        event={activeEvent}
+        staff={staff}
+        procurement={procurement}
+        damageExceptions={damageExceptions}
+        pitches={pitches}
+        assignedPmName={adminName || 'Project Manager'}
+        onBack={() => setSelectedEventId(null)}
+        onEditRecord={(ev) => {
+          setActiveRegisterEvent(ev)
+          setRegisterDrawerMode('edit')
+          setRegisterDrawerOpen(true)
+        }}
+        onOpenCanvas={() => navigate('canvas')}
+      />
+    )
 
     return (
-      <div className="min-h-screen bg-background text-foreground">
-        <OfflineBanner />
-        <ProjectManagerEventWorkspace
-          event={activeEvent}
-          staff={staff}
-          procurement={procurement}
-          damageExceptions={damageExceptions}
-          pitches={pitches}
-          assignedPmName={adminName || 'Project Manager'}
-          onBack={() => setSelectedEventId(null)}
-          onEditRecord={(ev) => {
-            setActiveRegisterEvent(ev)
-            setRegisterDrawerMode('edit')
-            setRegisterDrawerOpen(true)
-          }}
-          onOpenCanvas={() => navigate('canvas')}
-        />
-
-        <RegisterEventDrawer
-          open={registerDrawerOpen}
-          onClose={() => {
-            setRegisterDrawerOpen(false)
-            setActiveRegisterEvent(null)
-          }}
-          event={activeRegisterEvent}
-          mode={registerDrawerMode}
-        />
+      <div className="flex min-h-screen bg-background text-foreground">
+        <ProjectManagerSidebar activeSection="event-workspace" onSelect={(section) => { if (section === 'event-workspace') setSelectedEventId(null); else { setSelectedEventId(null); setActiveSection(section) } }} />
+        <div className="min-w-0 flex-1 pb-20">
+          <OfflineBanner />
+          <ProjectManagerHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} onNewPitch={() => { setEditingPitch(null); setPitchModalOpen(true) }} onRegisterEvent={() => { setActiveRegisterEvent(null); setRegisterDrawerMode('create'); setRegisterDrawerOpen(true) }} />
+          <ProjectManagerMobileNav activeSection="event-workspace" onSelect={(section) => { if (section === 'event-workspace') setSelectedEventId(null); else { setSelectedEventId(null); setActiveSection(section) } }} />
+          <main className="mx-auto flex max-w-[94rem] flex-col gap-5 px-4 py-6 sm:px-8">{workspaceContent}</main>
+          <RegisterEventDrawer open={registerDrawerOpen} onClose={() => { setRegisterDrawerOpen(false); setActiveRegisterEvent(null) }} event={activeRegisterEvent} mode={registerDrawerMode} />
+        </div>
       </div>
     )
+
   }
 
   // Otherwise, render the PM Command Center Dashboard
@@ -273,24 +258,16 @@ export function ProjectManagerDashboardPage() {
             </p>
           </div>
         </div>
-
+        <section className="rounded-2xl border border-border/80 bg-card/70 p-5 shadow-sm">
+          <div className="mb-4 flex items-end justify-between gap-3"><div><p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-primary">Action Required</p><h3 className="mt-1 font-serif text-xl font-semibold text-foreground">Needs Attention</h3><p className="mt-1 text-sm text-muted-foreground">Resolve current project blockers without leaving your workspace.</p></div></div>
+          <ProjectManagerActionRequired events={events} staff={staff} procurement={procurement} damageExceptions={damageExceptions} pitches={isProjectManagerLite ? [] : pitches} onOpenEvent={(id) => { setActiveSection('event-workspace'); setSelectedEventId(id) }} onOpenPitch={(pitchId) => { const p = pitches.find((item) => item.id === pitchId); if (p) { setEditingPitch(p); setPitchModalOpen(true) } }} />
+        </section>
         </>}
 
-        {activeSection === 'actions' && <ProjectManagerActionRequired
-          events={events}
-          staff={staff}
-          procurement={procurement}
-          damageExceptions={damageExceptions}
-          pitches={isProjectManagerLite ? [] : pitches}
-          onOpenEvent={(id) => setSelectedEventId(id)}
-          onOpenPitch={(pitchId) => {
-            const p = pitches.find((item) => item.id === pitchId)
-            if (p) {
-              setEditingPitch(p)
-              setPitchModalOpen(true)
-            }
-          }}
-        />}
+        {activeSection === 'event-workspace' && <section className="flex flex-col gap-5">
+          <div className="rounded-2xl border border-border/80 bg-card/70 p-5 shadow-sm"><p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-primary">Project Manager Workspace</p><h3 className="mt-1 font-serif text-2xl font-semibold text-foreground">Event Workspace</h3><p className="mt-1 max-w-2xl text-sm text-muted-foreground">Access and manage events assigned to your project workflow.</p></div>
+          <ProjectManagerEventsList events={events} staff={staff} procurement={procurement} assignedPmName={adminName || 'Project Manager'} searchQuery={searchQuery} onOpenEvent={(id) => { setSelectedEventId(id) }} />
+        </section>}
 
         {activeSection === 'projects' && <>
         {/* Master Calendar */}
@@ -298,7 +275,7 @@ export function ProjectManagerDashboardPage() {
           events={events}
           selectedDate={selectedCalendarDate}
           onSelectDate={setSelectedCalendarDate}
-          onOpenEvent={(id) => setSelectedEventId(id)}
+          onOpenEvent={(id) => { setActiveSection('event-workspace'); setSelectedEventId(id) }}
         />
 
         {/* My / Assigned Events Section */}
@@ -308,14 +285,15 @@ export function ProjectManagerDashboardPage() {
           procurement={procurement}
           assignedPmName={adminName || 'Project Manager'}
           searchQuery={searchQuery}
-          onOpenEvent={(id) => setSelectedEventId(id)}
+          onOpenEvent={(id) => { setActiveSection('event-workspace'); setSelectedEventId(id) }}
         />
 
         </>}
 
         {activeSection === 'pitches' && !isProjectManagerLite && (
           <>
-            {pitchesError && (
+            <div className="inline-flex w-fit rounded-lg border border-border bg-card p-1"><button type="button" onClick={() => setPitchesView('pitches')} className={`rounded-md px-3 py-2 text-xs font-semibold ${pitchesView === 'pitches' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Client Pitches</button><button type="button" onClick={() => setPitchesView('briefs')} className={`rounded-md px-3 py-2 text-xs font-semibold ${pitchesView === 'briefs' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Concept Briefs</button></div>
+            {pitchesView === 'pitches' && pitchesError && (
               <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-xs font-semibold text-rose-700 dark:text-rose-300 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="size-4 shrink-0" />
@@ -332,7 +310,7 @@ export function ProjectManagerDashboardPage() {
               </div>
             )}
 
-            <ProjectManagerPitchingSummary
+            {pitchesView === 'pitches' && <ProjectManagerPitchingSummary
               pitches={pitches}
               onNewPitch={() => {
                 setEditingPitch(null)
@@ -343,11 +321,11 @@ export function ProjectManagerDashboardPage() {
                 setPitchModalOpen(true)
               }}
               onConvertToEvent={handleConvertToEvent}
-            />
+            />}
           </>
         )}
 
-        {activeSection === 'briefs' && (
+        {activeSection === 'pitches' && pitchesView === 'briefs' && (
           <section className="flex flex-col gap-4">
             {pitches.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">

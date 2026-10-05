@@ -17,9 +17,10 @@ export type SegmentItem = {
 export const MAIN_ROLE_SEGMENTS: SegmentItem[] = [
   { label: 'Admin', color: 'text-emerald-500', dot: 'bg-emerald-500', isDrillable: false },
   { label: 'Executive', color: 'text-sky-500', dot: 'bg-sky-500', isDrillable: false },
-  { label: 'Warehouse Ops Manager', color: 'text-amber-500', dot: 'bg-amber-500', isDrillable: true },
+  { label: 'Warehouse Operations Manager', color: 'text-amber-500', dot: 'bg-amber-500', isDrillable: false },
   { label: 'Event Planner', color: 'text-rose-500', dot: 'bg-rose-500', isDrillable: false },
-  { label: 'Ground Crew', color: 'text-indigo-500', dot: 'bg-indigo-500', isDrillable: true },
+  { label: 'Ground Crew', color: 'text-indigo-500', dot: 'bg-indigo-500', isDrillable: false },
+  { label: 'Inactive Account', color: 'text-slate-500', dot: 'bg-slate-500', isDrillable: false },
 ]
 
 export const WOM_SUBROLE_SEGMENTS: SegmentItem[] = [

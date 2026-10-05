@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { LogOut, Moon, Sun, User, ShieldAlert, UserPlus, Activity, KeyRound, Check, X as XIcon } from 'lucide-react'
+import { LogOut, Menu, Moon, Sun, User, ShieldAlert, UserPlus, Activity, KeyRound, Check, X as XIcon } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { usePortal } from '@/lib/store'
@@ -12,7 +12,7 @@ import { MaskedPinInput } from '@/components/admin/MaskedPinInput'
 // Constant top bar for the Admin console: live date/time, notification bell,
 // and a profile menu. Sits alongside the rail outside the scroll container so
 // it never scrolls with page content.
-export function AdminTopBar() {
+export function AdminTopBar({ onMenu }: { onMenu?: () => void }) {
   const { adminName, adminRole, setConfirmLogout, hasConfirmationPin } = useAuth()
   const { navigate } = useNav()
   const { dark, toggle } = useDarkMode()
@@ -118,12 +118,15 @@ export function AdminTopBar() {
   const timeLabel = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-background px-5 sm:px-8">
-      <p className="text-[0.65rem] font-medium uppercase tracking-[0.12em] text-muted-foreground sm:text-xs sm:tracking-[0.15em]">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-border bg-background px-3 sm:px-8 md:static">
+      <div className="flex min-w-0 items-center gap-2.5">
+        {onMenu && <button type="button" onClick={onMenu} aria-label="Open admin navigation" className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border bg-background text-muted-foreground hover:bg-muted md:hidden"><Menu className="size-4" aria-hidden="true" /></button>}
+      <p className="truncate text-[0.58rem] font-medium uppercase tracking-[0.12em] text-muted-foreground sm:text-xs sm:tracking-[0.15em]">
         {dateLabel} <span className="mx-1 text-border">|</span> {timeLabel}
       </p>
+      </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <NotificationsBell notifications={notifications} size="md" />
 
         <div className="relative" ref={menuRef}>

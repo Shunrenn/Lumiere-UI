@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { PanelLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ADMIN_DESTINATIONS, type AdminDestinationId } from '@/lib/admin-destinations'
 interface AdminRailProps {
@@ -52,49 +51,11 @@ export function AdminRail({
       )}
       aria-label="Admin Navigation Sidebar"
     >
-      {/* Brand & Toggle header */}
-      {isCollapsed ? (
-        <div className="flex flex-col items-center gap-3">
-          <span
-            className="flex size-8 items-center justify-center rounded-md bg-sidebar-primary/10 font-serif text-lg font-medium leading-none text-sidebar-primary"
-            aria-hidden="true"
-          >
-            L
-          </span>
-          <button
-            type="button"
-            onClick={handleToggle}
-            aria-label="Expand sidebar"
-            title="Expand sidebar"
-            className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <PanelLeft className="size-4" aria-hidden="true" />
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center justify-between px-2 pb-1">
-          <div className="flex items-center gap-2.5">
-            <span
-              className="flex size-8 items-center justify-center rounded-md bg-sidebar-primary/10 font-serif text-lg font-medium leading-none text-sidebar-primary"
-              aria-hidden="true"
-            >
-              L
-            </span>
-            <span className="font-serif text-sm font-semibold tracking-[0.2em] text-sidebar-primary">
-              LUMIÈRE
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={handleToggle}
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-            className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <PanelLeft className="size-4" aria-hidden="true" />
-          </button>
-        </div>
-      )}
+      {/* Navigation items control expansion when the current item is clicked again. */}
+      <div className={cn('flex items-center px-2 pb-1', isCollapsed ? 'justify-center' : 'gap-2.5')}>
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary/10 font-serif text-lg font-medium leading-none text-sidebar-primary" aria-hidden="true">L</span>
+        {!isCollapsed && <span className="font-serif text-sm font-semibold tracking-[0.2em] text-sidebar-primary">LUMIÈRE</span>}
+      </div>
 
       <div className={cn('my-3 h-px bg-sidebar-border', isCollapsed ? 'w-8' : 'w-full')} aria-hidden="true" />
 
@@ -109,7 +70,7 @@ export function AdminRail({
               <button
                 key={destination.id}
                 type="button"
-                onClick={() => onSelect(destination.id)}
+                onClick={() => { if (active) handleToggle(); else onSelect(destination.id) }}
                 aria-label={destination.label}
                 aria-current={active ? 'true' : undefined}
                 title={destination.label}
@@ -129,7 +90,7 @@ export function AdminRail({
             <button
               key={destination.id}
               type="button"
-              onClick={() => onSelect(destination.id)}
+              onClick={() => { if (active) handleToggle(); else onSelect(destination.id) }}
               aria-current={active ? 'true' : undefined}
               title={destination.label}
               className={cn(

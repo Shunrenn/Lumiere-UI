@@ -1,15 +1,14 @@
 import { useMemo, useState } from 'react'
-import { Search, X } from 'lucide-react'
+import { Download, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
 import { useClickFlash } from '@/lib/use-click-flash'
-import { useGrowthSummary } from '@/lib/admin-growth-summary'
 import { AdminShell } from '@/components/admin/AdminShell'
 import { AdminPendingActions, type PendingSubRoleSetup } from '@/components/admin/AdminPendingActions'
 import { AdminSecurityFeed } from '@/components/admin/AdminSecurityFeed'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { UserDistributionCard, TrendAnalyticsCard } from '@/components/admin/AdminAnalytics'
+import { UserDistributionCard } from '@/components/admin/AdminAnalytics'
 import { SystemHealthMethodologyModal } from '@/components/admin/SystemHealthMethodologyModal'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
@@ -59,13 +58,6 @@ function StatCard({
   )
 }
 
-// Map a staff role onto the donut segment label it belongs to.
-function roleToSegment(role: string): string {
-  if (role === 'Warehouse Manager') return 'Warehouse Ops Manager'
-  if (role === 'Ground Crew') return 'Ground Crew'
-  return role
-}
-
 /* ----------------------------- Placeholder for not-yet-built destinations ----------------------------- */
 
 function AdminPlaceholder({ id }: { id: AdminDestinationId }) {
@@ -86,7 +78,7 @@ function AdminPlaceholder({ id }: { id: AdminDestinationId }) {
   )
 }
 
-type DashboardSummary = 'users' | 'gateway' | 'locked' | 'activations' | 'distribution' | 'pending' | 'trend'
+type DashboardSummary = 'users' | 'gateway' | 'locked' | 'activations' | 'distribution' | 'pending'
 
 function DashboardDetailModal({
   summary,
@@ -111,11 +103,12 @@ function DashboardDetailModal({
   if (!summary) return null
 
   const titles: Record<DashboardSummary, string> = {
-    users: 'Total Users', gateway: 'Gateway Connection', locked: 'Locked Accounts',
-    activations: 'Pending Activations', distribution: 'User Distribution', pending: 'Pending Actions', trend: 'Trend Analytics',
+    users: 'Total Active Users', gateway: 'Gateway Connection', locked: 'Locked Accounts',
+    activations: 'Pending Activations', distribution: 'User Distribution', pending: 'Pending Actions',
   }
   const normalizedQuery = query.trim().toLowerCase()
   const visibleStaff = staff.filter((person) => {
+    if (summary === 'users' && person.accountStatus !== 'Active') return false
     if (summary === 'locked' && person.accountStatus !== 'Locked') return false
     if (summary === 'activations' && person.accountStatus !== 'Pending') return false
     if (!normalizedQuery) return true
@@ -151,7 +144,6 @@ function DashboardDetailModal({
               <div className="divide-y divide-border">{Object.entries(roleCounts).map(([role, count]) => <div key={role} className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-4 py-3 text-sm"><span className="min-w-0 break-words text-foreground">{role || '—'}</span><span className="font-semibold tabular-nums text-foreground">{count}</span></div>)}</div>
             </div>
           )}
-          {summary === 'trend' && <div className="rounded-lg border border-border bg-background p-4"><p className="text-sm text-muted-foreground">Trend details use the same user-growth data shown on the dashboard chart.</p><div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-t border-border pt-3"><span className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Tracked accounts</span><span className="text-2xl font-bold tabular-nums text-foreground">{staff.length}</span></div></div>}
           {isRecordList && rows.length === 0 && <p className="py-8 text-center text-sm italic text-muted-foreground">No matching records found.</p>}
           {isRecordList && rows.length > 0 && (
             <div className="overflow-x-auto rounded-lg border border-border">
@@ -176,12 +168,38 @@ function DashboardDetailModal({
   )
 }
 
+function auditDateTime(entry: { date: string; timestamp: string }) {
+  return new Date(`${entry.date} ${entry.timestamp}`).getTime()
+}
+
+function SecurityAuditCard({ logs, onViewAll }: { logs: ReturnType<typeof usePortal>['logs']; onViewAll: () => void }) {
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const tomorrowStart = todayStart + 86400000
+  const yesterdayStart = todayStart - 86400000
+  const rangeLogs = logs.filter((entry) => {
+    const time = auditDateTime(entry)
+    return time >= yesterdayStart && time < tomorrowStart
+  }).sort((a, b) => auditDateTime(b) - auditDateTime(a))
+  const dateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  const rangeLabel = `${dateFormatter.format(new Date(yesterdayStart))} – ${dateFormatter.format(new Date(todayStart))}`
+
+  return (
+    <section className="flex h-[24rem] min-h-0 flex-col rounded-xl border border-border bg-card p-5">
+      <div className="flex shrink-0 items-start justify-between gap-3">
+        <div><h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">Security Audit</h3><p className="mt-1 text-xs text-muted-foreground">{rangeLabel}</p></div>
+        <button type="button" onClick={onViewAll} className="shrink-0 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary hover:bg-primary hover:text-primary-foreground">View All Audit Logs</button>
+      </div>
+      <div className="mt-4 min-h-0 flex-1 overflow-y-auto rounded-lg border border-border"><div className="divide-y divide-border">{rangeLogs.length === 0 ? <p className="p-6 text-center text-sm italic text-muted-foreground">No security audit records for this date range.</p> : rangeLogs.map((entry) => <div key={entry.id} className="grid gap-1 px-3 py-3 text-xs sm:grid-cols-[4.5rem_minmax(0,8rem)_minmax(0,1fr)_auto] sm:items-center"><span className="text-muted-foreground">{entry.timestamp}</span><span className="truncate font-medium text-foreground">{entry.account || '—'}</span><span className="truncate text-muted-foreground" title={entry.action}>{entry.action}</span><span className="w-fit rounded-full bg-muted px-2 py-1 text-[0.58rem] font-semibold text-foreground">{entry.status || '—'}</span></div>)}</div></div>
+    </section>
+  )
+}
+
 /* ----------------------------- Page ----------------------------- */
 
 export function AdminSystemDashboardPage() {
   const { navigate } = useNav()
-  const { staff, userActions, resolveUserAction, pendingSubRoleSetups, isBackendConnected } = usePortal()
-  const { openGrowthSummary } = useGrowthSummary()
+  const { staff, logs, userActions, resolveUserAction, pendingSubRoleSetups, isBackendConnected } = usePortal()
   const [activeId, setActiveId] = useState<AdminDestinationId>('system-dashboard')
   const [drillDownCategory, setDrillDownCategory] = useState<string | null>(null)
   // Pending-action confirmation state. The action is applied ONLY when the
@@ -191,7 +209,11 @@ export function AdminSystemDashboardPage() {
   const [methodologyOpen, setMethodologyOpen] = useState(false)
   const [detailSummary, setDetailSummary] = useState<DashboardSummary | null>(null)
 
-  const totalUsers = staff.length
+  const activeUsers = useMemo(
+    () => staff.filter((person) => person.accountStatus === 'Active'),
+    [staff],
+  )
+  const totalActiveUsers = activeUsers.length
   const lockedAccounts = userActions.filter(
     (a) => a.status === 'pending' && a.type === 'account-locked',
   ).length
@@ -200,10 +222,13 @@ export function AdminSystemDashboardPage() {
   ).length
 
   const roleCounts = useMemo(() => {
-    const tally: Record<string, number> = {}
-    staff.forEach((s) => {
-      const seg = roleToSegment(s.role)
-      tally[seg] = (tally[seg] ?? 0) + 1
+    const categories = ['Admin', 'Executive', 'Warehouse Operations Manager', 'Event Planner', 'Ground Crew', 'Inactive Account']
+    const tally = Object.fromEntries(categories.map((category) => [category, 0])) as Record<string, number>
+    staff.forEach((person) => {
+      if (person.accountStatus !== 'Active') { tally['Inactive Account'] += 1; return }
+      const role = person.role.toLowerCase()
+      const category = role.includes('admin') ? 'Admin' : role.includes('executive') ? 'Executive' : role.includes('warehouse manager') || role === 'warehouse operations manager' ? 'Warehouse Operations Manager' : role.includes('planner') ? 'Event Planner' : role === 'ground crew' ? 'Ground Crew' : null
+      if (category) tally[category] += 1
     })
     return tally
   }, [staff])
@@ -251,15 +276,13 @@ export function AdminSystemDashboardPage() {
   const isDashboard = activeId === 'system-dashboard'
 
   const stickyHeader = isDashboard ? (
-    <div>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-          System Dashboard
-        </h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          A read-only glance at users, access requests, and system health.
-        </p>
+        <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-[0.58rem] font-bold uppercase tracking-[0.16em] text-primary">Admin Console</span>
+        <h1 className="mt-1 font-serif text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">System Dashboard</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">A read-only glance at users, access requests, and system health.</p>
       </div>
+      <button type="button" onClick={() => window.print()} className="inline-flex min-h-[44px] w-fit items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Download className="size-4" aria-hidden="true" />PDF Export</button>
     </div>
   ) : (
     <h1 className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
@@ -289,21 +312,21 @@ export function AdminSystemDashboardPage() {
       ) : isDashboard ? (
         <div className="flex flex-col gap-4">
           {/* Row 1: 4 small stat cards (left) + User Distribution / Live Security Feed (right) */}
-          <div data-testid="admin-dashboard-stats" className="grid gap-4 lg:grid-cols-2">
-            <div className="grid grid-cols-2 gap-3">
-              <StatCard
-                agentSelector="data-agent-total-users"
-                label="Total Users"
-                value={String(totalUsers)}
-                caption="Registered workforce accounts"
-                onSelect={() => setDetailSummary('users')}
-              />
+          <div data-testid="admin-dashboard-stats" className="grid items-stretch gap-4 lg:grid-cols-2">
+            <div className="grid h-[21rem] grid-cols-2 gap-3">
               <StatCard
                 agentSelector="data-agent-system-health"
-                label="Gateway Connection"
+                label="System Health"
                 value={isBackendConnected ? 'Connected' : 'Offline'}
                 caption={isBackendConnected ? 'Production API gateway active' : 'Offline / local cached mode'}
                 onSelect={() => setDetailSummary('gateway')}
+              />
+              <StatCard
+                agentSelector="data-agent-total-users"
+                label="Total Users"
+                value={String(totalActiveUsers)}
+                caption="Active workforce accounts"
+                onSelect={() => setDetailSummary('users')}
               />
               <StatCard
                 agentSelector="data-agent-locked-accounts"
@@ -331,11 +354,11 @@ export function AdminSystemDashboardPage() {
                 onDrillDown={(cat) => setDrillDownCategory(cat)}
                 onBack={() => setDrillDownCategory(null)}
               />
-              <AdminSecurityFeed onSystemLogs={() => navigate('security-audit')} />
+              <AdminSecurityFeed logs={logs} onSystemLogs={() => navigate('security-audit')} />
             </div>
           </div>
 
-          {/* Row 2: Pending Actions (30%) + Trend Analytics (70%) */}
+          {/* Row 2: Pending Actions + Security Audit */}
           <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-10">
             <div className="lg:col-span-3">
               <AdminPendingActions
@@ -346,28 +369,7 @@ export function AdminSystemDashboardPage() {
                 onSelect={() => setDetailSummary('pending')}
               />
             </div>
-            <div
-              className="lg:col-span-7"
-              onClick={(event) => {
-                if (!(event.target as HTMLElement).closest('button')) setDetailSummary('trend')
-              }}
-              onKeyDown={(event) => {
-                if ((event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) {
-                  event.preventDefault()
-                  setDetailSummary('trend')
-                }
-              }}
-              tabIndex={0}
-              role="button"
-              aria-label="View trend analytics details"
-            >
-              <TrendAnalyticsCard
-                onOpenGrowthSummary={openGrowthSummary}
-                onOpenSecurityAudit={() => navigate('security-audit')}
-                drillDownCategory={drillDownCategory}
-                onBack={() => setDrillDownCategory(null)}
-              />
-            </div>
+            <div className="lg:col-span-7"><SecurityAuditCard logs={logs} onViewAll={() => navigate('security-audit')} /></div>
           </div>
         </div>
       ) : (

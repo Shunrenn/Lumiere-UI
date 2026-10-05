@@ -122,12 +122,9 @@ export function normalizeGroundCrewSubRole(rawRole?: string): GroundCrewSubRole 
 export const SELECTABLE_STAFF_ROLES = [
   'Admin',
   'Executive',
-  'Executive Lite',
-  'Project Manager',
-  'Project Manager Lite',
-  'Warehouse Manager',
-  'Warehouse Associate',
   'Event Planner',
+  'Project Manager',
+  'Warehouse Operations Manager',
   'Ground Crew',
 ] as const
 

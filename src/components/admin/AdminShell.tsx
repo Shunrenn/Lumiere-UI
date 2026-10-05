@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { AdminRail } from '@/components/admin/AdminRail'
 import { AdminTopBar } from '@/components/admin/AdminTopBar'
@@ -23,15 +24,26 @@ interface AdminShellProps {
 // scroll wrapper to stay `overflow-visible` on the y axis, which the CSS spec
 // doesn't allow once `overflow-x` is set to anything but `visible`.
 export function AdminShell({ activeId, onSelect, stickyHeader, children }: AdminShellProps) {
-  return (
-    <div className="fixed inset-0 flex bg-background">
-      <AdminRail activeId={activeId} onSelect={onSelect} />
+  const [mobileOpen, setMobileOpen] = useState(false)
+  useEffect(() => {
+    if (!mobileOpen) return
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setMobileOpen(false) }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [mobileOpen])
+  const handleSelect = (id: AdminDestinationId) => { onSelect(id); setMobileOpen(false) }
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <AdminTopBar />
+  return (
+    <div className="flex min-h-[100dvh] flex-col bg-background md:fixed md:inset-0 md:flex-row">
+      <div className="hidden md:flex"><AdminRail activeId={activeId} onSelect={onSelect} /></div>
+      {mobileOpen && <button type="button" aria-label="Close admin navigation" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden" />}
+      {mobileOpen && <div className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[86%] md:hidden"><AdminRail activeId={activeId} onSelect={handleSelect} collapsed={false} onToggleCollapse={() => setMobileOpen(false)} /></div>}
+
+      <div className="flex min-w-0 flex-1 flex-col md:min-h-0">
+        <AdminTopBar onMenu={() => setMobileOpen(true)} />
 
         {/* Only this region scrolls. */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="flex-1 overflow-x-hidden pb-[env(safe-area-inset-bottom,0px)] md:min-h-0 md:overflow-y-auto">
           {stickyHeader && (
             <div className="sticky top-0 z-20 border-b border-border bg-background/95 px-5 py-6 backdrop-blur sm:px-8">
               {stickyHeader}

@@ -13,20 +13,10 @@ import type { SecurityEvent } from '@/lib/security-events'
 /* ----------------------------- Domain ----------------------------- */
 
 type AuditStatus = 'Success' | 'Failed' | 'Blocked' | 'Warning'
-type AccountType = 'Admin' | 'Executive' | 'Event Planner' | 'Warehouse Ops' | 'Ground Crew'
+type AccountType = 'Admin' | 'Executive' | 'Event Planner' | 'Project Manager' | 'Warehouse Operations Manager' | 'Ground Crew' | 'System'
 
 const STATUS_FILTERS = ['All', 'Success', 'Failed', 'Blocked', 'Warning'] as const
 type StatusFilter = (typeof STATUS_FILTERS)[number]
-
-const ACCOUNT_FILTERS = [
-  'All',
-  'Admin',
-  'Executive',
-  'Event Planner',
-  'Warehouse Ops',
-  'Ground Crew',
-] as const
-type AccountFilter = (typeof ACCOUNT_FILTERS)[number]
 
 const statusStyles: Record<AuditStatus, string> = {
   Success: 'bg-emerald-100 text-emerald-800 ring-1 ring-inset ring-emerald-300 dark:bg-emerald-500/15 dark:text-emerald-400 dark:ring-emerald-500/30',
@@ -35,12 +25,14 @@ const statusStyles: Record<AuditStatus, string> = {
   Warning: 'bg-sky-100 text-sky-800 ring-1 ring-inset ring-sky-300 dark:bg-sky-500/15 dark:text-sky-400 dark:ring-sky-500/30',
 }
 
-const roleStyles: Record<AccountType, string> = {
+const roleStyles: Record<string, string> = {
   Admin: 'bg-emerald-100 text-emerald-900 border border-emerald-300 dark:border-transparent dark:bg-emerald-500/12 dark:text-emerald-300',
   Executive: 'bg-indigo-100 text-indigo-900 border border-indigo-300 dark:border-transparent dark:bg-indigo-500/15 dark:text-indigo-300',
   'Event Planner': 'bg-sky-100 text-sky-900 border border-sky-300 dark:border-transparent dark:bg-sky-500/15 dark:text-sky-300',
-  'Warehouse Ops': 'bg-amber-100 text-amber-900 border border-amber-300 dark:border-transparent dark:bg-amber-500/15 dark:text-amber-300',
+  'Project Manager': 'bg-violet-100 text-violet-900 border border-violet-300 dark:border-transparent dark:bg-violet-500/15 dark:text-violet-300',
+  'Warehouse Operations Manager': 'bg-amber-100 text-amber-900 border border-amber-300 dark:border-transparent dark:bg-amber-500/15 dark:text-amber-300',
   'Ground Crew': 'bg-purple-100 text-purple-900 border border-purple-300 dark:border-transparent dark:bg-purple-500/15 dark:text-purple-300',
+  System: 'bg-slate-100 text-slate-800 border border-slate-300 dark:border-transparent dark:bg-slate-500/15 dark:text-slate-300',
 }
 
 export function AdminSecurityAuditPage() {
@@ -48,18 +40,22 @@ export function AdminSecurityAuditPage() {
   const { logs: storeLogs } = usePortal()
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<StatusFilter>('All')
-  const [account, setAccount] = useState<AccountFilter>('All')
+  const [account, setAccount] = useState('All')
+  const [action, setAction] = useState('All')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
+  const invalidDateRange = Boolean(fromDate && toDate && fromDate > toDate)
 
   const securityLogs: SecurityEvent[] = useMemo(() => {
     return storeLogs.map((l) => {
-      let role: AccountType = 'Admin'
+      let role: AccountType = 'System'
       const init = (l.initiatorRole || '').toLowerCase()
-      if (init.includes('executive')) role = 'Executive'
+      if (init.includes('admin')) role = 'Admin'
+      else if (init.includes('executive')) role = 'Executive'
       else if (init.includes('planner') || init.includes('designer')) role = 'Event Planner'
-      else if (init.includes('warehouse')) role = 'Warehouse Ops'
+      else if (init.includes('project manager')) role = 'Project Manager'
+      else if (init.includes('warehouse')) role = 'Warehouse Operations Manager'
       else if (init.includes('ground') || init.includes('crew')) role = 'Ground Crew'
 
       return {
@@ -73,27 +69,30 @@ export function AdminSecurityAuditPage() {
         status: (l.status as AuditStatus) || 'Success',
         ip: l.ip,
         terminal: 'T-01',
-        token: `UID-${l.id.slice(-4)}`,
+        token: `••••••••••••${l.id.slice(-4)}`,
         note: l.detail,
         dotColor: l.status === 'Success' ? 'bg-emerald-400' : l.status === 'Blocked' ? 'bg-rose-400' : 'bg-amber-400',
       }
     })
   }, [storeLogs])
 
+  const accountFilters = useMemo(() => ['All', ...Array.from(new Set(securityLogs.map((entry) => entry.role)))], [securityLogs])
+  const actionFilters = useMemo(() => ['All', ...Array.from(new Set(securityLogs.map((entry) => entry.action)))], [securityLogs])
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
+    const fromTime = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : -Infinity
+    const toTime = toDate ? new Date(`${toDate}T23:59:59.999`).getTime() : Infinity
     return securityLogs.filter((entry) => {
+      const entryTime = new Date(entry.date + ' ' + entry.timestamp).getTime()
       const matchesStatus = status === 'All' || entry.status === status
       const matchesAccount = account === 'All' || entry.role === account
-      const matchesQuery =
-        !q ||
-        entry.action.toLowerCase().includes(q) ||
-        entry.employeeId.toLowerCase().includes(q) ||
-        entry.logId.toLowerCase().includes(q) ||
-        entry.role.toLowerCase().includes(q)
-      return matchesStatus && matchesAccount && matchesQuery
+      const matchesAction = action === 'All' || entry.action === action
+      const matchesDate = invalidDateRange || (entryTime >= fromTime && entryTime <= toTime)
+      const matchesQuery = !q || [entry.action, entry.employeeId, entry.logId, entry.role].some((value) => value.toLowerCase().includes(q))
+      return matchesStatus && matchesAccount && matchesAction && matchesDate && matchesQuery
     })
-  }, [securityLogs, query, status, account])
+  }, [securityLogs, query, status, account, action, fromDate, toDate, invalidDateRange])
 
   const exportCsv = () => {
     let exportRows = rows
@@ -175,6 +174,10 @@ export function AdminSecurityAuditPage() {
     handleRefetch()
   }, [])
 
+  useEffect(() => {
+    if (expanded && !rows.some((entry) => entry.id === expanded)) setExpanded(null)
+  }, [rows, expanded])
+
   return (
     <AdminShell activeId="security-audit" onSelect={railSelect} stickyHeader={stickyHeader}>
       {isError ? (
@@ -188,6 +191,7 @@ export function AdminSecurityAuditPage() {
       ) : (
         <>
           <div className="mb-5 flex flex-col gap-5">
+        {invalidDateRange && <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">From date must be on or before the To date.</p>}
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative min-w-0 flex-1 lg:max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -218,16 +222,15 @@ export function AdminSecurityAuditPage() {
                 className="rounded-md border border-input bg-background px-2.5 py-2 text-xs text-foreground outline-none focus:border-primary"
               />
             </div>
-            {(fromDate || toDate) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setFromDate('')
-                  setToDate('')
-                }}
-                className="text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground underline px-1"
-              >
-                Clear
+            <select value={account} onChange={(e) => setAccount(e.target.value)} className="rounded-md border border-input bg-background px-2.5 py-2 text-xs text-foreground outline-none focus:border-primary" aria-label="Filter by role">
+              {accountFilters.map((value) => <option key={value} value={value}>{value === 'All' ? 'All roles' : value}</option>)}
+            </select>
+            <select value={action} onChange={(e) => setAction(e.target.value)} className="max-w-[13rem] rounded-md border border-input bg-background px-2.5 py-2 text-xs text-foreground outline-none focus:border-primary" aria-label="Filter by action">
+              {actionFilters.map((value) => <option key={value} value={value}>{value === 'All' ? 'All actions' : value}</option>)}
+            </select>
+            {(query || account !== 'All' || action !== 'All' || status !== 'All' || fromDate || toDate) && (
+              <button type="button" onClick={() => { setQuery(''); setAccount('All'); setAction('All'); setStatus('All'); setFromDate(''); setToDate(''); setExpanded(null) }} className="rounded-md border border-border px-3 py-2 text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground hover:bg-muted hover:text-foreground">
+                Reset
               </button>
             )}
             <button
@@ -264,32 +267,14 @@ export function AdminSecurityAuditPage() {
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-1 text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Account
-            </span>
-            {ACCOUNT_FILTERS.map((a) => (
-              <button
-                key={a}
-                type="button"
-                onClick={() => setAccount(a)}
-                aria-pressed={account === a}
-                className={cn(
-                  'rounded-full border px-3.5 py-1.5 text-xs font-semibold transition',
-                  account === a
-                    ? 'border-foreground bg-foreground text-background'
-                    : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-              >
-                {a}
-              </button>
-            ))}
+            <span className="mr-1 text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Role</span>
+            <span className="text-xs text-muted-foreground">Use the toolbar selector to preserve historical role values while filtering.</span>
           </div>
         </div>
       </div>
 
       <p className="mb-4 text-xs text-muted-foreground">
-        Showing {rows.length} of {securityLogs.length} security events. Click a row to reveal
-        raw IP, terminal, and token metadata.
+        Showing {rows.length} of {securityLogs.length} security events. Click a row to reveal event metadata, including masked session information.
       </p>
 
       <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -302,7 +287,7 @@ export function AdminSecurityAuditPage() {
           <table className="w-full min-w-[820px] text-left">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-border bg-muted">
-                {['Timestamp', 'Log ID', 'Employee ID', 'Role', 'Action Executed', 'Status', ''].map(
+                {['Timestamp', 'Log ID', 'Employee', 'Role', 'Action', 'Status', 'Details'].map(
                   (h, i) => (
                     <th
                       key={h || `col-${i}`}
@@ -371,13 +356,9 @@ export function AdminSecurityAuditPage() {
                           </span>
                         </td>
                         <td className="px-4 py-4 text-right">
-                          <ChevronDown
-                            className={cn(
-                              'inline size-4 text-muted-foreground transition-transform',
-                              open && 'rotate-180',
-                            )}
-                            aria-hidden="true"
-                          />
+                          <button type="button" onClick={(event) => { event.stopPropagation(); setExpanded(open ? null : entry.id) }} aria-label={`${open ? 'Collapse' : 'Expand'} details for ${entry.logId}`} aria-expanded={open} className="inline-flex rounded-md p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            <ChevronDown className={cn('size-4 transition-transform', open && 'rotate-180')} aria-hidden="true" />
+                          </button>
                         </td>
                       </tr>
                       {open && (
@@ -385,7 +366,7 @@ export function AdminSecurityAuditPage() {
                           <td colSpan={7} className="px-4 pb-5 pt-1">
                             <div className="admin-fade rounded-lg border border-border bg-background/60 p-4">
                               <p className="text-[0.58rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                                Details
+                                Event Details
                               </p>
                               <div className="mt-3 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-3">
                                 <MetaField label="IP Address" value={entry.ip} />

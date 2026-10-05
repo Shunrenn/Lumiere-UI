@@ -1,25 +1,28 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown, ScrollText } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { SECURITY_EVENTS } from '@/lib/security-events'
 import { useClickFlash } from '@/lib/use-click-flash'
-
-const feedEvents = SECURITY_EVENTS.map((event) => ({
-  ...event,
-  time: `${event.timestamp.slice(0, 5)} UTC`,
-  headline: event.action,
-  details: event.note,
-}))
+import type { ActivityLog } from '@/lib/types'
 
 interface AdminSecurityFeedProps {
+  logs: ActivityLog[]
   onSystemLogs: () => void
 }
 
 // Read-only Live Security Feed. Headlines stay plain-language; IPs/terminal IDs
 // and other technical specifics are tucked into a per-entry Details expander.
-export function AdminSecurityFeed({ onSystemLogs }: AdminSecurityFeedProps) {
+export function AdminSecurityFeed({ logs, onSystemLogs }: AdminSecurityFeedProps) {
   const [expanded, setExpanded] = useState<string | null>(null)
-  const { flashing, trigger } = useClickFlash(onSystemLogs)
+  const [open, setOpen] = useState(false)
+  const { flashing, trigger } = useClickFlash(() => setOpen(true))
+  const feedEvents = logs.slice(0, 20).map((event) => ({ ...event, time: `${event.timestamp} · ${event.date}`, headline: event.action, details: event.detail }))
+
+  useEffect(() => {
+    if (!open) return
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [open])
 
   return (
     <section
@@ -51,7 +54,7 @@ export function AdminSecurityFeed({ onSystemLogs }: AdminSecurityFeedProps) {
               return (
                 <li key={event.id} className="flex items-start gap-3">
                   <span
-                    className={cn('mt-1.5 size-2.5 shrink-0 rounded-full', event.dotColor)}
+                    className={cn('mt-1.5 size-2.5 shrink-0 rounded-full', event.status === 'Success' ? 'bg-emerald-400' : event.status === 'Blocked' ? 'bg-rose-400' : 'bg-amber-400')}
                     aria-hidden="true"
                   />
                   <div className="min-w-0 flex-1">
@@ -94,7 +97,7 @@ export function AdminSecurityFeed({ onSystemLogs }: AdminSecurityFeedProps) {
           type="button"
           onClick={(e) => {
             e.stopPropagation()
-            trigger()
+            onSystemLogs()
           }}
           className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.15em] text-primary transition-colors hover:bg-muted"
         >
@@ -102,6 +105,15 @@ export function AdminSecurityFeed({ onSystemLogs }: AdminSecurityFeedProps) {
           View Full Security Log
         </button>
       </div>
+      {open && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="live-security-feed-title" onClick={() => setOpen(false)}>
+          <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4"><div><p className="text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Recent security activity</p><h2 id="live-security-feed-title" className="mt-1 font-serif text-xl text-foreground">Live Security Feed</h2></div><button type="button" onClick={() => setOpen(false)} className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Close live security feed"><span aria-hidden="true">×</span></button></div>
+            <div className="min-h-0 overflow-y-auto p-5">{logs.length === 0 ? <p className="py-8 text-center text-sm italic text-muted-foreground">No security activity is available for this period.</p> : <div className="divide-y divide-border">{logs.map((event) => <div key={event.id} className="grid gap-1 py-3 text-sm sm:grid-cols-[8rem_minmax(0,8rem)_minmax(0,1fr)_auto]"><span className="text-muted-foreground">{event.date} {event.timestamp}</span><span className="truncate text-foreground">{event.account || '—'}</span><span className="truncate text-muted-foreground">{event.action}</span><span className="w-fit rounded-full bg-muted px-2 py-1 text-[0.62rem] font-semibold text-foreground">{event.status || '—'}</span></div>)}</div>}</div>
+            <div className="flex shrink-0 justify-end border-t border-border px-5 py-3"><button type="button" onClick={() => setOpen(false)} className="rounded-md border border-input px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted">Close</button></div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

@@ -21,22 +21,6 @@ const emptyDraft: NewStaffDraft = {
   subRole: '',
 }
 
-const WOM_SUBROLES = [
-  'Manning Officer',
-  'Warehouse Manager',
-  'Production Manager',
-  'Inventory Officer',
-  'Purchasing Officer',
-] as const
-
-const GROUND_CREW_SUBROLES = [
-  'Warehouse',
-  'Field',
-  'Inventory',
-  'Production',
-  'EventAdmin',
-] as const
-
 const labelClass =
   'block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground'
 const inputClass =
@@ -255,78 +239,22 @@ export function EmployeeModal({ open, onClose, prefillEmail, actionId }: Props) 
               </div>
             </div>
 
-            {(() => {
-              const isSubroleAllowed =
-                draft.role === 'Warehouse Manager' ||
-                draft.role === ('Ground Crew' as any) ||
-                draft.role === ('Ground Crew' as any)
-              return (
-                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className={labelClass} htmlFor="role">
-                      <span className="text-destructive mr-0.5">*</span>Role:
-                    </label>
-                    <select
-                      id="role"
-                      className={`${inputClass} appearance-none`}
-                      value={draft.role}
-                      onChange={(e) => {
-                        const newRole = e.target.value as StaffRole
-                        const isNextSubroleAllowed =
-                          newRole === 'Warehouse Manager' ||
-                          newRole === ('Ground Crew' as any) ||
-                          newRole === ('Ground Crew' as any)
-                        setDraft((prev) => ({
-                          ...prev,
-                          role: newRole,
-                          subRole: !isNextSubroleAllowed
-                            ? ''
-                            : newRole === 'Warehouse Manager'
-                            ? WOM_SUBROLES[0]
-                            : GROUND_CREW_SUBROLES[0],
-                        }))
-                      }}
-                    >
-                      <option value="">Select Staff Role</option>
-                      {SELECTABLE_STAFF_ROLES.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className={labelClass} htmlFor="subRole">
-                      Subrole: {!isSubroleAllowed && <span className="normal-case text-muted-foreground font-normal">(Blocked for this role)</span>}
-                    </label>
-                    <select
-                      id="subRole"
-                      disabled={!isSubroleAllowed}
-                      className={`${inputClass} appearance-none disabled:cursor-not-allowed disabled:opacity-50`}
-                      value={isSubroleAllowed ? draft.subRole : ''}
-                      onChange={(e) => set('subRole', e.target.value)}
-                    >
-                      {!isSubroleAllowed ? (
-                        <option value="">N/A — Not applicable</option>
-                      ) : draft.role === 'Warehouse Manager' ? (
-                        WOM_SUBROLES.map((sr) => (
-                          <option key={sr} value={sr}>
-                            {sr}
-                          </option>
-                        ))
-                      ) : (
-                        GROUND_CREW_SUBROLES.map((sr) => (
-                          <option key={sr} value={sr}>
-                            {sr}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </div>
-                </div>
-              )
-            })()}
+            <div className="mt-4">
+              <label className={labelClass} htmlFor="role">
+                <span className="text-destructive mr-0.5">*</span>Role:
+              </label>
+              <select
+                id="role"
+                className={`${inputClass} appearance-none`}
+                value={draft.role}
+                onChange={(e) => setDraft((prev) => ({ ...prev, role: e.target.value as StaffRole, subRole: '' }))}
+              >
+                <option value="">Select Staff Role</option>
+                {SELECTABLE_STAFF_ROLES.map((role) => (
+                  <option key={role} value={role}>{role}</option>
+                ))}
+              </select>
+            </div>
 
             <div className="mt-4 rounded-md border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
               <span className="font-semibold text-foreground">Secure Credentials:</span> A 14-character CSPRNG temporary password will be generated automatically by the server upon profile creation and displayed once for distribution.
@@ -409,7 +337,6 @@ function VerifyStep({
           <Row label="Contact:" value={draft.contact} />
         </div>
         <Row label="Role:" value={draft.role} />
-        {draft.subRole && <Row label="Subrole:" value={draft.subRole} />}
         <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
           <p className="font-semibold text-foreground">Next Step:</p>
           <p className="mt-1">The server will provision this account, generate a secure temporary password, and display it once for secure handoff.</p>

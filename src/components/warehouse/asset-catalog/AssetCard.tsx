@@ -73,9 +73,10 @@ export function getTierGlanceDisplay(asset: CatalogAsset): {
 interface AssetCardProps {
   asset: CatalogAsset
   onOpen: () => void
+  executiveKiosk?: boolean
 }
 
-export function AssetCard({ asset, onOpen }: AssetCardProps) {
+export function AssetCard({ asset, onOpen, executiveKiosk = false }: AssetCardProps) {
   const glance = getTierGlanceDisplay(asset)
   const statusTone = ASSET_STATUS_TONE[asset.status]
 
@@ -86,6 +87,7 @@ export function AssetCard({ asset, onOpen }: AssetCardProps) {
       className="group flex min-w-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-white text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md hover:ring-1 hover:ring-primary/20 dark:bg-card"
     >
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+
         <img
           src={asset.image || '/placeholder.svg'}
           alt={asset.name}
@@ -109,6 +111,8 @@ export function AssetCard({ asset, onOpen }: AssetCardProps) {
         <h3 className="truncate font-serif text-[0.68rem] font-medium leading-snug text-card-foreground group-hover:text-primary transition-colors">
           {asset.name}
         </h3>
+        {executiveKiosk && asset.currentStock !== undefined && <div className="flex items-center justify-between gap-2 text-[0.58rem]"><span className="font-semibold text-card-foreground">{asset.currentStock} available</span><span className="text-emerald-600 dark:text-emerald-400">{asset.status}</span></div>}
+        {executiveKiosk && asset.currentStock !== undefined && asset.threshold !== undefined && <div className="h-1 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, Math.max(0, (asset.currentStock / Math.max(asset.threshold, 1)) * 100))}%` }} /></div>}
 
         <div className="mt-auto pt-0.5">
           {glance.kind === 'fraction' ? (
