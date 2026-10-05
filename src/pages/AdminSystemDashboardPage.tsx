@@ -238,11 +238,20 @@ export function AdminSystemDashboardPage() {
     const relevant = userActions.filter(
       (a) => a.type === 'forgot-password' || a.type === 'account-locked' || a.type === 'access-request',
     )
-    return [...relevant].sort((a, b) => {
+    const previewItem: UserAction = {
+      id: 'preview-account-locked-out',
+      type: 'account-locked',
+      user: 'sample.executive@lumiere.com',
+      email: 'sample.executive@lumiere.com',
+      status: 'pending',
+      accountType: 'Executive',
+    }
+    return [...relevant, previewItem].sort((a, b) => {
       if (a.status === b.status) return 0
       return a.status === 'pending' ? -1 : 1
     })
   }, [userActions])
+
 
   const handleResolve = (item: UserAction) => {
     if (item.type === 'access-request') {
