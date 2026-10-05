@@ -69,7 +69,10 @@ export function ExecutiveRail<T extends string = ExecutiveDestinationId>({
         })
     }
     return EXECUTIVE_DESTINATIONS.filter((destination) => {
-      if (destination.id === 'inventory' && !canAccessAssetInventory) return false
+      // Inventory is gated by the authoritative capability flag. Keep it in
+      // the Executive registry instead of letting a generic route filter hide
+      // the existing destination from the rail.
+      if (destination.id === 'inventory') return canAccessAssetInventory
       return canAccessRoute(currentUser, destination.id)
     })
   }, [destinations, isExecutiveLite, canAccessAssetInventory, currentUser])
