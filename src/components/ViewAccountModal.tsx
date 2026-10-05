@@ -60,7 +60,7 @@ export function ViewAccountModal({
   }
 
   const isPendingActivation = staff?.accountStatus === 'Pending'
-  const requestLabel = isPendingActivation ? 'Generate New Temporary Password' : 'Request New Password'
+  const requestLabel = isPendingActivation ? 'Generate Temporary Password' : 'Generate New Temporary Password'
 
   const copyToClipboard = async () => {
     if (!resetResult?.tempPassword) return
@@ -186,14 +186,27 @@ export function ViewAccountModal({
             </div>
           ) : (
             <>
-              <div className="space-y-4">
-                {/* Employee ID (always read-only) */}
-                <div>
-                  <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">
-                    Employee ID:
-                  </label>
-              {readField(staff.employeeId || '—')}
-            </div>
+              <div className="space-y-6">
+                <section aria-labelledby="personal-information-heading">
+                  <h3 id="personal-information-heading" className="border-b border-border pb-2 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Personal Information</h3>
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div><label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">First Name:</label>{readField(staff.firstName || '—')}</div>
+                    <div><label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">Middle Name:</label>{readField(staff.middleName || '—')}</div>
+                    <div><label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">Last Name:</label>{readField(staff.surname || '—')}</div>
+                    <div><label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">Full Name:</label>{readField(staff.fullName || `${staff.firstName} ${staff.middleName ? `${staff.middleName} ` : ''}${staff.surname}`.trim() || '—')}</div>
+                    <div className="sm:col-span-2"><label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">Contact Number:</label>{readField(staff.contact || '—')}</div>
+                  </div>
+                </section>
+
+                <section aria-labelledby="account-information-heading">
+                  <h3 id="account-information-heading" className="border-b border-border pb-2 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Account Information</h3>
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {/* Employee ID (always read-only) */}
+                    <div>
+                      <label className="block text-[0.65rem] font-bold uppercase tracking-[0.1em] text-foreground">Employee ID:</label>
+                      {readField(staff.employeeId || '—')}
+                    </div>
+
 
             {/* Full Name */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -301,6 +314,9 @@ export function ViewAccountModal({
               </label>
               {readField(staff.accountStatus || '—')}
             </div>
+
+            </div>
+                </section>
 
             <section className="rounded-md border border-border/70 bg-muted/20 p-3.5" aria-labelledby="account-access-heading">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
