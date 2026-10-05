@@ -145,11 +145,12 @@ export function canAccessRoute(
   }
 
   // Executive (standard):
-  // Allowed: dashboard, registry, inventory (conditional), event-detail, damage, logs, overview
+  // Allowed: dashboard, registry, inventory, event-detail, damage, logs, overview
   // Denied: Admin, Workforce, Security Audit, RBAC, Canvas, Manning, Production
   if (role === 'Executive') {
-    if (
-      cleanRoute === 'dashboard' ||
+  if (
+  cleanRoute === 'dashboard' ||
+  cleanRoute === 'inventory' ||
       cleanRoute === 'registry' ||
       cleanRoute === 'event-detail' ||
       cleanRoute === 'damage' ||
@@ -158,7 +159,6 @@ export function canAccessRoute(
     ) {
       return true
     }
-    if (cleanRoute === 'inventory' && canAsset) return true
     return false
   }
 
