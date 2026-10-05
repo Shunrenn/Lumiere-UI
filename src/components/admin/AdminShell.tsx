@@ -45,7 +45,7 @@ export function AdminShell({ activeId, onSelect, stickyHeader, children }: Admin
         {/* Only this region scrolls. */}
         <div className="flex-1 overflow-x-hidden pb-[env(safe-area-inset-bottom,0px)] md:min-h-0 md:overflow-y-auto">
           {stickyHeader && (
-            <div className="sticky top-0 z-20 border-b border-border bg-background/95 px-5 py-6 backdrop-blur sm:px-8">
+            <div className="sticky top-0 z-20 border-b border-border bg-background px-5 py-6 sm:px-8">
               {stickyHeader}
             </div>
           )}
