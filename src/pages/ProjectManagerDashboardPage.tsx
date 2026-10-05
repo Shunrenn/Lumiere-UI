@@ -14,7 +14,7 @@ import { ProjectManagerEventWorkspace } from '@/components/project-manager/Proje
 import { ProjectManagerLiteEventDetail } from '@/components/project-manager/ProjectManagerLiteEventDetail'
 import { RegisterEventDrawer } from '@/components/RegisterEventDrawer'
 import { OfflineBanner } from '@/components/OfflineBanner'
-import type { PortalEvent } from '@/lib/types'
+import type { PortalEvent } from '@/shared/types'
 import { CheckCircle2, Clock, Sparkles, Layers, AlertCircle, AlertTriangle, Info, RefreshCw } from 'lucide-react'
 
 export function ProjectManagerDashboardPage() {

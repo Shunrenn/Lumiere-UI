@@ -7,7 +7,7 @@ import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
 import { EmptyState } from '@/components/EmptyState'
 import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { usePortal } from '@/lib/store'
 import { useDispatchStore } from '@/lib/warehouse-dispatch'
 

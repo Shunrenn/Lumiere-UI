@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Download, Search, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
 import { useClickFlash } from '@/lib/use-click-flash'
@@ -17,7 +17,7 @@ import {
   getAdminDestination,
   type AdminDestinationId,
 } from '@/lib/admin-destinations'
-import type { UserAction } from '@/lib/types'
+import type { UserAction } from '@/shared/types'
 
 /* ----------------------------- Stat card ----------------------------- */
 

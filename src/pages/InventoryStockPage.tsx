@@ -8,7 +8,7 @@ import { AddNewAssetModal } from '@/components/AddNewAssetModal'
 import { AssetInformationModal } from '@/components/AssetInformationModal'
 import { ReorderRequisitionModal } from '@/components/ReorderRequisitionModal'
 import { EmptyState } from '@/components/EmptyState'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
@@ -17,7 +17,7 @@ import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { GridRevealContainer } from '@/components/GridRevealContainer'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
-import { ASSET_CATEGORIES, type InventoryItem, type ProcurementItem, type StockStatus, type Route } from '@/lib/types'
+import { ASSET_CATEGORIES, type InventoryItem, type ProcurementItem, type StockStatus, type Route } from '@/shared/types'
 
 const statusMeta: Record<StockStatus, { badge: string; dot: string; bar: string }> = {
   Available: { badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/60', dot: 'bg-emerald-500', bar: 'bg-emerald-600 dark:bg-emerald-500' },

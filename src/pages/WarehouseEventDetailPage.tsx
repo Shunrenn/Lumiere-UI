@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
-import type { PortalEvent } from '@/lib/types'
+import type { PortalEvent } from '@/shared/types'
 import type { WarehouseModuleId } from '@/lib/warehouse-modules'
 import {
   computeProductionBanner,

@@ -3,9 +3,9 @@ import { ShieldCheck } from 'lucide-react'
 import { AdminShell } from '@/components/admin/AdminShell'
 import { useNav } from '@/lib/nav'
 import { useAuth } from '@/lib/auth'
-import { fetchAdminRolePermissions, extractExecutiveAssetCapability, updateRoleAssetCapability } from '@/lib/adminPermissionsApi'
+import { fetchAdminRolePermissions, extractExecutiveAssetCapability, updateRoleAssetCapability } from '@/features/admin/api/adminPermissionsApi'
 import { ACCESS_LEVELS, STRUCTURAL_ROLES } from '@/lib/rbac'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import type { AdminDestinationId } from '@/lib/admin-destinations'
 
 type CurrentRole = {

@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { ExecutiveLiteDashboard } from '@/components/executive-lite/ExecutiveLiteDashboard'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 

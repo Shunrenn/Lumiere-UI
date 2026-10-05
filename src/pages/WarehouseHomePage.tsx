@@ -9,7 +9,7 @@ import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
 import { useNav } from '@/lib/nav'
 import type { WarehouseModuleId } from '@/lib/warehouse-modules'
-import type { PortalEvent } from '@/lib/types'
+import type { PortalEvent } from '@/shared/types'
 import { WAREHOUSE_MODULE_ROUTES } from '@/lib/warehouse-modules'
 import { WarehouseShell } from '@/components/warehouse/WarehouseShell'
 

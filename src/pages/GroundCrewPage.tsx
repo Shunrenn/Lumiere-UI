@@ -31,7 +31,7 @@ import {
   fetchMyManningAssignments,
   updateMyAssignmentExecutionStatus,
   type MyManningAssignmentDto,
-} from '@/lib/manningApi'
+} from '@/features/manning/api/manningApi'
 import { useDispatchStore } from '@/lib/warehouse-dispatch'
 import type { DispatchBatch } from '@/lib/event-detail'
 import { PartialEgressSection } from '@/components/warehouse/PartialEgressSection'
@@ -67,7 +67,7 @@ import {
   type CapturedEvidence,
   type PwaNavItem,
 } from '@/components/pwa'
-import type { GroundCrewSubRole, HavaDeclarationState, HavaEvidenceStatus } from '@/lib/types'
+import type { GroundCrewSubRole, HavaDeclarationState, HavaEvidenceStatus } from '@/shared/types'
 
 type Tab = 'home' | 'schedule' | 'field' | 'account'
 type AccessLevel = 'Ground Crew / Member' | 'Team Lead / Field Lead' | 'Receiver' | 'Event Admin'

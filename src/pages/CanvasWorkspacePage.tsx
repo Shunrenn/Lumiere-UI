@@ -20,7 +20,7 @@ import {
   Undo2, Redo2, Users,
 } from 'lucide-react'
 import { useNav } from '@/lib/nav'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { useAuth } from '@/lib/auth'
   import { usePlanner } from '@/lib/planner'
   import { EventPipelinePanel } from '@/components/EventPipelinePanel'
@@ -28,9 +28,9 @@ import { useAuth } from '@/lib/auth'
   import { CanvasCollaborationModal } from '@/components/canvas/CanvasCollaborationModal'
   import { KonvaInfiniteCanvas, type KonvaInfiniteCanvasHandle, type CanvasTool, type KonvaCanvasAsset, ARTBOARD_W, ARTBOARD_H } from '@/components/canvas/KonvaInfiniteCanvas'
   import { usePortal, checkAssetAllocationConflict } from '@/lib/store'
-  import { approveCanvasApi, getAssetAvailabilityApi, validateCanvasStateApi, type AssetConflictDetail, type AssetAvailabilityDto } from '@/lib/canvasApi'
-  import { createDeficitItemApi } from '@/lib/deficitApi'
-  import { fetchAssetsApi, type SearchAssetsParams } from '@/lib/assetsApi'
+  import { approveCanvasApi, getAssetAvailabilityApi, validateCanvasStateApi, type AssetConflictDetail, type AssetAvailabilityDto } from '@/features/canvas/api/canvasApi'
+  import { createDeficitItemApi } from '@/features/inventory/api/deficitApi'
+  import { fetchAssetsApi, type SearchAssetsParams } from '@/features/inventory/api/assetsApi'
 
 
 /* ─── Types ─── */
@@ -3352,7 +3352,7 @@ export function CanvasWorkspacePage() {
       // is intentional for auto-save; user will see stale state on reload if backend is down).
       const eventId = canonicalEventId
       if (!eventId) return
-      import('@/lib/canvasApi').then(({ saveCanvasLayoutApi }) => {
+      import('@/features/canvas/api/canvasApi').then(({ saveCanvasLayoutApi }) => {
         saveCanvasLayoutApi(eventId, JSON.stringify(droppedAssets)).then((result) => {
           if (!result.ok) {
             console.warn(
@@ -3371,7 +3371,7 @@ export function CanvasWorkspacePage() {
     let active = true
     const eventId = canonicalEventId
     if (!eventId) return
-    import('@/lib/canvasApi').then(({ fetchCanvasLayoutApi }) => {
+    import('@/features/canvas/api/canvasApi').then(({ fetchCanvasLayoutApi }) => {
       fetchCanvasLayoutApi(eventId).then((layoutDto) => {
         if (!active || !layoutDto?.canvasState) return
         try {

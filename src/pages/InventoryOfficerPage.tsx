@@ -41,7 +41,7 @@ import {
   PwaToast,
   type PwaNavItem,
 } from '@/components/pwa'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 // ----------------------------------------------------------------------
 // Types & Constants

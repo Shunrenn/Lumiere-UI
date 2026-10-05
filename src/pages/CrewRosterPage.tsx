@@ -6,7 +6,7 @@ import { ErrorFallback } from '@/components/ErrorFallback'
 import { CrewDetailModal, type CrewDetail } from '@/components/CrewDetailModal'
 import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
 import { CREW, type CrewStatus } from '@/lib/roster'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 const crewStatusVariants: Record<CrewStatus, StatusVariant> = {
   Available: 'success',

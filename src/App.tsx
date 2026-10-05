@@ -1,6 +1,6 @@
 import './App.css'
 import { useEffect, useState, lazy, Suspense } from 'react'
-import type { Route } from '@/lib/types'
+import type { Route } from '@/shared/types'
 import { NavProvider, useNav } from '@/lib/nav'
 import { PortalProvider, usePortal } from '@/lib/store'
 import { AdminGrowthSummaryProvider } from '@/lib/admin-growth-summary'

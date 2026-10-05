@@ -9,8 +9,8 @@ import { EditThresholdModal } from '@/components/EditThresholdModal'
 import { ShopForOrderModal } from '@/components/ShopForOrderModal'
 import { WarehouseRequestModal } from '@/components/WarehouseRequestModal'
 import { usePortal } from '@/lib/store'
-import { cn } from '@/lib/utils'
-import type { DeficitStatus, ProcurementItem } from '@/lib/types'
+import { cn } from '@/shared/utils'
+import type { DeficitStatus, ProcurementItem } from '@/shared/types'
 import { exportReplenishmentProcurementPdf } from '@/lib/pdf-exporter'
 
 type Filter = 'All' | DeficitStatus

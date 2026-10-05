@@ -28,11 +28,11 @@ import {
   PackageSearch,
   Calendar,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { usePortal } from '@/lib/store'
-import { fetchAssignedPlannerEventsApi } from '@/lib/eventsApi'
+import { fetchAssignedPlannerEventsApi } from '@/features/events/api/eventsApi'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { PLANNER_RAIL_DESTINATIONS, PLANNER_RAIL_IDENTITY } from '@/lib/executive-destinations'
 import { useThemeMode } from '@/lib/theme'
@@ -42,7 +42,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { DashboardCalendarCard } from '@/components/dashboard/DashboardCalendarCard'
 import { UpcomingEventsPanel } from '@/components/dashboard/UpcomingEventsPanel'
 import { DashboardRoleHeader } from '@/components/dashboard/DashboardRoleHeader'
-import type { PortalEvent } from '@/lib/types'
+import type { PortalEvent } from '@/shared/types'
 
 
 /* ─── Calendar helpers ─── */

@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { StatusBadge, type StatusVariant } from '@/components/StatusBadge'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 
 const logStatusVariants: Record<string, StatusVariant> = {

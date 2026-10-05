@@ -11,7 +11,7 @@ import { usePortal } from '@/lib/store'
 import { useGrowthSummary } from '@/lib/admin-growth-summary'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
-import type { AccountStatus, Staff } from '@/lib/types'
+import type { AccountStatus, Staff } from '@/shared/types'
 
 function statusFor(staff: Staff, lockedIds: Set<string>): AccountStatus {
   if (lockedIds.has(staff.email)) return 'Locked'
