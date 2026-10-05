@@ -49,10 +49,10 @@ const warehouseNavItems: NavItem[] = WAREHOUSE_DESTINATIONS.map((destination) =>
 })
 
 const plannerNavItems: NavItem[] = [
-  { label: 'Dashboard', blurb: 'Assigned events and recent design work', icon: LayoutGrid, route: 'dashboard' },
+  { label: 'Event Planner Dashboard', blurb: 'Assigned events and recent design work', icon: LayoutGrid, route: 'dashboard' },
   { label: 'Design Projects', blurb: 'Assigned event canvases', icon: PenTool, route: 'design-projects' },
-  { label: 'Mood Boards', blurb: 'Creative references and inspiration', icon: Palette, route: 'mood-boards' },
-  { label: 'Asset Catalog', blurb: 'Read-only décor and asset catalog', icon: Boxes, route: 'inventory' },
+  { label: 'Styling Templates', blurb: 'Creative references and inspiration', icon: Palette, route: 'mood-boards' },
+  { label: 'Asset Inventory', blurb: 'Read-only décor and asset inventory', icon: Boxes, route: 'inventory' },
 ]
 
 /* Sub-routes highlight their parent nav entry. */

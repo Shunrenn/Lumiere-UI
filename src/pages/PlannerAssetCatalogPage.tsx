@@ -9,7 +9,7 @@ import { usePortal } from '@/lib/store'
 export function PlannerAssetCatalogPage() {
   const { navigate, route } = useNav()
   const { events } = usePortal()
-  // Use the same shared store as the WOM Asset Catalog so both accounts are always in sync.
+  // Use the same shared store as WOM Asset Inventory so both accounts are always in sync.
   const catalogAssets = useCatalogAssets()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All')
@@ -36,9 +36,11 @@ export function PlannerAssetCatalogPage() {
   return (
     <ExecutiveShell activeId="inventory" onSelect={(id) => navigate(id as typeof route)} destinations={PLANNER_RAIL_DESTINATIONS} identityRoleLabel={PLANNER_RAIL_IDENTITY.roleLabel}>
       <main className="text-foreground">
-        <header className="mb-7">
-          <h1 className="font-serif text-3xl font-semibold">Asset Catalog</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Read-only WOM-registered assets and verified checkpoint-based availability.</p>
+        <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="font-serif text-3xl font-semibold tracking-tight text-foreground">Asset Inventory</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Read-only WOM-registered assets and verified checkpoint-based availability.</p>
+          </div>
         </header>
         <section className="mb-6 rounded-xl border border-border bg-card p-4">
           <div className="flex flex-wrap items-end gap-3">

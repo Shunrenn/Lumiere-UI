@@ -21,10 +21,10 @@ export interface SharedRailDestination {
 }
 
 export const PLANNER_RAIL_DESTINATIONS: readonly SharedRailDestination[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, route: 'dashboard' },
+  { id: 'dashboard', label: 'Event Planner Dashboard', icon: LayoutGrid, route: 'dashboard' },
   { id: 'design-projects', label: 'Design Projects', icon: PenTool, route: 'design-projects' },
-  { id: 'mood-boards', label: 'Mood Boards', icon: Palette, route: 'mood-boards' },
-  { id: 'inventory', label: 'Asset Catalog', icon: Boxes, route: 'inventory' },
+  { id: 'mood-boards', label: 'Styling Templates', icon: Palette, route: 'mood-boards' },
+  { id: 'inventory', label: 'Asset Inventory', icon: Boxes, route: 'inventory' },
 ]
 
 export const PLANNER_RAIL_IDENTITY = {
