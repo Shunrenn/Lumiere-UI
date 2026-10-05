@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, Download, Search } from 'lucide-react'
+import { ChevronDown, Download } from 'lucide-react'
 import { AdminShell } from '@/components/admin/AdminShell'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
