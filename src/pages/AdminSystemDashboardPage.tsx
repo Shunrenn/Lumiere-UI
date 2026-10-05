@@ -178,33 +178,6 @@ function DashboardDetailModal({
   )
 }
 
-function auditDateTime(entry: { date: string; timestamp: string }) {
-  return new Date(`${entry.date} ${entry.timestamp}`).getTime()
-}
-
-function SecurityAuditCard({ logs, onViewAll }: { logs: ReturnType<typeof usePortal>['logs']; onViewAll: () => void }) {
-  const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  const tomorrowStart = todayStart + 86400000
-  const yesterdayStart = todayStart - 86400000
-  const rangeLogs = logs.filter((entry) => {
-    const time = auditDateTime(entry)
-    return time >= yesterdayStart && time < tomorrowStart
-  }).sort((a, b) => auditDateTime(b) - auditDateTime(a))
-  const dateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-  const rangeLabel = `${dateFormatter.format(new Date(yesterdayStart))} – ${dateFormatter.format(new Date(todayStart))}`
-
-  return (
-    <section className="flex h-[24rem] min-h-0 flex-col rounded-xl border border-border bg-card p-5">
-      <div className="flex shrink-0 items-start justify-between gap-3">
-        <div><h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">Security Audit</h3><p className="mt-1 text-xs text-muted-foreground">{rangeLabel}</p></div>
-        <button type="button" onClick={onViewAll} className="shrink-0 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary hover:bg-primary hover:text-primary-foreground">View All Audit Logs</button>
-      </div>
-      <div className="mt-4 min-h-0 flex-1 overflow-y-auto rounded-lg border border-border"><div className="divide-y divide-border">{rangeLogs.length === 0 ? <p className="p-6 text-center text-sm italic text-muted-foreground">No security audit records for this date range.</p> : rangeLogs.map((entry) => <div key={entry.id} className="grid gap-1 px-3 py-3 text-xs sm:grid-cols-[4.5rem_minmax(0,8rem)_minmax(0,1fr)_auto] sm:items-center"><span className="text-muted-foreground">{entry.timestamp}</span><span className="truncate font-medium text-foreground">{entry.account || '—'}</span><span className="truncate text-muted-foreground" title={entry.action}>{entry.action}</span><span className="w-fit rounded-full bg-muted px-2 py-1 text-[0.58rem] font-semibold text-foreground">{entry.status || '—'}</span></div>)}</div></div>
-    </section>
-  )
-}
-
 /* ----------------------------- Page ----------------------------- */
 
 export function AdminSystemDashboardPage() {
@@ -383,18 +356,15 @@ export function AdminSystemDashboardPage() {
             </div>
           </div>
 
-          {/* Row 2: Pending Actions + Security Audit */}
-          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-10">
-            <div className="lg:col-span-3">
-              <AdminPendingActions
-                items={pendingItems}
-                onResolve={handleResolve}
-                subRoleSetups={pendingSubRoleSetups}
-                onConfigureSubRole={handleConfigureSubRole}
-                onSelect={() => setDetailSummary('pending')}
-              />
-            </div>
-            <div className="lg:col-span-7"><SecurityAuditCard logs={logs} onViewAll={() => navigate('security-audit')} /></div>
+          {/* Keep a deliberate dashboard gap before the full-width action queue. */}
+          <div className="w-full">
+            <AdminPendingActions
+              items={pendingItems}
+              onResolve={handleResolve}
+              subRoleSetups={pendingSubRoleSetups}
+              onConfigureSubRole={handleConfigureSubRole}
+              onSelect={() => setDetailSummary('pending')}
+            />
           </div>
         </div>
       ) : (
