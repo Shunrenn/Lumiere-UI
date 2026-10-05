@@ -181,7 +181,6 @@ function SecurityAuditCard({ logs, onViewAll }: { logs: ReturnType<typeof usePor
     const time = auditDateTime(entry)
     return time >= yesterdayStart && time < tomorrowStart
   }).sort((a, b) => auditDateTime(b) - auditDateTime(a))
-  const todayCount = rangeLogs.filter((entry) => auditDateTime(entry) >= todayStart).length
   const dateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
   const rangeLabel = `${dateFormatter.format(new Date(yesterdayStart))} – ${dateFormatter.format(new Date(todayStart))}`
 
@@ -191,7 +190,6 @@ function SecurityAuditCard({ logs, onViewAll }: { logs: ReturnType<typeof usePor
         <div><h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">Security Audit</h3><p className="mt-1 text-xs text-muted-foreground">{rangeLabel}</p></div>
         <button type="button" onClick={onViewAll} className="shrink-0 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary hover:bg-primary hover:text-primary-foreground">View All Audit Logs</button>
       </div>
-      <div className="mt-4 grid shrink-0 grid-cols-2 gap-2"><div className="rounded-lg border border-border bg-background px-3 py-2"><p className="text-[0.58rem] font-semibold uppercase tracking-wider text-muted-foreground">Yesterday</p><p className="mt-1 text-xl font-bold tabular-nums text-foreground">{rangeLogs.length - todayCount}</p></div><div className="rounded-lg border border-border bg-background px-3 py-2"><p className="text-[0.58rem] font-semibold uppercase tracking-wider text-muted-foreground">Today</p><p className="mt-1 text-xl font-bold tabular-nums text-foreground">{todayCount}</p></div></div>
       <div className="mt-4 min-h-0 flex-1 overflow-y-auto rounded-lg border border-border"><div className="divide-y divide-border">{rangeLogs.length === 0 ? <p className="p-6 text-center text-sm italic text-muted-foreground">No security audit records for this date range.</p> : rangeLogs.map((entry) => <div key={entry.id} className="grid gap-1 px-3 py-3 text-xs sm:grid-cols-[4.5rem_minmax(0,8rem)_minmax(0,1fr)_auto] sm:items-center"><span className="text-muted-foreground">{entry.timestamp}</span><span className="truncate font-medium text-foreground">{entry.account || '—'}</span><span className="truncate text-muted-foreground" title={entry.action}>{entry.action}</span><span className="w-fit rounded-full bg-muted px-2 py-1 text-[0.58rem] font-semibold text-foreground">{entry.status || '—'}</span></div>)}</div></div>
     </section>
   )
@@ -314,8 +312,8 @@ export function AdminSystemDashboardPage() {
       ) : isDashboard ? (
         <div className="flex flex-col gap-4">
           {/* Row 1: 4 small stat cards (left) + User Distribution / Live Security Feed (right) */}
-          <div data-testid="admin-dashboard-stats" className="grid gap-4 lg:grid-cols-2">
-            <div className="grid grid-cols-2 gap-3">
+          <div data-testid="admin-dashboard-stats" className="grid items-stretch gap-4 lg:grid-cols-2">
+            <div className="grid h-[21rem] grid-cols-2 gap-3">
               <StatCard
                 agentSelector="data-agent-system-health"
                 label="System Health"
