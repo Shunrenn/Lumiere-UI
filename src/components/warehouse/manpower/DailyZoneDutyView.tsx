@@ -74,10 +74,10 @@ export function DailyZoneDutyView({ crewRows, presetSquads }: DailyZoneDutyViewP
         <div>
           <div className="flex items-center gap-2">
             <Calendar className="size-4 text-primary" />
-            <h2 className="font-serif text-lg font-bold text-card-foreground">Daily Duty Breakdown</h2>
+            <h2 className="font-serif text-lg font-bold text-card-foreground">Daily Coverage</h2>
           </div>
           <p className="text-[0.6rem] uppercase tracking-[0.08em] text-muted-foreground">
-            Per-day department &amp; zone duty assignments. Gap callouts highlight unstaffed zones.
+            Coverage-first view by department and zone. Gap callouts highlight unstaffed work areas.
           </p>
         </div>
 

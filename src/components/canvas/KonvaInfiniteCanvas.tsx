@@ -64,6 +64,11 @@ export interface KonvaCanvasAsset {
   contrast?: number
   flipX?: boolean
   flipY?: boolean
+  /** Image-only non-destructive crop, expressed as fractions of the source image. */
+  cropX?: number
+  cropY?: number
+  cropWidth?: number
+  cropHeight?: number
 }
 
 export interface KonvaDroppedAsset {
@@ -310,6 +315,12 @@ function CanvasElement({
         image={image}
         width={asset.w}
         height={asset.h}
+        crop={{
+          x: image.width * (asset.cropX ?? 0),
+          y: image.height * (asset.cropY ?? 0),
+          width: image.width * (asset.cropWidth ?? 1),
+          height: image.height * (asset.cropHeight ?? 1),
+        }}
         offsetX={asset.flipX ? asset.w : 0}
         offsetY={asset.flipY ? asset.h : 0}
         scaleX={asset.flipX ? -1 : 1}
@@ -754,6 +765,7 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
               zIndex: 15,
             }}
             className="flex items-center justify-between gap-2 px-1 text-sm select-none pointer-events-auto"
+            onClick={() => onCurrentPageChange?.(page.id)}
           >
             {/* Left: Page Title Input (click to rename) */}
             <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border/80 bg-background/90 px-3 py-1.5 shadow-sm backdrop-blur-sm">
@@ -770,8 +782,8 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
               />
             </div>
 
-            {/* Right: Page Controls */}
-            <div className="flex items-center gap-1 rounded-lg border border-border/80 bg-background/90 px-2 py-1 shadow-sm backdrop-blur-sm">
+            {/* Keep page controls on the active page only; inactive pages remain easy to select without adding visual noise. */}
+            {isCurrent && <div className="flex items-center gap-1 rounded-lg border border-border/80 bg-background/90 px-2 py-1 shadow-sm backdrop-blur-sm">
               <button
                 type="button"
                 title="Move up"
@@ -815,7 +827,7 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
               >
                 <Trash2 className="size-3" />
               </button>
-            </div>
+            </div>}
           </div>
         )
       })}

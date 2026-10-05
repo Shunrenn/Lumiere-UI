@@ -5,7 +5,7 @@ import {
   Maximize2, Monitor, Search, Info, X, Check,
   Lock, ChevronRight, Eye, Type, Upload, Wrench, FolderOpen,
   ImageIcon, MousePointer2, Pen, Square, Minus, StickyNote,
-  Bold, Italic, Underline, AlignLeft, Palette, Plus, ChevronLeft,
+  Bold, Italic, Underline, AlignLeft, AlignRight, Palette, Plus, ChevronLeft,
   Package, AlertTriangle, RefreshCw, Boxes,   Maximize,
   Minimize,
   PanelRightOpen,
@@ -30,7 +30,7 @@ import { useAuth } from '@/lib/auth'
   import { usePortal, checkAssetAllocationConflict } from '@/lib/store'
   import { approveCanvasApi, getAssetAvailabilityApi, validateCanvasStateApi, type AssetConflictDetail, type AssetAvailabilityDto } from '@/lib/canvasApi'
   import { createDeficitItemApi } from '@/lib/deficitApi'
-  import { fetchAssetsApi, type SearchAssetsParams } from '@/lib/assetsApi'
+  import { useCatalogAssets } from '@/lib/warehouse-catalog'
 
 
 /* ─── Types ─── */
@@ -41,6 +41,7 @@ interface WorkspaceCard {
   title: string
   type: 'Design' | 'Mood Board'
   designer: string
+  creatorId?: string
   eventAlias: string
   eventDate: string
   lastEdited: string
@@ -125,17 +126,18 @@ export interface CanonicalCanvasItem {
   description?: string
   src: string
   unit: string
+  availableStock: number
 }
 
 // Development preview only: these never call the catalog API or persist to the
 // production registry. They provide varied objects for Canvas visual QA.
 const DEV_DEMO_CANVAS_ASSETS: CanonicalCanvasItem[] = [
-  { id: 'demo-stage-platform', name: 'Modular Stage Platform', category: 'Event Assets', description: 'Preview staging platform', src: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=320&q=80&auto=format&fit=crop', unit: 'sets' },
-  { id: 'demo-line-array', name: 'Line Array Speaker', category: 'Production Assets', description: 'Preview professional speaker', src: 'https://images.unsplash.com/photo-1545454675-3531b543be5d?w=320&q=80&auto=format&fit=crop', unit: 'pcs' },
-  { id: 'demo-spotlight', name: 'LED Moving Head', category: 'Stockroom Assets', description: 'Preview stage lighting fixture', src: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=320&q=80&auto=format&fit=crop', unit: 'pcs' },
-  { id: 'demo-led-wall', name: 'LED Video Wall', category: 'Rental Assets', description: 'Preview rental display wall', src: 'https://images.unsplash.com/photo-1531058020387-3be344556be6?w=320&q=80&auto=format&fit=crop', unit: 'panels' },
-  { id: 'demo-cocktail-table', name: 'Cocktail Table', category: 'Event Assets', description: 'Preview event furniture', src: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=320&q=80&auto=format&fit=crop', unit: 'pcs' },
-  { id: 'demo-floral-arrangement', name: 'Floral Arrangement', category: 'Administrative Assets', description: 'Preview event décor', src: 'https://images.unsplash.com/photo-1523438885200-e635ba2c371e?w=320&q=80&auto=format&fit=crop', unit: 'pcs' },
+  { id: 'demo-stage-platform', name: 'Modular Stage Platform', category: 'Event Assets', description: 'Preview staging platform', src: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=320&q=80&auto=format&fit=crop', unit: 'sets', availableStock: 8 },
+  { id: 'demo-line-array', name: 'Line Array Speaker', category: 'Production Assets', description: 'Preview professional speaker', src: 'https://images.unsplash.com/photo-1545454675-3531b543be5d?w=320&q=80&auto=format&fit=crop', unit: 'pcs', availableStock: 16 },
+  { id: 'demo-spotlight', name: 'LED Moving Head', category: 'Stockroom Assets', description: 'Preview stage lighting fixture', src: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=320&q=80&auto=format&fit=crop', unit: 'pcs', availableStock: 12 },
+  { id: 'demo-led-wall', name: 'LED Video Wall', category: 'Rental Assets', description: 'Preview rental display wall', src: 'https://images.unsplash.com/photo-1531058020387-3be344556be6?w=320&q=80&auto=format&fit=crop', unit: 'panels', availableStock: 24 },
+  { id: 'demo-cocktail-table', name: 'Cocktail Table', category: 'Event Assets', description: 'Preview event furniture', src: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=320&q=80&auto=format&fit=crop', unit: 'pcs', availableStock: 30 },
+  { id: 'demo-floral-arrangement', name: 'Floral Arrangement', category: 'Administrative Assets', description: 'Preview event décor', src: 'https://images.unsplash.com/photo-1523438885200-e635ba2c371e?w=320&q=80&auto=format&fit=crop', unit: 'pcs', availableStock: 18 },
 ]
 
 /* ─── Logistics / Allocated Asset types ─── */
@@ -278,7 +280,7 @@ function ElementsTab({
   serverAvailability: Record<string, AssetAvailabilityDto | 'loading' | 'error'>
 }) {
   const [query, setQuery] = useState('')
-  const [tooltip, setTooltip] = useState<{ id: string; label: string; src: string; category?: string; description?: string; atRisk: boolean } | null>(null)
+  const [tooltip, setTooltip] = useState<{ id: string; label: string; src: string; category?: string; description?: string; unit: string; atRisk: boolean } | null>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useOutsideClick(tooltipRef, () => setTooltip(null))
@@ -329,8 +331,8 @@ function ElementsTab({
     e.dataTransfer.effectAllowed = 'copy'
   }
 
-  function addToCanvas(item: { id: string; label: string; src: string; atRisk: boolean }) {
-    onDropAsset({ id: item.id, name: item.label, src: item.src, defaultUnit: 'pcs', atRisk: item.atRisk })
+  function addToCanvas(item: { id: string; label: string; src: string; unit: string; atRisk: boolean }) {
+    onDropAsset({ id: item.id, name: item.label, src: item.src, defaultUnit: item.unit || 'pcs', atRisk: item.atRisk })
     setTooltip(null)
   }
 
@@ -377,7 +379,7 @@ function ElementsTab({
         ) : (
           categories.map((cat) => (
             <div key={cat.id}>
-              <p className="mb-3 text-[length:var(--canvas-type-heading)] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{cat.label}</p>
+              <p className="mb-2 text-[0.62rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{cat.label}</p>
               <div className="grid grid-cols-2 gap-3">
                 {cat.items.map((item) => {
                   const fullyReserved = isFullyReserved(item)
@@ -404,21 +406,27 @@ function ElementsTab({
                           <Package className="size-7 text-muted-foreground/60" />
                         )}
                       </div>
-                      <p className="mt-1 line-clamp-2 text-center text-xs font-medium leading-snug text-foreground" title={item.name}>{item.name}</p>
+                      <p className="mt-1 line-clamp-2 text-center text-[0.68rem] font-medium leading-snug text-foreground" title={item.name}>{item.name}</p>
                       {fullyReserved ? (
-                        <span className="mt-1 flex w-full items-center justify-center rounded-full bg-destructive/15 px-1.5 py-1 text-center text-xs font-bold uppercase tracking-[0.04em] text-destructive">
+                        <span className="mt-1 flex w-full items-center justify-center rounded-full bg-destructive/15 px-1.5 py-1 text-center text-[0.58rem] font-bold uppercase tracking-[0.04em] text-destructive">
                           Fully reserved
                         </span>
                       ) : (
-                        <span className="mt-1 block text-center text-xs leading-snug text-muted-foreground/70">
-                          {availability === 'loading' ? 'Checking availability…' : availability === 'error' ? 'Availability unavailable' : 'Verified checkpoint availability'}
+                        <span className="mt-1 block text-center text-[0.58rem] leading-snug text-muted-foreground/70">
+                          {availability === 'loading'
+                            ? 'Checking availability…'
+                            : availability === 'error'
+                              ? `${formatStock(item.availableStock)} ${item.unit} in inventory`
+                              : typeof availability === 'object' && availability !== null
+                                ? `${formatStock(availability.availableQuantity)} ${item.unit} available`
+                                : `${formatStock(item.availableStock)} ${item.unit} in inventory`}
                         </span>
                       )}
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
-                          setTooltip({ id: item.id, label: item.name, src: item.src, category: item.category, description: item.description, atRisk: fullyReserved })
+                          setTooltip({ id: item.id, label: item.name, src: item.src, category: item.category, description: item.description, unit: item.unit, atRisk: fullyReserved })
                         }}
                         aria-label={`Info for ${item.name}`}
                         className="absolute right-1 top-1 flex size-6 items-center justify-center rounded-full bg-background/80 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-foreground"
@@ -1135,41 +1143,122 @@ function CropPanel({ asset, onUpdate, onClose }: {
   onUpdate: (id: string, changes: Partial<CanvasAsset>) => void
   onClose: () => void
 }) {
-  const [mode, setMode] = useState<'freeform' | 'original' | '1:1' | 'custom'>('freeform')
-  const [rotation, setRotation] = useState(0)
+  const [mode, setMode] = useState<'freeform' | 'original' | '1:1'>('freeform')
+  const [rotation, setRotation] = useState(asset.rotation)
+  const [horizontalTrim, setHorizontalTrim] = useState(Math.round((1 - (asset.cropWidth ?? 1)) * 50))
+  const [verticalTrim, setVerticalTrim] = useState(Math.round((1 - (asset.cropHeight ?? 1)) * 50))
+  const [crop, setCrop] = useState({ x: asset.cropX ?? 0, y: asset.cropY ?? 0, width: asset.cropWidth ?? 1, height: asset.cropHeight ?? 1 })
+  const cropDrag = useRef<{ mode: 'move' | 'resize'; startX: number; startY: number; crop: typeof crop } | null>(null)
+  // The canvas frame should always follow the source image's aspect ratio.
+  // Keep this stable reference while the crop rectangle is being adjusted.
+  const frameBase = useRef({
+    width: asset.w / (asset.cropWidth ?? 1),
+    height: asset.h / (asset.cropHeight ?? 1),
+  })
   const ref = useRef<HTMLDivElement>(null)
-  useOutsideClick(ref, onClose)
+  const original = useRef({
+    rotation: asset.rotation,
+    w: asset.w,
+    h: asset.h,
+    cropX: asset.cropX,
+    cropY: asset.cropY,
+    cropWidth: asset.cropWidth,
+    cropHeight: asset.cropHeight,
+  })
+  const applyCropPreview = (nextCrop: typeof crop, nextRotation = rotation) => {
+    setCrop(nextCrop)
+    onUpdate(asset.id, {
+      rotation: nextRotation,
+      cropX: nextCrop.x,
+      cropY: nextCrop.y,
+      cropWidth: nextCrop.width,
+      cropHeight: nextCrop.height,
+      w: Math.max(20, Math.round(frameBase.current.width * nextCrop.width)),
+      h: Math.max(20, Math.round(frameBase.current.height * nextCrop.height)),
+    })
+  }
+  const preview = (horizontal: number, vertical: number, nextRotation = rotation) => {
+    const cropWidth = Math.max(0.1, 1 - horizontal / 50)
+    const cropHeight = Math.max(0.1, 1 - vertical / 50)
+    applyCropPreview({ x: (1 - cropWidth) / 2, y: (1 - cropHeight) / 2, width: cropWidth, height: cropHeight }, nextRotation)
+  }
+  const cancelCrop = () => {
+    onUpdate(asset.id, original.current)
+    onClose()
+  }
+  useOutsideClick(ref, cancelCrop)
   const modes = [
     { id: 'freeform', label: 'Freeform' },
     { id: 'original', label: 'Original' },
     { id: '1:1',      label: '1 : 1' },
   ] as const
+  const beginCropDrag = (event: React.PointerEvent<HTMLElement>, mode: 'move' | 'resize') => {
+    event.currentTarget.setPointerCapture(event.pointerId)
+    cropDrag.current = { mode, startX: event.clientX, startY: event.clientY, crop }
+  }
+  const moveCropDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = cropDrag.current
+    if (!drag) return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const dx = (event.clientX - drag.startX) / bounds.width
+    const dy = (event.clientY - drag.startY) / bounds.height
+    if (drag.mode === 'move') {
+      applyCropPreview({ ...drag.crop, x: Math.max(0, Math.min(1 - drag.crop.width, drag.crop.x + dx)), y: Math.max(0, Math.min(1 - drag.crop.height, drag.crop.y + dy)) })
+    } else {
+      applyCropPreview({ ...drag.crop, width: Math.max(0.1, Math.min(1 - drag.crop.x, drag.crop.width + dx)), height: Math.max(0.1, Math.min(1 - drag.crop.y, drag.crop.height + dy)) })
+    }
+  }
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center pt-14 pointer-events-none">
       <div ref={ref} className="pointer-events-auto w-60 rounded-2xl border border-border bg-card shadow-2xl">
         <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
           <span className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-foreground flex items-center gap-1.5"><Crop className="size-3.5 text-primary" />Crop</span>
-          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="size-3.5" /></button>
+          <button type="button" onClick={cancelCrop} aria-label="Cancel crop" className="text-muted-foreground hover:text-foreground"><X className="size-3.5" /></button>
         </div>
         <div className="px-4 py-3 flex flex-col gap-3">
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-[1.25fr_1fr_0.75fr] gap-2">
             {modes.map((m) => (
-              <button key={m.id} type="button" onClick={() => setMode(m.id as typeof mode)}
-                className={cn('rounded-lg border py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
+              <button key={m.id} type="button" onClick={() => {
+                setMode(m.id)
+                if (m.id === 'original') {
+                  setHorizontalTrim(0)
+                  setVerticalTrim(0)
+                  preview(0, 0)
+                }
+                if (m.id === '1:1') {
+                  const sourceRatio = asset.w / asset.h
+                  if (sourceRatio >= 1) {
+                    const nextHorizontal = Math.round((1 - 1 / sourceRatio) * 50)
+                    setHorizontalTrim(nextHorizontal)
+                    setVerticalTrim(0)
+                    preview(nextHorizontal, 0)
+                  } else {
+                    setHorizontalTrim(0)
+                    const nextVertical = Math.round((1 - sourceRatio) * 50)
+                    setVerticalTrim(nextVertical)
+                    preview(0, nextVertical)
+                  }
+                }
+              }}
+                className={cn('min-w-0 whitespace-nowrap rounded-lg border py-1.5 text-[0.55rem] font-bold uppercase leading-none tracking-[0.04em] transition',
                   mode === m.id ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/40')}>
                 {m.label}
               </button>
             ))}
           </div>
-          <Slider label="Rotation" value={rotation} onChange={setRotation} min={-180} max={180} />
+          <div className="relative h-44 overflow-hidden rounded-lg bg-muted touch-none" onPointerMove={moveCropDrag} onPointerUp={() => { cropDrag.current = null }} onPointerCancel={() => { cropDrag.current = null }}>
+            <img src={asset.src} alt="Crop preview" draggable={false} className="size-full select-none object-contain" />
+            <div
+              className="absolute cursor-move border-2 border-primary bg-primary/5 shadow-[0_0_0_999px_rgba(0,0,0,0.45)]"
+              style={{ left: `${crop.x * 100}%`, top: `${crop.y * 100}%`, width: `${crop.width * 100}%`, height: `${crop.height * 100}%` }}
+              onPointerDown={(event) => beginCropDrag(event, 'move')}
+            >
+              <span className="absolute -bottom-1.5 -right-1.5 size-3 cursor-nwse-resize rounded-sm border-2 border-primary bg-card" onPointerDown={(event) => { event.stopPropagation(); beginCropDrag(event, 'resize') }} />
+            </div>
+          </div>
+          <p className="text-[0.55rem] leading-relaxed text-muted-foreground">Drag the frame to reposition the crop. Drag its lower-right handle to resize it.</p>
+          <Slider label="Rotation" value={rotation} onChange={(value) => { setRotation(value); preview(horizontalTrim, verticalTrim, value) }} min={-180} max={180} />
           <button type="button" onClick={() => {
-            const ratio = mode === '1:1' ? 1 : mode === 'original' ? asset.w / asset.h : undefined
-            const changes: Partial<CanvasAsset> = { rotation }
-            if (ratio) {
-              if (asset.w / asset.h > ratio) changes.w = Math.max(20, Math.round(asset.h * ratio))
-              else changes.h = Math.max(20, Math.round(asset.w / ratio))
-            }
-            onUpdate(asset.id, changes)
             onClose()
           }} className="w-full rounded-xl bg-primary py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">
             Apply crop
@@ -1376,7 +1465,7 @@ function PositionPanel({
             {/* Z-index */}
             <div>
               <p className="mb-2 text-[0.55rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Z-index</p>
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-2 gap-2">
                 {[
                   { icon: ArrowUp,   label: 'Forward',  act: () => onUpdate(asset.id, { zIndex: asset.zIndex + 1 }) },
                   { icon: ArrowDown, label: 'Backward', act: () => onUpdate(asset.id, { zIndex: Math.max(0, asset.zIndex - 1) }) },
@@ -1384,9 +1473,9 @@ function PositionPanel({
                   { icon: MoveDown,  label: 'Back',     act: () => onUpdate(asset.id, { zIndex: 0 }) },
                 ].map(({ icon: Icon, label, act }) => (
                   <button key={label} type="button" onClick={act}
-                    className="flex flex-col items-center gap-1 rounded-lg border border-border bg-background py-2 text-muted-foreground transition hover:border-primary/50 hover:text-foreground">
+                    className="flex min-h-14 flex-row items-center justify-center gap-2 rounded-lg border border-border bg-background px-2 py-2 text-muted-foreground transition hover:border-primary/50 hover:text-foreground">
                     <Icon className="size-3.5" />
-                    <span className="text-[0.48rem] uppercase tracking-wide">{label}</span>
+                    <span className="whitespace-nowrap text-[0.56rem] uppercase tracking-wide">{label}</span>
                   </button>
                 ))}
               </div>
@@ -1469,6 +1558,13 @@ function ContextualBar({
   const textStyle = asset.fontStyle || 'normal'
   const isBold = textStyle.includes('bold')
   const isItalic = textStyle.includes('italic')
+  const TextAlignmentIcon = asset.align === 'center'
+    ? AlignCenter
+    : asset.align === 'right'
+      ? AlignRight
+      : asset.align === 'justify'
+        ? AlignJustify
+        : AlignLeft
 
   function toggle(t: EditToolbar) { setOpenPanel((p) => (p === t ? null : t)) }
 
@@ -1516,9 +1612,8 @@ function ContextualBar({
               <button type="button" aria-label="Increase font size" onClick={() => onUpdate(asset.id, { fontSize: Math.min(180, (asset.fontSize || 16) + 1) })}
                 className="flex size-7 items-center justify-center text-sm text-muted-foreground hover:text-foreground">+</button>
             </div>
-            <label title="Text color" className="flex h-7 cursor-pointer items-center gap-1 rounded-lg border border-border bg-background px-2 text-[0.6rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground hover:border-primary/50 hover:text-foreground">
-              <span className="size-3.5 rounded-full border border-black/20" style={{ backgroundColor: textColor }} />
-              Color
+            <label title="Text color" className="flex size-7 cursor-pointer items-center justify-center rounded-lg border border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground">
+              <span className="size-4 rounded-full border border-black/20" style={{ backgroundColor: textColor }} />
               <input
                 aria-label="Text color"
                 type="color"
@@ -1534,7 +1629,7 @@ function ContextualBar({
             <button type="button" aria-label="Underline" aria-pressed={asset.textDecoration === 'underline'} onClick={() => onUpdate(asset.id, { textDecoration: asset.textDecoration === 'underline' ? '' : 'underline' })}
               className={cn('flex size-7 items-center justify-center rounded-lg border transition', asset.textDecoration === 'underline' ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}><Underline className="size-3.5" /></button>
             <button type="button" aria-label="Text alignment" title={`Alignment: ${asset.align || 'left'}`} onClick={cycleTextAlignment}
-              className="flex size-7 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:border-primary/50 hover:text-foreground"><AlignLeft className="size-3.5" /></button>
+              className="flex size-7 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:border-primary/50 hover:text-foreground"><TextAlignmentIcon className="size-3.5" /></button>
             <button type="button" aria-label="Position" onClick={() => toggle('position')}
               className={cn('flex items-center gap-1 rounded-lg border px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.08em] transition', openPanel === 'position' ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}><Layers className="size-3.5" />Position</button>
           </>
@@ -2525,7 +2620,17 @@ function VerifyReplenishmentModal({ item, onClose, onVerify }: { item: PendingRe
 // Fires automatically from on-canvas drag activity — advisory only.
 // This warning is based on physicalStock from the asset catalog, not server-authoritative
 // event-window availability. It is an early UX guide, not an operational availability gate.
-function StockAvailabilityWarningModal({ asset, onClose }: { asset: AllocatedAsset; onClose: () => void }) {
+function StockAvailabilityWarningModal({
+  asset,
+  onClose,
+  onProceedWithProcurement,
+  onChooseAlternative,
+}: {
+  asset: AllocatedAsset
+  onClose: () => void
+  onProceedWithProcurement: () => void
+  onChooseAlternative: () => void
+}) {
   const ref = useRef<HTMLDivElement>(null)
   useOutsideClick(ref, onClose)
   return (
@@ -2533,20 +2638,26 @@ function StockAvailabilityWarningModal({ asset, onClose }: { asset: AllocatedAss
       <div ref={ref} className="w-72 rounded-2xl border border-amber-500/40 bg-card p-4 shadow-2xl">
         <div className="mb-3 flex items-center gap-2">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-500/15"><AlertTriangle className="size-4 text-amber-400" /></div>
-          <span className="text-[0.68rem] font-bold uppercase tracking-[0.12em] text-foreground">Advisory: Catalog Stock Reached</span>
+          <span className="text-[0.68rem] font-bold uppercase tracking-[0.12em] text-foreground">More stock is needed</span>
         </div>
         <p className="mb-3 text-[0.64rem] text-muted-foreground leading-relaxed">
           You&apos;ve placed <span className="font-semibold text-foreground">{asset.dragCount} {asset.unit}</span> of{' '}
-          <span className="font-semibold text-foreground">{asset.name}</span> on the canvas, reaching its catalog stock of{' '}
-          <span className="font-semibold text-foreground">{asset.availableStock} {asset.unit}</span>.
+          <span className="font-semibold text-foreground">{asset.name}</span>, but only{' '}
+          <span className="font-semibold text-foreground">{asset.availableStock} {asset.unit}</span> are in inventory.
         </p>
         <p className="mb-3 text-[0.60rem] text-amber-400/80 leading-relaxed">
-          This is an advisory based on physical stock. Event-window availability (accounting for other committed events) is verified by the server at canvas validation and approval.
+          You can keep the item on the canvas and send the extra {asset.dragCount - asset.availableStock} {asset.unit} to Procurement, or remove the excess item and choose an alternative.
         </p>
-        <button type="button" onClick={onClose}
-          className="w-full rounded-xl bg-primary py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">
-          Got It
-        </button>
+        <div className="space-y-2">
+          <button type="button" onClick={onProceedWithProcurement}
+            className="w-full rounded-xl bg-primary py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">
+            Continue via procurement
+          </button>
+          <button type="button" onClick={onChooseAlternative}
+            className="w-full rounded-xl border border-border py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-foreground hover:bg-muted transition">
+            Choose an alternative
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -2633,13 +2744,23 @@ function RightPanel({
   const [tab, setTab] = useState<RightPanelTab>('allocated')
   const [selectedAsset, setSelectedAsset] = useState<AllocatedAsset | null>(null)
   const [verifyItem, setVerifyItem] = useState<PendingReplenishment | null>(null)
+  // The allocation panel is about the current design, not the full inventory.
+  // Only show items that have actually been placed or assigned on this canvas.
+  const canvasAssets = assets.filter((asset) => asset.dragCount > 0 || asset.allocated)
+
+  function availableFor(asset: AllocatedAsset) {
+    const availability = serverAvailability?.[asset.id]
+    return typeof availability === 'object' && availability !== null
+      ? Math.max(0, availability.availableQuantity)
+      : asset.availableStock
+  }
 
   function handleDelete(id: string) {
     setAssets((a) => a.filter((x) => x.id !== id))
     onRemoveDropped(id)
   }
   function handleSaveAllocation(id: string, qty: number, unit: string) {
-    setAssets((current) => current.map((x) => x.id === id ? { ...x, quantity: qty, unit, allocated: true, availableStock: Math.max(0, x.availableStock - qty) } : x))
+    setAssets((current) => current.map((x) => x.id === id ? { ...x, quantity: qty, unit, allocated: true } : x))
   }
   async function handleStrategy(path: StrategyPath, id: string, qty: number, unit: string) {
     if (qty <= 0) return
@@ -2725,7 +2846,7 @@ function RightPanel({
             <button key={t} type="button" onClick={() => setTab(t)}
               className={cn('min-w-0 px-2 py-3 text-center text-xs font-semibold uppercase tracking-[0.03em] leading-snug transition border-b-2',
                 tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}>
-              {t === 'allocated' ? 'Allocated Assets' : 'Pending Replenishment'}
+              {t === 'allocated' ? 'Canvas Assets' : 'Pending Replenishment'}
               {t === 'pending' && pending.length > 0 && (
                 <span className="ml-1.5 inline-flex size-3.5 items-center justify-center rounded-full bg-amber-500 text-[0.45rem] font-bold text-white">{pending.length}</span>
               )}
@@ -2734,10 +2855,10 @@ function RightPanel({
         </div>
         {tab === 'allocated' && (
           <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
-            {assets.length === 0 && (
+            {canvasAssets.length === 0 && (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center"><Boxes className="size-8 text-border" /><p className="text-[0.62rem] text-muted-foreground uppercase tracking-[0.1em]">No assets on canvas</p></div>
             )}
-            {assets.map((asset) => (
+            {canvasAssets.map((asset) => (
               <div key={asset.id} role="button" tabIndex={0} aria-label={`Allocate ${asset.name}`}
                 onClick={() => setSelectedAsset(asset)} onKeyDown={(e) => e.key === 'Enter' && setSelectedAsset(asset)}
                 className={cn('group relative flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer transition',
@@ -2745,16 +2866,19 @@ function RightPanel({
                 <div className={cn('size-2 shrink-0 rounded-full', asset.allocated ? 'bg-amber-400' : 'bg-muted-foreground/40')} />
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="truncate text-xs font-semibold text-foreground">{asset.name}</span>
-                  <span className="text-xs text-muted-foreground">{asset.allocated ? `${asset.quantity} ${asset.unit} allocated` : `Suggested: ${asset.dragCount} ${asset.unit} — unallocated`}</span>
+                  <span className="text-[0.68rem] text-muted-foreground">
+                    On canvas: {asset.dragCount} {asset.unit} · Available: {formatStock(availableFor(asset))} {asset.unit}
+                  </span>
+                  <span className={cn('text-[0.58rem] font-semibold uppercase tracking-[0.07em]', asset.allocated ? 'text-amber-400' : 'text-muted-foreground')}>
+                    {asset.allocated ? `${asset.quantity} ${asset.unit} assigned` : 'Needs assignment'}
+                  </span>
                 </div>
                 <button type="button" aria-label={`Remove ${asset.name}`} onClick={(e) => { e.stopPropagation(); handleDelete(asset.id) }}
                   className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition"><X className="size-4" /></button>
               </div>
             ))}
-            <div className="mt-2 flex flex-col gap-2 border-t border-border pt-4">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">Legend</p>
-              <div className="flex items-center gap-2"><div className="size-2.5 rounded-full bg-muted-foreground/40" /><span className="text-xs text-muted-foreground">Gray — on canvas, unallocated</span></div>
-              <div className="flex items-center gap-2"><div className="size-2.5 rounded-full bg-amber-400" /><span className="text-xs text-muted-foreground">Amber — successfully allocated</span></div>
+            <div className="mt-2 border-t border-border pt-4 text-[0.6rem] leading-relaxed text-muted-foreground">
+              Select an asset to set the assigned quantity or request additional stock.
             </div>
           </div>
         )}
@@ -2877,6 +3001,7 @@ export function CanvasWorkspacePage() {
   const { navigate } = useNav()
   const { adminName } = useAuth()
   const { events: portalEvents } = usePortal()
+  const catalogAssets = useCatalogAssets()
   const { events, selectedEventId, approveDesign, eventMaterials } = usePlanner()
   // In-workspace Event Pipeline drawer (Logistical Overview / Material Requirement / Design
   // Documents / Team Assignments) — reuses the exact same panel + data source as the
@@ -2889,7 +3014,14 @@ export function CanvasWorkspacePage() {
   const [canvasStatus, setCanvasStatus] = useState<'Draft' | 'Approved'>('Draft')
 
   const [card] = useState<WorkspaceCard | null>(() => {
-    try { const raw = sessionStorage.getItem('lumiere-workspace-card'); return raw ? JSON.parse(raw) : null }
+    try {
+      const raw = sessionStorage.getItem('lumiere-workspace-card')
+      if (raw) return JSON.parse(raw)
+      const projectId = new URLSearchParams(window.location.search).get('project')
+      if (!projectId) return null
+      const savedCards = JSON.parse(localStorage.getItem('lumiere-recents-cards') ?? '[]')
+      return Array.isArray(savedCards) ? savedCards.find((project) => project?.id === projectId) ?? null : null
+    }
     catch { return null }
   })
   // Event-derived cards must always use the API GUID, not the local card ID
@@ -3128,59 +3260,25 @@ export function CanvasWorkspacePage() {
   })
 
   /* Canonical Asset Inventory state */
-  const [canonicalCatalogAssets, setCanonicalCatalogAssets] = useState<CanonicalCanvasItem[]>([])
-  const [assetsLoading, setAssetsLoading] = useState(true)
-  const [assetsError, setAssetsError] = useState<string | null>(null)
   // Current server-side search term (debounced from ElementsTab)
   const [assetSearchTerm, setAssetSearchTerm] = useState('')
-
-  const loadCanonicalAssets = useCallback((params?: SearchAssetsParams) => {
-    setAssetsLoading(true)
-    setAssetsError(null)
-    fetchAssetsApi(params)
-      .then((items) => {
-        const mapped: CanonicalCanvasItem[] = (items || []).flatMap((item) => {
-          const id = item.id || (item as any).assetId
-          if (!id) return []
-          return [{
-          id,
-          name: item.name || (item as any).assetName || 'Unnamed Asset',
-          category: item.category || (item as any).categoryName || 'Event Assets',
-          description: item.description,
-          src: item.image || (item as any).catalogPhotoUrl || '',
-          unit: item.unit || 'pcs',
-        }]
-        })
-        const demoAssets = import.meta.env.DEV
-          ? DEV_DEMO_CANVAS_ASSETS.filter((asset) => {
-              const search = params?.search?.trim().toLowerCase()
-              return !search || `${asset.name} ${asset.category}`.toLowerCase().includes(search)
-            })
-          : []
-        setCanonicalCatalogAssets([...demoAssets, ...mapped])
-        setAssetsLoading(false)
-      })
-      .catch((err) => {
-        console.warn('[CanvasWorkspace] Failed to fetch canonical assets:', err)
-        setAssetsError('Failed to load asset catalog from server.')
-        setAssetsLoading(false)
-      })
-  }, [])
-
-  // Initial load
-  useEffect(() => {
-    loadCanonicalAssets()
-  }, [loadCanonicalAssets])
-
-  // Re-fetch when search term changes (server-side search/theme/category)
-  useEffect(() => {
-    if (assetSearchTerm !== '') {
-      loadCanonicalAssets({ search: assetSearchTerm })
-    } else {
-      // Empty search: reload full list
-      loadCanonicalAssets()
-    }
-  }, [assetSearchTerm, loadCanonicalAssets])
+  const canonicalCatalogAssets = useMemo<CanonicalCanvasItem[]>(() => {
+    const search = assetSearchTerm.trim().toLowerCase()
+    const mapped = catalogAssets.map((item) => ({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      description: item.description,
+      src: item.image,
+      unit: item.unit,
+      availableStock: Math.max(0, item.currentStock ?? 0),
+    }))
+    const filtered = !search ? mapped : mapped.filter((item) => `${item.name} ${item.category}`.toLowerCase().includes(search))
+    const demoAssets = import.meta.env.DEV ? DEV_DEMO_CANVAS_ASSETS.filter((item) => !search || `${item.name} ${item.category}`.toLowerCase().includes(search)) : []
+    return [...demoAssets, ...filtered]
+  }, [catalogAssets, assetSearchTerm])
+  const assetsLoading = false
+  const assetsError: string | null = null
 
   // Per-asset server availability: keyed by assetId, fetched when an asset is focused
   // in the allocation workflow. Uses AbortController to cancel stale requests.
@@ -3311,7 +3409,7 @@ export function CanvasWorkspacePage() {
             quantity: existing?.quantity ?? null,
             unit: c.unit || 'pcs',
             allocated: existing?.allocated ?? false,
-            availableStock: existing?.availableStock ?? 0,
+            availableStock: c.availableStock ?? existing?.availableStock ?? 0,
             existingAllocations: existing?.existingAllocations ?? [],
           }
         })
@@ -3422,6 +3520,7 @@ export function CanvasWorkspacePage() {
   }, [pending, card?.id])
   const [stockWarning, setStockWarning] = useState<AllocatedAsset | null>(null)
   const warnedDragCounts = useRef<Record<string, number>>({})
+  const procurementRequestedCounts = useRef<Record<string, number>>({})
 
   /* Canvas fit-to-screen + full-screen controls */
   const canvasHandleRef = useRef<KonvaInfiniteCanvasHandle>(null)
@@ -3689,7 +3788,7 @@ export function CanvasWorkspacePage() {
             quantity: null,
             unit: dropped?.defaultUnit ?? canonical?.unit ?? 'pcs',
             allocated: false,
-            availableStock: 0,
+            availableStock: canonical?.availableStock ?? 0,
             existingAllocations: [],
           })
         }
@@ -3702,15 +3801,15 @@ export function CanvasWorkspacePage() {
   // this session — not from manually opening AllocationModal, and not from any
   // preset/demo dragCount that was never actually dropped. Recompute live counts
   // straight from droppedAssets (rather than trusting assets[].dragCount, which
-  // can include stale seed values) and trigger the moment an unallocated asset's
-  // live canvas usage reaches or exceeds its real-time availableStock.
+  // can include stale seed values) and trigger when an unallocated asset's
+  // live canvas usage exceeds its inventory quantity.
   useEffect(() => {
     const liveCounts = new Map<string, number>()
     droppedAssets.forEach((d) => liveCounts.set(d.id, (liveCounts.get(d.id) ?? 0) + 1))
     for (const [id, count] of liveCounts) {
       const a = assets.find((x) => x.id === id)
       if (!a || a.allocated) continue
-      if (count >= a.availableStock) {
+      if (count > a.availableStock) {
         const lastWarned = warnedDragCounts.current[id] ?? 0
         if (count > lastWarned) {
           warnedDragCounts.current[id] = count
@@ -3991,6 +4090,19 @@ export function CanvasWorkspacePage() {
       pageId,
     }
     pushCanvasAssetsChange((prev) => [...prev, newAsset])
+    if (!dropped.atRisk && dropped.src) {
+      const image = new Image()
+      image.onload = () => {
+        if (!image.naturalWidth || !image.naturalHeight) return
+        const maximumSide = 160
+        const ratio = image.naturalWidth / image.naturalHeight
+        const dimensions = ratio >= 1
+          ? { w: maximumSide, h: Math.max(40, Math.round(maximumSide / ratio)) }
+          : { w: Math.max(40, Math.round(maximumSide * ratio)), h: maximumSide }
+        pushCanvasAssetsChange((previous) => previous.map((asset) => asset.id === newAsset.id ? { ...asset, ...dimensions } : asset))
+      }
+      image.src = dropped.src
+    }
     setSelectedAssetId(newAsset.id)
     setDroppedAssets((prev) => [...prev, dropped])
   }
@@ -3999,6 +4111,46 @@ export function CanvasWorkspacePage() {
   // Dragging directly onto the artboard places it at the exact drop coordinates on the target page
   function handleDropOnCanvas(dropped: DroppedAsset, x: number, y: number, pageId?: string) {
     placeAssetOnCanvas(dropped, x, y, pageId)
+  }
+  function chooseAlternativeForOverstock(asset: AllocatedAsset) {
+    setDroppedAssets((previous) => {
+      const index = previous.map((item) => item.id).lastIndexOf(asset.id)
+      return index < 0 ? previous : previous.filter((_, itemIndex) => itemIndex !== index)
+    })
+    pushCanvasAssetsChange((previous) => {
+      const index = previous.map((item) => item.label).lastIndexOf(asset.name)
+      return index < 0 ? previous : previous.filter((_, itemIndex) => itemIndex !== index)
+    })
+    setStockWarning(null)
+    showToast(`Removed the excess ${asset.name}. Choose an alternative from Elements.`)
+  }
+  async function continueOverstockViaProcurement(asset: AllocatedAsset) {
+    const excess = Math.max(0, asset.dragCount - asset.availableStock)
+    const alreadyRequested = procurementRequestedCounts.current[asset.id] ?? 0
+    const quantityNeeded = Math.max(0, excess - alreadyRequested)
+    if (quantityNeeded === 0) {
+      setStockWarning(null)
+      showToast('The extra quantity is already in the Procurement queue.')
+      return
+    }
+    try {
+      const result = await createDeficitItemApi({
+        eventId: pipelineEvent?.id || card?.id || undefined,
+        assetId: asset.id,
+        itemName: asset.name,
+        quantityNeeded,
+        triggerSource: 'Canvas',
+        urgencyLevel: 'Medium',
+      })
+      if (!result?.id) throw new Error('Procurement request was not accepted.')
+      procurementRequestedCounts.current[asset.id] = alreadyRequested + quantityNeeded
+      setPending((current) => [...current, { id: result.id, name: asset.name, requestedQty: quantityNeeded, unit: asset.unit, event: 'Current canvas event' }])
+      setStockWarning(null)
+      showToast(`${quantityNeeded} ${asset.unit} sent to Procurement for ${asset.name}.`)
+    } catch (error) {
+      console.error('[CanvasWorkspace] Unable to create procurement request:', error)
+      showToast('Could not send this request to Procurement. Please try again.')
+    }
   }
   function handleRemoveDropped(id: string) {
     setDroppedAssets((prev) => prev.filter((d) => d.id !== id))
@@ -4243,7 +4395,7 @@ export function CanvasWorkspacePage() {
           canonicalAssets={canonicalCatalogAssets}
           assetsLoading={assetsLoading}
           assetsError={assetsError}
-          onRetryFetch={loadCanonicalAssets}
+          onRetryFetch={() => undefined}
           onSearchChange={setAssetSearchTerm}
           serverAvailability={serverAvailability}
         />
@@ -4374,8 +4526,15 @@ export function CanvasWorkspacePage() {
         )}
       </div>
 
-      {/* Proactive Stock Availability Warning — advisory, fired from drag activity only */}
-      {stockWarning && <StockAvailabilityWarningModal asset={stockWarning} onClose={() => setStockWarning(null)} />}
+      {/* Proactive stock warning: offers a Procurement path or an immediate alternative. */}
+      {stockWarning && (
+        <StockAvailabilityWarningModal
+          asset={stockWarning}
+          onClose={() => setStockWarning(null)}
+          onProceedWithProcurement={() => { void continueOverstockViaProcurement(stockWarning) }}
+          onChooseAlternative={() => chooseAlternativeForOverstock(stockWarning)}
+        />
+      )}
 
       {/* Structured HTTP 409 Conflict Modal — shown on approval or pre-validation conflict */}
       {approval409 && (

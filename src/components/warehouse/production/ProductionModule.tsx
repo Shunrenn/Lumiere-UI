@@ -28,6 +28,12 @@ import { WarehouseModuleHeader } from '@/components/warehouse/WarehouseModuleHea
 
 type MainModuleView = 'gantt' | 'kanban' | 'workload'
 
+const VIEW_HELP: Record<MainModuleView, string> = {
+  gantt: 'Timeline shows when each job is scheduled.',
+  kanban: 'Board shows each job’s current stage.',
+  workload: 'Workload shows workshop capacity across all events.',
+}
+
 const STATUS_FILTERS: Array<ProductionStage | 'All'> = [
   'All',
   'Pending',
@@ -147,22 +153,16 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
               />
             </div>
 
-            <button
-              type="button"
-              onClick={() => setSubCategorySettingsOpen(true)}
-              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-3 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.08em] text-foreground transition hover:bg-muted"
-            >
-              <Sliders className="size-3.5 text-muted-foreground" />
-              Worker Caps
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setQuotaOpen(true)}
-              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-3 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.08em] text-foreground transition hover:bg-muted"
-            >
-              Estimate Quota
-            </button>
+            <details className="relative">
+              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-3 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.08em] text-foreground transition hover:bg-muted [&::-webkit-details-marker]:hidden">
+                <Sliders className="size-3.5 text-muted-foreground" />
+                Planning tools
+              </summary>
+              <div className="absolute right-0 z-20 mt-2 flex w-44 flex-col gap-1 rounded-md border border-border bg-card p-1.5 shadow-lg">
+                <button type="button" onClick={() => setSubCategorySettingsOpen(true)} className="rounded px-3 py-2 text-left text-xs font-medium text-card-foreground hover:bg-muted">Worker caps</button>
+                <button type="button" onClick={() => setQuotaOpen(true)} className="rounded px-3 py-2 text-left text-xs font-medium text-card-foreground hover:bg-muted">Estimate quota</button>
+              </div>
+            </details>
 
             <button
               type="button"
@@ -174,6 +174,8 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
             </button>
           </div>
         </div>
+
+        <p className="text-xs text-muted-foreground">{VIEW_HELP[view]}</p>
 
         {view === 'kanban' && (
           <div className="flex flex-wrap items-center gap-2">
@@ -204,6 +206,7 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
             items={filtered}
             onOpenItem={setSelectedItem}
             onFlagDelay={(item) => setDelayModalItem(item)}
+            onSchedule={() => setScheduleOpen(true)}
           />
         ) : view === 'workload' ? (
           <div className="flex flex-col gap-5">

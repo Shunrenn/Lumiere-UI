@@ -77,7 +77,7 @@ export function EventDetailPage() {
 
   return (
     <ConsoleLayout>
-      <div className="mt-2 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <button
             type="button"
@@ -87,7 +87,7 @@ export function EventDetailPage() {
             <ArrowLeft className="size-3.5" />
             Back to Dashboard
           </button>
-          <h1 className="mt-2 font-serif text-3xl font-medium leading-tight text-foreground text-balance lg:text-4xl">
+          <h1 className="mt-2 font-serif text-3xl font-semibold leading-tight tracking-tight text-foreground text-balance">
             {event.title}
           </h1>
         </div>
@@ -101,9 +101,9 @@ export function EventDetailPage() {
             Print Record
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="mt-6">
+      <div>
         <EventPipelinePanel
           event={event}
           adminName={adminName}

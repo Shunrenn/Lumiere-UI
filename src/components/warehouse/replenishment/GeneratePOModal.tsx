@@ -18,7 +18,8 @@ export function GeneratePOModal({ line, onClose, onGenerate }: GeneratePOModalPr
   const [useBackup, setUseBackup] = useState(false)
   const [quantity, setQuantity] = useState(String(line.quantityNeeded))
 
-  const activeVendor = useBackup && backupVendor ? backupVendor : primaryVendor
+  const preferredVendor = useBackup && backupVendor ? backupVendor : primaryVendor
+  const activeVendor = preferredVendor?.status === 'Active' ? preferredVendor : null
   const qtyNumber = Number(quantity) || 0
   const estimatedCost = qtyNumber * line.costPerUnit
 

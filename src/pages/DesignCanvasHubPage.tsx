@@ -32,7 +32,8 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { usePortal } from '@/lib/store'
-import { fetchAssignedPlannerEventsApi } from '@/lib/eventsApi'
+import { fetchAssignedPlannerEventsApi, fetchEventsApi } from '@/lib/eventsApi'
+import { getJoinedEventIds, isMember, join, leave, listMembers } from '@/lib/eventMembership'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { PLANNER_RAIL_DESTINATIONS, PLANNER_RAIL_IDENTITY } from '@/lib/executive-destinations'
 import { useThemeMode } from '@/lib/theme'
@@ -50,6 +51,7 @@ const MONTH_NAMES = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December',
 ]
+
 const DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
 // 10-color sequential palette per month (cycling)
@@ -218,6 +220,8 @@ const REAL_10_SEEDED_EVENTS: any[] = [
     moodPlan: 'High-tech modular displays and aviation-grade flooring.',
   },
 ]
+
+void REAL_10_SEEDED_EVENTS
 
 function parseIsoDateParts(isoStr: string): { year: number; month: number; day: number } | null {
   if (!isoStr) return null
@@ -408,6 +412,8 @@ interface ProjectCard {
   title: string
   type: 'Design' | 'Mood Board'
   designer: string
+  /** Browser-stored account ID for personal and locally created projects. */
+  creatorId?: string
   collaborators: Collaborator[]
   // Demo-only escape hatch: this seed data uses decorative French designer/collaborator
   // names that never literally match a logged-in demo account, so "restricted" is how we
@@ -1117,19 +1123,15 @@ function Dropdown({
    MAIN PAGE
    ══════════════════════════════════════════════════ */
 export function DesignCanvasHubPage() {
-  const { adminName } = useAuth()
+  const { adminName, currentUser } = useAuth()
   const { navigate, route } = useNav()
   const { staff } = usePortal()
 
-  const dbDesigners = useMemo(() => {
-    const designerStaff = (staff || []).filter((s) => {
-      const r = (s.role || '').toLowerCase()
-      return r === 'event planner' || r === 'designer' || r === 'event admin' || r.includes('planner') || r.includes('designer')
-    })
-    const names = designerStaff.map((s) => `${s.firstName || ''} ${s.surname || ''}`.trim()).filter(Boolean)
-    return Array.from(new Set(names))
-  }, [staff])
+  void staff
   const [assignedEvents, setAssignedEvents] = useState<PortalEvent[]>([])
+  const [allEvents, setAllEvents] = useState<PortalEvent[]>([])
+  const [membershipRevision, setMembershipRevision] = useState(0)
+  const [membershipNotice, setMembershipNotice] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isError, setIsError] = useState(false)
 
@@ -1137,9 +1139,9 @@ export function DesignCanvasHubPage() {
     let active = true
     setIsLoading(true)
     setIsError(false)
-    fetchAssignedPlannerEventsApi()
-      .then((events) => {
-        if (active) setAssignedEvents(events)
+    Promise.all([fetchAssignedPlannerEventsApi(), fetchEventsApi()])
+      .then(([assigned, all]) => {
+        if (active) { setAssignedEvents(assigned); setAllEvents(all) }
       })
       .catch(() => {
         if (active) setIsError(true)
@@ -1150,6 +1152,27 @@ export function DesignCanvasHubPage() {
     return () => { active = false }
   }, [])
 
+  useEffect(() => {
+    const refresh = () => setMembershipRevision((revision) => revision + 1)
+    window.addEventListener('lumiere-event-membership-change', refresh)
+    return () => window.removeEventListener('lumiere-event-membership-change', refresh)
+  }, [])
+
+  const plannerId = currentUser?.id ?? ''
+  const activeEvents = useMemo(() => {
+    const source = allEvents.length ? allEvents : assignedEvents
+    return source.filter((event) => !['Completed', 'Settled', 'Cancelled'].includes(event.status))
+  }, [allEvents, assignedEvents])
+  const joinedEventIds = useMemo(() => new Set(plannerId ? getJoinedEventIds(plannerId) : []), [plannerId, membershipRevision])
+  const joinedEvents = useMemo(() => activeEvents.filter((event) => joinedEventIds.has(event.id)), [activeEvents, joinedEventIds])
+
+  // Existing planner assignments remain available after this UI migration.
+  // They are represented as an assigned membership rather than a second access path.
+  useEffect(() => {
+    if (!plannerId) return
+    assignedEvents.forEach((event) => join(event.id, plannerId, 'assigned'))
+  }, [assignedEvents, plannerId])
+
 
   /* ── Calendar state ── */
   const today = new Date()
@@ -1158,11 +1181,11 @@ export function DesignCanvasHubPage() {
 
   // Map real backend events into calendar grid events for visible month/year
   const calEvents = useMemo(() => {
-    const source = assignedEvents.length > 0 ? assignedEvents : (import.meta.env.DEV ? REAL_10_SEEDED_EVENTS : [])
+    const source = activeEvents
     const events: CalendarEvent[] = []
 
     source.forEach((ev, index) => {
-      const parts = parseIsoDateParts(ev.targetDate || ev.dateOfEvent)
+      const parts = parseIsoDateParts(ev.targetDate || (ev as any).dateOfEvent)
       if (!parts) return
       if (parts.year !== calYear || parts.month !== calMonth) return
 
@@ -1185,7 +1208,7 @@ export function DesignCanvasHubPage() {
     })
 
     return events
-  }, [assignedEvents, calYear, calMonth])
+  }, [activeEvents, calYear, calMonth])
 
   const firstDow = new Date(calYear, calMonth, 1).getDay()
   const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate()
@@ -1245,20 +1268,25 @@ export function DesignCanvasHubPage() {
 
   // Combine real events as project cards with local card state
   const effectiveCards = useMemo(() => {
-    const source = assignedEvents.length > 0 ? assignedEvents : (import.meta.env.DEV ? REAL_10_SEEDED_EVENTS : [])
+    const source = joinedEvents.length > 0 ? joinedEvents : []
     const realCards = mapPortalEventsToCards(source, cards, adminName || 'Lumière Creatives')
-    const userCards = cards.filter((c) => c.id.startsWith('mb-') || c.id.startsWith('pc-custom-') || (!c.id.startsWith('pc-event-') && !realCards.some(rc => rc.id === c.id)))
+    const userCards = cards.filter((card) => {
+      if (card.eventId) return joinedEventIds.has(card.eventId)
+      const ownerId = card.creatorId || (card.designer === adminName ? plannerId : undefined)
+      return Boolean(ownerId && ownerId === plannerId)
+    })
     return [...realCards, ...userCards]
-  }, [assignedEvents, cards, adminName])
+  }, [joinedEvents, cards, adminName, joinedEventIds, plannerId])
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [designer, setDesigner] = useState('All Designers')
+  const [ownerFilter, setOwnerFilter] = useState('All')
   const [projectType, setProjectType] = useState('All Types')
   const [sortBy, setSortBy] = useState('Last Activity')
   const [view, setView] = useState<'grid' | 'row'>('grid')
   const [projectStatusFilter, setProjectStatusFilter] = useState('All')
   const [moodBoardFilter, setMoodBoardFilter] = useState<'All' | 'Linked to an event' | 'Standalone'>('All')
   const [moodBoardDialogOpen, setMoodBoardDialogOpen] = useState(false)
+  const [newDesignDialogOpen, setNewDesignDialogOpen] = useState(false)
 
   /* ── Ellipsis & Card actions state ── */
   const [detailsCard, setDetailsCard] = useState<ProjectCard | null>(null)
@@ -1275,7 +1303,8 @@ export function DesignCanvasHubPage() {
       c.designer.toLowerCase().includes(q)
     )
   }
-  if (designer !== 'All Designers') filteredCards = filteredCards.filter((c) => c.designer === designer)
+  if (ownerFilter === 'Created by me') filteredCards = filteredCards.filter((card) => card.creatorId === plannerId || card.designer === adminName)
+  if (ownerFilter === 'Shared with me') filteredCards = filteredCards.filter((card) => Boolean(card.eventId) && card.creatorId !== plannerId && card.designer !== adminName)
   if (projectType === 'Mood Board') filteredCards = filteredCards.filter((c) => c.type === 'Mood Board')
   if (projectType === 'Design Projects') filteredCards = filteredCards.filter((c) => c.type === 'Design')
   if (route === 'design-projects') {
@@ -1363,6 +1392,7 @@ export function DesignCanvasHubPage() {
       title: 'Untitled Mood Board',
       type: 'Mood Board',
       designer: adminName || 'Event Planner',
+      creatorId: plannerId,
       collaborators: [],
       eventId: linkedEvent?.eventId,
       linkedEventName: linkedEvent?.title,
@@ -1376,6 +1406,28 @@ export function DesignCanvasHubPage() {
     setCards(updated)
     localStorage.setItem('lumiere-recents-cards', JSON.stringify(updated))
     setMoodBoardDialogOpen(false)
+  }
+
+  function handleCreateDesignProject(eventId?: string) {
+    const linkedEvent = joinedEvents.find((event) => event.id === eventId)
+    const newCard: ProjectCard = {
+      id: `pc-custom-${Date.now()}`,
+      eventId: linkedEvent?.id,
+      linkedEventName: linkedEvent?.title,
+      title: linkedEvent ? `${linkedEvent.title} — New Design` : 'Untitled Design Project',
+      type: 'Design',
+      designer: adminName || 'Event Planner',
+      creatorId: plannerId,
+      collaborators: [],
+      eventAlias: linkedEvent ? makeEventAlias(linkedEvent.title) : '',
+      eventDate: linkedEvent?.targetDate || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      lastEdited: 'Just now', thumbnail: '', starred: false, status: linkedEvent?.status,
+    }
+    const updated = [newCard, ...cards]
+    setCards(updated)
+    localStorage.setItem('lumiere-recents-cards', JSON.stringify(updated))
+    setNewDesignDialogOpen(false)
+    handleOpenCard(newCard)
   }
 
   function handleUpdateMoodBoardLink(boardId: string, linkedEvent?: ProjectCard) {
@@ -1405,13 +1457,13 @@ export function DesignCanvasHubPage() {
 
   // Events across upcoming months, sorted chronologically (soonest first)
   const upcomingEvents = useMemo(() => {
-    const source = assignedEvents.length > 0 ? assignedEvents : (import.meta.env.DEV ? REAL_10_SEEDED_EVENTS : [])
+    const source = activeEvents
     const all: CalendarEvent[] = []
 
     source.forEach((ev, index) => {
-      const parts = parseIsoDateParts(ev.targetDate || ev.dateOfEvent)
+      const parts = parseIsoDateParts(ev.targetDate || (ev as any).dateOfEvent)
       if (!parts) return
-      const eventName = ev.title || ev.name || 'Untitled Event'
+      const eventName = ev.title || (ev as any).name || 'Untitled Event'
       const alias = makeEventAlias(eventName)
       const canonicalStatus = ev.status || 'Initialized'
 
@@ -1434,7 +1486,7 @@ export function DesignCanvasHubPage() {
       if (a.month !== b.month) return a.month - b.month
       return a.day - b.day
     })
-  }, [assignedEvents])
+  }, [activeEvents])
 
   const groupedUpcomingEvents = useMemo(() => {
     const groups: { monthLabel: string; events: CalendarEvent[] }[] = []
@@ -1480,6 +1532,26 @@ export function DesignCanvasHubPage() {
     navigate('design-projects')
   }
 
+  function eventForCalendarEvent(ev: CalendarEvent) {
+    return activeEvents.find((event) => event.id === ev.id.replace('up-ev-', '').replace('cal-ev-', '') || event.title === ev.name)
+  }
+
+  function handleJoinEvent(event: PortalEvent) {
+    if (!plannerId || ['Completed', 'Settled', 'Cancelled'].includes(event.status)) return
+    join(event.id, plannerId, 'self_joined')
+    setMembershipRevision((revision) => revision + 1)
+    setMembershipNotice(`Joined ${event.title}`)
+    window.setTimeout(() => setMembershipNotice(null), 3000)
+  }
+
+  function handleLeaveEvent(event: PortalEvent) {
+    if (!plannerId || !window.confirm(`Leave ${event.title}? Its canvases remain available to the other planners.`)) return
+    leave(event.id, plannerId)
+    setMembershipRevision((revision) => revision + 1)
+    setMembershipNotice(`Left ${event.title}`)
+    window.setTimeout(() => setMembershipNotice(null), 3000)
+  }
+
   const activeId = route === 'mood-boards' ? 'mood-boards' : route === 'design-projects' ? 'design-projects' : 'dashboard'
   const assignedDesignProjects = effectiveCards.filter((card) => card.type === 'Design' && Boolean(card.eventId))
   const selectedDesignProject = (() => {
@@ -1506,13 +1578,21 @@ export function DesignCanvasHubPage() {
                 <DashboardRoleHeader roleLabel="Event Planner" name={adminName} />
               </div>
             )}
-            {route === 'mood-boards' && (
+            {(route === 'design-projects' || route === 'mood-boards') && (
               <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
                 <div>
-                  <h1 className="font-serif text-3xl font-semibold tracking-tight text-foreground">Mood Boards</h1>
-                  <p className="mt-1 text-sm text-muted-foreground">Standalone creative concepts and visual direction.</p>
+                  <h1 className="font-serif text-3xl font-semibold tracking-tight text-foreground">
+                    {route === 'design-projects' ? 'Design Projects' : 'Styling Templates'}
+                  </h1>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {route === 'design-projects'
+                      ? 'Assigned event canvases. Select a project to enter its workspace.'
+                      : 'Standalone creative concepts and visual direction.'}
+                  </p>
                 </div>
-                <button type="button" onClick={() => setMoodBoardDialogOpen(true)} className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:opacity-90">+ Mood Board</button>
+                <button type="button" onClick={() => route === 'design-projects' ? setNewDesignDialogOpen(true) : setMoodBoardDialogOpen(true)} className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:opacity-90">
+                  {route === 'design-projects' ? '+ New Design Project' : '+ New Styling Template'}
+                </button>
               </header>
             )}
             {/* ── Calendar + Upcoming Events ── */}
@@ -1624,24 +1704,29 @@ export function DesignCanvasHubPage() {
 
                       <div className="space-y-2.5">
                         {group.events.map((ev) => {
+                          const event = eventForCalendarEvent(ev)
+                          const joined = Boolean(event && plannerId && isMember(event.id, plannerId))
+                          const memberCount = event ? listMembers(event.id).length : 0
                           return (
-                            <button
+                            <div
                               key={ev.id}
-                              type="button"
-                              onClick={() => handleOpenCalendarEvent(ev)}
                               className="group flex w-full flex-col gap-1.5 rounded-xl border border-border/80 bg-background/90 p-3.5 text-left shadow-xs transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-accent/40 hover:shadow-sm focus:outline-none"
                             >
-                              <div className="flex items-start justify-between gap-2">
+                              <button type="button" onClick={() => joined && handleOpenCalendarEvent(ev)} className="flex items-start justify-between gap-2 text-left">
                                 <p className="min-w-0 flex-1 truncate font-serif text-sm font-medium text-card-foreground transition-colors group-hover:text-primary">{ev.name}</p>
                                 <span className={cn('shrink-0 rounded-full border px-2.5 py-0.5 text-[0.55rem] uppercase tracking-wider', STATUS_LABEL_COLORS[ev.status])}>{ev.status}</span>
-                              </div>
+                              </button>
                               <div className="flex items-center justify-between gap-2 text-[0.62rem] text-muted-foreground">
                                 <span className="min-w-0 flex-1 truncate font-semibold text-card-foreground">{ev.venue || 'Venue TBD'}</span>
                                 <span className="shrink-0 whitespace-nowrap font-medium text-muted-foreground">
                                   · {MONTH_NAMES[ev.month].slice(0, 3)} {ev.day}
                                 </span>
                               </div>
-                            </button>
+                              <div className="flex items-center justify-between gap-2 pt-1">
+                                <span className="text-[0.6rem] text-muted-foreground">{memberCount} {memberCount === 1 ? 'planner' : 'planners'}</span>
+                                {joined ? <button type="button" onClick={() => event && handleLeaveEvent(event)} className="rounded-md border border-border px-2 py-1 text-[0.58rem] font-bold text-muted-foreground hover:text-foreground">Joined · Leave</button> : <button type="button" onClick={() => event && handleJoinEvent(event)} className="rounded-md bg-primary px-2 py-1 text-[0.58rem] font-bold text-primary-foreground">Join Event</button>}
+                              </div>
+                            </div>
                           )
                         })}
                       </div>
@@ -1662,11 +1747,7 @@ export function DesignCanvasHubPage() {
               {linkedMoodBoards.length ? <div className="mt-3 flex flex-wrap gap-2">{linkedMoodBoards.map((board) => <button key={board.id} type="button" onClick={() => handleOpenCard(board)} className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">{board.title}</button>)}</div> : <p className="mt-3 text-xs text-muted-foreground">No mood boards are linked to this event.</p>}
             </div>
           )}
-          <div className="flex flex-wrap items-center gap-3 mb-5">
-            <div className="mr-2">
-              <h2 className="font-serif text-2xl font-semibold text-foreground">{route === 'design-projects' ? 'Design Projects' : route === 'mood-boards' ? 'All Mood Boards' : 'Recents'}</h2>
-              {route === 'design-projects' && <p className="mt-1 text-sm text-muted-foreground">Assigned event canvases. Select a project to enter its workspace.</p>}
-            </div>
+          <div className="mb-5 flex flex-wrap items-center gap-3">
 
             {route === 'design-projects' && (
               <div className="relative min-w-52 flex-1 max-w-sm">
@@ -1687,10 +1768,10 @@ export function DesignCanvasHubPage() {
 
             {/* Filters */}
             <Dropdown
-              label="Designer"
-              options={['All Designers', ...dbDesigners]}
-              value={designer}
-              onChange={setDesigner}
+              label="Owner"
+              options={['All', 'Created by me', 'Shared with me']}
+              value={ownerFilter}
+              onChange={setOwnerFilter}
             />
             {route !== 'mood-boards' && <Dropdown
               label="Type"
@@ -1826,6 +1907,36 @@ export function DesignCanvasHubPage() {
 
       {moodBoardDialogOpen && <MoodBoardDialog events={assignedDesignProjects} onClose={() => setMoodBoardDialogOpen(false)} onCreate={handleCreateMoodBoard} />}
 
+      {newDesignDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl" role="dialog" aria-modal="true" aria-label="Create design project">
+            <h2 className="font-serif text-xl font-semibold text-foreground">New Design Project</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Choose a joined event or create a private personal project.</p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button type="button" onClick={() => handleCreateDesignProject()} className="rounded-lg border border-border px-3 py-3 text-left text-sm font-semibold text-foreground hover:border-primary">Personal (no event)</button>
+              {joinedEvents.map((event) => <button key={event.id} type="button" onClick={() => handleCreateDesignProject(event.id)} className="rounded-lg border border-border px-3 py-3 text-left text-sm font-semibold text-foreground hover:border-primary">{event.title}<span className="mt-0.5 block text-xs font-normal text-muted-foreground">{event.venue}</span></button>)}
+            </div>
+            {!joinedEvents.length && <p className="mt-3 text-xs text-muted-foreground">Join an event from the Dashboard to create an event design.</p>}
+            <div className="mt-6 flex justify-end"><button type="button" onClick={() => setNewDesignDialogOpen(false)} className="rounded-lg border border-border px-3 py-2 text-xs font-bold text-foreground">Cancel</button></div>
+          </div>
+        </div>
+      )}
+
+      {newDesignDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl" role="dialog" aria-modal="true" aria-label="Create design project">
+            <h2 className="font-serif text-xl font-semibold text-foreground">New Design Project</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Choose a joined event or create a private personal project.</p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button type="button" onClick={() => handleCreateDesignProject()} className="rounded-lg border border-border px-3 py-3 text-left text-sm font-semibold text-foreground hover:border-primary">Personal (no event)</button>
+              {joinedEvents.map((event) => <button key={event.id} type="button" onClick={() => handleCreateDesignProject(event.id)} className="rounded-lg border border-border px-3 py-3 text-left text-sm font-semibold text-foreground hover:border-primary">{event.title}<span className="mt-0.5 block text-xs font-normal text-muted-foreground">{event.venue}</span></button>)}
+            </div>
+            {!joinedEvents.length && <p className="mt-3 text-xs text-muted-foreground">Join an event from the Dashboard to create an event design.</p>}
+            <div className="mt-6 flex justify-end"><button type="button" onClick={() => setNewDesignDialogOpen(false)} className="rounded-lg border border-border px-3 py-2 text-xs font-bold text-foreground">Cancel</button></div>
+          </div>
+        </div>
+      )}
+
       {renameCard && (
         <RenameProjectModal
           card={renameCard}
@@ -1833,6 +1944,10 @@ export function DesignCanvasHubPage() {
           onSave={handleSaveRename}
         />
       )}
+
+      {membershipNotice && <div role="status" className="fixed bottom-6 right-6 z-50 rounded-xl border border-primary/30 bg-card px-4 py-3 text-sm font-semibold text-foreground shadow-xl">{membershipNotice}</div>}
+
+      {membershipNotice && <div role="status" className="fixed bottom-6 right-6 z-50 rounded-xl border border-primary/30 bg-card px-4 py-3 text-sm font-semibold text-foreground shadow-xl">{membershipNotice}</div>}
 
       {/* Floating Cross-Role New Event Checkpoint Banner */}
       {newEventBannerEvent && (

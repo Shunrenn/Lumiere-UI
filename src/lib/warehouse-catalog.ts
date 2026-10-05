@@ -1,6 +1,6 @@
 // Canonical data layer for the Asset Catalog module.
 // Renders authoritative backend/database-backed asset records.
-// Fallback state preserves only the 3 canonical DB assets with zero synthesized fixture state.
+// Fallback state preserves the existing canonical catalog.
 import { useEffect, useSyncExternalStore } from 'react'
 import { createAssetApi, fetchAssetsApi, updateAssetApi } from './assetsApi'
 
@@ -526,7 +526,11 @@ export function useCatalogAssets(): CatalogAsset[] {
         criticalThreshold: raw.criticalThreshold,
         ceilingCap: raw.ceilingCap,
       }))
-      cachedCatalog = mapped
+      // API records replace only matching IDs. The local catalog remains usable
+      // during an unavailable or partial API response.
+      const byId = new Map(getCatalogAssets().map((asset) => [asset.id, asset]))
+      mapped.forEach((asset) => byId.set(asset.id, asset))
+      cachedCatalog = Array.from(byId.values())
       publishCatalog()
     })
     return () => {

@@ -14,6 +14,7 @@ import {
   resolveBatchStall,
   updateBatchHandoffNote,
   updateBatchInfo,
+  updateBatchCrew,
   updateReconciliationRow,
   useDispatchStore,
   type BatchDirection,
@@ -30,6 +31,24 @@ import { cn } from '@/lib/utils'
 import { WarehouseModuleHeader } from '@/components/warehouse/WarehouseModuleHeader'
 
 type ViewMode = 'grouped' | 'consolidated'
+
+type DispatchAttention = 'pahabol' | 'short' | 'stalled'
+
+function batchAttention(batch: DispatchBatch): DispatchAttention[] {
+  const attention: DispatchAttention[] = []
+  if (batch.stalled) attention.push('stalled')
+  if (batch.reconciliation.some((row) => row.status === 'Pahabol')) attention.push('pahabol')
+  if (batch.reconciliation.some((row) => row.status === 'Short')) attention.push('short')
+  return attention
+}
+
+function attentionLabel(attention: DispatchAttention) {
+  switch (attention) {
+    case 'stalled': return 'Transit delayed'
+    case 'pahabol': return 'Follow-up items needed'
+    case 'short': return 'Items missing'
+  }
+}
 
 interface DispatchModuleProps {
   onClose: () => void
@@ -77,6 +96,7 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
   )
 
   const [viewMode, setViewMode] = useState<ViewMode>('grouped')
+  const [showAttentionOnly, setShowAttentionOnly] = useState(false)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [activeBatchIndex, setActiveBatchIndex] = useState<number | null>(null)
   const [pendingBatchId, setPendingBatchId] = useState<string | null>(null)
@@ -84,6 +104,26 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
   const [archiveBatchTarget, setArchiveBatchTarget] = useState<{ eventId: string; batch: DispatchBatch } | null>(null)
 
   const selectedEvent = summaries.find((s) => s.eventId === selectedEventId) ?? null
+  const eligibleCrew = useMemo(
+    () => staff
+      .filter((member) => !member.archived && member.role === 'Ground Crew')
+      .map((member) => ({ id: member.id, name: `${member.firstName} ${member.surname}` })),
+    [staff],
+  )
+  const attentionCounts = useMemo(() => {
+    const batches = summaries.flatMap((summary) => summary.batches)
+    return {
+      stalled: batches.filter((batch) => batch.stalled).length,
+      pahabol: batches.filter((batch) => batch.reconciliation.some((row) => row.status === 'Pahabol')).length,
+      short: batches.filter((batch) => batch.reconciliation.some((row) => row.status === 'Short')).length,
+    }
+  }, [summaries])
+  const visibleSummaries = useMemo(
+    () => showAttentionOnly
+      ? summaries.filter((summary) => summary.batches.some((batch) => batchAttention(batch).length > 0))
+      : summaries,
+    [showAttentionOnly, summaries],
+  )
 
   // The list currently being navigated in the Level 3 overlay.
   const navList: NavigableBatch[] = useMemo(() => {
@@ -140,7 +180,7 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
     <div className="flex h-full flex-1 flex-col overflow-y-auto">
       <div className="flex flex-col gap-4 border-b border-border px-0 py-7">
         <div className="flex items-start justify-between gap-4">
-          <WarehouseModuleHeader title="Dispatch & Logistics" description="Dispatch manifests, vehicle assignments, and transit checkpoints." />
+          <WarehouseModuleHeader title="Dispatch & Logistics" description="Delivery lists, vehicle assignments, and delivery updates." />
           <button
             type="button"
             onClick={onClose}
@@ -164,7 +204,7 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
                 viewMode === 'grouped' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
               )}
             >
-              Event-Grouped
+              By Event
             </button>
             <button
               type="button"
@@ -178,7 +218,7 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
                 viewMode === 'consolidated' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
               )}
             >
-              Consolidated
+              All Deliveries
             </button>
           </div>
             {viewMode === 'consolidated' && (
@@ -188,10 +228,30 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
                 className="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-border bg-background px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-accent"
               >
                 <Download className="size-3.5" />
-                Export All (PDF)
+                Export All Lists (PDF)
               </button>
             )}
           </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+          <div>
+            <p className="text-xs font-semibold text-card-foreground">Needs attention</p>
+            <p className="text-[0.68rem] text-muted-foreground">Items that need a follow-up before this delivery is clear.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">{attentionCounts.stalled} delivery delayed</span>
+            <span className="rounded-full bg-destructive/15 px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wide text-destructive">{attentionCounts.pahabol} follow-up items</span>
+            <span className="rounded-full bg-orange-500/15 px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wide text-orange-800 dark:text-orange-300">{attentionCounts.short} missing items</span>
+            <button
+              type="button"
+              onClick={() => setShowAttentionOnly((current) => !current)}
+              aria-pressed={showAttentionOnly}
+              className={cn('rounded-md border px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition', showAttentionOnly ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-card-foreground hover:bg-muted')}
+            >
+              {showAttentionOnly ? 'Show all' : 'Needs attention'}
+            </button>
+          </div>
+        </div>
 
         {viewMode === 'grouped' && selectedEvent && (
           <div className="flex items-center gap-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -206,7 +266,7 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
 
       <div className="flex-1 px-0 py-7">
         {viewMode === 'consolidated' ? (
-          <ConsolidatedBatchTable summaries={summaries} onOpenBatch={openBatch} />
+          <ConsolidatedBatchTable summaries={visibleSummaries} onOpenBatch={openBatch} />
         ) : selectedEvent ? (
           <EventBatchLevel
             summary={selectedEvent}
@@ -215,7 +275,7 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
             onExportManifest={() => exportEventManifest(selectedEvent)}
           />
         ) : (
-          <EventCardGrid summaries={summaries} onOpenEvent={setSelectedEventId} />
+          <EventCardGrid summaries={visibleSummaries} onOpenEvent={setSelectedEventId} />
         )}
       </div>
 
@@ -237,6 +297,8 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
           onStall={(reason) => markBatchStalled(activeNav.eventId, activeNav.batch.id, reason)}
           onResume={() => resolveBatchStall(activeNav.eventId, activeNav.batch.id)}
           onUpdateInfo={(info) => updateBatchInfo(activeNav.eventId, activeNav.batch.id, info)}
+          availableCrew={eligibleCrew}
+          onCrewChange={(crew) => updateBatchCrew(activeNav.eventId, activeNav.batch.id, crew)}
           onExportPdf={() => {
             const ev = events.find((e) => e.id === activeNav.eventId)
             exportBatchPdf({ eventTitle: activeNav.eventTitle, venue: ev?.venue || '', targetDate: ev?.targetDate || '' }, activeNav.batch)
@@ -290,7 +352,12 @@ function EventCardGrid({
   }
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {summaries.map((summary) => (
+      {summaries.map((summary) => {
+        const attention = summary.batches.flatMap(batchAttention)
+        const uniqueAttention = [...new Set(attention)]
+        const reconciledItems = summary.batches.flatMap((batch) => batch.reconciliation)
+        const matchedItems = reconciledItems.filter((row) => row.status === 'Matched').length
+        return (
         <button
           key={summary.eventId}
           type="button"
@@ -302,23 +369,20 @@ function EventCardGrid({
               <p className="truncate font-serif text-base font-medium text-card-foreground">{summary.eventTitle}</p>
               <p className="truncate text-[0.62rem] uppercase tracking-[0.06em] text-muted-foreground">{summary.venue}</p>
             </div>
-            {summary.hasStalled && (
+            {uniqueAttention.length > 0 && (
               <span
-                title="A batch is stalled in transit"
-                className="flex size-6 shrink-0 items-center justify-center rounded-full bg-destructive text-background"
-              >
-                <AlertTriangle className="size-3.5" />
-              </span>
-            )}
-            {summary.hasPahabol && (
-              <span
-                title="Pahabol items flagged"
+                title={uniqueAttention.map(attentionLabel).join(', ')}
                 className="flex size-6 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive"
               >
                 <AlertTriangle className="size-3.5" />
               </span>
             )}
           </div>
+          {uniqueAttention.length > 0 && (
+            <p className="text-[0.62rem] font-semibold text-destructive">
+              Action needed: {uniqueAttention.map(attentionLabel).join(' · ')}
+            </p>
+          )}
           <div className="flex items-center justify-between gap-3">
             <span className="inline-flex items-center gap-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
               <Truck className="size-3.5" />
@@ -331,11 +395,12 @@ function EventCardGrid({
                   style={{ width: `${summary.handshakePercent}%` }}
                 />
               </div>
-              <span className="text-[0.6rem] font-bold text-card-foreground">{summary.handshakePercent}%</span>
+              <span className="text-[0.6rem] font-bold text-card-foreground">{matchedItems}/{reconciledItems.length || 0} matched</span>
             </div>
           </div>
         </button>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -372,21 +437,21 @@ function EventBatchLevel({
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-xs">
           <div className="flex items-center gap-2">
             <PackageCheck className="size-4 text-primary shrink-0" />
-            <span className="font-semibold text-foreground">Preparation Readiness:</span>
+            <span className="font-semibold text-foreground">Items ready:</span>
             {!prepStatus.isManifestCurrent ? (
               <span className="inline-flex items-center gap-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-2 py-0.5 font-bold uppercase text-[0.6rem]">
                 <AlertTriangle className="size-3" />
-                Reservation Manifest Mismatch ({prepStatus.quantityMismatches.length} qty, {prepStatus.missingPreparationAssetIds.length} missing)
+                Item list needs checking ({prepStatus.quantityMismatches.length} quantities, {prepStatus.missingPreparationAssetIds.length} missing)
               </span>
             ) : prepStatus.isPreparationComplete ? (
               <span className="inline-flex items-center gap-1 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2 py-0.5 font-bold uppercase text-[0.6rem]">
                 <CheckCircle2 className="size-3" />
-                All {prepStatus.items.length} Items Prepared &amp; Verified
+                All {prepStatus.items.length} items ready
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 rounded bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 px-2 py-0.5 font-bold uppercase text-[0.6rem]">
                 <Clock className="size-3" />
-                {prepStatus.items.filter((i) => i.prepStatus === 'Completed').length}/{prepStatus.items.length} Items Completed
+                {prepStatus.items.filter((i) => i.prepStatus === 'Completed').length}/{prepStatus.items.length} items ready
               </span>
             )}
           </div>
@@ -398,8 +463,8 @@ function EventBatchLevel({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Handshake rate <span className="font-semibold text-card-foreground">{summary.handshakePercent}%</span> across{' '}
-          {summary.batches.length} batch{summary.batches.length === 1 ? '' : 'es'}.
+          Items checked <span className="font-semibold text-card-foreground">{summary.handshakePercent}%</span> across{' '}
+          {summary.batches.length} trip{summary.batches.length === 1 ? '' : 's'}.
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -408,28 +473,28 @@ function EventBatchLevel({
             className="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-border bg-background px-3.5 py-2.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-accent"
           >
             <Download className="size-3.5" />
-            Export Manifest (PDF)
+            Export Delivery List (PDF)
           </button>
           <button
             type="button"
             onClick={() => onNewBatch('outbound')}
             className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3.5 py-2.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90"
           >
-            + New Outbound Batch
+            + New Delivery Trip
           </button>
           <button
             type="button"
             onClick={() => onNewBatch('return')}
             className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-3.5 py-2.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-accent"
           >
-            + New Return Batch
+            + New Return Trip
           </button>
         </div>
       </div>
 
       {summary.batches.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border bg-card px-5 py-10 text-center text-sm text-muted-foreground">
-          No dispatch batches created for this event yet.
+          No delivery trips have been added for this event yet.
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
@@ -441,7 +506,7 @@ function EventBatchLevel({
               >
                 <span
                   className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary"
-                  aria-label={batch.direction === 'outbound' ? 'Outbound / egress' : 'Return / ingress'}
+                  aria-label={batch.direction === 'outbound' ? 'Delivery' : 'Return'}
                 >
                   {batch.direction === 'outbound' ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
                 </span>
@@ -483,7 +548,7 @@ function EventBatchLevel({
                       }}
                       className="inline-flex items-center gap-1 rounded bg-emerald-600 px-2.5 py-1 text-[0.58rem] font-bold uppercase tracking-wider text-white hover:bg-emerald-700"
                     >
-                      + Return Batch
+                      + Return Trip
                     </button>
                   )}
 
@@ -528,7 +593,7 @@ function EventBatchLevel({
             >
               <div className="flex items-center gap-2">
                 <Archive className="h-4 w-4 shrink-0" />
-                <span>Archived / Canceled Batches ({archived.length})</span>
+                <span>Past / canceled trips ({archived.length})</span>
               </div>
               <ChevronDown className={cn('h-4 w-4 transition-transform duration-200', showArchived && 'rotate-180')} />
             </button>
@@ -558,7 +623,7 @@ function EventBatchLevel({
                         <span className="text-destructive font-medium">{batch.archiveReason || 'No reason specified'}</span>
                       </div>
                       <div>
-                        <span className="font-semibold text-foreground">Manifest Snapshot: </span>
+                        <span className="font-semibold text-foreground">Delivery list: </span>
                         <span className="text-muted-foreground">
                           {batch.reconciliation.length} items ({batch.reconciliation.map((r) => `${r.itemName} [${r.planned}]`).join(', ') || 'None'})
                         </span>
@@ -585,7 +650,7 @@ function ConsolidatedBatchTable({
   const rows = summaries.flatMap((summary) => summary.batches.map((batch) => ({ summary, batch })))
 
   if (rows.length === 0) {
-    return <p className="text-sm text-muted-foreground">No dispatch batches across any event yet.</p>
+    return <p className="rounded-lg border border-dashed border-border bg-card px-5 py-10 text-center text-sm text-muted-foreground">No dispatch batches match this view.</p>
   }
 
   return (
@@ -593,7 +658,7 @@ function ConsolidatedBatchTable({
       <table className="w-full min-w-[880px] text-left">
         <thead>
           <tr className="border-b border-border bg-muted/40">
-            {['Event', 'Vehicle', 'Direction', 'Crew', 'Stage', 'Reconciliation'].map((h) => (
+            {['Event', 'Vehicle', 'Going', 'Crew', 'Status', 'Item check'].map((h) => (
               <th key={h} className="px-5 py-3.5 text-[0.56rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 {h}
               </th>
@@ -602,8 +667,9 @@ function ConsolidatedBatchTable({
         </thead>
         <tbody>
           {rows.map(({ summary, batch }) => {
-            const hasPahabol = batch.reconciliation.some((row) => row.status === 'Pahabol')
-            const hasShort = batch.reconciliation.some((row) => row.status === 'Short')
+            const attention = batchAttention(batch)
+            const hasPahabol = attention.includes('pahabol')
+            const hasShort = attention.includes('short')
             return (
               <tr
                 key={batch.id}
@@ -621,7 +687,7 @@ function ConsolidatedBatchTable({
                 <td className="px-5 py-3.5">
                   <span className="inline-flex items-center gap-1.5 text-xs text-card-foreground">
                     {batch.direction === 'outbound' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
-                    {batch.direction === 'outbound' ? 'Outbound' : 'Return'}
+                    {batch.direction === 'outbound' ? 'Delivery' : 'Return'}
                   </span>
                 </td>
                 <td className="px-5 py-3.5">
@@ -629,18 +695,28 @@ function ConsolidatedBatchTable({
                     {batch.crew.length === 0 ? (
                       <span className="text-[0.6rem] text-muted-foreground/60">Unassigned</span>
                     ) : (
-                      batch.crew.slice(0, 3).map((member) => <Avatar key={member.id} name={member.name} />)
+                      <>
+                        {batch.crew.slice(0, 3).map((member) => <Avatar key={member.id} name={member.name} />)}
+                        {batch.crew.length > 3 && (
+                          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[0.58rem] font-bold text-muted-foreground ring-1 ring-border" title={`${batch.crew.length - 3} more crew members`}>
+                            +{batch.crew.length - 3}
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
                 </td>
                 <td className="px-5 py-3.5">
+                  <p className={cn('mb-2 text-[0.62rem] font-bold uppercase tracking-[0.06em]', batch.stalled ? 'text-amber-700 dark:text-amber-300' : 'text-primary')}>
+                    {batch.stalled ? 'Transit delayed' : batch.stage}
+                  </p>
                   <DispatchStepper direction={batch.direction} stage={batch.stage} stalled={batch.stalled} />
                 </td>
                 <td className="px-5 py-3.5">
                   {hasPahabol ? (
-                    <Pill tone="critical">Pahabol</Pill>
+                    <div className="space-y-1"><Pill tone="critical">Follow-up items</Pill><p className="text-[0.58rem] text-muted-foreground">Additional items required</p></div>
                   ) : hasShort ? (
-                    <Pill tone="caution">Short</Pill>
+                    <div className="space-y-1"><Pill tone="caution">Items missing</Pill><p className="text-[0.58rem] text-muted-foreground">Delivery list count is short</p></div>
                   ) : (
                     <Pill tone="positive">Matched</Pill>
                   )}
@@ -745,7 +821,7 @@ function NewBatchModal({
               Dispatch &amp; Logistics
             </span>
             <h2 className="font-serif text-xl font-bold text-card-foreground">
-              New {direction === 'outbound' ? 'Outbound (Egress)' : 'Return (Ingress)'} Batch
+              New {direction === 'outbound' ? 'Delivery' : 'Return'} Trip
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">Target Event: {event?.title}</p>
           </div>
@@ -879,7 +955,7 @@ function NewBatchModal({
             onClick={handleCreate}
             className="rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-primary-foreground shadow-sm hover:opacity-90"
           >
-            Create Batch ({Object.keys(selectedQuantities).length} Assets)
+            Create Trip ({Object.keys(selectedQuantities).length} Items)
           </button>
         </div>
       </div>
