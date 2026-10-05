@@ -237,7 +237,11 @@ export function AdminSystemDashboardPage() {
     const relevant = userActions.filter(
       (a) => a.status === 'pending' && (a.type === 'forgot-password' || a.type === 'account-locked' || a.type === 'access-request'),
     )
-    return [...relevant].sort((a, b) => {
+    const previewRecords: UserAction[] = [
+      { id: 'preview-account-locked-out', type: 'account-locked', user: 'Sample Executive', email: 'sample.executive@lumiere.com', status: 'pending', accountType: 'Executive' },
+      { id: 'preview-forgot-password', type: 'forgot-password', user: 'Sample Project Manager', email: 'sample.pm@lumiere.com', status: 'pending', accountType: 'Project Manager' },
+    ]
+    return [...relevant, ...previewRecords].sort((a, b) => {
       if (a.status === b.status) return 0
       return a.status === 'pending' ? -1 : 1
     })

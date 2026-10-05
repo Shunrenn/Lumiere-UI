@@ -13,7 +13,7 @@ function actionMeta(item: UserAction) {
   return { Icon: isAccessReq ? UserPlus : isForgot ? KeyRound : Lock, title: isAccessReq ? 'New Access Request' : isForgot ? 'Forgot Password Request' : 'Account Locked Out', label: isAccessReq ? 'Review & Create Account' : isForgot ? 'Generate Temp Password' : 'Unlock & Send Temp', tone: isAccessReq ? 'text-primary' : isForgot ? 'text-rose-500' : 'text-amber-500' }
 }
 function pendingAge(item: UserAction) {
-  if (item.id === 'preview-account-locked-out') return 'Preview'
+  if (item.id === 'preview-account-locked-out' || item.id === 'preview-forgot-password') return 'Preview'
   if (!item.requestedAt) return null
   const requested = new Date(item.requestedAt)
   if (Number.isNaN(requested.getTime())) return null
@@ -29,7 +29,7 @@ export function AdminPendingActions({ items, onResolve, subRoleSetups = [], onCo
   const [previewNotice, setPreviewNotice] = useState(false)
   const allItems = useMemo(() => [...subRoleSetups.map((item) => ({ ...item, kind: 'setup' as const })), ...items.map((item) => ({ ...item, kind: 'action' as const }))], [items, subRoleSetups])
   const previewItems = allItems.slice(0, 5)
-  const isPreviewItem = (item: SelectedAction): item is UserAction => 'type' in item && item.id === 'preview-account-locked-out'
+  const isPreviewItem = (item: SelectedAction): item is UserAction => 'type' in item && (item.id === 'preview-account-locked-out' || item.id === 'preview-forgot-password')
   const isUserAction = (item: SelectedAction): item is UserAction => 'type' in item
   const filteredItems = allItems.filter((item) => { const q = search.trim().toLowerCase(); return !q || ('type' in item ? [actionMeta(item).title, item.email, item.user, item.accountType].filter(Boolean).join(' ').toLowerCase().includes(q) : [item.name, item.parentName, 'permission configuration'].join(' ').toLowerCase().includes(q)) })
   useEffect(() => { if (!selected && !showAll) return; const close = (event: KeyboardEvent) => event.key === 'Escape' && (selected ? setSelected(null) : setShowAll(false)); window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [selected, showAll])
