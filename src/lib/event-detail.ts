@@ -206,7 +206,7 @@ function buildBatches(event: PortalEvent, procurement: ProcurementItem[], crewPo
       plateNumber: plateFor(batchSeed),
       direction,
       stage,
-      handoffNote: '',
+      handoffNote: 'Manifest verified and equipment staged for dispatch.',
       crew,
       reconciliation: buildReconciliation(batchSeed, procurement),
       stalled: false,

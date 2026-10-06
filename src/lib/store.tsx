@@ -1688,7 +1688,14 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         if (!active) return
         setIsBackendConnected(connected)
         if (connected && reports.length > 0) {
-          setDamageExceptions(reports)
+          setDamageExceptions(() => {
+            if (reports && reports.length > 0) {
+              const ids = new Set(reports.map(r => r.id));
+              const missingSeed = seedDamage.filter(s => !ids.has(s.id));
+              return [...reports, ...missingSeed];
+            }
+            return seedDamage;
+          })
         }
       } catch (err) {
         console.warn('[store] Failed to load damage reports from backend:', err)
