@@ -15,6 +15,7 @@ import {
   RotateCcw,
   Wand2,
   Loader2,
+  Maximize2,
 } from 'lucide-react'
 import {
   formatSmartDuration,
@@ -645,14 +646,32 @@ export function AssetDetailModal({
               {tab === 'preview' && (
                 <div className="flex flex-col gap-5">
                   <div className="grid gap-5 md:grid-cols-[minmax(0,1.15fr)_minmax(15rem,0.85fr)] md:items-stretch">
-                    <div className="min-h-56 overflow-hidden rounded-xl border border-border bg-muted md:min-h-72">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        if (currentAsset.image) setFullscreenImageSrc(currentAsset.image)
+                      }}
+                      className={cn(
+                        "relative min-h-56 w-full overflow-hidden rounded-xl border border-border bg-muted md:min-h-72 group text-left cursor-pointer",
+                        currentAsset.image ? "cursor-zoom-in hover:border-primary/50" : ""
+                      )}
+                      title={currentAsset.image ? "Click to view full screen" : undefined}
+                    >
                       <img
                         src={currentAsset.image || '/placeholder.svg'}
                         alt={currentAsset.name}
                         crossOrigin="anonymous"
-                        className="size-full object-cover"
+                        className="size-full object-cover transition-transform group-hover:scale-102 pointer-events-none"
                       />
-                    </div>
+                      {currentAsset.image && (
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1.5 backdrop-blur-2xs pointer-events-none">
+                          <Maximize2 className="size-4" />
+                          <span>View Full Screen</span>
+                        </div>
+                      )}
+                    </button>
                     <div className="flex flex-col gap-4 rounded-xl border border-border bg-background p-4">
                       <div className="flex flex-wrap items-center gap-2">
                         <Pill tone={tone}>{currentAsset.status}</Pill>

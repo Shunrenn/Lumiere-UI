@@ -404,12 +404,15 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
             </div>
 
             <div className="flex items-start gap-4">
-              <div
-                onClick={() => {
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
                   if (activeDisplayImage) setIsFullscreenPreviewOpen(true)
                 }}
                 className={cn(
-                  "relative flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-card shadow-xs group",
+                  "relative flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-card shadow-xs group text-left cursor-pointer",
                   activeDisplayImage ? "cursor-zoom-in hover:border-primary/50" : ""
                 )}
                 title={activeDisplayImage ? "Click to view full screen" : undefined}
@@ -419,22 +422,23 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
                     <img
                       src={activeDisplayImage}
                       alt="Asset photo"
-                      className="size-full object-contain p-1 transition-transform group-hover:scale-105"
+                      className="size-full object-contain p-1 transition-transform group-hover:scale-105 pointer-events-none"
                     />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[0.6rem] font-semibold gap-1 backdrop-blur-2xs">
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[0.6rem] font-semibold gap-1 backdrop-blur-2xs pointer-events-none">
+                      <Sparkles className="size-3 text-amber-300" />
                       <span>View Full</span>
                     </div>
                   </>
                 ) : (
-                  <ImagePlus className="size-6 text-muted-foreground" aria-hidden="true" />
+                  <ImagePlus className="size-6 text-muted-foreground pointer-events-none" aria-hidden="true" />
                 )}
                 {isProcessingBg && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-card/90 backdrop-blur-2xs p-1 text-center">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-card/90 backdrop-blur-2xs p-1 text-center pointer-events-none">
                     <Loader2 className="size-5 animate-spin text-primary" />
                     <span className="mt-1 text-[0.55rem] font-semibold text-primary">Removing BG...</span>
                   </div>
                 )}
-              </div>
+              </button>
 
               <div className="flex flex-col gap-2">
                 <input
@@ -897,14 +901,7 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
                       <span className="text-xs font-semibold">m</span>
                     </div>
 
-      {activeDisplayImage && isFullscreenPreviewOpen && (
-        <ImageViewerModal
-          src={activeDisplayImage}
-          alt={name || 'Asset Photo'}
-          title={name ? `${name} (${activePhotoMode === 'bgRemoved' ? 'AI Cutout' : 'Original'})` : 'Asset Photo Preview'}
-          onClose={() => setIsFullscreenPreviewOpen(false)}
-        />
-      )}
+
 
                   </div>
                 </div>

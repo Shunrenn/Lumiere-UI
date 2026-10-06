@@ -24,6 +24,7 @@ export function ImageViewerModal({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        e.preventDefault()
         e.stopPropagation()
         onClose()
       } else if (e.key === '+' || e.key === '=') {
@@ -35,12 +36,12 @@ export function ImageViewerModal({
         setPosition({ x: 0, y: 0 })
       }
     }
-    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handleKeyDown, { capture: true })
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keydown', handleKeyDown, { capture: true })
       document.body.style.overflow = prevOverflow
     }
   }, [onClose])
@@ -48,22 +49,26 @@ export function ImageViewerModal({
   if (!src) return null
 
   const handleZoomIn = (e: React.MouseEvent) => {
+    e.preventDefault()
     e.stopPropagation()
-    setScale((s) => Math.min(s + 0.25, 4))
+    setScale((s) => Math.min(Number((s + 0.25).toFixed(2)), 4))
   }
 
   const handleZoomOut = (e: React.MouseEvent) => {
+    e.preventDefault()
     e.stopPropagation()
-    setScale((s) => Math.max(s - 0.25, 0.5))
+    setScale((s) => Math.max(Number((s - 0.25).toFixed(2)), 0.5))
   }
 
   const handleReset = (e?: React.MouseEvent) => {
+    e?.preventDefault()
     e?.stopPropagation()
     setScale(1)
     setPosition({ x: 0, y: 0 })
   }
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation()
     if (scale > 1) {
       setIsDragging(true)
       setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y })
@@ -72,6 +77,7 @@ export function ImageViewerModal({
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isDragging && scale > 1) {
+      e.stopPropagation()
       setPosition({
         x: e.clientX - dragStart.x,
         y: e.clientY - dragStart.y,
@@ -79,18 +85,23 @@ export function ImageViewerModal({
     }
   }
 
-  const handleMouseUp = () => setIsDragging(false)
+  const handleMouseUp = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsDragging(false)
+  }
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     if (e.deltaY < 0) {
-      setScale((s) => Math.min(s + 0.15, 4))
+      setScale((s) => Math.min(Number((s + 0.15).toFixed(2)), 4))
     } else {
-      setScale((s) => Math.max(s - 0.15, 0.5))
+      setScale((s) => Math.max(Number((s - 0.15).toFixed(2)), 0.5))
     }
   }
 
   const handleDownload = (e: React.MouseEvent) => {
+    e.preventDefault()
     e.stopPropagation()
     const link = document.createElement('a')
     link.href = src
@@ -100,17 +111,20 @@ export function ImageViewerModal({
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-[99999] flex flex-col bg-black/94 backdrop-blur-md animate-in fade-in duration-150 select-none"
+      className="fixed inset-0 z-[999999] flex flex-col bg-black/92 backdrop-blur-md select-none"
+      style={{ isolation: 'isolate' }}
       onClick={(e) => {
         e.stopPropagation()
-        onClose()
+        if (e.target === e.currentTarget) {
+          onClose()
+        }
       }}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
       {/* Top Controls Bar */}
       <div
-        className="flex items-center justify-between border-b border-white/10 bg-black/70 px-6 py-3.5 backdrop-blur shrink-0"
+        className="flex items-center justify-between border-b border-white/10 bg-black/80 px-6 py-3.5 backdrop-blur shrink-0 z-10"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3">
@@ -120,7 +134,7 @@ export function ImageViewerModal({
           <div>
             <h3 className="font-sans text-sm font-medium text-white">{title}</h3>
             <p className="text-[0.65rem] text-white/50">
-              Scroll or click to zoom • Click &amp; drag to pan • Press Esc to close
+              Scroll or click image to zoom • Click &amp; drag to pan • Press Esc to close
             </p>
           </div>
         </div>
@@ -133,7 +147,7 @@ export function ImageViewerModal({
               onClick={handleZoomOut}
               disabled={scale <= 0.5}
               title="Zoom out (-)"
-              className="flex size-8 items-center justify-center rounded text-white/80 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
+              className="flex size-8 items-center justify-center rounded text-white/80 transition hover:bg-white/10 hover:text-white disabled:opacity-40 cursor-pointer"
             >
               <ZoomOut className="size-4" />
             </button>
@@ -141,7 +155,7 @@ export function ImageViewerModal({
               type="button"
               onClick={handleReset}
               title="Reset Zoom (0)"
-              className="px-2.5 py-1 text-xs font-mono font-medium text-white/90 hover:bg-white/10 rounded transition"
+              className="px-2.5 py-1 text-xs font-mono font-medium text-white/90 hover:bg-white/10 rounded transition cursor-pointer"
             >
               {Math.round(scale * 100)}%
             </button>
@@ -150,7 +164,7 @@ export function ImageViewerModal({
               onClick={handleZoomIn}
               disabled={scale >= 4}
               title="Zoom in (+)"
-              className="flex size-8 items-center justify-center rounded text-white/80 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
+              className="flex size-8 items-center justify-center rounded text-white/80 transition hover:bg-white/10 hover:text-white disabled:opacity-40 cursor-pointer"
             >
               <ZoomIn className="size-4" />
             </button>
@@ -160,7 +174,7 @@ export function ImageViewerModal({
             type="button"
             onClick={handleReset}
             title="Reset position & zoom"
-            className="flex size-8 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-white/80 transition hover:bg-white/10 hover:text-white"
+            className="flex size-8 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-white/80 transition hover:bg-white/10 hover:text-white cursor-pointer"
           >
             <RotateCcw className="size-3.5" />
           </button>
@@ -169,7 +183,7 @@ export function ImageViewerModal({
             type="button"
             onClick={handleDownload}
             title="Download image"
-            className="flex size-8 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-white/80 transition hover:bg-white/10 hover:text-white"
+            className="flex size-8 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-white/80 transition hover:bg-white/10 hover:text-white cursor-pointer"
           >
             <Download className="size-3.5" />
           </button>
@@ -179,6 +193,7 @@ export function ImageViewerModal({
           <button
             type="button"
             onClick={(e) => {
+              e.preventDefault()
               e.stopPropagation()
               onClose()
             }}
@@ -195,10 +210,10 @@ export function ImageViewerModal({
         ref={containerRef}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
-        className="flex-1 flex items-center justify-center overflow-hidden p-6 relative cursor-default"
+        className="flex-1 flex items-center justify-center overflow-hidden p-6 relative"
         onClick={(e) => {
+          e.stopPropagation()
           if (e.target === containerRef.current) {
-            e.stopPropagation()
             onClose()
           }
         }}
@@ -213,6 +228,9 @@ export function ImageViewerModal({
             e.stopPropagation()
             if (scale === 1) {
               setScale(1.85)
+            } else if (scale > 1) {
+              setScale(1)
+              setPosition({ x: 0, y: 0 })
             }
           }}
         >
@@ -223,14 +241,17 @@ export function ImageViewerModal({
             src={src}
             alt={alt}
             draggable={false}
-            className="relative max-h-[80vh] max-w-[85vw] object-contain drop-shadow-2xl select-none rounded-lg"
+            className="relative max-h-[80vh] max-w-[85vw] object-contain drop-shadow-2xl select-none rounded-lg pointer-events-none"
           />
         </div>
       </div>
 
       {/* Bottom Hint */}
-      <div className="py-2 text-center text-[0.7rem] text-white/50 shrink-0 pointer-events-none">
-        Click image to zoom in • Click anywhere outside or press Esc to close
+      <div
+        className="py-2 text-center text-[0.7rem] text-white/50 shrink-0 pointer-events-none"
+        onClick={(e) => e.stopPropagation()}
+      >
+        Click image to zoom in/out • Click background or press Esc to close
       </div>
     </div>
   )
