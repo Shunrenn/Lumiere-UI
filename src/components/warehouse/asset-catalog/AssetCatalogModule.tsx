@@ -72,7 +72,15 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
     return assets.filter((asset) => {
       const matchesCategory = categoryFilter === 'All' || asset.category === categoryFilter
       const matchesStatus = statusFilter === 'All' || asset.status === statusFilter
-      const matchesQuery = !q || asset.name.toLowerCase().includes(q)
+      const matchesQuery = !q || [
+        asset.name,
+        asset.assetId,
+        asset.itemCallName,
+        asset.category,
+        asset.subCategory,
+        asset.material,
+        ...(asset.tags || []),
+      ].filter(Boolean).some((value) => value!.toLowerCase().includes(q))
       return matchesCategory && matchesStatus && matchesQuery
     })
   }, [assets, query, categoryFilter, statusFilter])
@@ -207,7 +215,7 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
             )}
             <div className="relative w-full sm:w-80">
               <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search assets..." className="h-9 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-xs text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-ring/30" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, ID, category, or tag..." className="h-9 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-xs text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-ring/30" />
             </div>
           </div>
         </div>

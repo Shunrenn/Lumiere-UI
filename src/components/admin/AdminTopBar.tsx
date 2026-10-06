@@ -30,7 +30,7 @@ export function AdminTopBar({ onMenu }: { onMenu?: () => void }) {
       const email = a.email || a.user
       list.push({ id: `act-req-${a.id}`, icon: access ? UserPlus : Activity, color: access ? 'text-primary' : 'text-rose-500', text: access ? `New access request: ${email}` : `Forgot password request: ${email}`, time: a.status === 'pending' ? 'Pending' : 'Resolved', unread: a.status === 'pending', onClick: () => navigate('workforce', { kind: 'unlock-user', payload: { email } }) })
     })
-    setups.forEach((setup: any) => list.push({ id: `setup-${setup.id}`, icon: Activity, color: 'text-amber-500', text: `Sub-role "${setup.name}" needs permission configuration (${setup.parentName})`, time: 'Needs setup', unread: true, onClick: () => navigate('rbac', { kind: 'configure-subrole', payload: { subRoleId: setup.subRoleId } }) }))
+    setups.forEach((setup: any) => list.push({ id: `setup-${setup.id}`, icon: Activity, color: 'text-amber-500', text: `Sub-role "${setup.name}" needs permission configuration (${setup.parentName})`, time: 'Needs setup', unread: true, onClick: () => navigate('workforce') }))
     SECURITY_EVENTS.slice(0, 3).forEach((ev: SecurityEvent) => list.push({ id: `sec-ev-${ev.id}`, icon: Activity, color: ev.status === 'Blocked' || ev.status === 'Failed' ? 'text-destructive' : 'text-sky-500', text: `${ev.action}: ${ev.note}`, time: ev.timestamp, unread: false, onClick: () => navigate('security-audit') }))
     return list
   }, [userActions, pendingSubRoleSetups, navigate])
