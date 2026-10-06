@@ -826,8 +826,7 @@ export function GroundCrewPage() {
             <PwaSyncStatusBar
               userId={currentUser?.id || adminEmail || 'crew'}
               onSyncComplete={loadAssignments}
-              className={tab === 'schedule' ? '[&>div:first-child>div>span:last-child]:hidden' : undefined}
-            />
+  />
           )}
 
         {tab === 'home' && (
@@ -851,8 +850,9 @@ export function GroundCrewPage() {
             events={crewEvents}
             loading={loadingAssignments}
             error={assignmentError}
-            isLeadForEvent={isLeadForEvent}
-          />
+  isLeadForEvent={isLeadForEvent}
+  crewScope={currentUser?.groundCrewSubRole === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew'}
+  />
         )}
 
         {tab === 'field' && (
@@ -2028,13 +2028,10 @@ function manilaToday() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
 }
 
-function scheduleStageFor(assignment: MyManningAssignmentDto, scope: string) {
-  const text = `${assignment.assignedRole ?? ''} ${assignment.taskTitle ?? ''} ${assignment.workArea ?? ''}`.toLowerCase()
-  const warehouse = scope === 'Warehouse Crew' || text.includes('warehouse') || text.includes('dispatch')
-  if (text.includes('egress')) return 'Egress Release'
-  if (text.includes('arrival') || text.includes('venue')) return 'Venue Arrival'
-  if (warehouse && text.includes('return')) return 'Warehouse Return'
-  return warehouse ? 'Dispatch Release' : 'Venue Arrival'
+function stagesForCrewScope(scope: 'Warehouse Crew' | 'Field Crew') {
+  return scope === 'Warehouse Crew'
+    ? ['Dispatch Release', 'Warehouse Return']
+    : ['Venue Arrival', 'Egress Release']
 }
 
 function formatTime(value?: string | null) {
@@ -2054,6 +2051,7 @@ function CalendarView({
   loading,
   error,
   isLeadForEvent,
+  crewScope,
 }: {
   selectedDate: string
   setSelectedDate: (date: string) => void
@@ -2062,6 +2060,7 @@ function CalendarView({
   loading: boolean
   error: string | null
   isLeadForEvent: (eventId: string) => boolean
+  crewScope: 'Warehouse Crew' | 'Field Crew'
 }) {
   const today = manilaToday()
   const [view, setView] = useState(() => {
@@ -2072,8 +2071,7 @@ function CalendarView({
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
   const shifts: ScheduleShift[] = assignments.filter((a) => Boolean(a.shiftDate)).map((assignment) => {
     const event = events.find((item) => item.id === assignment.eventId) ?? { id: assignment.eventId, name: assignment.eventName || 'Event', date: assignment.shiftDate!.slice(0, 10), venue: '', status: 'Upcoming' as EventStatus, editable: false, phase: null, items: [] }
-    const scope = (assignment.assignedRole ?? '').toLowerCase().includes('warehouse') ? 'Warehouse Crew' : 'Field Crew'
-    return { assignment, event: { ...event, date: assignment.shiftDate!.slice(0, 10) }, stages: [scheduleStageFor(assignment, scope)] }
+    return { assignment, event: { ...event, date: assignment.shiftDate!.slice(0, 10) }, stages: stagesForCrewScope(crewScope) }
   })
   const selected = shifts.filter((shift) => shift.event.date === selectedDate)
   const recent = shifts.filter((shift) => shift.event.date < today).sort((a, b) => b.event.date.localeCompare(a.event.date)).slice(0, 5)
@@ -2088,7 +2086,10 @@ function CalendarView({
       <button key={assignment.assignmentId} type="button" onClick={() => setDetail(shift)} className="w-full rounded-2xl border border-border bg-card p-3 text-left transition-colors hover:bg-accent/30">
         <div className="flex items-start justify-between gap-2">
           <div><h3 className="font-serif text-sm font-bold text-foreground">{shift.event.name}</h3><p className="mt-0.5 text-xs text-muted-foreground">{shift.event.venue || 'Venue not provided'}</p></div>
-          <PwaBadge variant="neutral" label={tagFor(shift.event.date)} />
+          <div className="flex flex-wrap items-center justify-end gap-1">
+            <PwaBadge variant="neutral" label={tagFor(shift.event.date)} />
+            {isLeadForEvent(assignment.eventId) && <PwaBadge variant="subrole" subRole="Field" label="Shift Lead" />}
+          </div>
         </div>
         {formatTime(assignment.shiftStartTime) && <p className="mt-2 text-xs text-muted-foreground"><Clock className="mr-1 inline size-3" />Call time {formatTime(assignment.shiftStartTime)}</p>}
         <p className="mt-2 text-xs font-medium text-foreground">Your stages: {shift.stages.join(', ')}</p>
