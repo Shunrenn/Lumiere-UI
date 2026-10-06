@@ -37,7 +37,6 @@ import type { DispatchBatch } from '@/lib/event-detail'
 import { PartialEgressSection } from '@/components/warehouse/PartialEgressSection'
 import {
   decideGroundCrewDeclaration,
-  getApproachingDeclarationsSummary,
   getDeclarationAging,
   loadDeclarationsFromBackend,
   submitGroundCrewDeclaration,
@@ -140,7 +139,6 @@ export function GroundCrewPage() {
   const [assignmentError, setAssignmentError] = useState<string | null>(null)
   const [mutatingAssignmentId, setMutatingAssignmentId] = useState<string | null>(null)
   const [isCachedData, setIsCachedData] = useState(false)
-  const [cacheTimestamp, setCacheTimestamp] = useState<string | null>(null)
   const [blockerModalAssignment, setBlockerModalAssignment] = useState<MyManningAssignmentDto | null>(null)
   const [blockerReasonInput, setBlockerReasonInput] = useState('')
   const [blockerNotesInput, setBlockerNotesInput] = useState('')
@@ -194,7 +192,6 @@ export function GroundCrewPage() {
       try {
         const data = await fetchMyManningAssignments()
         setIsCachedData(false)
-        setCacheTimestamp(null)
 
         // Store authoritative read snapshot into durable IndexedDB read_cache
         if (userId) {
@@ -256,7 +253,6 @@ export function GroundCrewPage() {
           })
           setMyAssignments(merged)
           setIsCachedData(true)
-          setCacheTimestamp(cached.cachedAt)
           setLoadingAssignments(false)
           return
         }
@@ -421,13 +417,6 @@ export function GroundCrewPage() {
     } finally {
       setMutatingAssignmentId(null)
     }
-  }
-
-  const handleOpenBlockerModal = (assignment: MyManningAssignmentDto) => {
-    setBlockerModalAssignment(assignment)
-    setBlockerReasonInput('')
-    setBlockerNotesInput('')
-    setBlockerError(null)
   }
 
   const handleSubmitBlocker = async (e: FormEvent) => {
@@ -792,11 +781,6 @@ export function GroundCrewPage() {
     (d) => d.eventId === adminEventId && d.status === 'Pending Event Admin'
   )
 
-  const approachingSummary = useMemo(() => {
-    if (accessLevel !== 'Event Admin') return null
-    return getApproachingDeclarationsSummary()
-  }, [accessLevel])
-
   const navItems: PwaNavItem[] = [
     { id: 'home', label: 'Home', icon: MapPin },
     { id: 'schedule', label: 'Schedule', icon: CalendarDays },
@@ -810,24 +794,24 @@ export function GroundCrewPage() {
       <PwaHeader
         title={
           tab === 'home'
-            ? 'Ground Crew'
+            ? `Hi, ${(adminName || currentUser?.name || '').trim().split(/\s+/)[0] || 'Home'}`
             : tab === 'schedule'
               ? 'Schedule'
               : tab === 'field'
-                ? selectedEvent ? selectedEvent.name : 'Field Console'
-                : adminName || 'Ground Crew Account'
+                ? selectedEvent ? selectedEvent.name : 'Field'
+                : adminName || 'Profile'
         }
         subtitle={
           tab === 'home'
-            ? 'Current and upcoming operational work'
+            ? undefined
             : tab === 'schedule'
-              ? 'Calendar, assigned events & shift reminders'
+              ? 'Calendar and shift reminders'
               : tab === 'field'
-                ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Tasks, reports, requests & history'
-                : adminEmail || 'Ground Crew Member'
+                ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Tasks, reports, requests and history'
+                : adminEmail || undefined
         }
-        roleName={accessLevel}
-        subRole={effectiveRole as GroundCrewSubRole}
+        roleName={tab === 'home' ? (currentUser?.groundCrewSubRole === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew') : accessLevel}
+        subRole={tab === 'home' ? undefined : effectiveRole as GroundCrewSubRole}
         icon={
           tab === 'home' ? (
             <MapPin className="size-5 text-primary" />
@@ -855,25 +839,21 @@ export function GroundCrewPage() {
       {/* Main Tab Content */}
       <main className="mx-auto w-full max-w-[440px] px-4 pt-4 space-y-4">
         {/* Unified Ground Crew Synchronization State */}
-        <PwaSyncStatusBar
-          userId={currentUser?.id || adminEmail || 'crew'}
-          onSyncComplete={loadAssignments}
-        />
+          {tab !== 'home' && (
+            <PwaSyncStatusBar
+              userId={currentUser?.id || adminEmail || 'crew'}
+              onSyncComplete={loadAssignments}
+            />
+          )}
 
         {tab === 'home' && (
           <Home
             events={crewEvents}
             onOpen={(item) => { setSelectedEventId(item.id); setTab('field') }}
-            approachingSummary={approachingSummary}
             assignments={myAssignments}
             loadingAssignments={loadingAssignments}
             assignmentError={assignmentError}
             isCachedData={isCachedData}
-            cacheTimestamp={cacheTimestamp}
-            onRefreshAssignments={loadAssignments}
-            mutatingAssignmentId={mutatingAssignmentId}
-            onUpdateAssignmentStatus={handleUpdateAssignmentStatus}
-            onOpenBlockerModal={handleOpenBlockerModal}
           />
         )}
 
@@ -1068,132 +1048,57 @@ export function GroundCrewPage() {
 function Home({
   events,
   onOpen,
-  approachingSummary,
   assignments,
   loadingAssignments,
   assignmentError,
   isCachedData,
-  cacheTimestamp,
-  onRefreshAssignments,
-  mutatingAssignmentId,
-  onUpdateAssignmentStatus,
-  onOpenBlockerModal,
 }: {
   events: EventItem[]
   onOpen: (event: EventItem) => void
-  approachingSummary?: { totalApproaching: number; eventsCount: number } | null
   assignments: MyManningAssignmentDto[]
   loadingAssignments: boolean
   assignmentError: string | null
   isCachedData?: boolean
-  cacheTimestamp?: string | null
-  onRefreshAssignments: () => void
-  mutatingAssignmentId: string | null
-  onUpdateAssignmentStatus: (
-    assignmentId: string,
-    req: { status: 'InProgress' | 'Completed' | 'Blocked'; blockerReason?: string | null; notes?: string | null },
-  ) => Promise<{ success: boolean; error?: string }>
-  onOpenBlockerModal: (assignment: MyManningAssignmentDto) => void
 }) {
-  const currentEvent = events.find((e) => e.status === 'Current') || events[0]
-  const upcomingEvents = events.filter((e) => e.id !== currentEvent?.id && e.status !== 'Completed')
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
+  const scope = assignments.some((a) => /warehouse/i.test(`${a.workArea} ${a.taskTitle}`)) ? 'Warehouse Crew' : 'Field Crew'
+  const stages = ['Dispatch Release', 'Venue Arrival', 'Egress Release', 'Warehouse Return']
+  const stageFor = (items: MyManningAssignmentDto[]) => {
+    const completed = items.filter((a) => a.executionStatus === 'Completed').length
+    const match = items.find((a) => a.taskTitle && stages.some((stage) => a.taskTitle?.toLowerCase().includes(stage.toLowerCase())))?.taskTitle
+    const index = match ? stages.findIndex((stage) => match.toLowerCase().includes(stage.toLowerCase())) : Math.min(completed, 3)
+    return { index: Math.max(0, index), label: stages[Math.max(0, index)] }
+  }
+  const grouped = Array.from(new Set(assignments.map((a) => a.eventId))).map((eventId) => {
+    const items = assignments.filter((a) => a.eventId === eventId)
+    const first = items[0]
+    const event = events.find((e) => e.id === eventId)
+    return { id: eventId, name: first.eventName || event?.name || 'Event', venue: event?.venue || first.workArea || 'Venue', date: first.shiftDate || event?.date || '', time: first.shiftStartTime, isLead: items.some((a) => a.isLead), items }
+  }).filter((item) => item.date)
+  const todayShift = grouped.find((item) => item.date.slice(0, 10) === today)
+  const nextShift = grouped.filter((item) => item.date.slice(0, 10) > today).sort((a, b) => a.date.localeCompare(b.date))[0]
+  const toEvent = (item: typeof grouped[number]) => events.find((e) => e.id === item.id) || { id: item.id, name: item.name, venue: item.venue, date: item.date, status: 'Upcoming' as EventStatus, editable: false, phase: null, items: [] }
+  const syncLabel = !navigator.onLine ? 'Offline - changes are saved on this phone' : isCachedData ? 'Offline - changes are saved on this phone' : assignments.some((a) => a.pendingSync) ? `${assignments.filter((a) => a.pendingSync).length} waiting to sync` : 'Online'
+
+  if (loadingAssignments) return <div className="space-y-3"><div className="h-5 w-20 animate-pulse rounded bg-muted" /><div className="h-44 animate-pulse rounded-2xl bg-muted" /><div className="h-28 animate-pulse rounded-2xl bg-muted" /></div>
+  if (assignmentError && assignments.length === 0) return <p className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Couldn&apos;t load your shifts. Try again.</p>
 
   return (
-    <div className="space-y-4">
-      {approachingSummary && approachingSummary.totalApproaching > 0 && (
-        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-200">
-          <div className="flex items-center gap-2 font-bold uppercase tracking-wider">
-            <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
-            Pending Escalation Warning
-          </div>
-          <p className="mt-1 leading-relaxed">
-            {approachingSummary.totalApproaching} declaration(s) approaching safety cutoff across{' '}
-            {approachingSummary.eventsCount} event(s). Review in Decision tab.
-          </p>
-        </div>
-      )}
-
-      {/* Canonical My Assignments Section */}
-      <MyAssignmentsSection
-        assignments={assignments}
-        loading={loadingAssignments}
-        error={assignmentError}
-        isCachedData={isCachedData}
-        cacheTimestamp={cacheTimestamp}
-        onRefresh={onRefreshAssignments}
-        mutatingAssignmentId={mutatingAssignmentId}
-        onUpdateStatus={onUpdateAssignmentStatus}
-        onOpenBlocker={onOpenBlockerModal}
-      />
-
-      {currentEvent && (
-        <PwaCard
-          title="Active Shift Context"
-          subtitle="Primary operational focus for today"
-          action={currentEvent.phase ? <PwaBadge subRole={currentEvent.phase === 'Dispatch Loading' ? 'Field' : 'Warehouse'} label={currentEvent.phase} /> : undefined}
-        >
-          <div className="mt-1 space-y-3">
-            <div>
-              <h4 className="font-serif text-lg font-bold text-foreground">{currentEvent.name}</h4>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <MapPin className="size-3.5 text-primary" /> {currentEvent.venue}
-                </span>
-                <span>•</span>
-                <span className="inline-flex items-center gap-1">
-                  <CalendarDays className="size-3.5 text-primary" /> {dateLabel(currentEvent.date)}
-                </span>
-              </div>
-            </div>
-
-            {currentEvent.items.length > 0 && (
-              <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-xs">
-                <span className="font-bold text-foreground uppercase tracking-wider text-[0.625rem]">Manifest Items: </span>
-                <span className="text-muted-foreground">
-                  {currentEvent.items.map((i) => `${i.qty}x ${i.name}`).join(', ')}
-                </span>
-              </div>
-            )}
-
-            <PwaButton onClick={() => onOpen(currentEvent)} variant="primary" size="md" className="w-full">
-              Open Event Console
-            </PwaButton>
-          </div>
-        </PwaCard>
-      )}
-
-      <div className="pt-2">
-        <h3 className="mb-2.5 font-serif text-sm font-semibold tracking-tight text-foreground uppercase tracking-[0.14em]">
-          Upcoming Operational Shifts
-        </h3>
-        {upcomingEvents.length === 0 ? (
-          <PwaEmptyState title="No Upcoming Shifts" description="All scheduled events for this period have been completed." />
-        ) : (
-          <div className="space-y-3">
-            {upcomingEvents.map((evt) => (
-              <PwaCard key={evt.id} className="p-3.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h4 className="font-serif text-sm font-bold text-foreground">{evt.name}</h4>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{evt.venue} • {dateLabel(evt.date)}</p>
-                  </div>
-                  {evt.phase && <PwaBadge variant="neutral" label={evt.phase} />}
-                </div>
-                <div className="mt-3 flex items-center justify-end">
-                  <PwaButton onClick={() => onOpen(evt)} variant="outline" size="sm">
-                    View Shift
-                  </PwaButton>
-                </div>
-              </PwaCard>
-            ))}
-          </div>
-        )}
-      </div>
+    <div className="space-y-3">
+      <span className="inline-flex rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">{syncLabel}</span>
+      {todayShift ? (
+        <button type="button" onClick={() => onOpen(toEvent(todayShift))} className="block w-full text-left">
+          <PwaCard title="Today" action={todayShift.isLead ? <PwaBadge variant="neutral" label="Shift Lead" /> : undefined}>
+            <div className="space-y-3"><div><h2 className="font-serif text-lg font-bold">{todayShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{todayShift.venue}{todayShift.time ? ` • Call ${todayShift.time}` : ''}</p></div><div><div className="grid grid-cols-4 gap-1">{stages.map((stage, index) => <span key={stage} className={`h-2 rounded-full ${index <= stageFor(todayShift.items).index ? 'bg-primary' : 'bg-muted'}`} />)}</div><p className="mt-2 text-xs text-muted-foreground">Stage {stageFor(todayShift.items).index + 1} of 4 · {stageFor(todayShift.items).label}</p></div><p className="text-xs text-muted-foreground">Your stages: {scope === 'Field Crew' ? 'Venue Arrival, Egress Release' : 'Dispatch Release, Warehouse Return'}</p></div>
+          </PwaCard>
+        </button>
+      ) : <PwaCard title="Today"><p className="text-sm text-muted-foreground">No shift today</p></PwaCard>}
+      {nextShift ? <button type="button" onClick={() => onOpen(toEvent(nextShift))} className="block w-full text-left"><PwaCard title="Next shift"><h2 className="font-serif text-lg font-bold">{nextShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{nextShift.venue} • {dateLabel(nextShift.date)}</p></PwaCard></button> : <PwaCard title="Next shift"><p className="text-sm text-muted-foreground">No upcoming shifts</p></PwaCard>}
     </div>
   )
 }
 
-function MyAssignmentsSection({
+export function MyAssignmentsSection({
   assignments,
   loading,
   error,
