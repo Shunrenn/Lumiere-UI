@@ -117,14 +117,14 @@ function Router() {
   }
 
   // Client-side scoped role guard for Executive Lite:
-  // Allowed client routes: dashboard, inventory (conditional), registry.
+  // Allowed client routes: dashboard, inventory (read-only), registry.
   // Fails closed to EventDashboardPage.
   if (isExecutiveLite) {
     switch (route) {
       case 'dashboard':
         return <EventDashboardPage />
       case 'inventory':
-        return canAccessAssetInventory ? <ExecutiveAssetInventoryPage /> : <EventDashboardPage />
+        return <ExecutiveAssetInventoryPage />
       case 'registry':
         return <EventRegistryPage />
       default:
@@ -245,7 +245,7 @@ function Router() {
       return <DamageValidationPage />
     case 'inventory':
       if (isExecutive) {
-        return canAccessAssetInventory ? <ExecutiveAssetInventoryPage /> : <EventDashboardPage />
+        return <ExecutiveAssetInventoryPage />
       }
       return <InventoryStockPage />
     case 'warehouse-logs':

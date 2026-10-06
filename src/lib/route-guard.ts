@@ -85,7 +85,7 @@ export function getDefaultRouteForUser(user: PortalAccount | null | undefined): 
 export function canAccessRoute(
   user: PortalAccount | null | undefined,
   routeOrPath: string,
-  canAssetOverride?: boolean,
+  _canAssetOverride?: boolean,
 ): boolean {
   if (!user) return false
 
@@ -97,7 +97,6 @@ export function canAccessRoute(
   const subRole = user.subRole
   const portal = user.portal
   const fullAccess = user.fullWarehouseAccess ?? false
-  const canAsset = canAssetOverride !== undefined ? canAssetOverride : Boolean(user.canAccessAssetInventoryAndAllocation)
   const isPwaRoute = PWA_STANDALONE_ROUTES.has(cleanRoute)
 
   // Portal boundary: PWA users cannot access web-only routes
@@ -135,12 +134,11 @@ export function canAccessRoute(
   }
 
   // Executive Lite:
-  // Allowed: dashboard, registry, inventory (conditional on asset capability)
+  // Allowed: dashboard, registry, and read-only inventory viewing.
+  // Asset allocation/management remains capability-gated inside operational surfaces.
   // Denied: Admin, Audit, Workforce, Canvas, Manning, Production, Overview
   if (role === 'Executive Lite') {
-    if (cleanRoute === 'dashboard' || cleanRoute === 'registry') return true
-    if (cleanRoute === 'inventory' && canAsset) return true
-    return false
+    return cleanRoute === 'dashboard' || cleanRoute === 'registry' || cleanRoute === 'inventory'
   }
 
   // Executive (standard):

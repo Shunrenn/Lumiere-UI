@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react'
-import { Search, MoreVertical, Edit3 } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Search } from 'lucide-react'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { RegisterEventDrawer } from '@/components/RegisterEventDrawer'
 import { EmptyState } from '@/components/EmptyState'
@@ -53,22 +53,10 @@ export function ExecutiveLiteEventOperations() {
 
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<EventStatus | 'All'>('All')
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
-
-  // Drawer modal states
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [drawerMode, setDrawerMode] = useState<'create' | 'view' | 'edit'>('create')
   const [selectedEvent, setSelectedEvent] = useState<PortalEvent | null>(null)
 
   const destination = (id: ExecutiveDestinationId) => navigate(id)
-
-  // Close actions menu when clicking outside
-  useEffect(() => {
-    if (!openMenuId) return
-    const handleClickOutside = () => setOpenMenuId(null)
-    window.addEventListener('click', handleClickOutside)
-    return () => window.removeEventListener('click', handleClickOutside)
-  }, [openMenuId])
 
   const metrics = useMemo(
     () => ({
@@ -99,21 +87,8 @@ export function ExecutiveLiteEventOperations() {
     return events.filter((e) => e.status !== 'Cancelled').slice(0, 4)
   }, [events])
 
-  const openCreate = () => {
-    setSelectedEvent(null)
-    setDrawerMode('create')
-    setDrawerOpen(true)
-  }
-
   const openView = (ev: PortalEvent) => {
     setSelectedEvent(ev)
-    setDrawerMode('view')
-    setDrawerOpen(true)
-  }
-
-  const openEdit = (ev: PortalEvent) => {
-    setSelectedEvent(ev)
-    setDrawerMode('edit')
     setDrawerOpen(true)
   }
 
@@ -176,7 +151,7 @@ export function ExecutiveLiteEventOperations() {
             </div>
           )}
 
-          {/* Filter Bar with Status Pills & REGISTER NEW EVENT Button */}
+            {/* Read-only filter bar */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-2">
               {statuses.map((status) => {
@@ -203,13 +178,6 @@ export function ExecutiveLiteEventOperations() {
               })}
             </div>
 
-            <button
-              type="button"
-              onClick={openCreate}
-              className="rounded-lg bg-[#1A1A1A] hover:bg-black text-white dark:bg-neutral-100 dark:text-neutral-950 px-5 py-2.5 text-xs font-bold uppercase tracking-widest shadow-xs transition-colors shrink-0 self-start sm:self-auto"
-            >
-              REGISTER NEW EVENT
-            </button>
           </div>
 
           {/* Event Table Container with Quick Stats Ribbon matching Reference 3 */}
@@ -354,41 +322,7 @@ export function ExecutiveLiteEventOperations() {
                             >
                               VIEW EVENT
                             </button>
-                            <div className="relative" onClick={(ev) => ev.stopPropagation()}>
-                              <button
-                                type="button"
-                                onClick={() => setOpenMenuId(openMenuId === e.id ? null : e.id)}
-                                className="p-1 rounded text-neutral-400 hover:text-neutral-700 hover:bg-neutral-200/50 dark:hover:bg-muted dark:hover:text-foreground transition-colors"
-                                title="More actions"
-                              >
-                                <MoreVertical className="size-4" />
-                              </button>
-                              {openMenuId === e.id && (
-                                <div className="absolute right-0 top-full mt-1 z-30 w-36 rounded-lg border border-border bg-card p-1 shadow-lg text-xs">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setOpenMenuId(null)
-                                      openEdit(e)
-                                    }}
-                                    className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left font-medium text-foreground hover:bg-muted transition"
-                                  >
-                                    <Edit3 className="size-3.5 text-muted-foreground" />
-                                    Edit Event
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setOpenMenuId(null)
-                                      openView(e)
-                                    }}
-                                    className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left font-medium text-foreground hover:bg-muted transition"
-                                  >
-                                    View Details
-                                  </button>
-                                </div>
-                              )}
-                            </div>
+
                           </div>
                         </td>
                       </tr>
@@ -408,7 +342,7 @@ export function ExecutiveLiteEventOperations() {
           setDrawerOpen(false)
           setSelectedEvent(null)
         }}
-        mode={drawerMode}
+        mode="view"
         event={selectedEvent}
       />
     </>

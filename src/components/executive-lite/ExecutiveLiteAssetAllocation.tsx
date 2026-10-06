@@ -1,9 +1,8 @@
 import { useState, useMemo } from 'react'
-import { Search, Grid2X2, List, ShieldAlert } from 'lucide-react'
+import { Search, Grid2X2, List } from 'lucide-react'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { AssetInformationModal } from '@/components/AssetInformationModal'
 import { usePortal } from '@/lib/store'
-import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import type { InventoryItem } from '@/lib/types'
@@ -11,7 +10,6 @@ import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
 
 export function ExecutiveLiteAssetAllocation() {
   const { navigate } = useNav()
-  const { canAccessAssetInventory } = useAuth()
   const { inventory: items } = usePortal()
 
   const [query, setQuery] = useState('')
@@ -77,30 +75,6 @@ export function ExecutiveLiteAssetAllocation() {
       return matchesCategory && matchesQuery
     })
   }, [items, selectedCategory, query])
-
-  // Direct RBAC Capability Guard
-  if (!canAccessAssetInventory) {
-    return (
-      <ExecutiveShell activeId="dashboard" onSelect={destination}>
-        <div className="flex min-h-[50vh] flex-col items-center justify-center text-center p-6">
-          <div className="flex size-14 items-center justify-center rounded-full bg-destructive/10 text-destructive mb-4">
-            <ShieldAlert className="size-7" />
-          </div>
-          <h2 className="font-serif text-2xl font-medium text-foreground">Access Restricted</h2>
-          <p className="mt-2 max-w-md text-sm text-muted-foreground">
-            Asset Inventory and Allocation capability is currently disabled for Executive accounts by the system administrator.
-          </p>
-          <button
-            type="button"
-            onClick={() => navigate('dashboard')}
-            className="button-primary mt-6 text-xs"
-          >
-            Return to Executive Dashboard
-          </button>
-        </div>
-      </ExecutiveShell>
-    )
-  }
 
   const stickyHeader = (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

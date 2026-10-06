@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Plus, Search, Calendar, MapPin, User, Clock, Eye, Edit3 } from 'lucide-react'
+import { Search, Calendar, MapPin, User, Clock, Eye } from 'lucide-react'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { ExecutiveStatCard, EventDistributionCard } from '@/components/executive/ExecutiveAnalytics'
 import { ExecutiveLiveFeed } from '@/components/executive/ExecutiveLiveFeed'
@@ -29,9 +29,7 @@ export function ExecutiveLiteDashboard() {
   const [selectedStatus, setSelectedStatus] = useState<string>('All')
   const [calendarDate, setCalendarDate] = useState<string>('')
 
-  // Drawer states
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [drawerMode, setDrawerMode] = useState<'create' | 'view' | 'edit'>('create')
   const [selectedEvent, setSelectedEvent] = useState<PortalEvent | null>(null)
 
   // Event metrics
@@ -85,21 +83,8 @@ export function ExecutiveLiteDashboard() {
 
   const destination = (id: ExecutiveDestinationId) => navigate(id)
 
-  const openCreate = () => {
-    setSelectedEvent(null)
-    setDrawerMode('create')
-    setDrawerOpen(true)
-  }
-
   const openView = (ev: PortalEvent) => {
     setSelectedEvent(ev)
-    setDrawerMode('view')
-    setDrawerOpen(true)
-  }
-
-  const openEdit = (ev: PortalEvent) => {
-    setSelectedEvent(ev)
-    setDrawerMode('edit')
     setDrawerOpen(true)
   }
 
@@ -124,14 +109,6 @@ export function ExecutiveLiteDashboard() {
             className="w-56 rounded-md border border-input bg-card py-2 pl-9 pr-3 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30 sm:w-64"
           />
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-primary-foreground shadow-sm transition hover:bg-primary/90"
-        >
-          <Plus className="size-3.5" />
-          + Event
-        </button>
       </div>
     </div>
   )
@@ -272,14 +249,6 @@ export function ExecutiveLiteDashboard() {
                       ? 'No events match your search or filter criteria. Try adjusting the filter or calendar selection.'
                       : 'There are no active events registered in the portfolio.'}
                   </p>
-                  <button
-                    type="button"
-                    onClick={openCreate}
-                    className="button-primary mt-4 text-xs"
-                  >
-                    <Plus className="size-3.5" />
-                    Register New Event
-                  </button>
                 </div>
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -335,14 +304,6 @@ export function ExecutiveLiteDashboard() {
                           <Eye className="size-3.5" />
                           View
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => openEdit(ev)}
-                          className="inline-flex items-center gap-1 text-[0.65rem] font-bold uppercase tracking-wider text-primary hover:underline transition-colors"
-                        >
-                          <Edit3 className="size-3.5" />
-                          Edit
-                        </button>
                       </div>
                     </div>
                   ))}
@@ -358,7 +319,7 @@ export function ExecutiveLiteDashboard() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         event={selectedEvent}
-        mode={drawerMode}
+        mode="view"
       />
     </>
   )
