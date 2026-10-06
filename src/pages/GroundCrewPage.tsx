@@ -173,7 +173,7 @@ export function GroundCrewPage() {
   const declarations = useGroundCrewDeclarations()
   void declarations
   const [tab, setTab] = useState<Tab>('home')
-  const [fieldSection, setFieldSection] = useState<'tasks' | 'reports' | 'requests' | 'history'>('tasks')
+  const [fieldSection, setFieldSection] = useState<'tasks' | 'requests' | 'history'>('tasks')
 
   // Canonical Manning operational assignments for authenticated user
   const [myAssignments, setMyAssignments] = useState<MyManningAssignmentDto[]>([])
@@ -853,7 +853,7 @@ export function GroundCrewPage() {
             : tab === 'schedule'
               ? undefined
               : tab === 'field'
-                ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Tasks, reports, requests and history'
+                ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Tasks, requests and history'
                 : adminEmail || undefined
         }
         roleName={currentUser?.groundCrewSubRole === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew'}
@@ -928,11 +928,11 @@ export function GroundCrewPage() {
             <div className="space-y-4">
               <PwaCard title="Field Console" subtitle="Open an assigned event or review operational work.">
                 <div className="grid grid-cols-2 gap-2">
-                  {(['tasks', 'reports', 'requests', 'history'] as const).map((section) => <button key={section} type="button" onClick={() => setFieldSection(section)} className={`rounded-xl border px-3 py-3 text-xs font-semibold capitalize ${fieldSection === section ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>{section}</button>)}
+                  {(['tasks', 'requests', 'history'] as const).map((section) => <button key={section} type="button" onClick={() => setFieldSection(section)} className={`rounded-xl border px-3 py-3 text-xs font-semibold capitalize ${fieldSection === section ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>{section}</button>)}
                 </div>
               </PwaCard>
               {fieldSection === 'tasks' && <FieldConsole events={crewEvents.filter((event) => event.status !== 'Completed')} assignmentScope={assignmentScope} />}
-              {fieldSection !== 'tasks' && <Activity reports={reports} requests={requests} events={crewEvents} offlineItems={offlineItems} isSyncingQueue={isSyncingQueue} onTriggerSync={handleTriggerSync} onUpdateReport={handleUpdateReport} />}
+              {fieldSection !== 'tasks' && <Activity reports={fieldSection === 'requests' ? reports : []} requests={fieldSection === 'requests' ? requests : []} events={crewEvents} offlineItems={offlineItems} isSyncingQueue={isSyncingQueue} onTriggerSync={handleTriggerSync} onUpdateReport={handleUpdateReport} />}
             </div>
           )
         )}
