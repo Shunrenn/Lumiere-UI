@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, Lock, MapPin, Package, X } from 'lucide-react'
+import { ArrowLeft, Check, Lock, MapPin, Package, Plus, TriangleAlert, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { DispatchBatch } from '@/lib/event-detail'
 import type { MyManningAssignmentDto } from '@/features/manning/api/manningApi'
@@ -10,7 +10,7 @@ import { PwaCard, PwaEmptyState } from '@/components/pwa'
 type FieldEvent = { id: string; name: string; date: string; venue: string }
 type Asset = { id: string; name: string; sku: string; qty: number; color: string }
 type ItemStatus = 'Not checked' | 'Verified' | 'Missing' | 'Damaged'
-type StageRecord = { status: ItemStatus; pending: boolean; missing: number; damaged: number; photo: boolean; noPhoto: boolean }
+type StageRecord = { status: ItemStatus; pending: boolean }
 
 const demoEnabled = import.meta.env.DEV && typeof window !== 'undefined' && Boolean(new URLSearchParams(window.location.search).get('demo'))
 
@@ -33,7 +33,9 @@ export function GroundCrewField({ event, events, assignments, batches, batchesBy
   const [section, setSection] = useState<'events' | 'reports'>('events')
   const [activeStage, setActiveStage] = useState<GroundCrewStage | null>(null)
   const [itemRecords, setItemRecords] = useState<Record<string, StageRecord>>({})
+  const [problemItem, setProblemItem] = useState<Asset | null>(null)
   const [notes, setNotes] = useState('')
+  const [photos, setPhotos] = useState<string[]>([])
   const [reviewedDamage, setReviewedDamage] = useState(false)
   const [completedStages, setCompletedStages] = useState<GroundCrewStage[]>([])
 
@@ -54,14 +56,13 @@ export function GroundCrewField({ event, events, assignments, batches, batchesBy
   const isLead = event ? isLeadForEvent(event.id) : false
   const assets = useMemo(() => batches.flatMap((batch) => batch.reconciliation.map((row) => ({ id: row.id, name: row.itemName, sku: row.id, qty: row.planned, color: 'bg-primary/10' }))).filter((item, index, list) => list.findIndex((candidate) => candidate.name === item.name) === index), [batches])
   const records = assets.reduce<Record<string, StageRecord>>((result, asset, index) => {
-    result[asset.id] = itemRecords[asset.id] ?? { status: isDemo && index === 0 ? 'Verified' : 'Not checked', pending: isDemo && index === 0, missing: 0, damaged: 0, photo: false, noPhoto: false }
+    result[asset.id] = itemRecords[asset.id] ?? { status: isDemo && index === 0 ? 'Verified' : 'Not checked', pending: isDemo && index === 0 }
     return result
   }, {})
-  const completedCount = Object.values(records).filter((record) => record.status !== 'Not checked' || record.missing > 0 || record.damaged > 0).length
-  const damagedCount = Object.values(records).reduce((sum, record) => sum + record.damaged, 0)
+  const completedCount = Object.values(records).filter((record) => record.status !== 'Not checked').length
+  const damagedCount = Object.values(records).filter((record) => record.status === 'Damaged').length
   const allChecked = assets.length > 0 && completedCount === assets.length
-  const missingPhoto = Object.values(records).some((record) => record.damaged > 0 && !record.photo && !record.noPhoto)
-  const canConfirm = isLead && allChecked && (!damagedCount || reviewedDamage) && !missingPhoto
+  const canConfirm = isLead && allChecked && (!damagedCount || reviewedDamage) && (!damagedCount || photos.length > 0)
 
   const stageSummaryFor = (item: FieldEvent) => {
     const itemBatches = batchesByEvent.get(item.id) ?? []
@@ -72,11 +73,11 @@ export function GroundCrewField({ event, events, assignments, batches, batchesBy
     return current ? `Stage ${itemStates.indexOf(current) + 1} of 4 · ${current.stage}` : 'Stage unavailable'
   }
 
-  const updateCounts = (asset: Asset, missing: number, damaged: number, noPhoto = false) => setItemRecords((previous) => ({ ...previous, [asset.id]: { ...(previous[asset.id] ?? { status: 'Not checked', pending: false, photo: false, noPhoto: false }), status: damaged > 0 ? 'Damaged' : missing > 0 ? 'Missing' : 'Verified', missing, damaged, noPhoto, pending: isDemo } }))
-  const updatePhoto = (asset: Asset) => setItemRecords((previous) => ({ ...previous, [asset.id]: { ...(previous[asset.id] ?? { status: 'Damaged', pending: false, missing: 0, damaged: 1, noPhoto: false }), photo: true, pending: isDemo } }))
+  const updateItem = (asset: Asset, status: ItemStatus) => setItemRecords((previous) => ({ ...previous, [asset.id]: { status, pending: isDemo } }))
   const openStage = (stage: GroundCrewStage) => {
     setActiveStage(stage)
     setReviewedDamage(false)
+    setPhotos([])
   }
   const confirmStage = () => {
     if (!canConfirm || !currentStage) return
@@ -84,7 +85,7 @@ export function GroundCrewField({ event, events, assignments, batches, batchesBy
     setActiveStage(null)
   }
 
-  if (event && activeStage) return <StageScreen event={event} stage={activeStage} stageIndex={scopeStages.indexOf(activeStage) + 1 || 2} assets={assets} records={records} completedCount={completedCount} damagedCount={damagedCount} isLead={isLead} isDemo={isDemo} canConfirm={canConfirm} reviewedDamage={reviewedDamage} notes={notes} onBack={() => setActiveStage(null)} onCheck={(asset) => updateCounts(asset, 0, 0)} onAddPhoto={(asset) => updatePhoto(asset)} onNotes={setNotes} onReview={setReviewedDamage} onConfirm={confirmStage} onCounts={(asset, missing, damaged, noPhoto) => { updateCounts(asset, missing, damaged, noPhoto); if (damaged > 0) onReport(asset) }} />
+  if (event && activeStage) return <StageScreen event={event} stage={activeStage} stageIndex={scopeStages.indexOf(activeStage) + 1 || 2} assets={assets} records={records} completedCount={completedCount} damagedCount={damagedCount} isLead={isLead} isDemo={isDemo} canConfirm={canConfirm} reviewedDamage={reviewedDamage} notes={notes} photos={photos} onBack={() => setActiveStage(null)} onCheck={(asset) => updateItem(asset, 'Verified')} onProblem={(asset) => setProblemItem(asset)} onAddPhoto={() => setPhotos((previous) => [...previous, `Stage photo ${previous.length + 1}`])} onNotes={setNotes} onReview={setReviewedDamage} onConfirm={confirmStage} problemItem={problemItem} closeProblem={() => setProblemItem(null)} setProblem={(asset, status) => { updateItem(asset, status); setProblemItem(null); if (status === 'Damaged') onReport(asset) }} />
 
   if (event) return <div className="space-y-4">
     <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm font-semibold text-muted-foreground"><ArrowLeft className="size-4" /> Field</button>
@@ -104,34 +105,21 @@ export function GroundCrewField({ event, events, assignments, batches, batchesBy
   </div>
 }
 
-function StageScreen({ event, stage, stageIndex, assets, records, completedCount, damagedCount, isLead, isDemo, canConfirm, reviewedDamage, notes, onBack, onCheck, onAddPhoto, onNotes, onReview, onConfirm, onCounts }: {
-  event: FieldEvent; stage: GroundCrewStage; stageIndex: number; assets: Asset[]; records: Record<string, StageRecord>; completedCount: number; damagedCount: number; isLead: boolean; isDemo: boolean; canConfirm: boolean; reviewedDamage: boolean; notes: string; onBack: () => void; onCheck: (asset: Asset) => void; onAddPhoto: (asset: Asset) => void; onNotes: (value: string) => void; onReview: (value: boolean) => void; onConfirm: () => void; onCounts: (asset: Asset, missing: number, damaged: number, noPhoto: boolean) => void
+function StageScreen({ event, stage, stageIndex, assets, records, completedCount, damagedCount, isLead, isDemo, canConfirm, reviewedDamage, notes, photos, onBack, onCheck, onProblem, onAddPhoto, onNotes, onReview, onConfirm, problemItem, closeProblem, setProblem }: {
+  event: FieldEvent; stage: GroundCrewStage; stageIndex: number; assets: Asset[]; records: Record<string, StageRecord>; completedCount: number; damagedCount: number; isLead: boolean; isDemo: boolean; canConfirm: boolean; reviewedDamage: boolean; notes: string; photos: string[]; onBack: () => void; onCheck: (asset: Asset) => void; onProblem: (asset: Asset) => void; onAddPhoto: () => void; onNotes: (value: string) => void; onReview: (value: boolean) => void; onConfirm: () => void; problemItem: Asset | null; closeProblem: () => void; setProblem: (asset: Asset, status: ItemStatus) => void
 }) {
-  const [editing, setEditing] = useState<{ asset: Asset; kind: 'Missing' | 'Damaged' } | null>(null)
-  const [count, setCount] = useState('')
-  const [noPhoto, setNoPhoto] = useState(false)
-  const saveCount = () => {
-    if (!editing) return
-    const value = Number(count)
-    const current = records[editing.asset.id]
-    const missing = editing.kind === 'Missing' ? value : current.missing
-    const damaged = editing.kind === 'Damaged' ? value : current.damaged
-    if (!Number.isInteger(value) || value < 1 || value > editing.asset.qty || missing + damaged > editing.asset.qty) return
-    onCounts(editing.asset, missing, damaged, editing.kind === 'Damaged' ? noPhoto : current.noPhoto)
-    setEditing(null)
-    setCount('')
-    setNoPhoto(false)
-  }
   return <div className="space-y-4">
     <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm font-semibold text-muted-foreground"><ArrowLeft className="size-4" /> Back</button>
     <PwaCard title={stage} subtitle={`Stage ${stageIndex} of 4 · ${event.name} · ${event.venue}`}>
-      <div className="space-y-3"><div className="flex items-center justify-between"><p className="text-xs font-semibold">{completedCount} of {assets.length} items checked</p>{!isLead && <span className="rounded-full bg-muted px-2 py-1 text-[10px] text-muted-foreground">Not your stage</span>}</div>
-        {assets.map((asset) => { const record = records[asset.id]; const ok = Math.max(asset.qty - record.missing - record.damaged, 0); return <div key={asset.id} className="space-y-2 rounded-xl border border-border p-3"><div className="flex items-center gap-2"><Package className="size-4 text-primary" /><div className="min-w-0 flex-1"><p className="text-xs font-semibold">{asset.name} <span className="font-normal text-muted-foreground">× {asset.qty}</span></p><p className="text-[10px] text-muted-foreground">{record.missing} missing · {record.damaged} damaged · {ok} OK</p>{record.pending && <p className="text-[10px] text-muted-foreground">Saved on this phone · pending sync</p>}</div><button type="button" aria-label={`Mark ${asset.name} present`} onClick={() => onCheck(asset)} className={`flex size-7 items-center justify-center rounded-md border ${record.status === 'Verified' && !record.missing && !record.damaged ? 'border-primary bg-primary text-primary-foreground' : 'border-border'}`}><Check className="size-4" /></button></div><div className="flex gap-2"><button type="button" onClick={() => { setEditing({ asset, kind: 'Missing' }); setCount(record.missing ? String(record.missing) : ''); setNoPhoto(false) }} className="rounded-lg border border-border px-2 py-1 text-[10px] font-semibold">Missing</button><button type="button" onClick={() => { setEditing({ asset, kind: 'Damaged' }); setCount(record.damaged ? String(record.damaged) : ''); setNoPhoto(record.noPhoto) }} className="rounded-lg border border-amber-500/40 px-2 py-1 text-[10px] font-semibold text-amber-700">Damaged</button>{record.damaged > 0 && <button type="button" onClick={() => onAddPhoto(asset)} className="rounded-lg border border-dashed border-border px-2 py-1 text-[10px] font-semibold">Add photo</button>}</div>{record.damaged > 0 && !record.photo && !record.noPhoto && <p className="text-[10px] text-amber-600">Add a photo of the damage.</p>}</div> })}
+      <div className="space-y-3"><div className="flex items-center justify-between"><p className="text-xs font-semibold">{completedCount} of {assets.reduce((sum, asset) => sum + asset.qty, 0)} items checked</p>{!isLead && <span className="rounded-full bg-muted px-2 py-1 text-[10px] text-muted-foreground">Not your stage</span>}</div>
+        {assets.map((asset) => { const record = records[asset.id]; return <div key={asset.id} className="flex items-center gap-2 rounded-xl border border-border p-3"><button type="button" aria-label={`Verify ${asset.name}`} onClick={() => onCheck(asset)} className={`flex size-6 shrink-0 items-center justify-center rounded-md border ${record.status === 'Verified' ? 'border-primary bg-primary text-primary-foreground' : 'border-border'}`}>{record.status === 'Verified' && <Check className="size-4" />}</button><Package className="size-4 text-primary" /><div className="min-w-0 flex-1"><p className="text-xs font-semibold">{asset.name} <span className="font-normal text-muted-foreground">× {asset.qty}</span></p><p className="text-[10px] text-muted-foreground">{record.status} · {record.pending ? (isDemo ? 'Saved on this phone · pending sync' : 'Saved') : 'Saved'}</p></div>{record.status === 'Damaged' && <TriangleAlert className="size-4 text-amber-500" />}<button type="button" onClick={() => onProblem(asset)} className="text-xs font-semibold text-destructive">Problem</button></div> })}
         {damagedCount > 0 && <label className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs"><input type="checkbox" checked={reviewedDamage} onChange={(e) => onReview(e.target.checked)} className="mt-0.5" /> I&apos;ve reviewed the reported damage</label>}
+        <div className="space-y-2"><p className="text-xs font-semibold">Photos {damagedCount > 0 && <span className="font-normal text-amber-600">(required for damaged items)</span>}</p><div className="flex flex-wrap gap-2">{photos.map((photo) => <span key={photo} className="rounded-lg bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-600">Photo saved{isDemo && ' · Saved on this phone · pending sync'}</span>)}<button type="button" onClick={onAddPhoto} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-3 py-2 text-xs font-semibold"><Plus className="size-3" /> Add photo</button></div></div>
         <label className="block text-xs font-semibold">Notes (optional)<textarea value={notes} onChange={(e) => onNotes(e.target.value)} rows={3} className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs" placeholder="Add a note for the next crew..." />{isDemo && notes && <span className="text-[10px] text-muted-foreground">Saved on this phone · pending sync</span>}</label>
         {isLead ? <button type="button" disabled={!canConfirm} onClick={onConfirm} className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">Confirm {stage}</button> : <div className="rounded-xl bg-muted/50 p-3 text-center text-xs font-semibold text-muted-foreground">Waiting for shift lead to confirm</div>}
+        {damagedCount > 0 && <p className="text-xs text-amber-600">{damagedCount} damaged item{damagedCount === 1 ? '' : 's'} reported</p>}
       </div>
     </PwaCard>
-    {editing && <div className="fixed inset-0 z-50 flex items-end bg-black/50 p-4"><div className="w-full rounded-2xl bg-card p-4 shadow-xl"><div className="mb-3 flex items-center justify-between"><p className="text-sm font-semibold">{editing.kind === 'Missing' ? 'How many are missing?' : 'How many are damaged?'}</p><button type="button" onClick={() => setEditing(null)} aria-label="Close"><X className="size-4" /></button></div><input autoFocus type="number" min="1" max={editing.asset.qty} value={count} onChange={(e) => setCount(e.target.value)} className="w-full rounded-xl border border-input bg-background p-3 text-sm" /><p className="mt-2 text-[10px] text-muted-foreground">Enter 1 to {editing.asset.qty}.</p>{Number(count) > editing.asset.qty || Number(count) < 1 || (editing.kind === 'Missing' ? Number(count) + records[editing.asset.id].damaged : Number(count) + records[editing.asset.id].missing) > editing.asset.qty ? <p className="mt-1 text-xs text-destructive">The count must be within the expected quantity.</p> : null}{editing.kind === 'Damaged' && <label className="mt-3 flex items-center gap-2 text-xs"><input type="checkbox" checked={noPhoto} onChange={(e) => setNoPhoto(e.target.checked)} /> No photo available</label>}<button type="button" onClick={saveCount} className="mt-4 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">Save</button></div></div>}
+    {problemItem && <div className="fixed inset-0 z-50 flex items-end bg-black/50 p-4"><div className="w-full rounded-2xl bg-card p-4 shadow-xl"><div className="mb-3 flex items-center justify-between"><p className="text-sm font-semibold">What is wrong with {problemItem.name}?</p><button type="button" onClick={closeProblem} aria-label="Close"><X className="size-4" /></button></div><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setProblem(problemItem, 'Missing')} className="rounded-xl border border-border px-3 py-3 text-sm font-semibold">Missing</button><button type="button" onClick={() => setProblem(problemItem, 'Damaged')} className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm font-semibold text-amber-700">Damaged</button></div></div></div>}
   </div>
 }
