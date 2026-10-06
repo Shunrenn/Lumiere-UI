@@ -28,7 +28,7 @@ export function GroundCrewField({ event, events, assignments, batches, batchesBy
   scope: 'Warehouse Crew' | 'Field Crew'
   onOpenEvent: (eventId: string) => void
   onBack: () => void
-  onReport: (item: Asset) => void
+  onReport: (item: Asset, quantity: number, onSubmitted: (noPhoto: boolean) => void, onCancelled: () => void) => void
 }) {
   const [section, setSection] = useState<'events' | 'reports'>('events')
   const [activeStage, setActiveStage] = useState<GroundCrewStage | null>(null)
@@ -84,7 +84,7 @@ export function GroundCrewField({ event, events, assignments, batches, batchesBy
     setActiveStage(null)
   }
 
-  if (event && activeStage) return <StageScreen event={event} stage={activeStage} stageIndex={scopeStages.indexOf(activeStage) + 1 || 2} assets={assets} records={records} completedCount={completedCount} damagedCount={damagedCount} isLead={isLead} isDemo={isDemo} canConfirm={canConfirm} reviewedDamage={reviewedDamage} notes={notes} onBack={() => setActiveStage(null)} onCheck={(asset) => updateCounts(asset, 0, 0)} onAddPhoto={(asset) => updatePhoto(asset)} onNotes={setNotes} onReview={setReviewedDamage} onConfirm={confirmStage} onCounts={(asset, missing, damaged, noPhoto) => { updateCounts(asset, missing, damaged, noPhoto); if (damaged > 0) onReport(asset) }} />
+  if (event && activeStage) return <StageScreen event={event} stage={activeStage} stageIndex={scopeStages.indexOf(activeStage) + 1 || 2} assets={assets} records={records} completedCount={completedCount} damagedCount={damagedCount} isLead={isLead} isDemo={isDemo} canConfirm={canConfirm} reviewedDamage={reviewedDamage} notes={notes} onBack={() => setActiveStage(null)} onCheck={(asset) => updateCounts(asset, 0, 0)} onAddPhoto={(asset) => updatePhoto(asset)} onNotes={setNotes} onReview={setReviewedDamage} onConfirm={confirmStage} onCounts={(asset, missing, damaged, noPhoto) => { if (damaged > 0) onReport(asset, damaged, (exceptionalNoPhoto) => setItemRecords((previous) => ({ ...previous, [asset.id]: { ...(previous[asset.id] ?? { status: 'Damaged', pending: false, missing: 0, damaged, photo: false, noPhoto: false }), status: 'Damaged', missing, damaged, photo: !exceptionalNoPhoto, noPhoto: exceptionalNoPhoto, pending: isDemo } })), () => updateCounts(asset, 0, 0, false)); else updateCounts(asset, missing, damaged, noPhoto) }} />
 
   if (event) return <div className="space-y-4">
     <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm font-semibold text-muted-foreground"><ArrowLeft className="size-4" /> Field</button>
