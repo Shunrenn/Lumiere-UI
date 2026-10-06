@@ -51,6 +51,7 @@ import { triggerOutboxReplay, subscribeSyncEngine } from '@/lib/offline/offlineR
 import { setReadCache, getReadCache } from '@/lib/offline/db'
 import { StatusBadge } from '@/components/StatusBadge'
 import { GroundCrewSyncPill } from '@/pages/GroundCrewSyncPill'
+import { GroundCrewField } from '@/pages/GroundCrewField'
 import {
   PwaBadge,
   PwaBottomNav,
@@ -60,7 +61,6 @@ import {
   PwaHeader,
   PwaModal,
   PwaToast,
-  PwaSyncStatusBar,
   HavaCameraCaptureModal,
   type CapturedEvidence,
   type PwaNavItem,
@@ -574,6 +574,18 @@ export function GroundCrewPage() {
 
   const [isSubmittingReport, setIsSubmittingReport] = useState(false)
   const [reportError, setReportError] = useState<string | null>(null)
+  void fieldSection
+  void setFieldSection
+  void reports
+  void offlineItems
+  void isSyncingQueue
+  void handleTriggerSync
+  void handleUpdateReport
+  void setHandoffNotes
+  void egressErrors
+  void DecisionMode
+  void EventDetail
+  void Activity
 
   const openReport = (item: EventItem['items'][number]) => {
     setReportItem(item)
@@ -776,6 +788,10 @@ export function GroundCrewPage() {
     window.setTimeout(() => setToast(''), 5000)
   }
 
+  void handleDecision
+  void advancePhase
+  void handleStartEgress
+
   const navItems: PwaNavItem[] = [
     { id: 'home', label: 'Home', icon: MapPin },
     { id: 'schedule', label: 'Schedule', icon: CalendarDays },
@@ -822,12 +838,6 @@ export function GroundCrewPage() {
 
       {/* Main Tab Content */}
       <main className="mx-auto w-full max-w-[440px] px-4 pt-4 space-y-4">
-        {tab === 'field' && (
-          <PwaSyncStatusBar
-            userId={currentUser?.id || adminEmail || 'crew'}
-            onSyncComplete={loadAssignments}
-          />
-        )}
 
         {tab === 'schedule' && (
           <GroundCrewSyncPill assignments={myAssignments} isCachedData={isCachedData} />
@@ -860,30 +870,21 @@ export function GroundCrewPage() {
         )}
 
         {tab === 'field' && (
-          selectedEvent ? (
-            <EventDetail
-              event={selectedEvent}
-              batches={dispatchStore.get(selectedEvent.id) ?? []}
-              handoffNote={handoffNotes[selectedEvent.id] || ''}
-              onHandoffNoteChange={(val) => setHandoffNotes((prev) => ({ ...prev, [selectedEvent.id]: val }))}
-              egressError={egressErrors[selectedEvent.id] || ''}
-              isLead={isLeadForEvent(selectedEvent.id)}
-              onAdvancePhase={() => advancePhase(selectedEvent.id)}
-              onStartEgress={() => handleStartEgress(selectedEvent.id)}
-              onBack={() => setSelectedEventId(null)}
-              onReport={openReport}
-            />
-          ) : (
-            <div className="space-y-4">
-              <PwaCard title="Field Console" subtitle="Open an assigned event or review operational work.">
-                <div className="grid grid-cols-2 gap-2">
-                  {(['tasks', 'reports', 'requests', 'history'] as const).map((section) => <button key={section} type="button" onClick={() => setFieldSection(section)} className={`rounded-xl border px-3 py-3 text-xs font-semibold capitalize ${fieldSection === section ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>{section}</button>)}
-                </div>
-              </PwaCard>
-              {fieldSection === 'tasks' && <DecisionMode declarations={declarations} accessLevel={accessLevel} adminEventId={adminEventId} events={crewEvents} onEventChange={setAdminEventId} onDecision={handleDecision} />}
-              {fieldSection !== 'tasks' && <Activity reports={reports} requests={requests} events={crewEvents} offlineItems={offlineItems} isSyncingQueue={isSyncingQueue} onTriggerSync={handleTriggerSync} onUpdateReport={handleUpdateReport} />}
-            </div>
-          )
+          <GroundCrewField
+            event={selectedEvent}
+            events={crewEvents}
+            assignments={myAssignments}
+            batches={selectedEvent ? (dispatchStore.get(selectedEvent.id) ?? []) : []}
+            declarations={declarations}
+            loading={loadingAssignments}
+            error={assignmentError}
+            isCachedData={isCachedData}
+            isLeadForEvent={isLeadForEvent}
+            scope={currentUser?.groundCrewSubRole === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew'}
+            onOpenEvent={setSelectedEventId}
+            onBack={() => setSelectedEventId(null)}
+            onReport={openReport}
+          />
         )}
 
         {tab === 'account' && (
