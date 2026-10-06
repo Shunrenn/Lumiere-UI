@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   CalendarClock,
-  Clock,
   Download,
   UserPlus,
   Users,
@@ -28,8 +27,6 @@ import {
   reconcileExpiredDeclarations,
   useGroundCrewDeclarations,
 } from '@/lib/ground-crew-declarations'
-import { CrewOpsGrid } from '@/components/warehouse/manpower/CrewOpsGrid'
-import { DailyZoneDutyView } from '@/components/warehouse/manpower/DailyZoneDutyView'
 import { AssignCrewModal } from '@/components/warehouse/manpower/AssignCrewModal'
 import { PARENT_ROLES } from '@/lib/rbac'
 import {
@@ -54,7 +51,7 @@ function Avatar({ name }: { name: string }) {
   )
 }
 
-type ManningView = 'weekly' | 'coverage' | 'events' | 'rosters'
+type ManningView = 'events' | 'rosters'
 
 interface ManningModuleProps {
   onClose: () => void
@@ -72,7 +69,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
   const declarations = useGroundCrewDeclarations()
 
   // Navigation State
-  const [view, setView] = useState<ManningView>('weekly')
+  const [view, setView] = useState<ManningView>('events')
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
 
   // Roster Directory Search & Filter State
@@ -167,13 +164,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
         {/* ─── Primary navigation: four peer views, grouped by purpose ─── */}
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-end gap-4">
-            <div>
-              <p className="mb-1 px-1 text-[0.55rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">Daily Operations</p>
-              <div className="inline-flex rounded-lg border border-border bg-card p-1">
-                <button type="button" onClick={() => setView('weekly')} aria-pressed={view === 'weekly'} className={cn('flex items-center gap-2 rounded-md px-3 py-2 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition', view === 'weekly' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}><Clock className="size-3.5" />Weekly Roster</button>
-                <button type="button" onClick={() => setView('coverage')} aria-pressed={view === 'coverage'} className={cn('rounded-md px-3 py-2 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition', view === 'coverage' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>Daily Coverage</button>
-              </div>
-            </div>
+            
             <div>
               <p className="mb-1 px-1 text-[0.55rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">Event Staffing</p>
               <div className="inline-flex rounded-lg border border-border bg-card p-1">
@@ -306,14 +297,8 @@ export function ManningModule({ onClose }: ManningModuleProps) {
 
       {/* ─── Main Content Area ─── */}
       <div className="flex-1 px-0 py-7">
-        {view === 'weekly' || view === 'coverage' ? (
-          view === 'weekly' ? (
-            <CrewOpsGrid staff={staff} />
-          ) : (
-            <DailyZoneDutyView crewRows={crewRows} presetSquads={presetSquads} />
-          )
-        ) : (
-          <div className="flex flex-col gap-5">
+        
+            <div className="flex flex-col gap-5">
             {/* SUB-TAB: EVENT SCHEDULE */}
             {view === 'events' && (
               <div className="flex flex-col gap-4">
@@ -493,7 +478,6 @@ export function ManningModule({ onClose }: ManningModuleProps) {
             )}
 
           </div>
-        )}
       </div>
 
       {/* ─── Assign Field Crew Modal ─── */}
