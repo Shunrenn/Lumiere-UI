@@ -560,7 +560,6 @@ export function GroundCrewPage() {
   const [requests] = useState<CrewRequest[]>([])
   const [showReport, setShowReport] = useState(false)
   const [reportItem, setReportItem] = useState<EventItem['items'][number] | null>(null)
-  const damageReportCallbacks = useRef<{ onSubmitted: (noPhoto: boolean) => void; onCancelled: () => void } | null>(null)
   const [toast, setToast] = useState('')
   const [selectedDate, setSelectedDate] = useState(() => {
     const now = new Date()
@@ -610,10 +609,7 @@ export function GroundCrewPage() {
   void EventDetail
   void Activity
 
-  const openReport = (asset: { id: string; name: string; sku: string; qty: number; color: string }, quantity: number, onSubmitted: (noPhoto: boolean) => void, onCancelled: () => void) => {
-    if (!selectedEvent) return
-    const item = selectedEvent.items.find((candidate) => candidate.id === asset.id || candidate.name === asset.name) ?? { ...asset, qty: Math.max(quantity, asset.qty) }
-    damageReportCallbacks.current = { onSubmitted, onCancelled }
+  const openReport = (item: EventItem['items'][number]) => {
     setReportItem(item)
     setReportError(null)
     setShowReport(true)
@@ -694,8 +690,6 @@ export function GroundCrewPage() {
         }
 
         setReports((prev) => [newReport, ...prev])
-        damageReportCallbacks.current?.onSubmitted(noPhotographicEvidence)
-        damageReportCallbacks.current = null
         setShowReport(false)
         setReportItem(null)
       } else {
@@ -1010,14 +1004,12 @@ export function GroundCrewPage() {
       {showReport && reportItem && selectedEvent && (
         <PwaModal
           isOpen={showReport}
-  onClose={() => {
-  if (!isSubmittingReport) {
-  damageReportCallbacks.current?.onCancelled()
-  damageReportCallbacks.current = null
-  setShowReport(false)
-  setReportError(null)
-  }
-  }}
+          onClose={() => {
+            if (!isSubmittingReport) {
+              setShowReport(false)
+              setReportError(null)
+            }
+          }}
           title="Report Item Condition"
           subtitle={`${reportItem.name} • ${selectedEvent.name}`}
         >
