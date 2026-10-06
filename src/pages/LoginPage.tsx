@@ -156,13 +156,7 @@ export function LoginPage({
                   setRequestType('forgot-password')
                   setView('request')
                 }}
-                onRequest={() => {
-                  setError('')
-                  setRequestError('')
-                  setRequestType('request-password')
-                  setView('request')
-                }}
-                onCrewPortal={onCrewPortal}
+                                onCrewPortal={onCrewPortal}
               />
             )}
 
@@ -205,7 +199,6 @@ function SignInView(props: {
   onRemember: () => void
   onSubmit: (e: FormEvent) => void
   onForgot: () => void
-  onRequest: () => void
   onCrewPortal: () => void
 }) {
   return (
@@ -287,14 +280,6 @@ function SignInView(props: {
             className="transition-colors hover:text-foreground"
           >
             Forgot Password?
-          </button>
-          <span className="text-border">|</span>
-          <button
-            type="button"
-            onClick={props.onRequest}
-            className="transition-colors hover:text-foreground"
-          >
-            Request Access
           </button>
         </div>
       </div>
