@@ -1490,7 +1490,8 @@ export function DesignCanvasHubPage() {
 
   const groupedUpcomingEvents = useMemo(() => {
     const groups: { monthLabel: string; events: CalendarEvent[] }[] = []
-    for (const ev of upcomingEvents) {
+    const filteredEvents = upcomingEvents.filter((ev) => ev.month === calMonth && ev.year === calYear)
+    for (const ev of filteredEvents) {
       const label = `${MONTH_NAMES[ev.month]} ${ev.year}`
       let group = groups.find((g) => g.monthLabel === label)
       if (!group) {
@@ -1505,7 +1506,7 @@ export function DesignCanvasHubPage() {
     }
 
     return groups
-  }, [upcomingEvents])
+  }, [upcomingEvents, calMonth, calYear])
 
   function handleOpenCalendarEvent(ev: CalendarEvent) {
     const matchingCard = effectiveCards.find((c) => c.eventAlias === ev.alias || c.title.includes(ev.name))
@@ -1687,7 +1688,7 @@ export function DesignCanvasHubPage() {
               <div className="px-0.5 py-1">
                 {groupedUpcomingEvents.length === 0 ? (
                   <p className="px-4 py-8 text-center text-xs text-muted-foreground">
-                    No upcoming assigned events found.
+                    No upcoming assigned events found for {MONTH_NAMES[calMonth]} {calYear}.
                   </p>
                 ) : (
                   groupedUpcomingEvents.map((group) => (

@@ -231,29 +231,27 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
     return map
   }, [events])
 
-  // Right Side Upcoming Events List: Default-sorts automatically by nearest target date ascending
-  const upcomingEvents = useMemo(() => {
-    return [...events].sort((a, b) => {
-      const dateA = parseEventDate(a.targetDate)?.getTime() ?? 0
-      const dateB = parseEventDate(b.targetDate)?.getTime() ?? 0
-      return dateA - dateB
-    })
-  }, [events])
-
-  // Group events by Month Year for month-grouped sticky headers
-  const monthGroups = useMemo(() => {
-    const map = new Map<string, PortalEvent[]>()
-    upcomingEvents.forEach((evt) => {
-      const d = parseEventDate(evt.targetDate)
-      const groupKey = d ? `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}` : 'OTHER EVENTS'
-      const list = map.get(groupKey) ?? []
-      list.push(evt)
-      map.set(groupKey, list)
-    })
-    return Array.from(map.entries())
-  }, [upcomingEvents])
-
   const monthLabel = `${MONTH_NAMES[month]} ${year}`
+
+  // Right Side Upcoming Events List: Synced strictly to currently viewed calendar month & year
+  const monthUpcomingEvents = useMemo(() => {
+    return events
+      .filter((evt) => {
+        const d = parseEventDate(evt.targetDate)
+        return d !== null && d.getFullYear() === year && d.getMonth() === month
+      })
+      .sort((a, b) => {
+        const dateA = parseEventDate(a.targetDate)?.getTime() ?? 0
+        const dateB = parseEventDate(b.targetDate)?.getTime() ?? 0
+        return dateA - dateB
+      })
+  }, [events, year, month])
+
+  // Group events for this month into sticky section
+  const monthGroups = useMemo(() => {
+    if (monthUpcomingEvents.length === 0) return []
+    return [[monthLabel, monthUpcomingEvents] as [string, PortalEvent[]]]
+  }, [monthUpcomingEvents, monthLabel])
 
   return (
     <div className="grid items-stretch gap-6 min-[1100px]:grid-cols-[minmax(0,1.35fr)_minmax(380px,1fr)]">
@@ -398,12 +396,12 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
       </DashboardCalendarCard>
 
       {/* ─── RIGHT SIDE: Upcoming Events Side Panel (Month-Grouped Sticky Headers) ─── */}
-      <UpcomingEventsPanel title="Upcoming Events" count={upcomingEvents.length} subtitle="Month-Grouped Roster" className="h-[35rem]">
+      <UpcomingEventsPanel title="Upcoming Events" count={monthUpcomingEvents.length} subtitle="Month-Grouped Roster" className="h-[35rem]">
         {/* Side Panel Header (Static / Non-Scrolling) */}
         <div className="hidden">
           <div>
             <h3 className="font-serif text-lg font-medium text-card-foreground">
-              Upcoming Events ({upcomingEvents.length})
+              Upcoming Events ({monthUpcomingEvents.length})
             </h3>
             <p className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
               Month-Grouped Roster
@@ -413,8 +411,12 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
 
         {/* Scrollable Row List with Sticky Month Headers */}
         <div className="space-y-4">
-          {monthGroups.length === 0 ? (
-            <p className="py-8 text-center text-xs text-muted-foreground">No upcoming events found.</p>
+          {monthUpcomingEvents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <CalendarIcon className="size-8 text-muted-foreground/30 mb-2" />
+              <p className="text-xs font-medium text-muted-foreground">No upcoming events scheduled for {MONTH_NAMES[month]} {year}.</p>
+              <p className="text-[0.68rem] text-muted-foreground/60 mt-1">Navigate using the calendar arrows to view other months.</p>
+            </div>
           ) : (
             monthGroups.map(([groupKey, groupEvents]) => (
               <div key={groupKey} className="space-y-2">
