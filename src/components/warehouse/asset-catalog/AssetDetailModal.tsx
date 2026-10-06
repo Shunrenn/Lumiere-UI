@@ -85,7 +85,7 @@ export function AssetDetailModal({
     setIsRemovingBg(true)
     setImageError('')
     try {
-      const { default: removeBackground } = await import('@imgly/background-removal')
+      const { removeBackground } = await import('@imgly/background-removal')
       const blob = await removeBackground(draft.image)
       const reader = new FileReader()
       reader.onload = (e) => {
