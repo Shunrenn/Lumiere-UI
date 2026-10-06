@@ -461,9 +461,8 @@ export function createReturnBatchFromDelivered(eventId: string, outboundBatch: D
   return returnBatch
 }
 
-import jsPDF from 'jspdf'
-
-export function exportBatchPdf(eventInfo: { eventTitle: string; venue: string; targetDate: string }, batch: DispatchBatch) {
+export async function exportBatchPdf(eventInfo: { eventTitle: string; venue: string; targetDate: string }, batch: DispatchBatch) {
+  const { default: jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'pt', format: 'letter' })
   const margin = 40
   let y = margin

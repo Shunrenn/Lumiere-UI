@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Download, Search, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
@@ -100,6 +100,16 @@ function DashboardDetailModal({
   onClose: () => void
 }) {
   const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    if (!summary) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose, summary])
+
   if (!summary) return null
 
   const titles: Record<DashboardSummary, string> = {
@@ -168,33 +178,6 @@ function DashboardDetailModal({
   )
 }
 
-function auditDateTime(entry: { date: string; timestamp: string }) {
-  return new Date(`${entry.date} ${entry.timestamp}`).getTime()
-}
-
-function SecurityAuditCard({ logs, onViewAll }: { logs: ReturnType<typeof usePortal>['logs']; onViewAll: () => void }) {
-  const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  const tomorrowStart = todayStart + 86400000
-  const yesterdayStart = todayStart - 86400000
-  const rangeLogs = logs.filter((entry) => {
-    const time = auditDateTime(entry)
-    return time >= yesterdayStart && time < tomorrowStart
-  }).sort((a, b) => auditDateTime(b) - auditDateTime(a))
-  const dateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-  const rangeLabel = `${dateFormatter.format(new Date(yesterdayStart))} – ${dateFormatter.format(new Date(todayStart))}`
-
-  return (
-    <section className="flex h-[24rem] min-h-0 flex-col rounded-xl border border-border bg-card p-5">
-      <div className="flex shrink-0 items-start justify-between gap-3">
-        <div><h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">Security Audit</h3><p className="mt-1 text-xs text-muted-foreground">{rangeLabel}</p></div>
-        <button type="button" onClick={onViewAll} className="shrink-0 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary hover:bg-primary hover:text-primary-foreground">View All Audit Logs</button>
-      </div>
-      <div className="mt-4 min-h-0 flex-1 overflow-y-auto rounded-lg border border-border"><div className="divide-y divide-border">{rangeLogs.length === 0 ? <p className="p-6 text-center text-sm italic text-muted-foreground">No security audit records for this date range.</p> : rangeLogs.map((entry) => <div key={entry.id} className="grid gap-1 px-3 py-3 text-xs sm:grid-cols-[4.5rem_minmax(0,8rem)_minmax(0,1fr)_auto] sm:items-center"><span className="text-muted-foreground">{entry.timestamp}</span><span className="truncate font-medium text-foreground">{entry.account || '—'}</span><span className="truncate text-muted-foreground" title={entry.action}>{entry.action}</span><span className="w-fit rounded-full bg-muted px-2 py-1 text-[0.58rem] font-semibold text-foreground">{entry.status || '—'}</span></div>)}</div></div>
-    </section>
-  )
-}
-
 /* ----------------------------- Page ----------------------------- */
 
 export function AdminSystemDashboardPage() {
@@ -214,20 +197,40 @@ export function AdminSystemDashboardPage() {
     [staff],
   )
   const totalActiveUsers = activeUsers.length
-  const lockedAccounts = userActions.filter(
-    (a) => a.status === 'pending' && a.type === 'account-locked',
+  const recoveryEmails = new Set(
+    userActions
+      .filter((action) => action.status === 'pending' && action.type === 'forgot-password')
+      .map((action) => action.email?.trim().toLowerCase())
+      .filter((email): email is string => Boolean(email)),
+  )
+  const lockedAccounts = staff.filter(
+    (person) => person.accountStatus === 'Locked' || recoveryEmails.has(person.email.trim().toLowerCase()),
   ).length
-  const pendingActivations = userActions.filter(
-    (a) => a.status === 'pending' && a.type !== 'account-locked',
-  ).length
+  // Pending Activation is an account lifecycle state, not an admin action queue.
+  const pendingActivations = staff.filter((person) => person.accountStatus === 'Pending').length
 
   const roleCounts = useMemo(() => {
-    const categories = ['Admin', 'Executive', 'Warehouse Operations Manager', 'Event Planner', 'Ground Crew', 'Inactive Account']
+    const categories = ['Admin', 'Executive', 'Project Manager', 'Warehouse Operations Manager', 'Event Planner', 'Ground Crew', 'Inactive Account']
     const tally = Object.fromEntries(categories.map((category) => [category, 0])) as Record<string, number>
     staff.forEach((person) => {
-      if (person.accountStatus !== 'Active') { tally['Inactive Account'] += 1; return }
+      if (person.accountStatus !== 'Active') {
+        tally['Inactive Account'] += 1
+        return
+      }
       const role = person.role.toLowerCase()
-      const category = role.includes('admin') ? 'Admin' : role.includes('executive') ? 'Executive' : role.includes('warehouse manager') || role === 'warehouse operations manager' ? 'Warehouse Operations Manager' : role.includes('planner') ? 'Event Planner' : role === 'ground crew' ? 'Ground Crew' : null
+      const category = role.includes('admin')
+        ? 'Admin'
+        : role.includes('executive')
+          ? 'Executive'
+          : role.includes('project manager') || role === 'project_manager'
+            ? 'Project Manager'
+            : role.includes('warehouse manager') || role === 'warehouse operations manager'
+              ? 'Warehouse Operations Manager'
+              : role.includes('planner')
+                ? 'Event Planner'
+                : role.includes('ground crew')
+                  ? 'Ground Crew'
+                  : null
       if (category) tally[category] += 1
     })
     return tally
@@ -238,13 +241,18 @@ export function AdminSystemDashboardPage() {
   // recently completed so the "✓ Completed" state is visible on the glance screen.
   const pendingItems: UserAction[] = useMemo(() => {
     const relevant = userActions.filter(
-      (a) => a.type === 'forgot-password' || a.type === 'account-locked' || a.type === 'access-request',
+      (a) => a.status === 'pending' && (a.type === 'forgot-password' || a.type === 'account-locked' || a.type === 'access-request'),
     )
-    return [...relevant].sort((a, b) => {
+    const previewRecords: UserAction[] = [
+      { id: 'preview-account-locked-out', type: 'account-locked', user: 'Sample Executive', email: 'sample.executive@lumiere.com', status: 'pending', accountType: 'Executive' },
+      { id: 'preview-forgot-password', type: 'forgot-password', user: 'Sample Project Manager', email: 'sample.pm@lumiere.com', status: 'pending', accountType: 'Project Manager' },
+    ]
+    return [...relevant, ...previewRecords].sort((a, b) => {
       if (a.status === b.status) return 0
       return a.status === 'pending' ? -1 : 1
     })
   }, [userActions])
+
 
   const handleResolve = (item: UserAction) => {
     if (item.type === 'access-request') {
@@ -282,7 +290,6 @@ export function AdminSystemDashboardPage() {
         <h1 className="mt-1 font-serif text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">System Dashboard</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">A read-only glance at users, access requests, and system health.</p>
       </div>
-      <button type="button" onClick={() => window.print()} className="inline-flex min-h-[44px] w-fit items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Download className="size-4" aria-hidden="true" />PDF Export</button>
     </div>
   ) : (
     <h1 className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
@@ -310,10 +317,10 @@ export function AdminSystemDashboardPage() {
       ) : isLoading ? (
         <LoadingSkeleton variant="dashboard" />
       ) : isDashboard ? (
-        <div className="flex flex-col gap-4">
-          {/* Row 1: 4 small stat cards (left) + User Distribution / Live Security Feed (right) */}
-          <div data-testid="admin-dashboard-stats" className="grid items-stretch gap-4 lg:grid-cols-2">
-            <div className="grid h-[21rem] grid-cols-2 gap-3">
+        <div className="flex flex-col gap-6">
+          {/* Keep the overview cards in one explicit row so the lower row always starts after it. */}
+          <div data-testid="admin-dashboard-stats" className="grid items-stretch gap-4 lg:grid-cols-4">
+            <div className="grid min-h-[21rem] grid-cols-2 gap-3 lg:col-span-2">
               <StatCard
                 agentSelector="data-agent-system-health"
                 label="System Health"
@@ -345,7 +352,7 @@ export function AdminSystemDashboardPage() {
             </div>
             {/* Fixed row height so the feed scrolls internally instead of
                 stretching the donut card with trailing blank space. */}
-            <div className="grid h-[21rem] grid-cols-2 gap-3">
+            <div className="grid h-[21rem] grid-cols-2 gap-3 lg:col-span-2">
               <UserDistributionCard
                 compact
                 counts={roleCounts}
@@ -358,18 +365,14 @@ export function AdminSystemDashboardPage() {
             </div>
           </div>
 
-          {/* Row 2: Pending Actions + Security Audit */}
-          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-10">
-            <div className="lg:col-span-3">
-              <AdminPendingActions
-                items={pendingItems}
-                onResolve={handleResolve}
-                subRoleSetups={pendingSubRoleSetups}
-                onConfigureSubRole={handleConfigureSubRole}
-                onSelect={() => setDetailSummary('pending')}
-              />
-            </div>
-            <div className="lg:col-span-7"><SecurityAuditCard logs={logs} onViewAll={() => navigate('security-audit')} /></div>
+          {/* Keep a deliberate dashboard gap before the full-width action queue. */}
+          <div className="w-full">
+            <AdminPendingActions
+              items={pendingItems}
+              onResolve={handleResolve}
+              subRoleSetups={pendingSubRoleSetups}
+              onConfigureSubRole={handleConfigureSubRole}
+            />
           </div>
         </div>
       ) : (

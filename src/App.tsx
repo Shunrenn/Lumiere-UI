@@ -14,15 +14,15 @@ import { PlannerProvider } from '@/lib/planner'
 import { WarehouseProvider } from '@/lib/warehouse'
 
 // Code-split page components for minimal initial bundle latency
-import { LoginPage } from '@/pages/LoginPage'
-import { OverviewPage } from '@/pages/OverviewPage'
-import { AdminSystemDashboardPage } from '@/pages/AdminSystemDashboardPage'
-import { AdminWorkforcePage } from '@/pages/AdminWorkforcePage'
-import { WarehouseHomePage } from '@/pages/WarehouseHomePage'
-import { WarehouseModulePage } from '@/pages/WarehouseModulePage'
-import { GroundCrewPage } from '@/pages/GroundCrewPage'
-import { PinSetupScreen } from '@/pages/PinSetupScreen'
-import { TempPasswordResetScreen } from '@/pages/TempPasswordResetScreen'
+const LoginPage = lazy(() => import('@/pages/LoginPage').then((m) => ({ default: m.LoginPage })))
+const OverviewPage = lazy(() => import('@/pages/OverviewPage').then((m) => ({ default: m.OverviewPage })))
+const AdminSystemDashboardPage = lazy(() => import('@/pages/AdminSystemDashboardPage').then((m) => ({ default: m.AdminSystemDashboardPage })))
+const AdminWorkforcePage = lazy(() => import('@/pages/AdminWorkforcePage').then((m) => ({ default: m.AdminWorkforcePage })))
+const WarehouseHomePage = lazy(() => import('@/pages/WarehouseHomePage').then((m) => ({ default: m.WarehouseHomePage })))
+const WarehouseModulePage = lazy(() => import('@/pages/WarehouseModulePage').then((m) => ({ default: m.WarehouseModulePage })))
+const GroundCrewPage = lazy(() => import('@/pages/GroundCrewPage').then((m) => ({ default: m.GroundCrewPage })))
+const PinSetupScreen = lazy(() => import('@/pages/PinSetupScreen').then((m) => ({ default: m.PinSetupScreen })))
+const TempPasswordResetScreen = lazy(() => import('@/pages/TempPasswordResetScreen').then((m) => ({ default: m.TempPasswordResetScreen })))
 
 // Code-split heavy subpages for feature-level chunking
 const AdminSecurityAuditPage = lazy(() => import('@/pages/AdminSecurityAuditPage').then((m) => ({ default: m.AdminSecurityAuditPage })))
@@ -310,6 +310,8 @@ function Gate() {
     currentUser,
     isAuthenticated,
     isTempPassword,
+    isAdmin,
+    isExecutive,
     hasConfirmationPin,
     canAccessAssetInventory,
   } = useAuth()
@@ -331,7 +333,7 @@ function Gate() {
     return <TempPasswordResetScreen />
   }
 
-  if (!hasConfirmationPin) {
+  if (!isAdmin && !isExecutive && !hasConfirmationPin) {
     return <PinSetupScreen />
   }
 

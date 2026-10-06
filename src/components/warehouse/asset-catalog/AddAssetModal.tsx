@@ -5,6 +5,7 @@ import type {
   AssetDimensions,
   BespokeStage,
 } from '@/lib/warehouse-catalog'
+import { addCatalogAsset } from '@/lib/warehouse-catalog'
 import { SearchableVendorSelect } from '@/components/warehouse/shared/SearchableVendorSelect'
 import { cn } from '@/lib/utils'
 
@@ -339,9 +340,8 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
       deviceSpecs: deviceSpecs.trim() || undefined,
     }
 
-    import('@/lib/warehouse-catalog').then(({ addCatalogAsset }) => {
-      addCatalogAsset({
-        id: `cat-${Date.now()}`,
+    addCatalogAsset({
+      id: `cat-${Date.now()}`,
         assetId: `LM-${category.slice(0, 2).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`,
         name: draft.name,
         itemCallName: draft.itemCallName,
@@ -357,7 +357,6 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
         primaryVendorId: draft.primaryVendorId || 'v-1',
         dateAdded: new Date().toISOString().slice(0, 10),
       })
-    })
 
     onCreate(draft)
   }

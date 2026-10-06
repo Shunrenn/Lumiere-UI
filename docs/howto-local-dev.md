@@ -1,12 +1,12 @@
 # How to run the SPA locally
 
-You will have Vite on port 5173. In local development, API requests default to `http://localhost:8080` via `src/lib/apiConfig.ts` unless `VITE_API_URL` is set.
+You will have Vite on port 5173. In local development, API requests default to `http://localhost:8080` via `src/shared/api/apiConfig.ts` unless `VITE_API_URL` is set.
 
 ## Prerequisites
 
 - `pnpm`
 - A running Lumiere API on port 8080 (clone Shunrenn/Lumiere, `dotnet run --project Lumiere.API/Lumiere.API.csproj`)
-- Production env (`VITE_API_URL`) is set with Vercel CLI or the dashboard, not in this local file. Never a JWT secret in this SPA.
+- Production env (`VITE_API_URL`) is configured in deployment environment settings (e.g. Railway), not in this local file. Never a JWT secret in this SPA.
 
 ## Steps
 

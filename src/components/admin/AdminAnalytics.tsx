@@ -17,6 +17,7 @@ export type SegmentItem = {
 export const MAIN_ROLE_SEGMENTS: SegmentItem[] = [
   { label: 'Admin', color: 'text-emerald-500', dot: 'bg-emerald-500', isDrillable: false },
   { label: 'Executive', color: 'text-sky-500', dot: 'bg-sky-500', isDrillable: false },
+  { label: 'Project Manager', color: 'text-violet-500', dot: 'bg-violet-500', isDrillable: false },
   { label: 'Warehouse Operations Manager', color: 'text-amber-500', dot: 'bg-amber-500', isDrillable: false },
   { label: 'Event Planner', color: 'text-rose-500', dot: 'bg-rose-500', isDrillable: false },
   { label: 'Ground Crew', color: 'text-indigo-500', dot: 'bg-indigo-500', isDrillable: false },
@@ -59,7 +60,6 @@ export function UserDistributionCard({
   compact = false,
   drillDownCategory = null,
   onDrillDown,
-  onBack,
 }: {
   counts: Record<string, number>
   onSelect?: () => void
@@ -101,9 +101,13 @@ export function UserDistributionCard({
   })
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label="View user distribution breakdown"
       className={cn(
-        'flex h-full flex-col rounded-xl border border-border bg-card text-left',
+        'flex h-full w-full flex-col rounded-xl border border-border bg-card text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        onSelect && 'cursor-pointer hover:border-primary/40 hover:bg-muted/20',
         compact ? 'p-4' : 'p-5',
         flashing && 'ring-2 ring-primary/60 border-primary/60',
       )}
@@ -112,21 +116,12 @@ export function UserDistributionCard({
         <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground truncate">
           {drillDownCategory ? `${drillDownCategory} Sub-Roles` : 'User Distribution'}
         </h3>
-        {drillDownCategory && onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex items-center gap-1 text-[0.65rem] font-semibold text-primary hover:underline cursor-pointer shrink-0"
-          >
-            <ArrowLeft className="size-3" /> Back
-          </button>
-        )}
       </div>
 
-      <div className={cn('flex items-center justify-center', compact ? 'mt-4' : 'mt-6')}>
+      <div className={cn('flex flex-1 items-center justify-center', compact ? 'mt-4' : 'mt-6')}>
         <div className="relative inline-flex items-center justify-center">
           <svg
-            className={cn('-rotate-90', compact ? 'h-24 w-24' : 'h-32 w-32')}
+            className={cn('-rotate-90', compact ? 'h-24 w-24' : 'h-36 w-36 sm:h-40 sm:w-40')}
             viewBox="0 0 100 100"
             role="img"
             aria-label="User distribution by account type"
@@ -166,48 +161,10 @@ export function UserDistributionCard({
         </div>
       </div>
 
-      <div
-        className={cn(
-          'text-[0.65rem]',
-          compact ? 'mt-4 flex flex-col gap-1.5' : 'mt-6 grid grid-cols-2 gap-3',
-        )}
-      >
-        {segments.map((seg) => {
-          const isDrillable = 'isDrillable' in seg && seg.isDrillable
-          const cnt = activeCounts[seg.label] ?? 0
-          if (isDrillable && onDrillDown) {
-            return (
-              <button
-                key={seg.label}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onDrillDown(seg.label)
-                }}
-                className="flex items-center gap-2 rounded px-1.5 py-1 text-left transition hover:bg-primary/10 group cursor-pointer border border-transparent hover:border-primary/30"
-                title={`Click to view drill-down for ${seg.label}`}
-              >
-                <div className={cn('size-2 shrink-0 rounded-full', seg.dot)} aria-hidden="true" />
-                <span className="truncate font-medium text-foreground group-hover:text-primary">
-                  {seg.label} ({cnt})
-                </span>
-                <span className="ml-auto text-[0.6rem] font-bold text-primary opacity-80 group-hover:opacity-100">
-                  ↳
-                </span>
-              </button>
-            )
-          }
-          return (
-            <div key={seg.label} className="flex items-center gap-2 px-1.5 py-1">
-              <div className={cn('size-2 shrink-0 rounded-full', seg.dot)} aria-hidden="true" />
-              <span className="truncate">
-                {seg.label} ({cnt})
-              </span>
-            </div>
-          )
-        })}
+      <div className="mt-3 text-center text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        Click to view breakdown
       </div>
-    </div>
+    </button>
   )
 }
 

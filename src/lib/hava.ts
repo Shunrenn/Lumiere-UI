@@ -1,5 +1,3 @@
-import exifr from 'exifr'
-
 export interface HavaPhotoMetadata {
   capturedAt: string
   gpsCoordinates: string
@@ -40,6 +38,7 @@ export async function extractPhotoMetadata(file: File): Promise<HavaPhotoMetadat
   let exifJson: string | null = null
 
   try {
+    const { default: exifr } = await import('exifr')
     const exifData = await exifr.parse(file, {
       tiff: true, exif: true, gps: true, ifd1: false, interop: false,
       translateKeys: true, translateValues: true,

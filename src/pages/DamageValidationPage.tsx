@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Search, CheckCircle2, XCircle, Clock3, Scale, MoreVertical, Wrench, Ban, UserCheck2, AlertTriangle } from 'lucide-react'
 import { WarehouseShell } from '@/components/warehouse/WarehouseShell'
+import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { DamageVerdictModal } from '@/components/DamageVerdictModal'
 import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
@@ -12,7 +14,7 @@ import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import type { DamageException, DamageVerdict } from '@/lib/types'
-import { API_BASE_URL } from '@/lib/apiConfig'
+import { API_BASE_URL } from '@/shared/api/apiConfig'
 
 const statusStyles: Record<DamageVerdict, string> = {
   'Pending Verdict': 'border border-primary/40 bg-primary/10 text-primary',
@@ -71,8 +73,8 @@ function DamageReportPreview({ report }: { report: DamageException }) {
 
 export function DamageValidationPage() {
   const { damageExceptions: items, isBackendConnected, resolveDamage, staff, subRolesByParent, setSubRolesByParent } = usePortal()
-  const { isWarehouse, isWarehouseLead, hasFullWarehouseAccess, adminRole, adminEmail, adminName, subRole: userSubRole } = useAuth()
-  const { intent, clearIntent } = useNav()
+  const { isExecutive, isWarehouse, isWarehouseLead, hasFullWarehouseAccess, adminRole, adminEmail, adminName, subRole: userSubRole } = useAuth()
+  const { intent, clearIntent, navigate } = useNav()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('All')
   const [active, setActive] = useState<DamageException | null>(null)
@@ -218,8 +220,16 @@ export function DamageValidationPage() {
     handleRefetch()
   }, [])
 
+  const executiveDestination = (id: import('@/lib/executive-destinations').ExecutiveDestinationId) => navigate(id)
+  const Shell = ({ children }: { children: ReactNode }) =>
+    isExecutive ? (
+      <ExecutiveShell activeId="damage" onSelect={executiveDestination} stickyHeader={stickyHeader}>{children}</ExecutiveShell>
+    ) : (
+      <WarehouseShell activeRoute="damage" stickyHeader={stickyHeader}>{children}</WarehouseShell>
+    )
+
   return (
-    <WarehouseShell activeRoute="damage" stickyHeader={stickyHeader}>
+    <Shell>
       {isError ? (
         <ErrorFallback
           title="Damage Exceptions Registry Unavailable"
@@ -503,6 +513,6 @@ export function DamageValidationPage() {
         womSubRoleName={currentWomSubRole?.name ?? 'Warehouse Manager'}
         onPermanentUnblockSubRole={handlePermanentUnblockSubRole}
       />
-    </WarehouseShell>
+    </Shell>
   )
 }

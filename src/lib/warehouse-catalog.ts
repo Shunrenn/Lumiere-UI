@@ -2,7 +2,7 @@
 // Renders authoritative backend/database-backed asset records.
 // Fallback state preserves the existing canonical catalog.
 import { useEffect, useSyncExternalStore } from 'react'
-import { createAssetApi, fetchAssetsApi, updateAssetApi } from './assetsApi'
+import { createAssetApi, fetchAssetsApi, updateAssetApi } from '@/features/inventory/api/assetsApi'
 
 import type { WarehouseZone } from '@/lib/warehouse-crew'
 

@@ -38,7 +38,7 @@ import {
   canWarehouseHandoffProduction,
   formatProductionStatus,
   getProductionStatusTone,
-} from '@/lib/productionApi'
+} from '@/features/production/api/productionApi'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import {
   ProductionConfirmationModal,

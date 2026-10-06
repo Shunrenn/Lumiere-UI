@@ -1,9 +1,10 @@
 import { logAuditEvent } from '@/lib/audit-logger'
-import * as damageApi from '@/lib/damageApi'
-import * as partialEgressApi from '@/lib/partialEgressApi'
-import { fetchAuditLogs } from '@/lib/auditApi'
-import { API_BASE_URL, getAuthToken } from '@/lib/apiConfig'
+import * as damageApi from '@/features/damage/api/damageApi'
+import * as partialEgressApi from '@/features/warehouse/api/partialEgressApi'
+import { fetchAuditLogs } from '@/features/audit/api/auditApi'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
 import { completeAccessRequest, fetchAccessRequests } from '@/features/access-requests/api'
+import { fetchEventsApi, createEventApi, updateEventApi, isGuid } from '@/features/events/api/eventsApi'
 import {
   createContext,
   useCallback,
@@ -89,8 +90,11 @@ function rowToStaff(row: any): Staff {
     : ((row.session_status ?? row.sessionStatus ?? 'Offline Session') as Staff['sessionStatus'])
 
   const unclaimedTemp = Boolean(row.temporaryPassword ?? row.temporary_password)
+  const mustChangePassword = Boolean(row.mustChangePassword ?? row.must_change_password)
+  const activationStatus = String(row.activationStatus ?? row.activation_status ?? '').trim()
+  const isPendingActivation = activationStatus.toLowerCase() === 'pendingactivation' || unclaimedTemp || mustChangePassword
   const accountStatus: AccountStatus =
-    sessionStatus === 'Suspended' ? 'Suspended' : unclaimedTemp ? 'Pending' : 'Active'
+    sessionStatus === 'Suspended' ? 'Suspended' : isPendingActivation ? 'Pending' : 'Active'
 
   const rawDate = row.updatedAt ?? row.updated_at ?? row.createdAt ?? row.created_at
   const lastAccess = rawDate
@@ -116,6 +120,9 @@ function rowToStaff(row: any): Staff {
     lastAccess,
     recordKind: 'full-account',
     accountStatus,
+    employmentType: (row.employmentType ?? row.employment_type ?? 'Full Time') as Staff['employmentType'],
+    mustChangePassword,
+    activationStatus: activationStatus || undefined,
     tempPassword: undefined,
   }
 }
@@ -1478,7 +1485,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     lastEventsRequestAtRef.current = now
     const request = (async () => {
       try {
-        const { fetchEventsApi } = await import('@/lib/eventsApi')
         const remoteEvents = await fetchEventsApi()
         eventsRef.current = remoteEvents
         setEvents(remoteEvents)
@@ -1789,9 +1795,10 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       const payload = {
         email,
         fullName,
-        roleName: role,
-        contactNumber,
-        employeeId,
+    roleName: role,
+    employmentType: 'Full Time',
+    contactNumber,
+    employeeId,
         subRole,
       }
 
@@ -2083,7 +2090,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       initiatorRole = 'Executive',
       allowConflictOverride = false,
     ): Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }> => {
-      const { createEventApi, isGuid } = await import('@/lib/eventsApi')
 
       const sanitizeToIsoDate = (val?: string): string => {
         if (!val) return ''
@@ -2174,7 +2180,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       initiatorRole = 'Executive',
       allowConflictOverride = false,
     ): Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }> => {
-      const { updateEventApi } = await import('@/lib/eventsApi')
       const result = await updateEventApi(id, draft, allowConflictOverride)
 
       if (result.conflict) {

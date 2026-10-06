@@ -9,7 +9,7 @@ import {
   type CanvasAccessLevel,
   type CanvasCollaboratorDto,
   type CollaboratorCandidateDto,
-} from '@/lib/canvasApi'
+} from '@/features/canvas/api/canvasApi'
 import { cn } from '@/lib/utils'
 
 interface CanvasCollaborationModalProps {

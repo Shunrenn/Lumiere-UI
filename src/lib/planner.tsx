@@ -7,9 +7,10 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { approveCanvasApi } from '@/lib/canvasApi'
+import { approveCanvasApi } from '@/features/canvas/api/canvasApi'
 import { populateWarehouseDispatchFromCanvas } from '@/lib/warehouse-dispatch'
 import { fetchPlannerCatalog } from '@/features/planner/api'
+import { fetchEventsApi, createEventApi } from '@/features/events/api/eventsApi'
 
 /* ============================================================
    Event Planner domain — pipeline portfolios, design canvases,
@@ -512,10 +513,9 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   // Hydrate pipeline events from backend REST API (GET /api/events)
   useEffect(() => {
     let active = true
-    import('@/lib/eventsApi').then(({ fetchEventsApi }) => {
-      fetchEventsApi().then((remoteEvents) => {
-        if (!active || !remoteEvents.length) return
-        const mappedPipelineEvents: PipelineEvent[] = remoteEvents.map((pe) => ({
+    fetchEventsApi().then((remoteEvents) => {
+      if (!active || !remoteEvents.length) return
+      const mappedPipelineEvents: PipelineEvent[] = remoteEvents.map((pe) => ({
           id: pe.id,
           title: pe.title,
           client: pe.client || 'Not available from backend yet',
@@ -537,7 +537,6 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           return [...newRemote, ...prev]
         })
       })
-    })
     return () => {
       active = false
     }
@@ -586,8 +585,6 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [eventChecklist, setEventChecklist] = useState<Record<string, ChecklistItem[]>>({})
 
   const addPortfolio = useCallback(async (draft: NewPortfolioDraft) => {
-    const { createEventApi } = await import('@/lib/eventsApi')
-
     const cleanDate = draft.date && draft.date.trim() ? draft.date.trim().split('T')[0] : new Date().toISOString().slice(0, 10)
     const dateOfEventIso = `${cleanDate}T00:00:00Z`
     const result = await createEventApi({

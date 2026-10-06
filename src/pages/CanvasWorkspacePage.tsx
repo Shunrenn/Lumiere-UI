@@ -28,8 +28,8 @@ import { useAuth } from '@/lib/auth'
   import { CanvasCollaborationModal } from '@/components/canvas/CanvasCollaborationModal'
   import { KonvaInfiniteCanvas, type KonvaInfiniteCanvasHandle, type CanvasTool, type KonvaCanvasAsset, ARTBOARD_W, ARTBOARD_H } from '@/components/canvas/KonvaInfiniteCanvas'
   import { usePortal, checkAssetAllocationConflict } from '@/lib/store'
-  import { approveCanvasApi, getAssetAvailabilityApi, validateCanvasStateApi, type AssetConflictDetail, type AssetAvailabilityDto } from '@/lib/canvasApi'
-  import { createDeficitItemApi } from '@/lib/deficitApi'
+  import { approveCanvasApi, getAssetAvailabilityApi, validateCanvasStateApi, type AssetConflictDetail, type AssetAvailabilityDto } from '@/features/canvas/api/canvasApi'
+  import { createDeficitItemApi } from '@/features/inventory/api/deficitApi'
   import { useCatalogAssets } from '@/lib/warehouse-catalog'
 
 
@@ -3450,7 +3450,7 @@ export function CanvasWorkspacePage() {
       // is intentional for auto-save; user will see stale state on reload if backend is down).
       const eventId = canonicalEventId
       if (!eventId) return
-      import('@/lib/canvasApi').then(({ saveCanvasLayoutApi }) => {
+      import('@/features/canvas/api/canvasApi').then(({ saveCanvasLayoutApi }) => {
         saveCanvasLayoutApi(eventId, JSON.stringify(droppedAssets)).then((result) => {
           if (!result.ok) {
             console.warn(
@@ -3469,7 +3469,7 @@ export function CanvasWorkspacePage() {
     let active = true
     const eventId = canonicalEventId
     if (!eventId) return
-    import('@/lib/canvasApi').then(({ fetchCanvasLayoutApi }) => {
+    import('@/features/canvas/api/canvasApi').then(({ fetchCanvasLayoutApi }) => {
       fetchCanvasLayoutApi(eventId).then((layoutDto) => {
         if (!active || !layoutDto?.canvasState) return
         try {

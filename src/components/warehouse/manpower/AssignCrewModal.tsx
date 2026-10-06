@@ -24,7 +24,7 @@ import {
   canPerformRoutineAssignment,
   canPerformResourceOverride,
   type ManningRecordDto,
-} from '@/lib/manningApi'
+} from '@/features/manning/api/manningApi'
 
 const FIELD_TASKS = [
   'Load-in & setup',

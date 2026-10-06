@@ -9,9 +9,9 @@ import {
 } from 'react'
 import { womModuleAccessLevel } from './rbac'
 import { type GroundCrewSubRole, normalizeGroundCrewSubRole } from './types'
-import { API_BASE_URL } from './apiConfig'
+import { API_BASE_URL } from '@/shared/api/apiConfig'
 import { useIdleTimeout } from './useIdleTimeout'
-import { fetchAuthCapabilities } from './adminPermissionsApi'
+import { fetchAuthCapabilities } from '@/features/admin/api/adminPermissionsApi'
 import { getDefaultRouteForUser } from './route-guard'
 import { getRealtimeConnection, stopRealtimeConnection } from './realtime'
 
@@ -56,6 +56,8 @@ export interface PortalAccount {
   groundCrewSubRole?: GroundCrewSubRole
   fullWarehouseAccess?: boolean
   temporaryPassword: boolean
+  mustChangePassword?: boolean
+  activationStatus?: string
   token?: string
   canAccessAssetInventoryAndAllocation?: boolean
 }
@@ -69,6 +71,8 @@ export function mapBackendUserToPortalAccount(data: {
   groundCrewSubRole?: string
   token?: string
   temporaryPassword?: boolean
+  mustChangePassword?: boolean
+  activationStatus?: string
   canAccessAssetInventoryAndAllocation?: boolean
   CanAccessAssetInventoryAndAllocation?: boolean
   allowAssetInventoryAndAllocation?: boolean
@@ -77,7 +81,11 @@ export function mapBackendUserToPortalAccount(data: {
   const jwtGcSubRole = payload?.ground_crew_subrole || payload?.groundCrewSubRole
   const canonicalGcSubRole = normalizeGroundCrewSubRole(jwtGcSubRole || data.groundCrewSubRole || data.subRole)
   const rawRole = data.role.trim()
-  const isTemp = Boolean(data.temporaryPassword ?? data.email?.toLowerCase().includes('temp'))
+  const isTemp = Boolean(
+    data.temporaryPassword ??
+    data.mustChangePassword ??
+    data.activationStatus?.toLowerCase() === 'pendingactivation',
+  )
   const canAccessAssetInventoryAndAllocation = Boolean(
     data.canAccessAssetInventoryAndAllocation ??
     data.CanAccessAssetInventoryAndAllocation ??
@@ -94,6 +102,8 @@ export function mapBackendUserToPortalAccount(data: {
       subRole: undefined,
       portal: 'web',
       temporaryPassword: isTemp,
+      mustChangePassword: data.mustChangePassword,
+      activationStatus: data.activationStatus,
       token: data.token,
       canAccessAssetInventoryAndAllocation,
     }
@@ -117,6 +127,8 @@ export function mapBackendUserToPortalAccount(data: {
       fullWarehouseAccess: false,
       portal: womSubRoles[rawRole],
       temporaryPassword: isTemp,
+      mustChangePassword: data.mustChangePassword,
+      activationStatus: data.activationStatus,
       token: data.token,
       canAccessAssetInventoryAndAllocation,
     }
@@ -134,6 +146,8 @@ export function mapBackendUserToPortalAccount(data: {
     groundCrewSubRole: rawRole === 'Ground Crew' ? canonicalGcSubRole || 'Field' : undefined,
     portal,
     temporaryPassword: isTemp,
+    mustChangePassword: data.mustChangePassword,
+    activationStatus: data.activationStatus,
     token: data.token,
     canAccessAssetInventoryAndAllocation,
   }

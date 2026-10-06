@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Lock, Pencil, Plus, RefreshCw, Search } from 'lucide-react'
 import { formatVendorLeadTime, mapVendorDtoToWarehouseVendor, updateVendor, useWarehouseVendors, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
-import { fetchVendorsResultApi } from '@/lib/vendorApi'
+import { fetchVendorsResultApi } from '@/features/vendors/api/vendorApi'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { VENDOR_STATUS_TONE } from '@/components/warehouse/replenishment/tone'
 import { VendorDetailModal } from '@/components/warehouse/vendors/VendorDetailModal'

@@ -1,4 +1,3 @@
-import jsPDF from 'jspdf'
 import type { EventDispatchSummary } from '@/lib/warehouse-dispatch'
 import type { DeficitLine } from '@/lib/warehouse-replenishment'
 import type { ProcurementItem } from '@/lib/types'
@@ -24,7 +23,7 @@ interface ColumnDef {
 }
 
 class PdfReportBuilder {
-  doc: jsPDF
+  doc: any
   margin = 40
   pageWidth = 612 // Letter width in pt
   pageHeight = 792 // Letter height in pt
@@ -32,8 +31,11 @@ class PdfReportBuilder {
   y = 40
   currentPage = 1
 
-  constructor() {
-    this.doc = new jsPDF({ unit: 'pt', format: 'letter' })
+  static async create(): Promise<PdfReportBuilder> {
+    const { default: jsPDF } = await import('jspdf')
+    const builder = new PdfReportBuilder()
+    builder.doc = new jsPDF({ unit: 'pt', format: 'letter' })
+    return builder
   }
 
   // Draw standardized brand header banner
@@ -166,7 +168,7 @@ function getStatusRGB(statusStr?: string): [number, number, number] {
 }
 
 // ─── 1. Security & System Audit Logs PDF Exporter ───
-export function exportSecurityAuditPdf(
+export async function exportSecurityAuditPdf(
   title: string,
   logs: Array<{
     timestamp: string
@@ -182,7 +184,7 @@ export function exportSecurityAuditPdf(
   }>,
   filename: string,
 ) {
-  const builder = new PdfReportBuilder()
+  const builder = await PdfReportBuilder.create()
   builder.drawHeader(title, [
     `Total Logs Rendered: ${logs.length} entries`,
     `Scope: Filtered System Security & Audit Log Record`,
@@ -240,7 +242,7 @@ export function exportSecurityAuditPdf(
 }
 
 // ─── 2. Warehouse Operations Activity Logs PDF Exporter ───
-export function exportWarehouseLogsPdf(
+export async function exportWarehouseLogsPdf(
   logs: Array<{
     timestamp: string
     logId: string
@@ -253,7 +255,7 @@ export function exportWarehouseLogsPdf(
   }>,
   filename: string,
 ) {
-  const builder = new PdfReportBuilder()
+  const builder = await PdfReportBuilder.create()
   builder.drawHeader('WAREHOUSE ACTIVITY & INVENTORY LOGS', [
     `Total Log Entries: ${logs.length} movement records`,
     'Scope: Warehouse Logistics Movement & Handover Log',
@@ -306,8 +308,8 @@ export function exportWarehouseLogsPdf(
 }
 
 // ─── 3. Dispatch Manifest Event PDF Exporter ───
-export function exportDispatchEventPdf(summary: EventDispatchSummary) {
-  const builder = new PdfReportBuilder()
+export async function exportDispatchEventPdf(summary: EventDispatchSummary) {
+  const builder = await PdfReportBuilder.create()
   builder.drawHeader('DISPATCH MANIFEST (EVENT SCOPE)', [
     `Event: ${summary.eventTitle.toUpperCase()}`,
     `Venue: ${summary.venue}   |   Target Date: ${summary.targetDate}`,
@@ -362,8 +364,8 @@ export function exportDispatchEventPdf(summary: EventDispatchSummary) {
 }
 
 // ─── 4. Dispatch Consolidated Manifest PDF Exporter ───
-export function exportDispatchConsolidatedPdf(summaries: EventDispatchSummary[]) {
-  const builder = new PdfReportBuilder()
+export async function exportDispatchConsolidatedPdf(summaries: EventDispatchSummary[]) {
+  const builder = await PdfReportBuilder.create()
   const totalBatches = summaries.reduce((acc, s) => acc + s.batches.length, 0)
   builder.drawHeader('CONSOLIDATED DISPATCH MANIFEST', [
     `Total Events: ${summaries.length}   |   Total Batches: ${totalBatches}`,
@@ -419,8 +421,8 @@ export function exportDispatchConsolidatedPdf(summaries: EventDispatchSummary[])
 }
 
 // ─── 5. Replenishment Deficit Report PDF Exporter ───
-export function exportReplenishmentDeficitPdf(lines: DeficitLine[], reportTitle?: string) {
-  const builder = new PdfReportBuilder()
+export async function exportReplenishmentDeficitPdf(lines: DeficitLine[], reportTitle?: string) {
+  const builder = await PdfReportBuilder.create()
   const activeLines = lines.filter((l) => l.status !== 'Received')
   const totalEstimatedCost = activeLines.reduce((sum, l) => {
     const required = l.quantityNeeded ?? Math.max(0, l.threshold - l.currentStock)
@@ -486,8 +488,8 @@ export function exportReplenishmentDeficitPdf(lines: DeficitLine[], reportTitle?
 }
 
 // ─── 6. Replenishment Procurement Register PDF Exporter ───
-export function exportReplenishmentProcurementPdf(items: ProcurementItem[]) {
-  const builder = new PdfReportBuilder()
+export async function exportReplenishmentProcurementPdf(items: ProcurementItem[]) {
+  const builder = await PdfReportBuilder.create()
   builder.drawHeader('PROCUREMENT REGISTER & STOCK AUDIT', [
     `Total Register Items: ${items.length} inventory lines`,
     'Scope: Master Procurement & Low-Stock Threshold Register',
@@ -547,7 +549,7 @@ export interface CrewRosterExportMember {
   status?: string
 }
 
-export function exportCrewRosterPdf(
+export async function exportCrewRosterPdf(
   eventInfo: {
     eventTitle: string
     venue: string
@@ -555,7 +557,7 @@ export function exportCrewRosterPdf(
   },
   crewList: CrewRosterExportMember[],
 ) {
-  const builder = new PdfReportBuilder()
+  const builder = await PdfReportBuilder.create()
   const leadsCount = crewList.filter((c) => c.isTeamLead).length
 
   builder.drawHeader('EVENT CREW ROSTER & MANNING DELEGATION', [
