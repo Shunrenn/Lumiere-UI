@@ -12,7 +12,6 @@ import {
   Layers,
   Lock,
   MapPin,
-  MessageSquare,
   PackageCheck,
   Play,
   Send,
@@ -546,7 +545,7 @@ export function GroundCrewPage() {
     const d = String(now.getDate()).padStart(2, '0')
     return `${y}-${m}-${d}`
   })
-  const [notes, setNotes] = useState<Record<string, string>>(() => {
+  const [notes] = useState<Record<string, string>>(() => {
     if (typeof window === 'undefined') return {}
     try {
       const stored = localStorage.getItem('__lumiere_crew_notes__')
@@ -796,11 +795,11 @@ export function GroundCrewPage() {
                 ? selectedEvent ? selectedEvent.name : 'Field'
                 : adminName || 'Profile'
         }
-        subtitle={
+            subtitle={
           tab === 'home'
             ? undefined
             : tab === 'schedule'
-              ? 'Calendar and shift reminders'
+              ? undefined
               : tab === 'field'
                 ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Tasks, reports, requests and history'
                 : adminEmail || undefined
@@ -847,18 +846,11 @@ export function GroundCrewPage() {
           <CalendarView
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
-            notes={notes}
-            setNotes={setNotes}
-            onSave={() => {
-              try {
-                localStorage.setItem('__lumiere_crew_notes__', JSON.stringify(notes))
-                setToast('Personal note saved.')
-              } catch {
-                setToast('Failed to save note.')
-              }
-              window.setTimeout(() => setToast(''), 3000)
-            }}
+            assignments={myAssignments}
             events={crewEvents}
+            loading={loadingAssignments}
+            error={assignmentError}
+            isLeadForEvent={isLeadForEvent}
           />
         )}
 
@@ -2023,140 +2015,104 @@ function DamageForm({
   )
 }
 
-function DayDots({ hasSchedule, hasNote }: { hasSchedule: boolean; hasNote: boolean }) {
-  if (!hasSchedule && !hasNote) return <span className="mt-1 block h-1.5" />
-  return (
-    <span className="mt-1 flex items-center justify-center gap-1">
-      {hasSchedule && <span className="size-1.5 rounded-full bg-primary" />}
-      {hasNote && <span className="size-1.5 rounded-full border border-current" />}
-    </span>
-  )
+type ScheduleShift = {
+  assignment: MyManningAssignmentDto
+  event: EventItem
+  stages: string[]
+}
+
+const SCHEDULE_STAGES = ['Dispatch Release', 'Venue Arrival', 'Egress Release', 'Warehouse Return'] as const
+
+function manilaToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
+}
+
+function scheduleStageFor(assignment: MyManningAssignmentDto, scope: string) {
+  const text = `${assignment.assignedRole ?? ''} ${assignment.taskTitle ?? ''} ${assignment.workArea ?? ''}`.toLowerCase()
+  const warehouse = scope === 'Warehouse Crew' || text.includes('warehouse') || text.includes('dispatch')
+  if (text.includes('egress')) return 'Egress Release'
+  if (text.includes('arrival') || text.includes('venue')) return 'Venue Arrival'
+  if (warehouse && text.includes('return')) return 'Warehouse Return'
+  return warehouse ? 'Dispatch Release' : 'Venue Arrival'
+}
+
+function formatTime(value?: string | null) {
+  if (!value) return null
+  const match = value.match(/(\d{1,2}):(\d{2})/)
+  if (!match) return value
+  const hour = Number(match[1])
+  const suffix = hour >= 12 ? 'PM' : 'AM'
+  return `${hour % 12 || 12}:${match[2]} ${suffix}`
 }
 
 function CalendarView({
   selectedDate,
   setSelectedDate,
-  notes,
-  setNotes,
-  onSave,
+  assignments,
   events,
+  loading,
+  error,
+  isLeadForEvent,
 }: {
   selectedDate: string
   setSelectedDate: (date: string) => void
-  notes: Record<string, string>
-  setNotes: (updater: (current: Record<string, string>) => Record<string, string>) => void
-  onSave: () => void
+  assignments: MyManningAssignmentDto[]
   events: EventItem[]
+  loading: boolean
+  error: string | null
+  isLeadForEvent: (eventId: string) => boolean
 }) {
+  const today = manilaToday()
   const [view, setView] = useState(() => {
-    if (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate.trim())) {
-      const [y, m] = selectedDate.trim().split('-').map(Number)
-      return { year: y, month: m - 1 }
-    }
-    const now = new Date()
-    return { year: now.getFullYear(), month: now.getMonth() }
+    const [year, month] = selectedDate.split('-').map(Number)
+    return { year, month: month - 1 }
   })
-
-  const MONTH_NAMES = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ]
-
-  const shiftMonth = (delta: number) => {
-    setView((prev) => {
-      const next = new Date(prev.year, prev.month + delta, 1)
-      return { year: next.getFullYear(), month: next.getMonth() }
-    })
-  }
-
+  const [detail, setDetail] = useState<ScheduleShift | null>(null)
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  const shifts: ScheduleShift[] = assignments.filter((a) => Boolean(a.shiftDate)).map((assignment) => {
+    const event = events.find((item) => item.id === assignment.eventId) ?? { id: assignment.eventId, name: assignment.eventName || 'Event', date: assignment.shiftDate!.slice(0, 10), venue: '', status: 'Upcoming' as EventStatus, editable: false, phase: null, items: [] }
+    const scope = (assignment.assignedRole ?? '').toLowerCase().includes('warehouse') ? 'Warehouse Crew' : 'Field Crew'
+    return { assignment, event: { ...event, date: assignment.shiftDate!.slice(0, 10) }, stages: [scheduleStageFor(assignment, scope)] }
+  })
+  const selected = shifts.filter((shift) => shift.event.date === selectedDate)
+  const recent = shifts.filter((shift) => shift.event.date < today).sort((a, b) => b.event.date.localeCompare(a.event.date)).slice(0, 5)
   const firstWeekday = new Date(view.year, view.month, 1).getDay()
   const daysInMonth = new Date(view.year, view.month + 1, 0).getDate()
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
-  const entries = events.filter((item) => item.date === selectedDate)
-  const noteValue = notes[selectedDate] ?? ''
-
+  const monthDays = Array.from({ length: daysInMonth }, (_, index) => index + 1)
+  const shiftMonth = (delta: number) => setView((current) => { const next = new Date(current.year, current.month + delta, 1); return { year: next.getFullYear(), month: next.getMonth() } })
+  const tagFor = (date: string) => date === today ? 'Today' : date > today ? 'Upcoming' : 'Past'
+  const card = (shift: ScheduleShift) => {
+    const assignment = shift.assignment
+    return (
+      <button key={assignment.assignmentId} type="button" onClick={() => setDetail(shift)} className="w-full rounded-2xl border border-border bg-card p-3 text-left transition-colors hover:bg-accent/30">
+        <div className="flex items-start justify-between gap-2">
+          <div><h3 className="font-serif text-sm font-bold text-foreground">{shift.event.name}</h3><p className="mt-0.5 text-xs text-muted-foreground">{shift.event.venue || 'Venue not provided'}</p></div>
+          <PwaBadge variant="neutral" label={tagFor(shift.event.date)} />
+        </div>
+        {formatTime(assignment.shiftStartTime) && <p className="mt-2 text-xs text-muted-foreground"><Clock className="mr-1 inline size-3" />Call time {formatTime(assignment.shiftStartTime)}</p>}
+        <p className="mt-2 text-xs font-medium text-foreground">Your stages: {shift.stages.join(', ')}</p>
+      </button>
+    )
+  }
+  if (detail) return <ScheduleDetail shift={detail} today={today} isLead={isLeadForEvent(detail.event.id)} onBack={() => setDetail(null)} />
+  if (loading) return <div className="space-y-3" aria-label="Loading schedule"><div className="h-48 animate-pulse rounded-2xl bg-muted" /><div className="h-28 animate-pulse rounded-2xl bg-muted" /></div>
+  if (error && shifts.length === 0) return <PwaEmptyState title="Couldn't load your schedule. Try again." description="" />
   return (
-    <div className="space-y-4">
-      <PwaCard title={`${MONTH_NAMES[view.month]} ${view.year} Calendar`}>
-        <div className="flex items-center justify-between mb-3">
-          <PwaButton variant="ghost" size="sm" onClick={() => shiftMonth(-1)} aria-label="Previous month">
-            <ChevronLeft className="size-4" /> Prev
-          </PwaButton>
-          <span className="font-serif text-sm font-bold text-foreground">
-            {MONTH_NAMES[view.month]} {view.year}
-          </span>
-          <PwaButton variant="ghost" size="sm" onClick={() => shiftMonth(1)} aria-label="Next month">
-            Next <ChevronRight className="size-4" />
-          </PwaButton>
-        </div>
-        <div className="grid grid-cols-7 gap-1 text-center text-xs">
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-            <span key={`${d}-${i}`} className="font-bold text-muted-foreground text-[0.65rem] py-1">
-              {d}
-            </span>
-          ))}
-          {Array.from({ length: firstWeekday }).map((_, i) => (
-            <span key={`pad-${i}`} />
-          ))}
-          {days.map((day) => {
-            const date = `${view.year}-${String(view.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-            const hasSchedule = events.some((item) => item.date === date)
-            const hasNote = Boolean(notes[date])
-            const isSelected = date === selectedDate
-
-            return (
-              <button
-                key={date}
-                onClick={() => setSelectedDate(date)}
-                className={`flex min-h-[44px] flex-col items-center justify-center rounded-xl p-1 text-xs transition-all ${
-                  isSelected
-                    ? 'bg-primary text-primary-foreground font-bold shadow-sm'
-                    : hasSchedule
-                      ? 'bg-primary/10 text-primary font-bold'
-                      : 'hover:bg-accent/40 text-foreground'
-                }`}
-              >
-                <span>{day}</span>
-                <DayDots hasSchedule={hasSchedule} hasNote={hasNote} />
-              </button>
-            )
-          })}
-        </div>
+    <div className="space-y-3">
+      <PwaCard>
+        <div className="mb-2 flex items-center justify-between"><button type="button" aria-label="Previous month" onClick={() => shiftMonth(-1)} className="rounded-full p-2 hover:bg-accent"><ChevronLeft className="size-4" /></button><h2 className="font-serif text-base font-bold">{monthNames[view.month]} {view.year}</h2><button type="button" aria-label="Next month" onClick={() => shiftMonth(1)} className="rounded-full p-2 hover:bg-accent"><ChevronRight className="size-4" /></button></div>
+        <div className="grid grid-cols-7 gap-1 text-center text-[0.65rem] text-muted-foreground">{['S','M','T','W','T','F','S'].map((day, index) => <span key={`${day}-${index}`} className="py-1 font-bold">{day}</span>)}{Array.from({ length: firstWeekday }, (_, index) => <span key={`pad-${index}`} />)}{monthDays.map((day) => { const date = `${view.year}-${String(view.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`; const hasShift = shifts.some((shift) => shift.event.date === date); const past = date < today; const isToday = date === today; const isSelected = date === selectedDate; return <button type="button" key={date} onClick={() => setSelectedDate(date)} className={`relative flex min-h-9 flex-col items-center justify-center rounded-lg text-xs ${isSelected ? 'ring-2 ring-primary' : ''} ${isToday ? 'bg-primary text-primary-foreground font-bold' : 'text-foreground'}`}><span>{day}</span>{hasShift && <span className={`mt-1 size-1.5 rounded-full ${past ? 'bg-muted-foreground/50' : isToday ? 'bg-primary-foreground' : 'bg-primary'}`} />}</button>})}</div>
       </PwaCard>
-
-      <PwaCard title={`Shift Schedule • ${dateLabel(selectedDate)}`}>
-        {entries.length ? (
-          <div className="space-y-2 pt-1">
-            {entries.map((entry) => (
-              <div key={entry.id} className="rounded-xl border border-border p-3">
-                {entry.phase && <PwaBadge variant="subrole" subRole="Field" label={entry.phase} />}
-                <h4 className="mt-1 font-serif text-sm font-bold text-foreground">{entry.name}</h4>
-                <p className="text-xs text-muted-foreground">{entry.venue}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground py-2">No shift briefings assigned for this date.</p>
-        )}
-
-        <div className="mt-4 border-t border-border pt-3 space-y-2">
-          <label className="block text-xs font-semibold text-foreground">
-            Personal Shift Reminders
-            <textarea
-              value={noteValue}
-              onChange={(e) => setNotes((curr) => ({ ...curr, [selectedDate]: e.target.value }))}
-              rows={3}
-              placeholder="Add personal notes or reminders..."
-              className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-          <PwaButton onClick={onSave} variant="primary" size="sm" icon={<MessageSquare className="size-3.5" />}>
-            Save Reminder
-          </PwaButton>
-        </div>
-      </PwaCard>
+      <section aria-labelledby="selected-shifts-heading"><h2 id="selected-shifts-heading" className="mb-2 font-serif text-base font-bold">{selectedDate === today ? `Today · ${dateLabel(selectedDate)}` : dateLabel(selectedDate)}</h2>{selected.length ? <div className="space-y-2">{selected.map(card)}</div> : <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">{selectedDate === today ? 'Not rostered today' : 'Not rostered on this day'}</div>}</section>
+      {recent.length > 0 && <section aria-labelledby="recent-shifts-heading"><h2 id="recent-shifts-heading" className="mb-2 font-serif text-base font-bold">Recent shifts</h2><div className="space-y-2">{recent.map(card)}</div></section>}
     </div>
   )
+}
+
+function ScheduleDetail({ shift, today, isLead, onBack }: { shift: ScheduleShift; today: string; isLead: boolean; onBack: () => void }) {
+  const { assignment, event, stages } = shift
+  const completed = assignment.executionStatus === 'Completed'
+  return <div className="space-y-4"><button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm font-semibold text-primary"><ChevronLeft className="size-4" />Back</button><PwaCard><div className="flex items-start justify-between gap-2"><div><h1 className="font-serif text-xl font-bold">{event.name}</h1><p className="mt-1 text-sm text-muted-foreground">{event.venue || 'Venue not provided'}</p></div>{isLead && <PwaBadge variant="subrole" subRole="Field" label="Shift Lead" />}</div><div className="mt-4 space-y-2 text-sm"><p>Ingress: {dateLabel(event.date)}{formatTime(assignment.shiftStartTime) ? ` · ${formatTime(assignment.shiftStartTime)}` : ''}</p>{formatTime(assignment.shiftStartTime) && <p>Call time: {formatTime(assignment.shiftStartTime)}</p>}{formatTime(assignment.shiftEndTime) && <p>Event hours end: {formatTime(assignment.shiftEndTime)}</p>}<p>Your stages: {stages.join(', ')}</p>{completed && <p className="font-semibold text-primary">Completed</p>}{!completed && event.date < today && <p className="text-muted-foreground">Past</p>}</div><div className="mt-5 space-y-2">{SCHEDULE_STAGES.map((stage) => <div key={stage} className="flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm"><span>{stage}</span>{stages.includes(stage) && <span className="font-semibold text-primary">Yours</span>}</div>)}</div></PwaCard></div>
 }
 
 function Activity({
