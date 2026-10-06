@@ -47,9 +47,9 @@ export function ExecutiveAssetInventoryPage() {
     <div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <span className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2.5 py-1 text-[0.58rem] font-bold uppercase tracking-[0.16em] text-primary">Asset Kiosk</span>
+          <span className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2.5 py-1 text-[0.58rem] font-bold uppercase tracking-[0.16em] text-primary">Asset Inventory</span>
           <h1 className="mt-1 font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
-            Asset Allocation
+            Asset Inventory
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
             Browse, search, and review assets by classification.
