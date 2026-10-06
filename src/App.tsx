@@ -245,7 +245,7 @@ function Router() {
       return <DamageValidationPage />
     case 'inventory':
       if (isExecutive) {
-        return canAccessAssetInventory ? <ExecutiveAssetInventoryPage /> : <EventDashboardPage />
+        return <ExecutiveAssetInventoryPage />
       }
       return <InventoryStockPage />
     case 'warehouse-logs':
