@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { X, ZoomIn, ZoomOut, RotateCcw, Maximize2, Download } from 'lucide-react'
 
 interface ImageViewerModalProps {
@@ -23,6 +24,7 @@ export function ImageViewerModal({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        e.stopPropagation()
         onClose()
       } else if (e.key === '+' || e.key === '=') {
         setScale((s) => Math.min(s + 0.25, 4))
@@ -34,14 +36,29 @@ export function ImageViewerModal({
       }
     }
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = prevOverflow
+    }
   }, [onClose])
 
   if (!src) return null
 
-  const handleZoomIn = () => setScale((s) => Math.min(s + 0.25, 4))
-  const handleZoomOut = () => setScale((s) => Math.max(s - 0.25, 0.5))
-  const handleReset = () => {
+  const handleZoomIn = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setScale((s) => Math.min(s + 0.25, 4))
+  }
+
+  const handleZoomOut = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setScale((s) => Math.max(s - 0.25, 0.5))
+  }
+
+  const handleReset = (e?: React.MouseEvent) => {
+    e?.stopPropagation()
     setScale(1)
     setPosition({ x: 0, y: 0 })
   }
@@ -73,23 +90,27 @@ export function ImageViewerModal({
     }
   }
 
-  const handleDownload = () => {
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation()
     const link = document.createElement('a')
     link.href = src
     link.download = `${title.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'asset-photo'}.png`
     link.click()
   }
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-[100] flex flex-col bg-black/92 backdrop-blur-md animate-in fade-in duration-200 select-none"
-      onClick={onClose}
+      className="fixed inset-0 z-[99999] flex flex-col bg-black/94 backdrop-blur-md animate-in fade-in duration-150 select-none"
+      onClick={(e) => {
+        e.stopPropagation()
+        onClose()
+      }}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
       {/* Top Controls Bar */}
       <div
-        className="flex items-center justify-between border-b border-white/10 bg-black/60 px-6 py-3.5 backdrop-blur shrink-0"
+        className="flex items-center justify-between border-b border-white/10 bg-black/70 px-6 py-3.5 backdrop-blur shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3">
@@ -99,7 +120,7 @@ export function ImageViewerModal({
           <div>
             <h3 className="font-sans text-sm font-medium text-white">{title}</h3>
             <p className="text-[0.65rem] text-white/50">
-              Scroll to zoom • Click &amp; drag to pan • Press Esc to close
+              Scroll or click to zoom • Click &amp; drag to pan • Press Esc to close
             </p>
           </div>
         </div>
@@ -157,9 +178,12 @@ export function ImageViewerModal({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation()
+              onClose()
+            }}
             aria-label="Close full view"
-            className="flex size-8 items-center justify-center rounded-lg bg-white/10 text-white transition hover:bg-rose-500/80 hover:text-white"
+            className="flex size-8 items-center justify-center rounded-lg bg-white/10 text-white transition hover:bg-rose-500/90 hover:text-white cursor-pointer"
           >
             <X className="size-4.5" />
           </button>
@@ -173,7 +197,10 @@ export function ImageViewerModal({
         onMouseDown={handleMouseDown}
         className="flex-1 flex items-center justify-center overflow-hidden p-6 relative cursor-default"
         onClick={(e) => {
-          if (e.target === containerRef.current) onClose()
+          if (e.target === containerRef.current) {
+            e.stopPropagation()
+            onClose()
+          }
         }}
       >
         <div
@@ -185,7 +212,7 @@ export function ImageViewerModal({
           onClick={(e) => {
             e.stopPropagation()
             if (scale === 1) {
-              setScale(1.75)
+              setScale(1.85)
             }
           }}
         >
@@ -202,9 +229,11 @@ export function ImageViewerModal({
       </div>
 
       {/* Bottom Hint */}
-      <div className="py-2 text-center text-[0.7rem] text-white/40 shrink-0 pointer-events-none">
-        Click image to zoom in • Double click or click backdrop to exit
+      <div className="py-2 text-center text-[0.7rem] text-white/50 shrink-0 pointer-events-none">
+        Click image to zoom in • Click anywhere outside or press Esc to close
       </div>
     </div>
   )
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : null
 }

@@ -1159,6 +1159,15 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
           </button>
         </div>
       </div>
+
+      {activeDisplayImage && isFullscreenPreviewOpen && (
+        <ImageViewerModal
+          src={activeDisplayImage}
+          alt={name || 'Asset Photo'}
+          title={name ? `${name} (${activePhotoMode === 'bgRemoved' ? 'AI Cutout' : 'Original'})` : 'Asset Photo Preview'}
+          onClose={() => setIsFullscreenPreviewOpen(false)}
+        />
+      )}
     </div>
   )
 }
