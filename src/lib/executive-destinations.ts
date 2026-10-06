@@ -1,9 +1,10 @@
-import { LayoutGrid, ClipboardList, Boxes, ListFilter, type LucideIcon } from 'lucide-react'
+import { LayoutGrid, ClipboardList, ClipboardCheck, Boxes, ListFilter, PenTool, Palette, type LucideIcon } from 'lucide-react'
+import type { Route } from '@/lib/types'
 
 // Executive console destinations.
 // Reconciled to client-presented authority:
-// Executive Dashboard, Asset Inventory (conditional permission),
-// Event Operations, and System Audit Trail & Security Logs.
+// Executive Dashboard, Asset Inventory, Event Operations, Damage Reports,
+// and Operational Audit Logs.
 export type ExecutiveDestinationId = 'dashboard' | 'inventory' | 'registry' | 'damage' | 'logs'
 
 export interface ExecutiveDestination {
@@ -12,11 +13,31 @@ export interface ExecutiveDestination {
   icon: LucideIcon
 }
 
+export interface SharedRailDestination {
+  id: string
+  label: string
+  icon: LucideIcon
+  route: Route
+}
+
+export const PLANNER_RAIL_DESTINATIONS: readonly SharedRailDestination[] = [
+  { id: 'dashboard', label: 'Event Planner Dashboard', icon: LayoutGrid, route: 'dashboard' },
+  { id: 'design-projects', label: 'Design Projects', icon: PenTool, route: 'design-projects' },
+  { id: 'mood-boards', label: 'Styling Templates', icon: Palette, route: 'mood-boards' },
+  { id: 'inventory', label: 'Asset Inventory', icon: Boxes, route: 'inventory' },
+]
+
+export const PLANNER_RAIL_IDENTITY = {
+  roleLabel: 'EVENT PLANNER',
+  getName: (sessionName: string | undefined) => sessionName || 'Event Planner',
+} as const
+
 export const EXECUTIVE_DESTINATIONS: ExecutiveDestination[] = [
   { id: 'dashboard', label: 'Executive Dashboard', icon: LayoutGrid },
   { id: 'inventory', label: 'Asset Inventory', icon: Boxes },
   { id: 'registry', label: 'Event Operations', icon: ClipboardList },
-  { id: 'logs', label: 'System Audit Trail & Security Logs', icon: ListFilter },
+  { id: 'damage', label: 'Damage Reports', icon: ClipboardCheck },
+  { id: 'logs', label: 'Operational Audit Logs', icon: ListFilter },
 ]
 
 export function getExecutiveDestination(id: ExecutiveDestinationId) {

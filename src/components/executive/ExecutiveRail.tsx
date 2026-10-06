@@ -1,14 +1,14 @@
 import { useState, useMemo } from 'react'
-import { PanelLeft, Sun, Moon, LogOut, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { EXECUTIVE_DESTINATIONS, type ExecutiveDestinationId } from '@/lib/executive-destinations'
+import { EXECUTIVE_DESTINATIONS, type ExecutiveDestinationId, type SharedRailDestination } from '@/lib/executive-destinations'
 import { useAuth } from '@/lib/auth'
-import { useDarkMode } from '@/lib/theme'
 import { canAccessRoute } from '@/lib/route-guard'
 
-interface ExecutiveRailProps {
-  activeId: ExecutiveDestinationId
-  onSelect: (id: ExecutiveDestinationId) => void
+interface ExecutiveRailProps<T extends string = ExecutiveDestinationId> {
+  activeId: T
+  onSelect: (id: T) => void
+  destinations?: readonly SharedRailDestination[]
+  identityRoleLabel?: string
   collapsed?: boolean
   onToggleCollapse?: () => void
 }
@@ -17,14 +17,15 @@ interface ExecutiveRailProps {
 // Supports both icon-only collapsed (w-16) and fully labeled expanded (w-64) states,
 // with persistent collapse memory in localStorage, keyboard/screen-reader accessibility,
 // conditional RBAC filtering, and accessible profile/theme/logout controls.
-export function ExecutiveRail({
+export function ExecutiveRail<T extends string = ExecutiveDestinationId>({
   activeId,
   onSelect,
   collapsed: externalCollapsed,
   onToggleCollapse: externalToggleCollapse,
-}: ExecutiveRailProps) {
-  const { canAccessAssetInventory, isExecutiveLite, adminName, adminRole, setConfirmLogout, currentUser } = useAuth()
-  const { dark, toggle: toggleTheme } = useDarkMode()
+  destinations,
+  identityRoleLabel: _identityRoleLabel,
+}: ExecutiveRailProps<T>) {
+  const { canAccessAssetInventory, isExecutiveLite, currentUser } = useAuth()
 
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
     try {
@@ -56,6 +57,7 @@ export function ExecutiveRail({
   // For Full Executive: Preserve existing EXECUTIVE_DESTINATIONS order and capabilities
   // For other shared shell consumers (e.g. Event Planner): filter strictly by canAccessRoute to prevent role leaks
   const visibleDestinations = useMemo(() => {
+    if (destinations) return destinations
     if (isExecutiveLite) {
       const liteOrder: ExecutiveDestinationId[] = ['dashboard', 'registry', 'inventory']
       return liteOrder
@@ -67,10 +69,12 @@ export function ExecutiveRail({
         })
     }
     return EXECUTIVE_DESTINATIONS.filter((destination) => {
-      if (destination.id === 'inventory' && !canAccessAssetInventory) return false
+      // Standard Executive navigation always exposes the five authoritative destinations.
+      // Asset capability still controls the page contents and API authorization.
+      if (destination.id === 'inventory') return true
       return canAccessRoute(currentUser, destination.id)
     })
-  }, [isExecutiveLite, canAccessAssetInventory, currentUser])
+  }, [destinations, isExecutiveLite, canAccessAssetInventory, currentUser])
 
   // Executive Lite uses a fixed compact dark rail per client references
   const effectiveCollapsed = isExecutiveLite ? true : isCollapsed
@@ -83,51 +87,10 @@ export function ExecutiveRail({
       )}
       aria-label="Executive Navigation Sidebar"
     >
-      {/* Brand & Toggle header */}
-      {effectiveCollapsed ? (
-        <div className="flex flex-col items-center gap-3">
-          <span
-            className="flex size-9 items-center justify-center rounded-lg bg-amber-500/10 font-serif text-xl font-bold leading-none text-amber-600 dark:text-amber-400 shadow-sm ring-1 ring-amber-500/20"
-            aria-hidden="true"
-          >
-            L
-          </span>
-          {!isExecutiveLite && (
-            <button
-              type="button"
-              onClick={handleToggle}
-              aria-label="Expand sidebar"
-              title="Expand sidebar"
-              className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            >
-              <PanelLeft className="size-4" aria-hidden="true" />
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="flex items-center justify-between px-2 pb-1">
-          <div className="flex items-center gap-2.5">
-            <span
-              className="flex size-8 items-center justify-center rounded-md bg-sidebar-primary/10 font-serif text-lg font-medium leading-none text-sidebar-primary"
-              aria-hidden="true"
-            >
-              L
-            </span>
-            <span className="font-serif text-sm font-semibold tracking-[0.2em] text-sidebar-primary">
-              LUMIÈRE
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={handleToggle}
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-            className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <PanelLeft className="size-4" aria-hidden="true" />
-          </button>
-        </div>
-      )}
+      <div className={cn('flex items-center px-2 pb-1', effectiveCollapsed ? 'justify-center' : 'gap-2.5')}>
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 font-serif text-lg font-bold leading-none text-amber-600 shadow-sm ring-1 ring-amber-500/20 dark:text-amber-400" aria-hidden="true">L</span>
+        {!effectiveCollapsed && <span className="font-serif text-sm font-semibold tracking-[0.2em] text-sidebar-primary">LUMIÈRE</span>}
+      </div>
 
       <div className={cn('my-3 h-px bg-sidebar-border', effectiveCollapsed ? 'w-8' : 'w-full')} aria-hidden="true" />
 
@@ -142,7 +105,7 @@ export function ExecutiveRail({
               <button
                 key={destination.id}
                 type="button"
-                onClick={() => onSelect(destination.id)}
+                onClick={() => { if (active && !isExecutiveLite) handleToggle(); else onSelect(destination.id as T) }}
                 aria-label={destination.label}
                 aria-current={active ? 'true' : undefined}
                 title={destination.label}
@@ -164,7 +127,7 @@ export function ExecutiveRail({
             <button
               key={destination.id}
               type="button"
-              onClick={() => onSelect(destination.id)}
+              onClick={() => { if (active && !isExecutiveLite) handleToggle(); else onSelect(destination.id as T) }}
               aria-current={active ? 'true' : undefined}
               title={destination.label}
               className={cn(
@@ -181,65 +144,6 @@ export function ExecutiveRail({
         })}
       </nav>
 
-      {/* Bottom Profile, Theme & Logout Region */}
-      <div className={cn('pt-2 border-t border-sidebar-border flex flex-col gap-1', effectiveCollapsed ? 'items-center' : '')}>
-        {/* Expanded Profile Info */}
-        {!effectiveCollapsed && (
-          <div className="flex items-center gap-2.5 px-2 py-2 mb-1 rounded-lg bg-sidebar-accent/40">
-            <div className="flex size-7 items-center justify-center rounded-full bg-sidebar-primary/15 text-sidebar-primary shrink-0">
-              <User className="size-3.5" aria-hidden="true" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold text-sidebar-foreground">{adminName || 'Executive'}</p>
-              <p className="truncate text-[0.62rem] uppercase tracking-wider text-sidebar-foreground/60">{adminRole || 'Executive'}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Theme Toggle */}
-        {effectiveCollapsed ? (
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-            title={dark ? 'Light mode' : 'Dark mode'}
-            className="flex size-10 items-center justify-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            {dark ? <Sun className="size-4" aria-hidden="true" /> : <Moon className="size-4" aria-hidden="true" />}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            {dark ? <Sun className="size-4 shrink-0" aria-hidden="true" /> : <Moon className="size-4 shrink-0" aria-hidden="true" />}
-            <span className="truncate">{dark ? 'Light mode' : 'Dark mode'}</span>
-          </button>
-        )}
-
-        {/* Sign Out */}
-        {effectiveCollapsed ? (
-          <button
-            type="button"
-            onClick={() => setConfirmLogout(true)}
-            aria-label="Sign out"
-            title="Sign out"
-            className="flex size-10 items-center justify-center rounded-lg text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive"
-          >
-            <LogOut className="size-4" aria-hidden="true" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setConfirmLogout(true)}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive"
-          >
-            <LogOut className="size-4 shrink-0" aria-hidden="true" />
-            <span className="truncate">Sign out</span>
-          </button>
-        )}
-      </div>
     </aside>
   )
 }

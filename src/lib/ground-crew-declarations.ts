@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { HavaDeclarationState, HavaEvidenceStatus } from './types'
+import { fetchDamageReportsAllEvents, submitDamageReportApi, editDamageReportApi } from '@/features/damage/api/damageApi'
+import { getPendingQueue, enqueueDeclaration } from './offlineQueue'
 
 export type DeclarationStatus = 'Pending Event Admin' | 'Confirmed' | 'Rejected' | 'Escalated to Manning'
 
@@ -52,9 +54,6 @@ let declarations: GroundCrewDeclaration[] = []
 
 export async function loadDeclarationsFromBackend(events?: Array<{ id: string }>): Promise<GroundCrewDeclaration[]> {
   try {
-    const { fetchDamageReportsAllEvents } = await import('./damageApi')
-    const { getPendingQueue } = await import('./offlineQueue')
-
     let backendReports: GroundCrewDeclaration[] = []
     if (events && events.length > 0) {
       const { reports } = await fetchDamageReportsAllEvents(events)
@@ -169,7 +168,6 @@ export async function submitGroundCrewDeclaration(
   if (isOffline) {
     // Offline: Enqueue to IndexedDB for automatic background replay on reconnect
     try {
-      const { enqueueDeclaration } = await import('./offlineQueue')
       const queued = await enqueueDeclaration({
         eventId: input.eventId,
         eventName: input.eventName,
@@ -207,7 +205,6 @@ export async function submitGroundCrewDeclaration(
 
   // Online: Submit to authoritative backend REST API
   try {
-    const { submitDamageReportApi } = await import('./damageApi')
     const res = await submitDamageReportApi({
       assetId: input.assetId || '',
       eventId: input.eventId,
@@ -275,7 +272,6 @@ export async function updateGroundCrewDeclaration(
   },
 ): Promise<{ success: boolean; declaration?: GroundCrewDeclaration; error?: string; code?: string }> {
   try {
-    const { editDamageReportApi } = await import('./damageApi')
     const res = await editDamageReportApi(id, {
       damagedQuantity: updates.quantity,
       photoUrl: updates.photoUrl,

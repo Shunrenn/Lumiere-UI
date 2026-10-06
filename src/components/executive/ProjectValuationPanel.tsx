@@ -11,7 +11,7 @@ import {
   HelpCircle,
   CheckCircle2,
 } from 'lucide-react'
-import { fetchEventBudget, type EventBudgetData, type BudgetLineItem } from '@/lib/budgetApi'
+import { fetchEventBudget, type EventBudgetData, type BudgetLineItem } from '@/features/budget/api/budgetApi'
 import { cn } from '@/lib/utils'
 import type { PortalEvent } from '@/lib/types'
 

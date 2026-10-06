@@ -35,7 +35,7 @@ interface CrewOpsGridProps {
   staff: Staff[]
 }
 
-// Daily-Weekly Ops — a shift-roster grid (days as columns, crew as rows) for
+// Weekly roster — a shift-roster grid (days as columns, crew as rows) for
 // non-event-bound warehouse staffing, independent of any specific event.
 export function CrewOpsGrid({ staff }: CrewOpsGridProps) {
   const [weekOffset, setWeekOffset] = useState(0)
@@ -84,7 +84,7 @@ export function CrewOpsGrid({ staff }: CrewOpsGridProps) {
       <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="font-serif text-lg font-bold text-card-foreground">Daily-Weekly Ops</h2>
+            <h2 className="font-serif text-lg font-bold text-card-foreground">Weekly Roster</h2>
             {pendingCount > 0 && (
               <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                 {pendingCount} staged edit{pendingCount === 1 ? '' : 's'}
@@ -92,7 +92,7 @@ export function CrewOpsGrid({ staff }: CrewOpsGridProps) {
             )}
           </div>
           <p className="text-[0.6rem] uppercase tracking-[0.08em] text-muted-foreground">
-            Shift roster for warehouse staffing — click cell to stage AM / PM / OFF, then click Save to commit.
+            People-first shift plan for routine warehouse staffing — click a cell to stage AM / PM / OFF, then save to commit.
           </p>
         </div>
 

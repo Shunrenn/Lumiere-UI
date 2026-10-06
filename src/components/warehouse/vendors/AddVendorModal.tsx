@@ -1,58 +1,65 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
-import { addVendor, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
-import { createVendorApi } from '@/lib/vendorApi'
+import { addVendor, updateVendor, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
 
 const STATUSES: VendorStatus[] = ['Active', 'On Hold', 'Inactive']
+const CATEGORIES = ['Linens & Textiles', 'Florals', 'Furniture Rental', 'Lighting', 'Printing & Signage', 'Props & Decor', 'Staging & Fabrication', 'General Supplier', 'Other'] as const
 
 interface AddVendorModalProps {
   onClose: () => void
   // Receives the freshly registered vendor so a caller opening this from a
   // selector can immediately select it.
   onCreated?: (vendor: WarehouseVendor) => void
+  vendor?: WarehouseVendor
 }
 
-export function AddVendorModal({ onClose, onCreated }: AddVendorModalProps) {
-  const [name, setName] = useState('')
-  const [contactName, setContactName] = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
-  const [specialty, setSpecialty] = useState('')
-  const [leadTimeHours, setLeadTimeHours] = useState('24')
-  const [status, setStatus] = useState<VendorStatus>('Active')
+export function AddVendorModal({ onClose, onCreated, vendor: editingVendor }: AddVendorModalProps) {
+  const [name, setName] = useState(editingVendor?.name ?? '')
+  const [contactName, setContactName] = useState(editingVendor?.contactName ?? '')
+  const [email, setEmail] = useState(editingVendor?.email ?? '')
+  const [phone, setPhone] = useState(editingVendor?.phone ?? '')
+  const [specialty, setSpecialty] = useState(editingVendor?.specialty ?? '')
+  const [category, setCategory] = useState(editingVendor?.category ?? '')
+  const [address, setAddress] = useState(editingVendor?.address ?? '')
+  const [city, setCity] = useState(editingVendor?.city ?? '')
+  const [leadTimeValue, setLeadTimeValue] = useState(String(editingVendor?.leadTimeValue ?? 24))
+  const [leadTimeUnit, setLeadTimeUnit] = useState<'hours' | 'days'>(editingVendor?.leadTimeUnit ?? 'hours')
+  const [status, setStatus] = useState<VendorStatus>(editingVendor?.status ?? 'Active')
+  const [statusReason, setStatusReason] = useState(editingVendor?.statusReason ?? '')
   const [performanceNotes, setPerformanceNotes] = useState('')
 
-  const canSubmit = name.trim().length > 0 && contactName.trim().length > 0
+  const emailValid = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+  const phoneValid = !phone.trim() || /^(?:\+63|0)9\d{9}$/.test(phone.replace(/[\s-]/g, ''))
+  const canSubmit = name.trim().length > 0 && category.length > 0 && emailValid && phoneValid
   // Spell out what is still missing — a silently disabled submit button reads
   // as a broken form.
   const missing = [
     name.trim().length === 0 ? 'vendor name' : null,
-    contactName.trim().length === 0 ? 'contact person' : null,
+    category.length === 0 ? 'category' : null,
   ].filter(Boolean)
 
   const fieldClass =
     'rounded-md border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30'
   const labelClass = 'text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted-foreground'
 
-  const handleSubmit = async () => {
-    await createVendorApi({
+  const handleSubmit = () => {
+    const draft = {
       name,
       contactName,
       email,
       phone,
-      specialty: specialty || 'General supply',
-    })
-    const vendor = addVendor({
-      name,
-      contactName,
-      email,
-      phone,
-      specialty: specialty || 'General supply',
-      leadTimeHours: Number(leadTimeHours) || 24,
+      specialty,
+      category,
+      address,
+      city,
+      leadTimeValue: Number(leadTimeValue) || 24,
+      leadTimeUnit,
       status,
+      statusReason: status === 'Active' ? '' : statusReason,
       performanceNotes,
-    })
-    onCreated?.(vendor)
+    }
+    if (editingVendor) updateVendor(editingVendor.id, draft)
+    else onCreated?.(addVendor(draft))
     onClose()
   }
 
@@ -77,7 +84,7 @@ export function AddVendorModal({ onClose, onCreated }: AddVendorModalProps) {
             <p className="text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Vendor registry
             </p>
-            <h2 className="mt-1 font-serif text-xl font-medium text-card-foreground">Add New Vendor</h2>
+            <h2 className="mt-1 font-serif text-xl font-medium text-card-foreground">{editingVendor ? 'Edit Vendor' : 'Add Vendor'}</h2>
           </div>
           <button
             type="button"
@@ -103,16 +110,21 @@ export function AddVendorModal({ onClose, onCreated }: AddVendorModalProps) {
             <span className={labelClass}>Contact person</span>
             <input value={contactName} onChange={(event) => setContactName(event.target.value)} className={fieldClass} />
           </label>
+          <label className="flex flex-col gap-1.5"><span className={labelClass}>Category *</span><select value={category} onChange={(event) => setCategory(event.target.value)} className={fieldClass}><option value="">Select category</option>{CATEGORIES.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
           <label className="flex flex-col gap-1.5">
-            <span className={labelClass}>Lead time (hours)</span>
+            <span className={labelClass}>Lead time</span>
+            <div className="flex gap-2">
             <input
               type="number"
               min={1}
-              value={leadTimeHours}
-              onChange={(event) => setLeadTimeHours(event.target.value)}
+              value={leadTimeValue}
+              onChange={(event) => setLeadTimeValue(event.target.value)}
               className={fieldClass}
             />
+            <select value={leadTimeUnit} onChange={(event) => setLeadTimeUnit(event.target.value as 'hours' | 'days')} className={fieldClass}><option value="hours">hours</option><option value="days">days</option></select></div>
           </label>
+          <label className="col-span-2 flex flex-col gap-1.5"><span className={labelClass}>Address</span><textarea value={address} onChange={(event) => setAddress(event.target.value)} rows={2} className={fieldClass} /></label>
+          <label className="flex flex-col gap-1.5"><span className={labelClass}>City</span><input value={city} onChange={(event) => setCity(event.target.value)} className={fieldClass} /></label>
           <label className="flex flex-col gap-1.5">
             <span className={labelClass}>Email</span>
             <input
@@ -122,6 +134,7 @@ export function AddVendorModal({ onClose, onCreated }: AddVendorModalProps) {
               className={fieldClass}
             />
           </label>
+          {status !== 'Active' && <label className="col-span-2 flex flex-col gap-1.5"><span className={labelClass}>Status reason (optional)</span><textarea value={statusReason} onChange={(event) => setStatusReason(event.target.value)} rows={2} className={fieldClass} /></label>}
           <label className="flex flex-col gap-1.5">
             <span className={labelClass}>Phone</span>
             <input value={phone} onChange={(event) => setPhone(event.target.value)} className={fieldClass} />
@@ -179,7 +192,7 @@ export function AddVendorModal({ onClose, onCreated }: AddVendorModalProps) {
             onClick={handleSubmit}
             className="rounded-md bg-primary px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
           >
-            Register vendor
+            {editingVendor ? 'Save Changes' : 'Register vendor'}
           </button>
           </div>
         </div>

@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Search, UserPlus, Users, ChevronDown, TrendingUp, ArrowUpDown } from 'lucide-react'
+import { Plus, Search, UserPlus, Users, ChevronDown, ArrowUpDown, AlertTriangle } from 'lucide-react'
 import { AdminShell } from '@/components/admin/AdminShell'
-import { EmployeeModal } from '@/components/EmployeeModal'
-import { ViewAccountModal } from '@/components/ViewAccountModal'
+import { EmployeeModal } from '@/components/admin/workforce/EmployeeModal'
+import { ViewAccountModal } from '@/components/admin/workforce/ViewAccountModal'
 import { EmployeeRecordModal } from '@/components/admin/workforce/EmployeeRecordModal'
 import { WorkforceTable } from '@/components/admin/workforce/WorkforceTable'
 import type { AdminDestinationId } from '@/lib/admin-destinations'
 import { useNav } from '@/lib/nav'
 import { usePortal } from '@/lib/store'
-import { useGrowthSummary } from '@/lib/admin-growth-summary'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import type { AccountStatus, Staff } from '@/lib/types'
 
 function statusFor(staff: Staff, lockedIds: Set<string>): AccountStatus {
@@ -18,7 +18,7 @@ function statusFor(staff: Staff, lockedIds: Set<string>): AccountStatus {
   return staff.accountStatus ?? (staff.sessionStatus === 'Suspended' ? 'Suspended' : 'Active')
 }
 
-// Status filter options rendered as pills (spec: All / Active / Pending / Locked / Suspended).
+// Status options are the authoritative workforce filter.
 const STATUS_FILTERS = ['All', 'Active', 'Pending', 'Locked', 'Suspended'] as const
 type StatusFilter = (typeof STATUS_FILTERS)[number]
 
@@ -36,8 +36,7 @@ function parseDateAdded(value: string | undefined): number {
 
 export function AdminWorkforcePage() {
   const { navigate, intent, clearIntent } = useNav()
-  const { staff, userActions, addEmployeeRecord, toggleSuspend, forceLogout, updateStaff } = usePortal()
-  const { openGrowthSummary } = useGrowthSummary()
+  const { staff, userActions, addEmployeeRecord, toggleSuspend, forceLogout, updateStaff, removeStaff } = usePortal()
   const [query, setQuery] = useState('')
   const [role, setRole] = useState('All Roles')
   const [status, setStatus] = useState<StatusFilter>('All')
@@ -46,7 +45,13 @@ export function AdminWorkforcePage() {
   const [createAccountOpen, setCreateAccountOpen] = useState(false)
   const [createRecordOpen, setCreateRecordOpen] = useState(false)
   const [selected, setSelected] = useState<Staff | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Staff | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deletePending, setDeletePending] = useState(false)
   const [editMode, setEditMode] = useState(false)
+  const [pendingAction, setPendingAction] = useState<'suspend' | 'force-logout' | null>(null)
+  const [actionReason, setActionReason] = useState('')
+  const [actionError, setActionError] = useState<string | null>(null)
   const addMenuRef = useRef<HTMLDivElement | null>(null)
 
   const lockedIds = useMemo(() => new Set(userActions.filter((a) => a.type === 'account-locked' && a.status === 'pending').map((a) => a.user)), [userActions])
@@ -144,16 +149,15 @@ export function AdminWorkforcePage() {
     }
     return sorted
   }, [staff, query, role, status, sort, lockedIds])
-  const roles = [...new Set(staff.map((s) => s.role))].filter(Boolean)
+  const roles = useMemo(() => Array.from(new Set(staff.map((s) => s.role).filter(Boolean))).sort((a, b) => a.localeCompare(b)), [staff])
 
   // These three figures mirror the System Dashboard's stats (minus System Health), but
   // render as a compact inline strip in the table header rather than standalone cards —
   // that keeps table rows visible on load instead of pushed below the fold.
-  const totalUsers = staff.length
   const lockedAccounts = userActions.filter((a) => a.status === 'pending' && a.type === 'account-locked').length
-  const pendingActivations = userActions.filter((a) => a.status === 'pending' && a.type !== 'account-locked').length
+  const pendingActivations = staff.filter((person) => person.accountStatus === 'Pending').length
   const tableStats = [
-    { label: 'Total Users', value: totalUsers },
+    { label: 'Active Users', value: staff.filter((s) => (s.accountStatus ?? s.sessionStatus) === 'Active').length },
     { label: 'Locked Accounts', value: lockedAccounts },
     { label: 'Pending Activations', value: pendingActivations },
   ]
@@ -186,11 +190,13 @@ export function AdminWorkforcePage() {
         <LoadingSkeleton variant="table" />
       ) : (
         <div className="flex flex-col gap-5">
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, ID, or email" className="w-full rounded-md border border-input bg-background py-2.5 pl-9 pr-3 text-sm text-foreground outline-none focus:border-primary" /></div>
-          <div className="flex flex-wrap items-center gap-2">
-            <select value={role} onChange={(e) => setRole(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2.5 text-xs text-foreground"><option>All Roles</option>{roles.map((r) => <option key={r}>{r}</option>)}</select>
-            <button type="button" onClick={openGrowthSummary} className="button-secondary"><TrendingUp className="size-3.5 text-primary" /> User Growth Summary</button>
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-4">
+          <div className="relative min-w-[min(100%,16rem)] flex-1 basis-full lg:basis-0"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search workforce..." aria-label="Search workforce" className="w-full rounded-md border border-input bg-background py-2.5 pl-9 pr-3 text-sm text-foreground outline-none focus:border-primary" /></div>
+          <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><span className="sr-only">Role</span><select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2.5 text-xs text-foreground"><option>All Roles</option>{roles.map((r) => <option key={r}>{r}</option>)}</select></label>
+            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><span className="sr-only">Status</span><select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} className="rounded-md border border-input bg-background px-3 py-2.5 text-xs text-foreground">{STATUS_FILTERS.map((s) => <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>)}</select></label>
+            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><ArrowUpDown className="size-3.5" aria-hidden="true" /><span className="sr-only">Sort by</span><select aria-label="Sort by" value={sort} onChange={(e) => setSort(e.target.value as SortOption)} className="rounded-md border border-input bg-background px-3 py-2.5 text-xs text-foreground">{SORT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}</select></label>
+            <button type="button" onClick={() => { setQuery(''); setRole('All Roles'); setStatus('All') }} className="rounded-md border border-input bg-background px-3 py-2.5 text-xs font-semibold text-foreground transition hover:bg-muted">Clear Filters</button>
             <div className="relative" ref={addMenuRef}>
               <button type="button" onClick={() => setAddMenuOpen((v) => !v)} className="button-primary" aria-haspopup="menu" aria-expanded={addMenuOpen}><Plus className="size-3.5" /> Add New User <ChevronDown className="size-3.5" /></button>
               {addMenuOpen && (
@@ -202,22 +208,18 @@ export function AdminWorkforcePage() {
             </div>
           </div>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            {STATUS_FILTERS.map((s) => (
-              <button key={s} type="button" onClick={() => setStatus(s)} className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${status === s ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'}`} aria-pressed={status === s}>{s}</button>
-            ))}
-          </div>
-          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <ArrowUpDown className="size-3.5" aria-hidden="true" />
-            <span>Sort by</span>
-            <select value={sort} onChange={(e) => setSort(e.target.value as SortOption)} className="rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground">
-              {SORT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </label>
-        </div>
         <p className="text-xs text-muted-foreground">Showing {rows.length} of {staff.length} directory entries. Click a row to view details.</p>
-        <WorkforceTable rows={rows} resolveStatus={(s) => statusFor(s, lockedIds)} onRowClick={(s) => { setSelected(s); setEditMode(false); }} onSuspend={(s) => void toggleSuspend(s.id)} onForceLogout={(s) => forceLogout(s.id)} onEdit={(s) => { setSelected(s); setEditMode(true); }} highlightId={highlightId} stats={tableStats} />
+        <WorkforceTable
+          rows={rows}
+          resolveStatus={(s) => statusFor(s, lockedIds)}
+          onRowClick={(s) => { setSelected(s); setEditMode(false) }}
+          onSuspend={(s) => { setSelected(s); setEditMode(false); setPendingAction('suspend'); setActionReason(''); setActionError(null) }}
+          onForceLogout={(s) => { setSelected(s); setEditMode(false); setPendingAction('force-logout'); setActionReason(''); setActionError(null) }}
+          onDelete={(s) => { setDeleteTarget(s); setDeleteError(null) }}
+          onEdit={(s) => { setSelected(s); setEditMode(true) }}
+          highlightId={highlightId}
+          stats={tableStats}
+        />
       </div>
       )}
       <EmployeeModal 
@@ -227,7 +229,84 @@ export function AdminWorkforcePage() {
         actionId={prefillActionId}
       />
       <EmployeeRecordModal open={createRecordOpen} onClose={() => setCreateRecordOpen(false)} onCreate={addEmployeeRecord} />
-      <ViewAccountModal open={!!selected} staff={selected} onClose={() => setSelected(null)} editable={editMode} onSave={async (s) => { await updateStaff(s); setSelected(null) }} />
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        eyebrow="Destructive Account Action"
+        title="Delete Account"
+        tone="destructive"
+        confirmLabel={deletePending ? 'Deleting…' : 'Delete Account'}
+        onCancel={() => { if (!deletePending) { setDeleteTarget(null); setDeleteError(null) } }}
+        onConfirm={async () => {
+          if (!deleteTarget || deletePending) return
+          setDeletePending(true)
+          setDeleteError(null)
+          try {
+            await removeStaff(deleteTarget.id)
+            setDeleteTarget(null)
+          } catch (error) {
+            setDeleteError(error instanceof Error ? error.message : 'The account could not be deleted.')
+          } finally {
+            setDeletePending(false)
+          }
+        }}
+        description={deleteTarget ? (
+          <div className="flex flex-col gap-3">
+            <p>You are about to permanently delete this workforce account. This action may permanently remove account access.</p>
+            <dl className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+              <div className="flex flex-col gap-0.5"><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Employee</dt><dd className="font-semibold text-foreground">{deleteTarget.fullName || `${deleteTarget.firstName} ${deleteTarget.surname}`.trim() || '—'}</dd></div>
+              <div className="mt-2 flex flex-col gap-0.5"><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Email</dt><dd className="text-foreground">{deleteTarget.email || '—'}</dd></div>
+              <div className="mt-2 flex flex-col gap-0.5"><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Role</dt><dd className="text-foreground">{deleteTarget.role || '—'}</dd></div>
+            </dl>
+            {deleteError && <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">{deleteError}</p>}
+          </div>
+        ) : undefined}
+      />
+      <ViewAccountModal open={!!selected && !pendingAction} staff={selected} onClose={() => setSelected(null)} editable={editMode} onSave={async (s) => { await updateStaff(s); setSelected(null) }} />
+      {pendingAction && selected && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-700/70 p-4" role="dialog" aria-modal="true" aria-labelledby="workforce-action-title">
+          <div className="w-full max-w-md overflow-hidden rounded-lg bg-card shadow-2xl">
+            <div className="flex items-center gap-3 bg-destructive px-6 py-4 text-destructive-foreground">
+              <AlertTriangle className="size-5 shrink-0" aria-hidden="true" />
+              <h2 id="workforce-action-title" className="text-sm font-bold uppercase tracking-[0.15em]">
+                {pendingAction === 'suspend' ? (selected.accountStatus === 'Suspended' ? 'Reactivate Account?' : 'Suspend Account?') : 'Force Logout?'}
+              </h2>
+            </div>
+            <form className="space-y-4 px-6 py-6" onSubmit={async (event) => {
+              event.preventDefault()
+              const reason = actionReason.trim()
+              if (!reason) {
+                setActionError(pendingAction === 'suspend' ? 'Please provide a reason for suspending this account.' : 'Please provide a reason for forcing this user to log out.')
+                return
+              }
+              setActionError(null)
+              try {
+                if (pendingAction === 'suspend') await toggleSuspend(selected.id)
+                else await forceLogout(selected.id)
+                setPendingAction(null)
+                setSelected(null)
+                setActionReason('')
+              } catch (error) {
+                setActionError(error instanceof Error ? error.message : 'The account action could not be completed.')
+              }
+            }}>
+              <div className="text-sm text-foreground">
+                <p>You are about to {pendingAction === 'suspend' ? (selected.accountStatus === 'Suspended' ? 'reactivate' : 'suspend') : 'terminate the active session for'}:</p>
+                <p className="mt-1 font-semibold">{selected.fullName || `${selected.firstName} ${selected.surname}`.trim() || '—'}</p>
+                {selected.email && <p className="text-xs text-muted-foreground">{selected.email}</p>}
+              </div>
+              <label className="block text-xs font-semibold text-foreground" htmlFor="workforce-action-reason">
+                Reason <span className="text-destructive">*</span>
+                <textarea id="workforce-action-reason" required value={actionReason} onChange={(event) => setActionReason(event.target.value)} rows={4} placeholder="Describe why this administrative action is required..." className="mt-1.5 w-full resize-none rounded-md border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30" />
+              </label>
+              {actionError && <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">{actionError}</p>}
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={() => { setPendingAction(null); setActionReason(''); setActionError(null) }} className="rounded-md border border-input bg-background px-4 py-2.5 text-xs font-semibold text-foreground hover:bg-muted">Cancel</button>
+                <button type="submit" className="rounded-md bg-destructive px-4 py-2.5 text-xs font-bold text-destructive-foreground hover:opacity-90">{pendingAction === 'suspend' ? (selected.accountStatus === 'Suspended' ? 'Reactivate Account' : 'Suspend Account') : 'Force Logout'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </AdminShell>
   )
 }

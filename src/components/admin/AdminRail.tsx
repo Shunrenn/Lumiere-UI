@@ -1,10 +1,6 @@
 import { useState } from 'react'
-import { PanelLeft, Sun, Moon, LogOut, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ADMIN_DESTINATIONS, type AdminDestinationId } from '@/lib/admin-destinations'
-import { useAuth } from '@/lib/auth'
-import { useDarkMode } from '@/lib/theme'
-
 interface AdminRailProps {
   activeId: AdminDestinationId
   onSelect: (id: AdminDestinationId) => void
@@ -15,16 +11,13 @@ interface AdminRailProps {
 // Collapsible left navigation sidebar for the Admin console.
 // Supports both icon-only collapsed (w-16) and fully labeled expanded (w-64) states,
 // with persistent collapse memory in localStorage, keyboard/screen-reader accessibility,
-// and accessible profile/theme/logout controls.
+// and a clean navigation-only lower edge.
 export function AdminRail({
   activeId,
   onSelect,
   collapsed: externalCollapsed,
   onToggleCollapse: externalToggleCollapse,
 }: AdminRailProps) {
-  const { adminName, adminRole, setConfirmLogout } = useAuth()
-  const { dark, toggle: toggleTheme } = useDarkMode()
-
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('_lumiere_admin_sidebar_collapsed') === 'true'
@@ -58,49 +51,11 @@ export function AdminRail({
       )}
       aria-label="Admin Navigation Sidebar"
     >
-      {/* Brand & Toggle header */}
-      {isCollapsed ? (
-        <div className="flex flex-col items-center gap-3">
-          <span
-            className="flex size-8 items-center justify-center rounded-md bg-sidebar-primary/10 font-serif text-lg font-medium leading-none text-sidebar-primary"
-            aria-hidden="true"
-          >
-            L
-          </span>
-          <button
-            type="button"
-            onClick={handleToggle}
-            aria-label="Expand sidebar"
-            title="Expand sidebar"
-            className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <PanelLeft className="size-4" aria-hidden="true" />
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center justify-between px-2 pb-1">
-          <div className="flex items-center gap-2.5">
-            <span
-              className="flex size-8 items-center justify-center rounded-md bg-sidebar-primary/10 font-serif text-lg font-medium leading-none text-sidebar-primary"
-              aria-hidden="true"
-            >
-              L
-            </span>
-            <span className="font-serif text-sm font-semibold tracking-[0.2em] text-sidebar-primary">
-              LUMIÈRE
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={handleToggle}
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-            className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <PanelLeft className="size-4" aria-hidden="true" />
-          </button>
-        </div>
-      )}
+      {/* Navigation items control expansion when the current item is clicked again. */}
+      <div className={cn('flex items-center px-2 pb-1', isCollapsed ? 'justify-center' : 'gap-2.5')}>
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary/10 font-serif text-lg font-medium leading-none text-sidebar-primary" aria-hidden="true">L</span>
+        {!isCollapsed && <span className="font-serif text-sm font-semibold tracking-[0.2em] text-sidebar-primary">LUMIÈRE</span>}
+      </div>
 
       <div className={cn('my-3 h-px bg-sidebar-border', isCollapsed ? 'w-8' : 'w-full')} aria-hidden="true" />
 
@@ -115,7 +70,7 @@ export function AdminRail({
               <button
                 key={destination.id}
                 type="button"
-                onClick={() => onSelect(destination.id)}
+                onClick={() => { if (active) handleToggle(); else onSelect(destination.id) }}
                 aria-label={destination.label}
                 aria-current={active ? 'true' : undefined}
                 title={destination.label}
@@ -135,7 +90,7 @@ export function AdminRail({
             <button
               key={destination.id}
               type="button"
-              onClick={() => onSelect(destination.id)}
+              onClick={() => { if (active) handleToggle(); else onSelect(destination.id) }}
               aria-current={active ? 'true' : undefined}
               title={destination.label}
               className={cn(
@@ -152,65 +107,7 @@ export function AdminRail({
         })}
       </nav>
 
-      {/* Bottom Profile, Theme & Logout Region */}
-      <div className={cn('pt-2 border-t border-sidebar-border flex flex-col gap-1', isCollapsed ? 'items-center' : '')}>
-        {/* Expanded Profile Info */}
-        {!isCollapsed && (
-          <div className="flex items-center gap-2.5 px-2 py-2 mb-1 rounded-lg bg-sidebar-accent/40">
-            <div className="flex size-7 items-center justify-center rounded-full bg-sidebar-primary/15 text-sidebar-primary shrink-0">
-              <User className="size-3.5" aria-hidden="true" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold text-sidebar-foreground">{adminName || 'Admin'}</p>
-              <p className="truncate text-[0.62rem] uppercase tracking-wider text-sidebar-foreground/60">{adminRole || 'Administrator'}</p>
-            </div>
-          </div>
-        )}
 
-        {/* Theme Toggle */}
-        {isCollapsed ? (
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-            title={dark ? 'Light mode' : 'Dark mode'}
-            className="flex size-10 items-center justify-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            {dark ? <Sun className="size-4" aria-hidden="true" /> : <Moon className="size-4" aria-hidden="true" />}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            {dark ? <Sun className="size-4 shrink-0" aria-hidden="true" /> : <Moon className="size-4 shrink-0" aria-hidden="true" />}
-            <span className="truncate">{dark ? 'Light mode' : 'Dark mode'}</span>
-          </button>
-        )}
-
-        {/* Sign Out */}
-        {isCollapsed ? (
-          <button
-            type="button"
-            onClick={() => setConfirmLogout(true)}
-            aria-label="Sign out"
-            title="Sign out"
-            className="flex size-10 items-center justify-center rounded-lg text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive"
-          >
-            <LogOut className="size-4" aria-hidden="true" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setConfirmLogout(true)}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive"
-          >
-            <LogOut className="size-4 shrink-0" aria-hidden="true" />
-            <span className="truncate">Sign out</span>
-          </button>
-        )}
-      </div>
     </aside>
   )
 }

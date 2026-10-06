@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { API_BASE_URL, getAuthToken } from './apiConfig'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
 
 export type PitchStatus =
   | 'Draft'

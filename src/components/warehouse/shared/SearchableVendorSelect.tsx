@@ -10,6 +10,7 @@ interface SearchableVendorSelectProps {
   placeholder?: string
   label?: string
   allowAdd?: boolean
+  inlineSearch?: boolean
   disabled?: boolean
   className?: string
 }
@@ -20,6 +21,7 @@ export function SearchableVendorSelect({
   placeholder = 'Select vendor…',
   label,
   allowAdd = true,
+  inlineSearch = true,
   disabled = false,
   className,
 }: SearchableVendorSelectProps) {
@@ -37,8 +39,9 @@ export function SearchableVendorSelect({
 
   const filteredVendors = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return vendors
-    return (vendors || []).filter(
+    const activeVendors = (vendors || []).filter((v) => v?.status === 'Active')
+    if (!q) return activeVendors
+    return activeVendors.filter(
       (v) =>
         v &&
         ((v.name || '').toLowerCase().includes(q) ||
@@ -75,6 +78,55 @@ export function SearchableVendorSelect({
     e.stopPropagation()
     onChange('')
     setSearch('')
+  }
+
+  if (inlineSearch) {
+    return (
+      <div className={cn('relative flex flex-col gap-1', className)} ref={containerRef}>
+        {label && <span className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">{label}</span>}
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={isOpen ? search : selectedVendor?.name ?? ''}
+            onFocus={() => {
+              setSearch('')
+              setIsOpen(true)
+            }}
+            onChange={(event) => {
+              setSearch(event.target.value)
+              onChange('')
+              setIsOpen(true)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') setIsOpen(false)
+            }}
+            placeholder={placeholder}
+            disabled={disabled}
+            className="w-full rounded-md border border-input bg-background py-2.5 pl-9 pr-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label={label ?? placeholder}
+            aria-expanded={isOpen}
+            aria-controls="vendor-autocomplete-options"
+            autoComplete="off"
+          />
+        </div>
+        {isOpen && (
+          <div id="vendor-autocomplete-options" className="absolute left-0 top-[100%] z-50 mt-1 flex max-h-64 w-full flex-col overflow-hidden rounded-md border border-border bg-card shadow-lg">
+            <div className="flex-1 overflow-y-auto p-1">
+              {filteredVendors.length === 0 ? (
+                <p className="px-3 py-3 text-center text-xs text-muted-foreground">No vendor found. Add the vendor in Vendor Management first.</p>
+              ) : (
+                filteredVendors.map((vendor) => (
+                  <button key={vendor.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => handleSelect(vendor.id)} className="flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-xs transition hover:bg-accent">
+                    <span className="min-w-0"><span className="block truncate font-medium text-card-foreground">{vendor.name}</span><span className="block truncate text-[0.62rem] text-muted-foreground">{vendor.specialty}</span></span>
+                    {vendor.id === value && <Check className="size-3.5 shrink-0 text-primary" />}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (

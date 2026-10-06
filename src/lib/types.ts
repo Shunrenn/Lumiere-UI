@@ -10,6 +10,7 @@ export type Route =
   | 'rbac'
   | 'damage'
   | 'replenishment'
+  | 'production'
   // Warehouse supervisor console
   | 'inventory'
   | 'warehouse-logs'
@@ -21,6 +22,8 @@ export type Route =
   | 'event-detail'
   | 'canvas'
   | 'canvas-workspace'
+  | 'design-projects'
+  | 'mood-boards'
   // Ground crew field app
   | 'field-ops'
   // Warehouse mobile workspaces
@@ -118,12 +121,9 @@ export function normalizeGroundCrewSubRole(rawRole?: string): GroundCrewSubRole 
 export const SELECTABLE_STAFF_ROLES = [
   'Admin',
   'Executive',
-  'Executive Lite',
-  'Project Manager',
-  'Project Manager Lite',
-  'Warehouse Manager',
-  'Warehouse Associate',
   'Event Planner',
+  'Project Manager',
+  'Warehouse Operations Manager',
   'Ground Crew',
 ] as const
 
@@ -164,7 +164,7 @@ export type RecordKind = 'full-account' | 'employee-record'
 // session state. Locked is derived from an open account-locked request.
 export type AccountStatus = 'Active' | 'Pending' | 'Locked' | 'Suspended'
 
-export type EmploymentType = 'On-call' | 'Seasonal'
+export type EmploymentType = 'Full Time' | 'On-call' | 'Seasonal'
 
 export interface Staff {
   id: string
@@ -187,7 +187,10 @@ export interface Staff {
   recordKind?: RecordKind
   accountStatus?: AccountStatus
   employmentType?: EmploymentType
-  // Present (unclaimed) only for a Pending full account awaiting first login.
+  // Server-backed first-login lifecycle flags. These must never be inferred from UI state.
+  mustChangePassword?: boolean
+  activationStatus?: 'PendingActivation' | 'Active' | 'Suspended' | 'Inactive' | string
+  // Present only in the one-time creation response; never persisted by the client.
   tempPassword?: string
   // Employee records can be archived and reactivated later.
   archived?: boolean
@@ -201,6 +204,7 @@ export interface NewStaffDraft {
   email: string
   contact: string
   role: StaffRole | ''
+  employmentType: 'Full Time'
   subRole?: string
   tempPassword?: string
 }
@@ -296,6 +300,7 @@ export interface UserAction {
   email?: string
   status: UserActionStatus
   accountType?: StaffRole
+  requestedAt?: string
 }
 
 /* ---------- Event Updates ---------- */
@@ -557,3 +562,154 @@ export interface UpdatePostEgressPolicyRequest {
   completionWindowMinutes: number
   expectedVersion: number
 }
+
+/* ---------- Warehouse Catalog & Bespoke Models ---------- */
+
+export type AssetStatus =
+  | 'Available'
+  | 'Low Stock'
+  | 'Critical Deficit'
+  | 'Deployed'
+  | 'Lost In Action'
+  | 'In Maintenance'
+
+export type BespokeStage = 'Unprepped' | 'Prepping' | 'Ready'
+
+export interface AssetDimensions {
+  height: string
+  width: string
+  depth: string
+  weight: string
+}
+
+export type LedgerEntryType =
+  | 'Registered'
+  | 'Reserved'
+  | 'Packed'
+  | 'Dispatched'
+  | 'Returned'
+  | 'Damaged'
+  | 'Repaired'
+  | 'Reconciled'
+  | 'Retired'
+
+export type ReconciliationTag = 'Matched' | 'Short' | 'Pahabol'
+
+export interface CatalogLedgerEntry {
+  id: string
+  timestamp: string
+  type: LedgerEntryType
+  note: string
+  declaredBy: string
+  linkedBatchRef?: string
+  reconciliationTag?: ReconciliationTag
+}
+
+export type StockHealthState = 'Low Stock' | 'Healthy Stock' | 'Over Stock'
+
+export interface BespokeSimulationAttempt {
+  id: string
+  attemptNumber: number
+  durationMinutes: number
+  rawInput: string
+  loggedAt: string
+  loggedBy?: string
+}
+
+export interface BespokeSubCategoryConfig {
+  subCategory: string
+  maxParallelWorkers: number
+  description?: string
+}
+
+export interface CatalogAsset {
+  id: string
+  assetId: string
+  name: string
+  itemCallName?: string
+  category: AssetCategory
+  subCategory?: string
+  description?: string
+  status: AssetStatus
+  image: string
+  unit: string
+  warehouseZone?: string
+
+  // Shared Base Fields
+  dimensions: AssetDimensions
+  is_circular?: boolean
+  shape?: string
+  circumference?: string
+  material?: string
+  colorType?: 'mono' | 'multi' | 'changeable'
+  colorPrimary?: string
+  colorSecondary?: string[]
+  colorNotes?: string
+  tags?: string[]
+
+  purchaseCost: number
+  costPerUnit: number
+  dateAdded: string
+  primaryVendorId: string
+  backupVendorId?: string
+
+  // Event Asset Specific
+  currentStock?: number
+  threshold?: number
+  lifeSpan?: string
+  damageReplacementCost?: number
+
+  // Bespoke Specific
+  bespokeStage?: BespokeStage
+  bespokeCrew?: string
+  rawMaterials?: string[]
+  manCount?: number
+  finishTimeMinutes?: number
+  revisionTimeMinutes?: number
+
+  // Bespoke Simulation State
+  simulationHeadcount?: number
+  simulationAttempts?: BespokeSimulationAttempt[]
+  baseSingleWorkerTimeMinutes?: number
+
+  // Stockroom Specific
+  criticalThreshold?: number
+  ceilingCap?: number
+  pricePerPack?: number
+
+  // Rental Specific
+  onLoanDueDate?: string
+  rentalVendorName?: string
+  supplierDetails?: string
+  supplierContact?: string
+  lengthOfRent?: string
+  overduePenaltyFee?: number
+
+  // Office Asset Specific
+  custodian?: string
+  vendorDetails?: string
+  deviceModel?: string
+  serialNumber?: string
+  deviceSpecs?: string
+}
+
+/* ---------- Portal Account & Authentication Models ---------- */
+
+export type PortalKind = 'web' | 'pwa'
+
+export interface PortalAccount {
+  id: string
+  email: string
+  name: string
+  role: string
+  portal: PortalKind
+  subRole?: string
+  groundCrewSubRole?: GroundCrewSubRole
+  fullWarehouseAccess?: boolean
+  temporaryPassword: boolean
+  mustChangePassword?: boolean
+  activationStatus?: string
+  token?: string
+  canAccessAssetInventoryAndAllocation?: boolean
+}
+

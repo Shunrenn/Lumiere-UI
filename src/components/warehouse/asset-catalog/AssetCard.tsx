@@ -73,9 +73,10 @@ export function getTierGlanceDisplay(asset: CatalogAsset): {
 interface AssetCardProps {
   asset: CatalogAsset
   onOpen: () => void
+  executiveKiosk?: boolean
 }
 
-export function AssetCard({ asset, onOpen }: AssetCardProps) {
+export function AssetCard({ asset, onOpen, executiveKiosk = false }: AssetCardProps) {
   const glance = getTierGlanceDisplay(asset)
   const statusTone = ASSET_STATUS_TONE[asset.status]
 
@@ -83,43 +84,43 @@ export function AssetCard({ asset, onOpen }: AssetCardProps) {
     <button
       type="button"
       onClick={onOpen}
-      className="group flex flex-col overflow-hidden rounded-xl border border-border/80 bg-white dark:bg-card text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-primary/50 hover:ring-1 hover:ring-primary/20"
+      className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-card text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-lg hover:ring-1 hover:ring-primary/20"
     >
-      {/* Aspect Ratio 4:3 image for compact 6-col grid */}
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+      <div className="relative m-1.5 mb-0 aspect-[4/3] overflow-hidden rounded-xl bg-muted">
         <img
           src={asset.image || '/placeholder.svg'}
           alt={asset.name}
           crossOrigin="anonymous"
           className="size-full object-cover transition duration-300 group-hover:scale-105"
         />
-        <div className="absolute left-1.5 top-1.5 flex flex-wrap gap-1">
-          <Pill tone={statusTone} className="text-[0.5rem] px-1.5 py-0.5">
+        <div className="absolute left-2 top-2 flex flex-wrap gap-1">
+          <Pill tone={statusTone} className="border border-background/20 bg-background/80 px-2 py-1 text-[0.5rem] font-bold uppercase tracking-[0.08em] backdrop-blur-sm">
             {asset.status}
           </Pill>
           {glance.kind === 'health' && glance.badgeLabel && (
-            <Pill tone={glance.badgeTone ?? 'positive'} className="text-[0.5rem] px-1.5 py-0.5">
+            <Pill tone={glance.badgeTone ?? 'positive'} className="border border-background/20 bg-background/80 px-2 py-1 text-[0.5rem] font-bold uppercase tracking-[0.08em] backdrop-blur-sm">
               {glance.badgeLabel}
             </Pill>
           )}
         </div>
       </div>
 
-      {/* Proportional compact card body */}
-      <div className="flex flex-1 flex-col gap-1 p-2 sm:p-2.5">
-        <h3 className="truncate font-serif text-[0.68rem] font-medium leading-snug text-card-foreground group-hover:text-primary transition-colors">
+      <div className="flex min-h-[72px] flex-1 flex-col gap-1.5 px-3 py-2.5">
+        <h3 className="truncate font-serif text-sm font-medium leading-snug text-card-foreground transition-colors group-hover:text-primary">
           {asset.name}
         </h3>
+        {executiveKiosk && asset.currentStock !== undefined && <div className="flex items-center justify-between gap-2 text-[0.58rem]"><span className="font-semibold text-card-foreground">{asset.currentStock} available</span><span className="text-emerald-600 dark:text-emerald-400">{asset.status}</span></div>}
+        {executiveKiosk && asset.currentStock !== undefined && asset.threshold !== undefined && <div className="h-1 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, Math.max(0, (asset.currentStock / Math.max(asset.threshold, 1)) * 100))}%` }} /></div>}
 
-        <div className="mt-auto pt-0.5">
+        <div className="mt-auto">
           {glance.kind === 'fraction' ? (
-            <div className="flex items-center justify-between text-[0.55rem] font-semibold uppercase tracking-wider text-muted-foreground">
-              <span className="truncate">{asset.category}</span>
-              <span className="shrink-0 text-card-foreground font-bold">{glance.text}</span>
+            <div className="flex items-center justify-between gap-2 text-[0.55rem] font-bold uppercase tracking-[0.09em] text-muted-foreground">
+              <span className="truncate">{asset.category.replace(' Assets', '')} asset</span>
+              <span className="shrink-0 text-card-foreground">{glance.text}</span>
             </div>
           ) : (
-            <p className="truncate text-[0.55rem] font-medium text-muted-foreground">
-              <span className="font-semibold uppercase tracking-wider text-card-foreground/90">{asset.category}</span>
+            <p className="truncate text-[0.55rem] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              <span className="font-bold text-card-foreground/90">{asset.category.replace(' Assets', '')} asset</span>
               <span className="opacity-80"> · {glance.text}</span>
             </p>
           )}

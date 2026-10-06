@@ -22,7 +22,7 @@ export function DispatchStepper({ direction, stage, stalled = false }: DispatchS
         <div key={step} className="flex items-center gap-1.5">
           <span
             className={cn(
-              'flex items-center gap-1.5 rounded-full px-2 py-1 text-[0.55rem] font-bold uppercase tracking-[0.04em] transition-colors',
+              'flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-1 text-[0.55rem] font-bold uppercase tracking-[0.04em] transition-colors',
               index === activeIndex
                 ? stalled
                   ? 'border border-amber-400/50 bg-amber-500 text-white dark:bg-amber-600'

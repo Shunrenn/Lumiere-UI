@@ -79,8 +79,7 @@ export function ManpowerModule({ onClose }: ManpowerModuleProps) {
       <div className="flex flex-col gap-4 border-b border-border px-6 py-5 sm:px-10">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[0.6rem] font-bold uppercase tracking-[0.24em] text-primary">Warehouse module</p>
-            <h1 className="mt-1 font-serif text-2xl font-medium text-foreground">Manpower &amp; Crew</h1>
+            <h1 className="font-serif text-3xl font-medium leading-none tracking-tight text-foreground sm:text-4xl">Manpower &amp; Crew</h1>
             <p className="mt-1 text-sm text-muted-foreground">Crew roster, availability, and scheduling conflicts.</p>
           </div>
           <button

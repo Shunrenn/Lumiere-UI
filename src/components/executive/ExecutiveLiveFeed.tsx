@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, ScrollText } from 'lucide-react'
+import { ChevronDown, ScrollText, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePortal } from '@/lib/store'
 import { useClickFlash } from '@/lib/use-click-flash'
@@ -27,30 +27,13 @@ interface ExecutiveLiveFeedProps {
 export function ExecutiveLiveFeed({ onViewLogs }: ExecutiveLiveFeedProps) {
   const { eventUpdates } = usePortal()
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [selectedUpdate, setSelectedUpdate] = useState<{ id: string; title: string; status: EventUpdateStatus; time: string; detail: string } | null>(null)
   const noop = () => {}
   const { flashing, trigger } = useClickFlash(onViewLogs || noop)
 
   return (
-    <section
-      role={onViewLogs ? 'button' : undefined}
-      tabIndex={onViewLogs ? 0 : undefined}
-      onClick={onViewLogs ? trigger : undefined}
-      onKeyDown={
-        onViewLogs
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                trigger()
-              }
-            }
-          : undefined
-      }
-      className={cn(
-        'flex h-full min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card p-4 text-card-foreground transition',
-        onViewLogs && 'cursor-pointer hover:border-primary/40 hover:bg-muted/40',
-        flashing && 'ring-2 ring-primary/60 border-primary/60',
-      )}
-    >
+    <section className={cn('flex h-full min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card p-4 text-card-foreground transition', flashing && 'ring-2 ring-primary/60 border-primary/60')}>
+
       <h2 className="shrink-0 text-sm font-semibold uppercase tracking-[0.12em] text-foreground">
         Live Operations Feed
       </h2>
@@ -65,6 +48,8 @@ export function ExecutiveLiveFeed({ onViewLogs }: ExecutiveLiveFeedProps) {
               const detail = feedDetails[update.id] || `Operational update status marked as ${update.status}. Logged to central event registry.`
               return (
                 <li key={update.id} className="flex items-start gap-3">
+                  <div role="button" tabIndex={0} onClick={() => setSelectedUpdate({ id: update.id, title: update.title, status: update.status, time: feedTimes[i % feedTimes.length], detail })} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedUpdate({ id: update.id, title: update.title, status: update.status, time: feedTimes[i % feedTimes.length], detail }) } }} className="group flex min-w-0 flex-1 items-start gap-3 rounded-lg text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+
                   <span
                     className={cn('mt-1.5 size-2.5 shrink-0 rounded-full', statusDot[update.status] ?? 'bg-sky-500')}
                     aria-hidden="true"
@@ -98,6 +83,7 @@ export function ExecutiveLiveFeed({ onViewLogs }: ExecutiveLiveFeedProps) {
                       </p>
                     )}
                   </div>
+                  </div>
                 </li>
               )
             })}
@@ -118,6 +104,19 @@ export function ExecutiveLiveFeed({ onViewLogs }: ExecutiveLiveFeedProps) {
           Operational Logs
         </button>
       </div>
+      {selectedUpdate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="executive-feed-detail-title" onClick={() => setSelectedUpdate(null)}>
+          <section className="w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div><p className="text-[0.6rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Live Operations Feed</p><h3 id="executive-feed-detail-title" className="mt-1 font-serif text-xl font-medium text-foreground">{selectedUpdate.title}</h3></div>
+              <button type="button" onClick={() => setSelectedUpdate(null)} aria-label="Close feed details" className="flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"><X className="size-4" aria-hidden="true" /></button>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-[0.65rem] text-muted-foreground"><span>{selectedUpdate.time}</span><span className="rounded-full border border-border px-2 py-0.5 font-semibold uppercase tracking-wider">{selectedUpdate.status}</span></div>
+            <p className="mt-4 rounded-lg bg-muted/50 p-3 text-sm leading-relaxed text-card-foreground">{selectedUpdate.detail}</p>
+            <div className="mt-5 flex justify-end"><button type="button" onClick={() => setSelectedUpdate(null)} className="rounded-md border border-border px-3 py-2 text-xs font-semibold uppercase tracking-wider text-foreground hover:bg-muted">Close</button></div>
+          </section>
+        </div>
+      )}
     </section>
   )
 }

@@ -1,16 +1,22 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { User, Lock, Eye, EyeOff, HardHat, Sun, Moon, Monitor } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { createAccessRequest } from '@/features/access-requests/api'
 import { useThemeMode, type ThemeMode } from '@/lib/theme'
-import { usePortal } from '@/lib/store'
 
 type View = 'signin' | 'request' | 'sent'
 type RequestType = 'forgot-password' | 'request-password'
 
-export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
+export function LoginPage({
+  onCrewPortal,
+  portalStaff,
+  addUserAction,
+}: {
+  onCrewPortal: () => void
+  portalStaff: ReturnType<typeof import('@/lib/store').usePortal>['staff']
+  addUserAction: ReturnType<typeof import('@/lib/store').usePortal>['addUserAction']
+}) {
   const { login } = useAuth()
-  const { staff: portalStaff, addUserAction } = usePortal()
   const { mode: themeMode, setMode: setThemeMode } = useThemeMode()
   const [view, setView] = useState<View>('signin')
 
@@ -29,6 +35,8 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
   })
 
   const [requestEmail, setRequestEmail] = useState('')
+  const [requestName, setRequestName] = useState('')
+  const [requestedRole, setRequestedRole] = useState('Ground Crew')
   const [requestType, setRequestType] = useState<RequestType>('request-password')
   const [requestError, setRequestError] = useState('')
   const [submittingRequest, setSubmittingRequest] = useState(false)
@@ -55,23 +63,39 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
       return
     }
 
+    const normalizedName = requestName.trim()
+    if (!normalizedName) {
+      setRequestError('Please enter your full name.')
+      return
+    }
+
     // Case-insensitive email collision check against existing staff directory
     const existingStaff = (portalStaff || []).some(
       (s: any) => s.email && s.email.trim().toLowerCase() === normalized
     )
 
-    if (existingStaff) {
-      // Redirect existing user to Forgot Password flow
-      setRequestType('forgot-password')
-      setRequestError('An account already exists for this email address. Redirected to Password Recovery mode.')
-      return
-    }
+  if (existingStaff) {
+    addUserAction({
+      type: 'forgot-password',
+      user: normalized,
+      email: normalized,
+      status: 'pending',
+    })
+    setRequestEmail('')
+    setRequestName('')
+    setView('sent')
+    return
+  }
+
 
     setSubmittingRequest(true)
     try {
-      void supabase
-        .from('access_requests')
-        .insert({ email: normalized, type: requestType, status: 'pending' })
+      await createAccessRequest({
+        fullName: normalizedName,
+        email: normalized,
+        requestedRole: requestType === 'forgot-password' ? 'Password Recovery' : requestedRole,
+        reason: requestType === 'forgot-password' ? 'Password recovery request' : undefined,
+      })
 
       addUserAction({
         type: 'access-request',
@@ -80,7 +104,10 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
         status: 'pending',
       })
       setRequestEmail('')
+      setRequestName('')
       setView('sent')
+    } catch (err) {
+      setRequestError(err instanceof Error ? err.message : 'Unable to send access request.')
     } finally {
       setSubmittingRequest(false)
     }
@@ -142,10 +169,14 @@ export function LoginPage({ onCrewPortal }: { onCrewPortal: () => void }) {
             {view === 'request' && (
               <RequestView
                 email={requestEmail}
+                name={requestName}
+                requestedRole={requestedRole}
                 type={requestType}
                 error={requestError}
                 submitting={submittingRequest}
                 onEmail={setRequestEmail}
+                onName={setRequestName}
+                onRequestedRole={setRequestedRole}
                 onSubmit={handleRequest}
                 onBack={() => setView('signin')}
               />
@@ -289,10 +320,14 @@ function SignInView(props: {
 
 function RequestView(props: {
   email: string
+  name: string
+  requestedRole: string
   type: RequestType
   error: string
   submitting: boolean
   onEmail: (v: string) => void
+  onName: (v: string) => void
+  onRequestedRole: (v: string) => void
   onSubmit: (e: FormEvent) => void
   onBack: () => void
 }) {
@@ -309,6 +344,21 @@ function RequestView(props: {
       </p>
 
       <div className="mt-8">
+        <Field label="FULL NAME">
+          <InputWrap>
+            <User className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <input
+              type="text"
+              required
+              value={props.name}
+              onChange={(e) => props.onName(e.target.value)}
+              placeholder="Your full name"
+              autoComplete="name"
+              className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/70"
+            />
+          </InputWrap>
+        </Field>
+
         <Field label="EMAIL">
           <InputWrap>
             <User className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -323,6 +373,21 @@ function RequestView(props: {
             />
           </InputWrap>
         </Field>
+
+        {!isForgot && (
+          <Field label="REQUESTED ROLE">
+            <select
+              value={props.requestedRole}
+              onChange={(e) => props.onRequestedRole(e.target.value)}
+              className="mt-2 w-full rounded-md border border-border bg-transparent px-3 py-2 text-foreground outline-none"
+            >
+              <option>Ground Crew</option>
+              <option>Warehouse Member</option>
+              <option>Warehouse Lead</option>
+              <option>Event Planner</option>
+            </select>
+          </Field>
+        )}
       </div>
 
       {props.error && (

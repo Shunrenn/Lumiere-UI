@@ -16,7 +16,7 @@ import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import { PartialEgressSection } from '@/components/warehouse/PartialEgressSection'
-import { fetchCanvasAccessApi, type CanvasCollaboratorDto } from '@/lib/canvasApi'
+import { fetchCanvasAccessApi, type CanvasCollaboratorDto } from '@/features/canvas/api/canvasApi'
 import type { PortalEvent } from '@/lib/types'
 
 const PIPELINE_STEPS = [

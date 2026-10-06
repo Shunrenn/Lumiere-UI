@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, ChevronLeft, ChevronRight, TrendingUp, X } from 'lucide-react'
+import { ArrowRight, TrendingUp, X } from 'lucide-react'
 import type { Staff } from '@/lib/types'
 
 interface Props {
@@ -9,65 +9,41 @@ interface Props {
   onViewInWorkforce: (staffId: string) => void
 }
 
-// Groups a dateAdded string like "Feb 04, 2026" into a "Feb 2026" bucket,
-// preserving chronological order by first occurrence in the sorted list.
-function monthKey(dateAdded: string): { key: string; label: string; sortValue: number; year: number } {
-  const parsed = new Date(dateAdded)
-  if (Number.isNaN(parsed.getTime())) {
-    return { key: 'unknown', label: 'Undated', sortValue: -1, year: -1 }
-  }
-  const key = `${parsed.getFullYear()}-${String(parsed.getMonth()).padStart(2, '0')}`
-  const label = parsed.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  return { key, label, sortValue: parsed.getTime(), year: parsed.getFullYear() }
-}
-
 export function UserGrowthSummaryModal({ open, staff, onClose, onViewInWorkforce }: Props) {
-  const allGroups = useMemo(() => {
-    const withDates = staff.filter((s) => !!s.dateAdded)
-    const byMonth = new Map<string, { label: string; sortValue: number; year: number; members: Staff[] }>()
+  const datedStaff = useMemo(
+    () => staff.filter((s) => s.dateAdded && !Number.isNaN(new Date(s.dateAdded).getTime())),
+    [staff],
+  )
+  const availableYears = useMemo(
+    () => [...new Set(datedStaff.map((s) => new Date(s.dateAdded as string).getFullYear()))].sort((a, b) => a - b),
+    [datedStaff],
+  )
+  const latestDate = datedStaff.length ? Math.max(...datedStaff.map((s) => new Date(s.dateAdded as string).getTime())) : Date.now()
+  const latestPeriod = new Date(latestDate)
+  const [selectedMonth, setSelectedMonth] = useState(latestPeriod.getMonth())
+  const [selectedYear, setSelectedYear] = useState(latestPeriod.getFullYear())
 
-    withDates.forEach((s) => {
-      const { key, label, sortValue, year } = monthKey(s.dateAdded as string)
-      const existing = byMonth.get(key)
-      if (existing) existing.members.push(s)
-      else byMonth.set(key, { label, sortValue, year, members: [s] })
-    })
-
-    return [...byMonth.values()]
-      .map((g) => ({
-        ...g,
-        members: g.members.sort(
-          (a, b) => new Date(a.dateAdded as string).getTime() - new Date(b.dateAdded as string).getTime(),
-        ),
-      }))
-      .sort((a, b) => a.sortValue - b.sortValue)
-  }, [staff])
-
-  // Every year that has at least one onboarded record, oldest to newest, so the
-  // "< year >" control only ever steps between years that actually have data.
-  const years = useMemo(() => {
-    const distinct = new Set(allGroups.filter((g) => g.year !== -1).map((g) => g.year))
-    return [...distinct].sort((a, b) => a - b)
-  }, [allGroups])
-
-  const currentYear = new Date().getFullYear()
-  const defaultYear = years.length > 0 ? years[years.length - 1] : currentYear
-  const [selectedYear, setSelectedYear] = useState(defaultYear)
-
-  // Reset to the most recent year with data every time the modal is (re)opened.
   useEffect(() => {
-    if (open) setSelectedYear(defaultYear)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+    if (open) {
+      setSelectedMonth(latestPeriod.getMonth())
+      setSelectedYear(latestPeriod.getFullYear())
+    }
+  }, [open, latestPeriod.getMonth(), latestPeriod.getFullYear()])
 
   if (!open) return null
 
-  const yearIndex = years.indexOf(selectedYear)
-  const hasPrevYear = yearIndex > 0
-  const hasNextYear = yearIndex !== -1 && yearIndex < years.length - 1
-
-  const groups = allGroups.filter((g) => g.year === selectedYear)
-  const totalTracked = groups.reduce((sum, g) => sum + g.members.length, 0)
+  const selectedMembers = datedStaff.filter((s) => {
+    const date = new Date(s.dateAdded as string)
+    return date.getFullYear() === selectedYear && date.getMonth() === selectedMonth
+  })
+  const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate()
+  const dailyRows = Array.from({ length: daysInMonth }, (_, index) => {
+    const day = index + 1
+    const total = selectedMembers.filter((s) => new Date(s.dateAdded as string).getDate() === day).length
+    return { day, total }
+  })
+  const maxDailyTotal = Math.max(1, ...dailyRows.map((row) => row.total))
+  const selectedLabel = new Date(selectedYear, selectedMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
   return (
     <div
@@ -108,82 +84,57 @@ export function UserGrowthSummaryModal({ open, staff, onClose, onViewInWorkforce
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
-          {/* Year pagination — scopes the month-grouped list below to a single
-              year so the list stays short regardless of how many years of
-              onboarding history accumulate. */}
-          <div className="flex items-center justify-center gap-4">
-            <button
-              type="button"
-              onClick={() => hasPrevYear && setSelectedYear(years[yearIndex - 1])}
-              disabled={!hasPrevYear}
-              aria-label="Previous year"
-              className="flex size-7 items-center justify-center rounded-md border border-border text-foreground transition hover:border-primary/40 hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-border disabled:hover:bg-transparent"
-            >
-              <ChevronLeft className="size-3.5" aria-hidden="true" />
-            </button>
-            <span className="min-w-[3.5rem] text-center font-sans text-sm font-bold tabular-nums text-card-foreground">
-              {selectedYear}
-            </span>
-            <button
-              type="button"
-              onClick={() => hasNextYear && setSelectedYear(years[yearIndex + 1])}
-              disabled={!hasNextYear}
-              aria-label="Next year"
-              className="flex size-7 items-center justify-center rounded-md border border-border text-foreground transition hover:border-primary/40 hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-border disabled:hover:bg-transparent"
-            >
-              <ChevronRight className="size-3.5" aria-hidden="true" />
-            </button>
+          <div className="grid gap-4 rounded-lg border border-border bg-background p-4 sm:grid-cols-2">
+            <label className="flex flex-col gap-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Month
+              <select value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))} className="rounded-md border border-input bg-card px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-foreground outline-none focus:border-primary">
+                {Array.from({ length: 12 }, (_, month) => <option key={month} value={month}>{new Date(2000, month, 1).toLocaleDateString('en-US', { month: 'long' })}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Year
+              <select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="rounded-md border border-input bg-card px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-foreground outline-none focus:border-primary">
+                {availableYears.length > 0 ? availableYears.map((year) => <option key={year} value={year}>{year}</option>) : <option value={selectedYear}>{selectedYear}</option>}
+              </select>
+            </label>
           </div>
 
-          <p className="mt-4 text-center text-xs text-muted-foreground">
-            {totalTracked} onboarded {totalTracked === 1 ? 'account' : 'accounts'} in {selectedYear},
-            grouped by month added. Select a name to view and highlight that record in Workforce
-            Management.
-          </p>
-
-          {groups.length === 0 && (
-            <p className="mt-6 text-center text-sm italic text-muted-foreground">
-              No onboarding activity recorded for {selectedYear}.
-            </p>
-          )}
-
-          <div className="mt-5 flex flex-col gap-5">
-            {groups.map((group) => (
-              <div key={group.label}>
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-foreground">
-                    {group.label}
-                  </h3>
-                  <span className="text-[0.65rem] font-semibold text-muted-foreground">
-                    {group.members.length} hired
-                  </span>
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="rounded-lg border border-border bg-background px-4 py-3">
+              <p className="text-[0.58rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Accounts Created</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{selectedMembers.length}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-background px-4 py-3">
+              <p className="text-[0.58rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Selected Period</p>
+              <p className="mt-1 text-base font-bold text-foreground">{selectedLabel}</p>
+            </div>
+          </div>
+          <p className="mt-4 text-center text-xs text-muted-foreground">Counts use the existing account onboarding date ({'dateAdded'}). Current account status is not used as historical status.</p>
+          <div className="mt-5 rounded-lg border border-border bg-background p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-foreground">User Registrations — {selectedLabel}</h3>
+              <span className="text-[0.65rem] text-muted-foreground">{selectedMembers.length} total</span>
+            </div>
+            <div className="mt-4 flex h-28 items-end gap-px overflow-hidden border-b border-border pb-0.5">
+              {dailyRows.map((row) => (
+                <div key={row.day} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1" title={`${selectedLabel}, day ${row.day}: ${row.total} registrations`}>
+                  <div className="w-full rounded-t-sm bg-primary/75 transition-all" style={{ height: row.total ? `${Math.max(10, (row.total / maxDailyTotal) * 100)}%` : '3%' }} />
                 </div>
-                <div className="mt-2 flex flex-col gap-1.5">
-                  {group.members.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => onViewInWorkforce(s.id)}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3.5 py-2.5 text-left transition hover:border-primary/40 hover:bg-muted/40"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">
-                          {s.firstName} {s.surname}
-                        </p>
-                        <p className="truncate text-[0.7rem] text-muted-foreground">
-                          {s.role} · {s.dateAdded}
-                        </p>
-                      </div>
-                      <span className="flex shrink-0 items-center gap-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary">
-                        View in Workforce
-                        <ArrowRight className="size-3" aria-hidden="true" />
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              ))}
+            </div>
+            <div className="mt-2 flex justify-between text-[0.55rem] text-muted-foreground"><span>1</span><span>{Math.ceil(daysInMonth / 2)}</span><span>{daysInMonth}</span></div>
+          </div>
+
+          {selectedMembers.length === 0 && <p className="mt-6 text-center text-sm italic text-muted-foreground">No user registrations recorded for {selectedLabel}.</p>}
+
+          {selectedMembers.length > 0 && <div className="mt-5 flex flex-col gap-1.5">
+            {selectedMembers.map((s) => (
+              <button key={s.id} type="button" onClick={() => onViewInWorkforce(s.id)} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3.5 py-2.5 text-left transition hover:border-primary/40 hover:bg-muted/40">
+                <div className="min-w-0"><p className="truncate text-sm font-medium text-foreground">{s.firstName} {s.surname}</p><p className="truncate text-[0.7rem] text-muted-foreground">{s.role} · {s.dateAdded}</p></div>
+                <span className="flex shrink-0 items-center gap-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-primary">View in Workforce <ArrowRight className="size-3" aria-hidden="true" /></span>
+              </button>
             ))}
-          </div>
+          </div>}
         </div>
       </div>
     </div>

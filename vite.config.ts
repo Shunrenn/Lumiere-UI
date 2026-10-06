@@ -1,16 +1,9 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
-export default defineConfig(({ mode }) => {
-  // Load all env vars (no VITE_ prefix filter) from .env files into a local object.
-  const env = loadEnv(mode, process.cwd(), '')
-
-  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL || ''
-  const supabaseAnonKey =
-    env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || ''
-
+export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
@@ -18,13 +11,16 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, './src'),
       },
     },
-    define: {
-      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(supabaseUrl),
-      'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(supabaseAnonKey),
-    },
     server: {
       host: true,
-      allowedHosts: true,
+      allowedHosts: true as const,
+      proxy: {
+        '/api': {
+          target: 'https://lumiere-production-f6a1.up.railway.app',
+          changeOrigin: true,
+          secure: true,
+        },
+      },
     },
   }
 })

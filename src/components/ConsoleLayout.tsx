@@ -1,6 +1,11 @@
 import { useState, type ReactNode } from 'react'
 import { Menu } from 'lucide-react'
 import { ConsoleSidebar } from '@/components/ConsoleSidebar'
+import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
+import { PLANNER_RAIL_DESTINATIONS, PLANNER_RAIL_IDENTITY } from '@/lib/executive-destinations'
+import { useAuth } from '@/lib/auth'
+import { useNav } from '@/lib/nav'
+import type { Route } from '@/lib/types'
 
 interface Props {
   children: ReactNode
@@ -8,8 +13,22 @@ interface Props {
 
 export function ConsoleLayout({ children }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+  const { isPlanner } = useAuth()
+  const { route, navigate } = useNav()
 
+  if (isPlanner) {
+    const activeId = route === 'mood-boards' ? 'mood-boards' : route === 'inventory' ? 'inventory' : route === 'design-projects' || route === 'event-detail' || route === 'canvas-workspace' ? 'design-projects' : 'dashboard'
+    return (
+      <ExecutiveShell
+        activeId={activeId}
+        onSelect={(id) => navigate(id as Route)}
+        destinations={PLANNER_RAIL_DESTINATIONS}
+        identityRoleLabel={PLANNER_RAIL_IDENTITY.roleLabel}
+      >
+        {children}
+      </ExecutiveShell>
+    )
+  }
   const dateLabel = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -24,8 +43,6 @@ export function ConsoleLayout({ children }: Props) {
   return (
     <div className="flex min-h-screen bg-background">
       <ConsoleSidebar
-        collapsed={collapsed}
-        onToggleCollapse={() => setCollapsed((c) => !c)}
         mobileOpen={mobileOpen}
         onCloseMobile={() => setMobileOpen(false)}
       />

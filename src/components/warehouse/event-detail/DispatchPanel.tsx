@@ -24,7 +24,7 @@ import {
   dispatchEvent,
   type DispatchPreparationResponse,
   type DispatchPreparationItemDto,
-} from '@/lib/dispatchApi'
+} from '@/features/warehouse/api/dispatchApi'
 import { useAuth } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 

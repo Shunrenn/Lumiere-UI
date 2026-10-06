@@ -24,7 +24,7 @@ import {
   canPerformRoutineAssignment,
   canPerformResourceOverride,
   type ManningRecordDto,
-} from '@/lib/manningApi'
+} from '@/features/manning/api/manningApi'
 
 const FIELD_TASKS = [
   'Load-in & setup',
@@ -39,6 +39,7 @@ interface AssignCrewModalProps {
   events: PortalEvent[]
   crewRows: CrewRow[]
   presetSquads: PresetSquad[]
+  initialEventId?: string
   onClose: () => void
 }
 
@@ -57,7 +58,7 @@ interface ActiveConflictReview {
   }
 }
 
-export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: AssignCrewModalProps) {
+export function AssignCrewModal({ events, crewRows, presetSquads, initialEventId, onClose }: AssignCrewModalProps) {
   const { adminRole, subRole, hasFullWarehouseAccess } = useAuth()
   const { staff } = usePortal()
   const declarations = useGroundCrewDeclarations()
@@ -67,7 +68,7 @@ export function AssignCrewModal({ events, crewRows, presetSquads, onClose }: Ass
   const canOverride = canPerformResourceOverride({ role: adminRole, subRole, fullWarehouseAccess: hasFullWarehouseAccess })
 
   const [mode, setMode] = useState<AssignMode>('fifo')
-  const [eventId, setEventId] = useState(events[0]?.id ?? '')
+  const [eventId, setEventId] = useState(initialEventId ?? events[0]?.id ?? '')
   const [task, setTask] = useState(FIELD_TASKS[0])
   const [slotCount, setSlotCount] = useState(3)
   const [manualIds, setManualIds] = useState<Set<string>>(new Set())

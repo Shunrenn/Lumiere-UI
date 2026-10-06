@@ -59,6 +59,16 @@ export interface KonvaCanvasAsset {
   textDecoration?: string
   align?: string
   fontFamily?: string
+  /** Image-only non-destructive adjustments. */
+  brightness?: number
+  contrast?: number
+  flipX?: boolean
+  flipY?: boolean
+  /** Image-only non-destructive crop, expressed as fractions of the source image. */
+  cropX?: number
+  cropY?: number
+  cropWidth?: number
+  cropHeight?: number
 }
 
 export interface KonvaDroppedAsset {
@@ -77,6 +87,8 @@ type Props = {
   selectedId: string | null
   zoom: number
   showGrid: boolean
+  showRulers?: boolean
+  showMargin?: boolean
   onSelect: (id: string | null) => void
   onUpdate: (id: string, changes: Partial<KonvaCanvasAsset>) => void
   onDeselect: () => void
@@ -140,6 +152,9 @@ function CanvasElement({
   onSelect,
   onUpdate,
   onStartEditing,
+  onDuplicate,
+  onDelete,
+  onToggleLock,
 }: {
   asset: KonvaCanvasAsset
   pageIndex: number
@@ -152,6 +167,9 @@ function CanvasElement({
   onSelect: () => void
   onUpdate: (changes: Partial<KonvaCanvasAsset>) => void
   onStartEditing: () => void
+  onDuplicate: () => void
+  onDelete: () => void
+  onToggleLock: () => void
 }) {
   const image = useLoadedImage(asset.src)
   const nodeRef = useRef<any>(null)
@@ -173,10 +191,46 @@ function CanvasElement({
     }
   }, [selected, listening, image, asset.w, asset.h, asset.id])
 
+  // Konva applies image filters to a cached bitmap. Cache only once an
+  // adjustment has been requested so unedited catalog images remain cheap.
+  useEffect(() => {
+    const node = nodeRef.current
+    const hasAdjustments = asset.brightness !== undefined || asset.contrast !== undefined
+    if (asset.kind !== 'image' || !hasAdjustments || !node) return
+    node.cache()
+    node.getLayer()?.batchDraw()
+    return () => {
+      node.clearCache()
+      node.getLayer()?.batchDraw()
+    }
+  }, [image, asset.kind, asset.brightness, asset.contrast])
+
   if (asset.hidden) return null
 
   const kind = asset.kind || 'image'
   if (kind === 'image' && !image) return null
+
+  const toolbarWidth = 148
+  const toolbarHeight = 34
+  const toolbarX = Math.max(
+    ARTBOARD_X + 4,
+    Math.min(ARTBOARD_X + ARTBOARD_W - toolbarWidth - 4, ARTBOARD_X + asset.x + (asset.w - toolbarWidth) / 2),
+  )
+  const toolbarY = asset.y < 54 ? pageY + asset.y + asset.h + 18 : pageY + asset.y - toolbarHeight - 18
+  const actionButton = (x: number, label: string, action: () => void) => (
+    <Group
+      key={label}
+      x={toolbarX + x}
+      y={toolbarY}
+      width={29}
+      height={toolbarHeight}
+      onClick={(event) => { event.cancelBubble = true; action() }}
+      onTap={(event) => { event.cancelBubble = true; action() }}
+    >
+      <Rect width={29} height={toolbarHeight} fill="transparent" cornerRadius={8} />
+      <KonvaText x={0} y={8} width={29} align="center" text={label} fontSize={15} fontFamily="sans-serif" fill="#ffffff" />
+    </Group>
+  )
 
   const commonProps = {
     ref: nodeRef,
@@ -184,7 +238,10 @@ function CanvasElement({
     x: ARTBOARD_X + asset.x,
     y: pageY + asset.y,
     rotation: asset.rotation,
-    opacity: asset.opacity / 100,
+    // Older preset text was mistakenly persisted with `1` for a percentage
+    // opacity, making it effectively invisible. Treat that legacy value as
+    // fully opaque for text while preserving intentional opacity elsewhere.
+    opacity: asset.kind === 'text' && asset.opacity <= 1 ? 1 : asset.opacity / 100,
     draggable: listening && !asset.locked,
     listening,
     dragBoundFunc: (pos: { x: number; y: number }) => {
@@ -197,9 +254,11 @@ function CanvasElement({
         y: Math.max(minY, Math.min(maxY, pos.y)),
       }
     },
-    shadowColor: selected ? '#b58a52' : undefined,
-    shadowBlur: selected ? 12 : 0,
-    shadowOpacity: selected ? 0.28 : 0,
+    // Selection affordance is drawn by the transformer below. Keeping the
+    // object itself shadow-free matches Canva's precise, uncluttered edit mode.
+    shadowColor: undefined,
+    shadowBlur: 0,
+    shadowOpacity: 0,
     onClick: (event: any) => {
       if (!listening) return
       event.cancelBubble = true
@@ -248,8 +307,29 @@ function CanvasElement({
 
   let nodeEl = null
   if (kind === 'image' && image) {
-    const filters = asset.label.toLowerCase().includes('crystal') ? [Konva.Filters.Brighten] : undefined
-    nodeEl = <KonvaImage {...commonProps} image={image} width={asset.w} height={asset.h} filters={filters} />
+    const hasAdjustments = asset.brightness !== undefined || asset.contrast !== undefined
+    const filters = hasAdjustments ? [Konva.Filters.Brighten, Konva.Filters.Contrast] : undefined
+    nodeEl = (
+      <KonvaImage
+        {...commonProps}
+        image={image}
+        width={asset.w}
+        height={asset.h}
+        crop={{
+          x: image.width * (asset.cropX ?? 0),
+          y: image.height * (asset.cropY ?? 0),
+          width: image.width * (asset.cropWidth ?? 1),
+          height: image.height * (asset.cropHeight ?? 1),
+        }}
+        offsetX={asset.flipX ? asset.w : 0}
+        offsetY={asset.flipY ? asset.h : 0}
+        scaleX={asset.flipX ? -1 : 1}
+        scaleY={asset.flipY ? -1 : 1}
+        filters={filters}
+        brightness={asset.brightness ?? 0}
+        contrast={asset.contrast ?? 0}
+      />
+    )
   } else if (kind === 'rect') {
     nodeEl = <Rect {...commonProps} width={asset.w} height={asset.h} fill={asset.fill || '#3b82f6'} stroke="#1d4ed8" strokeWidth={1} cornerRadius={4} />
   } else if (kind === 'circle') {
@@ -278,7 +358,7 @@ function CanvasElement({
         fontStyle={asset.fontStyle || 'normal'}
         textDecoration={asset.textDecoration || ''}
         align={asset.align || 'left'}
-        fill={asset.strokeColor || asset.fill || '#0f172a'}
+        fill={asset.fill || asset.strokeColor || '#0f172a'}
         wrap="word"
       />
     )
@@ -288,16 +368,33 @@ function CanvasElement({
     <>
       {nodeEl}
       {selected && listening && (
-        <Transformer
-          ref={transformerRef}
-          rotateEnabled
-          enabledAnchors={asset.locked ? [] : ['top-left', 'top-right', 'bottom-left', 'bottom-right']}
-          borderStroke="#b58a52"
-          anchorFill="#fffaf0"
-          anchorStroke="#b58a52"
-          anchorSize={8}
-          padding={4}
-        />
+        <>
+          <Transformer
+            ref={transformerRef}
+            rotateEnabled
+            enabledAnchors={asset.locked ? [] : ['top-left', 'top-right', 'bottom-left', 'bottom-right']}
+            borderStroke="#8b5cf6"
+            borderStrokeWidth={2}
+            anchorFill="#ffffff"
+            anchorStroke="#8b5cf6"
+            anchorStrokeWidth={2}
+            anchorCornerRadius={5}
+            anchorSize={10}
+            rotateAnchorOffset={30}
+            padding={2}
+          />
+          <Group x={toolbarX} y={toolbarY} listening>
+            <Rect width={toolbarWidth} height={toolbarHeight} fill="#1f2027" cornerRadius={17} shadowColor="#000000" shadowBlur={8} shadowOpacity={0.24} shadowOffset={{ x: 0, y: 3 }} />
+          </Group>
+          {actionButton(1, '↻', () => onUpdate({ rotation: (asset.rotation + 90) % 360 }))}
+          {actionButton(30, asset.locked ? '▣' : '♧', onToggleLock)}
+          {actionButton(59, '⧉', onDuplicate)}
+          {actionButton(88, '⌫', onDelete)}
+          <Group x={toolbarX + 117} y={toolbarY} width={30} height={toolbarHeight} listening>
+            <Rect width={30} height={toolbarHeight} fill="transparent" cornerRadius={8} />
+            <KonvaText x={0} y={6} width={30} align="center" text="•••" fontSize={14} fontFamily="sans-serif" fill="#ffffff" />
+          </Group>
+        </>
       )}
     </>
   )
@@ -313,6 +410,8 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
     selectedId,
     zoom,
     showGrid,
+    showRulers = false,
+    showMargin = false,
     onSelect,
     onUpdate,
     onDeselect,
@@ -665,42 +764,43 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
               width: `${width}px`,
               zIndex: 15,
             }}
-            className="flex items-center justify-between gap-2 px-1 text-xs select-none pointer-events-auto"
+            className="flex items-center justify-between gap-2 px-1 text-sm select-none pointer-events-auto"
+            onClick={() => onCurrentPageChange?.(page.id)}
           >
             {/* Left: Page Title Input (click to rename) */}
-            <div className="flex items-center gap-1.5 min-w-0 bg-background/90 backdrop-blur-sm border border-border/80 rounded-lg px-2 py-0.5 shadow-sm">
-              <span className={cn('font-semibold uppercase tracking-wider text-[0.62rem] shrink-0', isCurrent ? 'text-primary' : 'text-muted-foreground')}>
+            <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border/80 bg-background/90 px-3 py-1.5 shadow-sm backdrop-blur-sm">
+              <span className={cn('shrink-0 text-xs font-semibold uppercase tracking-[0.05em]', isCurrent ? 'text-primary' : 'text-muted-foreground')}>
                 Page {pIdx + 1}
               </span>
-              <span className="text-muted-foreground/40 text-[0.6rem]">·</span>
+              <span className="text-xs text-muted-foreground/40">·</span>
               <input
                 type="text"
                 value={page.title}
                 placeholder="Add page title"
                 onChange={(e) => onRenamePage?.(page.id, e.target.value)}
-                className="bg-transparent hover:bg-muted/40 focus:bg-background rounded px-1.5 py-0.5 text-[0.68rem] font-medium text-foreground outline-none border border-transparent focus:border-primary transition max-w-[200px] truncate"
+                className="max-w-[220px] truncate rounded border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-foreground outline-none transition hover:bg-muted/40 focus:border-primary focus:bg-background"
               />
             </div>
 
-            {/* Right: Page Controls */}
-            <div className="flex items-center gap-0.5 bg-background/90 backdrop-blur-sm border border-border/80 rounded-lg px-1.5 py-0.5 shadow-sm">
+            {/* Keep page controls on the active page only; inactive pages remain easy to select without adding visual noise. */}
+            {isCurrent && <div className="flex items-center gap-1 rounded-lg border border-border/80 bg-background/90 px-2 py-1 shadow-sm backdrop-blur-sm">
               <button
                 type="button"
                 title="Move up"
                 onClick={() => onMovePage?.(page.id, -1)}
                 disabled={pIdx === 0}
-                className="flex size-5 items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-30 transition"
+                className="flex size-8 items-center justify-center rounded text-muted-foreground transition hover:text-foreground disabled:opacity-30"
               >
-                <MoveUp className="size-3" />
+                <MoveUp className="size-4" />
               </button>
               <button
                 type="button"
                 title="Move down"
                 onClick={() => onMovePage?.(page.id, 1)}
                 disabled={pIdx === effectivePages.length - 1}
-                className="flex size-5 items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-30 transition"
+                className="flex size-8 items-center justify-center rounded text-muted-foreground transition hover:text-foreground disabled:opacity-30"
               >
-                <MoveDown className="size-3" />
+                <MoveDown className="size-4" />
               </button>
               <button
                 type="button"
@@ -727,7 +827,7 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
               >
                 <Trash2 className="size-3" />
               </button>
-            </div>
+            </div>}
           </div>
         )
       })}
@@ -974,6 +1074,21 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                   shadowOpacity={0.06}
                   shadowOffset={{ x: 0, y: 2 }}
                 />
+                {showRulers && (
+                  <>
+                    <Rect x={ARTBOARD_X} y={pageY} width={ARTBOARD_W} height={18} fill="rgba(196,181,157,0.22)" listening={false} />
+                    <Rect x={ARTBOARD_X} y={pageY} width={18} height={ARTBOARD_H} fill="rgba(196,181,157,0.22)" listening={false} />
+                    {Array.from({ length: 10 }, (_, index) => (
+                      <Line key={`ruler-x-${page.id}-${index}`} points={[ARTBOARD_X + index * 100, pageY, ARTBOARD_X + index * 100, pageY + 9]} stroke="#9b6b3f" strokeWidth={1} listening={false} />
+                    ))}
+                    {Array.from({ length: 7 }, (_, index) => (
+                      <Line key={`ruler-y-${page.id}-${index}`} points={[ARTBOARD_X, pageY + index * 100, ARTBOARD_X + 9, pageY + index * 100]} stroke="#9b6b3f" strokeWidth={1} listening={false} />
+                    ))}
+                  </>
+                )}
+                {showMargin && (
+                  <Rect x={ARTBOARD_X + 48} y={pageY + 48} width={ARTBOARD_W - 96} height={ARTBOARD_H - 96} stroke="#c49666" strokeWidth={1} dash={[6, 5]} opacity={0.75} listening={false} />
+                )}
                 {/* Photo background: cover-fit image over the artboard */}
                 {artboardBgImage && (() => {
                   const imgW = artboardBgImage.naturalWidth || ARTBOARD_W
@@ -1014,6 +1129,9 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                       onSelect={() => onSelect(asset.id)}
                       onUpdate={(changes) => onUpdate(asset.id, changes)}
                       onStartEditing={() => setEditingAssetId(asset.id)}
+                      onDuplicate={() => onDuplicate(asset.id)}
+                      onDelete={() => onDelete(asset.id)}
+                      onToggleLock={() => onUpdate(asset.id, { locked: !asset.locked })}
                     />
                   ))}
                 </Group>
@@ -1037,9 +1155,22 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                 shadowColor="#1f1810"
                 shadowBlur={10}
                 shadowOpacity={0.06}
-                shadowOffset={{ x: 0, y: 2 }}
-              />
-              {/* Photo background: cover-fit image over the artboard */}
+                  shadowOffset={{ x: 0, y: 2 }}
+                />
+                {showRulers && (
+                  <>
+                    {Array.from({ length: 10 }, (_, index) => (
+                      <Line key={`ruler-x-${activeSinglePage.id}-${index}`} points={[ARTBOARD_X + index * 100, ARTBOARD_Y, ARTBOARD_X + index * 100, ARTBOARD_Y + 9]} stroke="#9b6b3f" strokeWidth={1} listening={false} />
+                    ))}
+                    {Array.from({ length: 7 }, (_, index) => (
+                      <Line key={`ruler-y-${activeSinglePage.id}-${index}`} points={[ARTBOARD_X, ARTBOARD_Y + index * 100, ARTBOARD_X + 9, ARTBOARD_Y + index * 100]} stroke="#9b6b3f" strokeWidth={1} listening={false} />
+                    ))}
+                  </>
+                )}
+                {showMargin && (
+                  <Rect x={ARTBOARD_X + 48} y={ARTBOARD_Y + 48} width={ARTBOARD_W - 96} height={ARTBOARD_H - 96} stroke="#c49666" strokeWidth={1} dash={[6, 5]} opacity={0.75} listening={false} />
+                )}
+                {/* Photo background: cover-fit image over the artboard */}
               {artboardBgImage && (() => {
                 const imgW = artboardBgImage.naturalWidth || ARTBOARD_W
                 const imgH = artboardBgImage.naturalHeight || ARTBOARD_H
@@ -1082,6 +1213,9 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
                       onSelect={() => onSelect(asset.id)}
                       onUpdate={(changes) => onUpdate(asset.id, changes)}
                       onStartEditing={() => setEditingAssetId(asset.id)}
+                      onDuplicate={() => onDuplicate(asset.id)}
+                      onDelete={() => onDelete(asset.id)}
+                      onToggleLock={() => onUpdate(asset.id, { locked: !asset.locked })}
                     />
                   ))}
               </Group>
@@ -1126,14 +1260,14 @@ export const KonvaInfiniteCanvas = forwardRef<KonvaInfiniteCanvasHandle, Props>(
             height: `${editingScreenH}px`,
             fontSize: `${editingFontSizePx}px`,
             fontFamily: 'sans-serif',
-            color: editingAsset.kind === 'sticky' ? '#1e293b' : (editingAsset.strokeColor || '#0f172a'),
+            color: editingAsset.kind === 'sticky' ? '#1e293b' : (editingAsset.fill || editingAsset.strokeColor || '#0f172a'),
             backgroundColor: editingAsset.kind === 'sticky' ? (editingAsset.fill || '#fef08a') : 'transparent',
             border: '2px solid #3b82f6',
             borderRadius: '4px',
             padding: '4px',
             outline: 'none',
             resize: 'both',
-            zIndex: 50,
+            zIndex: 100,
             boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
           }}
         />

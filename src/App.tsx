@@ -2,12 +2,11 @@ import './App.css'
 import { useEffect, useState, lazy, Suspense } from 'react'
 import type { Route } from '@/lib/types'
 import { NavProvider, useNav } from '@/lib/nav'
-import { PortalProvider } from '@/lib/store'
+import { PortalProvider, usePortal } from '@/lib/store'
 import { AdminGrowthSummaryProvider } from '@/lib/admin-growth-summary'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { LogoutModal } from '@/components/LogoutModal'
 import { OfflineBanner } from '@/components/OfflineBanner'
-import { WelcomeModal } from '@/components/WelcomeModal'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { loadRosterFromDatabase } from '@/lib/roster'
@@ -15,14 +14,15 @@ import { PlannerProvider } from '@/lib/planner'
 import { WarehouseProvider } from '@/lib/warehouse'
 
 // Code-split page components for minimal initial bundle latency
-import { LoginPage } from '@/pages/LoginPage'
-import { OverviewPage } from '@/pages/OverviewPage'
-import { AdminSystemDashboardPage } from '@/pages/AdminSystemDashboardPage'
-import { AdminWorkforcePage } from '@/pages/AdminWorkforcePage'
-import { WarehouseHomePage } from '@/pages/WarehouseHomePage'
-import { GroundCrewPage } from '@/pages/GroundCrewPage'
-import { PinSetupScreen } from '@/pages/PinSetupScreen'
-import { TempPasswordResetScreen } from '@/pages/TempPasswordResetScreen'
+const LoginPage = lazy(() => import('@/pages/LoginPage').then((m) => ({ default: m.LoginPage })))
+const OverviewPage = lazy(() => import('@/pages/OverviewPage').then((m) => ({ default: m.OverviewPage })))
+const AdminSystemDashboardPage = lazy(() => import('@/pages/AdminSystemDashboardPage').then((m) => ({ default: m.AdminSystemDashboardPage })))
+const AdminWorkforcePage = lazy(() => import('@/pages/AdminWorkforcePage').then((m) => ({ default: m.AdminWorkforcePage })))
+const WarehouseHomePage = lazy(() => import('@/pages/WarehouseHomePage').then((m) => ({ default: m.WarehouseHomePage })))
+const WarehouseModulePage = lazy(() => import('@/pages/WarehouseModulePage').then((m) => ({ default: m.WarehouseModulePage })))
+const GroundCrewPage = lazy(() => import('@/pages/GroundCrewPage').then((m) => ({ default: m.GroundCrewPage })))
+const PinSetupScreen = lazy(() => import('@/pages/PinSetupScreen').then((m) => ({ default: m.PinSetupScreen })))
+const TempPasswordResetScreen = lazy(() => import('@/pages/TempPasswordResetScreen').then((m) => ({ default: m.TempPasswordResetScreen })))
 
 // Code-split heavy subpages for feature-level chunking
 const AdminSecurityAuditPage = lazy(() => import('@/pages/AdminSecurityAuditPage').then((m) => ({ default: m.AdminSecurityAuditPage })))
@@ -33,6 +33,7 @@ const ReplenishmentPage = lazy(() => import('@/pages/ReplenishmentPage').then((m
 const ActivityLogsPage = lazy(() => import('@/pages/ActivityLogsPage').then((m) => ({ default: m.ActivityLogsPage })))
 const DamageValidationPage = lazy(() => import('@/pages/DamageValidationPage').then((m) => ({ default: m.DamageValidationPage })))
 const InventoryStockPage = lazy(() => import('@/pages/InventoryStockPage').then((m) => ({ default: m.InventoryStockPage })))
+const PlannerAssetCatalogPage = lazy(() => import('@/pages/PlannerAssetCatalogPage').then((m) => ({ default: m.PlannerAssetCatalogPage })))
 const WarehouseLogsPage = lazy(() => import('@/pages/WarehouseLogsPage').then((m) => ({ default: m.WarehouseLogsPage })))
 const CrewRosterPage = lazy(() => import('@/pages/CrewRosterPage').then((m) => ({ default: m.CrewRosterPage })))
 const TaskDeploymentsPage = lazy(() => import('@/pages/TaskDeploymentsPage').then((m) => ({ default: m.TaskDeploymentsPage })))
@@ -170,6 +171,31 @@ function Router() {
     }
   }
 
+  // Full Warehouse Operations accounts use one desktop shell for the dashboard
+  // and every operational module. Scoped associate and mobile routes retain
+  // their dedicated experiences above.
+  if (isWarehouse && hasFullWarehouseAccess) {
+    switch (route) {
+      case 'inventory':
+        return <WarehouseModulePage moduleId="assets" />
+      case 'replenishment':
+        return <WarehouseModulePage moduleId="replenishment" />
+      case 'vendors':
+        return <WarehouseModulePage moduleId="vendors" />
+      case 'crew':
+        return <WarehouseModulePage moduleId="manning" />
+      case 'dispatch':
+        return <WarehouseModulePage moduleId="dispatch" />
+      case 'production':
+        return <WarehouseModulePage moduleId="production" />
+      case 'damage':
+        return <DamageValidationPage />
+      case 'overview':
+      default:
+        return <WarehouseHomePage />
+    }
+  }
+
   // Client-side role guard for Project Manager:
   // PM is restricted to project manager dashboard and design canvas oversight surfaces.
   // PM cannot mount Admin/Executive operational pages (security-audit, workforce, rbac, executive dashboard/logs).
@@ -182,6 +208,27 @@ function Router() {
       case 'project-manager':
       default:
         return <ProjectManagerDashboardPage />
+    }
+  }
+
+  // Event Planner is intentionally isolated from registry and damage
+  // operations. Dashboard / project / mood-board content is introduced in
+  // later planner phases; for now these shell destinations land on the
+  // existing planner workspace hub.
+  if (currentUser?.role === 'Event Planner') {
+    switch (route) {
+      case 'inventory':
+        return <PlannerAssetCatalogPage />
+      case 'canvas-workspace':
+        return <CanvasWorkspacePage />
+      case 'event-detail':
+        return <EventDetailPage />
+      case 'dashboard':
+      case 'design-projects':
+      case 'mood-boards':
+      case 'canvas':
+      default:
+        return <DesignCanvasHubPage />
     }
   }
 
@@ -258,10 +305,13 @@ function Router() {
 }
 
 function Gate() {
+  const { staff: portalStaff, addUserAction } = usePortal()
   const {
     currentUser,
     isAuthenticated,
     isTempPassword,
+    isAdmin,
+    isExecutive,
     hasConfirmationPin,
     canAccessAssetInventory,
   } = useAuth()
@@ -271,7 +321,11 @@ function Gate() {
     return portal === 'crew' ? (
       <GroundCrewLoginPage onStaffPortal={() => setPortal('staff')} />
     ) : (
-      <LoginPage onCrewPortal={() => setPortal('crew')} />
+      <LoginPage
+        onCrewPortal={() => setPortal('crew')}
+        portalStaff={portalStaff}
+        addUserAction={addUserAction}
+      />
     )
   }
 
@@ -279,7 +333,7 @@ function Gate() {
     return <TempPasswordResetScreen />
   }
 
-  if (!hasConfirmationPin) {
+  if (!isAdmin && !isExecutive && !hasConfirmationPin) {
     return <PinSetupScreen />
   }
 
@@ -321,7 +375,6 @@ function Gate() {
             <Router />
           </Suspense>
         </ErrorBoundary>
-        <WelcomeModal />
       </AdminGrowthSummaryProvider>
     </NavProvider>
   )

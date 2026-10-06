@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Bell, CheckCheck, RefreshCw, AlertCircle, Sparkles, type LucideIcon } from 'lucide-react'
+import { Bell, CheckCheck, RefreshCw, AlertCircle, Sparkles, X, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   fetchNotificationsApi,
   markNotificationReadApi,
   markAllNotificationsReadApi,
   type NotificationDto,
-} from '@/lib/notificationsApi'
+} from '@/features/notifications/api/notificationsApi'
 
 export interface NotificationEntry {
   id: string
@@ -54,6 +54,8 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isMarkingAll, setIsMarkingAll] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState(false)
+  const [period, setPeriod] = useState<'today' | 'week' | 'all'>('today')
 
   const isControlled = Boolean(propNotifications)
 
@@ -132,6 +134,19 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
         raw: n,
       }))
 
+  const isInPeriod = (isoString: string, selectedPeriod: typeof period) => {
+    const date = new Date(isoString)
+    if (Number.isNaN(date.getTime()) || selectedPeriod === 'all') return true
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    if (selectedPeriod === 'today') return date.getTime() >= startOfToday
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).getTime()
+    return date.getTime() >= startOfWeek
+  }
+
+  const scopedItems = isControlled
+    ? displayItems
+    : displayItems.filter((item: any) => isInPeriod(item.raw.createdAt, period))
   const unreadCount = displayItems.filter((n) => n.unread).length
   const isMd = size === 'md'
 
@@ -260,14 +275,14 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
                   Retry
                 </button>
               </div>
-            ) : displayItems.length === 0 ? (
+            ) : scopedItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-1.5 py-10 text-center text-muted-foreground px-4">
                 <Sparkles className="size-5 text-muted-foreground/60" />
                 <p className="text-xs font-medium text-foreground/80">You&apos;re all caught up</p>
                 <p className="text-[0.65rem] text-muted-foreground">No unread or pending operational notifications.</p>
               </div>
             ) : (
-              displayItems.map((n: any) => {
+              scopedItems.slice(0, 5).map((n: any) => {
                 const isUnread = Boolean(n.unread)
                 return (
                   <button
@@ -312,6 +327,26 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
                 )
               })
             )}
+          </div>
+          <button type="button" onClick={() => setShowAll(true)} className="flex w-full items-center justify-center border-t border-border px-4 py-3 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-primary hover:bg-accent">
+              View All Notifications
+            </button>
+        </div>
+      )}
+
+      {showAll && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/50 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="notifications-dialog-title" onClick={() => setShowAll(false)}>
+          <div className="flex max-h-[min(720px,calc(100vh-1.5rem))] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <div><h2 id="notifications-dialog-title" className="font-serif text-lg font-semibold text-popover-foreground">Notifications</h2><p className="mt-0.5 text-xs text-muted-foreground">Only notifications authorized for the signed-in account are shown.</p></div>
+              <button type="button" onClick={() => setShowAll(false)} className="flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Close notifications"><X className="size-4" /></button>
+            </div>
+            <div className="flex gap-2 border-b border-border px-5 py-3">
+              {(['today', 'week', 'all'] as const).map((value) => <button key={value} type="button" onClick={() => setPeriod(value)} className={cn('rounded-full px-3 py-1.5 text-xs font-semibold capitalize', period === value ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}>{value === 'week' ? 'This Week' : value}</button>)}
+            </div>
+            <div className="min-h-0 overflow-y-auto divide-y divide-border">
+              {scopedItems.length === 0 ? <div className="px-5 py-14 text-center text-sm text-muted-foreground">No notifications for this period.</div> : scopedItems.map((n: any) => <button key={n.id} type="button" onClick={() => handleMarkOne(n)} className={cn('flex w-full items-start gap-3 px-5 py-4 text-left hover:bg-accent', n.unread && 'bg-primary/5')}><span className={cn('mt-1.5 size-2 shrink-0 rounded-full', n.unread ? 'bg-primary' : 'border border-muted-foreground/40')} /><span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-foreground">{n.title || n.text}</span>{n.message && <span className="mt-1 block text-xs text-muted-foreground">{n.message}</span>}<span className="mt-2 block text-[0.65rem] text-muted-foreground">{n.time}</span></span></button>)}
+            </div>
           </div>
         </div>
       )}

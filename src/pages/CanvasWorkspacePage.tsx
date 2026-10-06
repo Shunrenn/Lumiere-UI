@@ -5,7 +5,7 @@ import {
   Maximize2, Monitor, Search, Info, X, Check,
   Lock, ChevronRight, Eye, Type, Upload, Wrench, FolderOpen,
   ImageIcon, MousePointer2, Pen, Square, Minus, StickyNote,
-  Bold, Italic, Underline, AlignLeft, Palette, Plus, ChevronLeft,
+  Bold, Italic, Underline, AlignLeft, AlignRight, Palette, Plus, ChevronLeft,
   Package, AlertTriangle, RefreshCw, Boxes,   Maximize,
   Minimize,
   PanelRightOpen,
@@ -13,7 +13,7 @@ import {
   ZoomIn, ZoomOut, LayoutGrid, Fullscreen, RotateCw,
   FlipHorizontal, FlipVertical, Layers, MoveUp, MoveDown,
   AlignCenter, AlignVerticalJustifyCenter, AlignHorizontalJustifyCenter,
-  Crop, Sliders, Contrast, Sun, Droplets, Sparkles,
+  Crop, Sliders, Sun,
   MoveHorizontal, MoveVertical, ArrowUp, ArrowDown,
   MessageCircle, EyeOff, MoreHorizontal, ChevronUp,
   GalleryVerticalEnd, GalleryVertical, Grid2X2, FolderSearch, PackageSearch, ImageOff,
@@ -28,17 +28,20 @@ import { useAuth } from '@/lib/auth'
   import { CanvasCollaborationModal } from '@/components/canvas/CanvasCollaborationModal'
   import { KonvaInfiniteCanvas, type KonvaInfiniteCanvasHandle, type CanvasTool, type KonvaCanvasAsset, ARTBOARD_W, ARTBOARD_H } from '@/components/canvas/KonvaInfiniteCanvas'
   import { usePortal, checkAssetAllocationConflict } from '@/lib/store'
-  import { approveCanvasApi, getAssetAvailabilityApi, validateCanvasStateApi, type AssetConflictDetail, type AssetAvailabilityDto } from '@/lib/canvasApi'
-  import { createDeficitItemApi } from '@/lib/deficitApi'
-  import { fetchAssetsApi, type SearchAssetsParams } from '@/lib/assetsApi'
+  import { approveCanvasApi, getAssetAvailabilityApi, validateCanvasStateApi, type AssetConflictDetail, type AssetAvailabilityDto } from '@/features/canvas/api/canvasApi'
+  import { createDeficitItemApi } from '@/features/inventory/api/deficitApi'
+  import { useCatalogAssets } from '@/lib/warehouse-catalog'
 
 
 /* ─── Types ─── */
 interface WorkspaceCard {
   id: string
+  /** Canonical API event ID for an event-derived Design Project. */
+  eventId?: string
   title: string
   type: 'Design' | 'Mood Board'
   designer: string
+  creatorId?: string
   eventAlias: string
   eventDate: string
   lastEdited: string
@@ -46,14 +49,10 @@ interface WorkspaceCard {
   starred: boolean
 }
 
-type WorkspaceMode = 'Viewing' | 'Commenting' | 'Planning' | 'Designing' | 'Asset Planning'
 type PanelTab = 'elements' | 'text' | 'uploads' | 'tools' | 'projects' | 'background'
 type RightPanelTab = 'allocated' | 'pending'
 type EditToolbar = 'adjust' | 'crop' | 'flip' | 'transparency' | 'position' | 'color' | null
 type PositionTab = 'arrange' | 'layers'
-
-// Per PDF: Commenting does NOT require PIN — only Planning, Designing, Asset Planning do
-const LOCKED_MODES: WorkspaceMode[] = ['Planning', 'Designing', 'Asset Planning']
 
 /* ─── Dragged-from-panel asset ─── */
 interface DroppedAsset {
@@ -61,6 +60,8 @@ interface DroppedAsset {
   name: string
   src: string
   defaultUnit: string
+  /** Server-confirmed fully-reserved assets may be shown only as unallocated placeholders. */
+  atRisk?: boolean
 }
 
 const DRAG_MIME = 'application/lumiere-asset'
@@ -124,9 +125,20 @@ export interface CanonicalCanvasItem {
   category: string
   description?: string
   src: string
-  physicalStock: number
   unit: string
+  availableStock: number
 }
+
+// Development preview only: these never call the catalog API or persist to the
+// production registry. They provide varied objects for Canvas visual QA.
+const DEV_DEMO_CANVAS_ASSETS: CanonicalCanvasItem[] = [
+  { id: 'demo-stage-platform', name: 'Modular Stage Platform', category: 'Event Assets', description: 'Preview staging platform', src: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=320&q=80&auto=format&fit=crop', unit: 'sets', availableStock: 8 },
+  { id: 'demo-line-array', name: 'Line Array Speaker', category: 'Production Assets', description: 'Preview professional speaker', src: 'https://images.unsplash.com/photo-1545454675-3531b543be5d?w=320&q=80&auto=format&fit=crop', unit: 'pcs', availableStock: 16 },
+  { id: 'demo-spotlight', name: 'LED Moving Head', category: 'Stockroom Assets', description: 'Preview stage lighting fixture', src: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=320&q=80&auto=format&fit=crop', unit: 'pcs', availableStock: 12 },
+  { id: 'demo-led-wall', name: 'LED Video Wall', category: 'Rental Assets', description: 'Preview rental display wall', src: 'https://images.unsplash.com/photo-1531058020387-3be344556be6?w=320&q=80&auto=format&fit=crop', unit: 'panels', availableStock: 24 },
+  { id: 'demo-cocktail-table', name: 'Cocktail Table', category: 'Event Assets', description: 'Preview event furniture', src: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=320&q=80&auto=format&fit=crop', unit: 'pcs', availableStock: 30 },
+  { id: 'demo-floral-arrangement', name: 'Floral Arrangement', category: 'Administrative Assets', description: 'Preview event décor', src: 'https://images.unsplash.com/photo-1523438885200-e635ba2c371e?w=320&q=80&auto=format&fit=crop', unit: 'pcs', availableStock: 18 },
+]
 
 /* ─── Logistics / Allocated Asset types ─── */
 interface AllocatedAsset {
@@ -251,32 +263,27 @@ function Slider({ label, value, onChange, min = 0, max = 100 }: { label: string;
 
 function ElementsTab({
   onDropAsset,
-  assets,
   canonicalAssets,
   assetsLoading,
   assetsError,
   onRetryFetch,
-  onRouteToDeficit,
   onSearchChange,
+  serverAvailability,
 }: {
   onDropAsset: (asset: DroppedAsset) => void
-  assets: AllocatedAsset[]
   canonicalAssets: CanonicalCanvasItem[]
   assetsLoading: boolean
   assetsError: string | null
   onRetryFetch?: () => void
-  onRouteToDeficit: (item: { id: string; name: string; unit: string }) => void
   /** Called with the debounced search term so the parent can re-fetch from backend */
   onSearchChange?: (term: string) => void
+  serverAvailability: Record<string, AssetAvailabilityDto | 'loading' | 'error'>
 }) {
   const [query, setQuery] = useState('')
-  const [tooltip, setTooltip] = useState<{ id: string; label: string; src: string; category?: string; stock: number; description?: string } | null>(null)
-  const [blocked, setBlocked] = useState<{ id: string; label: string; unit: string } | null>(null)
+  const [tooltip, setTooltip] = useState<{ id: string; label: string; src: string; category?: string; description?: string; unit: string; atRisk: boolean } | null>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
-  const blockedRef = useRef<HTMLDivElement>(null)
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useOutsideClick(tooltipRef, () => setTooltip(null))
-  useOutsideClick(blockedRef, () => setBlocked(null))
 
   function handleQueryChange(value: string) {
     setQuery(value)
@@ -313,42 +320,37 @@ function ElementsTab({
     }))
   }, [filteredAssets])
 
-  function getStock(item: CanonicalCanvasItem) {
-    const found = assets.find((a) => a.id === item.id)
-    return found ? found.availableStock : item.physicalStock
+  function isFullyReserved(item: CanonicalCanvasItem) {
+    const availability = serverAvailability[item.id]
+    return typeof availability === 'object' && availability !== null && availability.availableQuantity <= 0
   }
 
-  function handleDragStart(e: React.DragEvent, item: CanonicalCanvasItem, stock: number) {
-    if (stock <= 0) { e.preventDefault(); return }
-    const payload: DroppedAsset = { id: item.id, name: item.name, src: item.src, defaultUnit: item.unit || 'pcs' }
+  function handleDragStart(e: React.DragEvent, item: CanonicalCanvasItem) {
+    const payload: DroppedAsset = { id: item.id, name: item.name, src: item.src, defaultUnit: item.unit || 'pcs', atRisk: isFullyReserved(item) }
     e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload))
     e.dataTransfer.effectAllowed = 'copy'
   }
 
-  function addToCanvas(item: { id: string; label: string; src: string }) {
-    onDropAsset({ id: item.id, name: item.label, src: item.src, defaultUnit: 'pcs' })
+  function addToCanvas(item: { id: string; label: string; src: string; unit: string; atRisk: boolean }) {
+    onDropAsset({ id: item.id, name: item.label, src: item.src, defaultUnit: item.unit || 'pcs', atRisk: item.atRisk })
     setTooltip(null)
   }
 
-  function handleTileClick(item: CanonicalCanvasItem, stock: number) {
-    if (stock <= 0) setBlocked({ id: item.id, label: item.name, unit: item.unit || 'pcs' })
-  }
-
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-3 pt-3 pb-2 shrink-0">
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="shrink-0 px-4 pb-3 pt-4">
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search assets…"
             value={query}
             onChange={(e) => handleQueryChange(e.target.value)}
-            className="w-full rounded-lg border border-border bg-background py-1.5 pl-7 pr-3 text-[0.65rem] text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none"
+            className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none"
           />
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-5 scrollbar-thin">
+      <div className="flex-1 space-y-5 overflow-y-auto px-4 pb-5 scrollbar-thin">
         {assetsLoading ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -377,52 +379,59 @@ function ElementsTab({
         ) : (
           categories.map((cat) => (
             <div key={cat.id}>
-              <p className="mb-2 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">{cat.label}</p>
-              <div className="grid grid-cols-3 gap-1.5">
+              <p className="mb-2 text-[0.62rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{cat.label}</p>
+              <div className="grid grid-cols-2 gap-3">
                 {cat.items.map((item) => {
-                  const stock = getStock(item)
-                  const outOfStock = stock <= 0
+                  const fullyReserved = isFullyReserved(item)
+                  const availability = serverAvailability[item.id]
                   return (
                     <div
                       key={item.id}
-                      className={cn('relative group', outOfStock ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing')}
-                      draggable={!outOfStock}
-                      onDragStart={(e) => handleDragStart(e, item, stock)}
-                      onClick={() => handleTileClick(item, stock)}
+                      className={cn('relative group cursor-grab active:cursor-grabbing', fullyReserved && 'opacity-60')}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, item)}
                     >
-                      <div className={cn('relative aspect-square overflow-hidden rounded-lg border border-border/40 bg-muted/20 transition-all flex items-center justify-center', outOfStock ? 'opacity-40' : 'group-active:scale-95 group-active:opacity-70')}>
+                      <div className={cn('relative aspect-square overflow-hidden rounded-lg border border-border/40 bg-muted/20 transition-all flex items-center justify-center', fullyReserved ? 'bg-muted/60 grayscale' : 'group-active:scale-95 group-active:opacity-70')}>
                         {item.src ? (
                           <img
                             src={item.src}
                             alt={item.name}
                             draggable={false}
-                            className={cn('size-full object-cover mix-blend-multiply dark:mix-blend-normal pointer-events-none', outOfStock && 'grayscale')}
+                            className="size-full object-cover mix-blend-multiply dark:mix-blend-normal pointer-events-none"
                             onError={(e) => {
                               (e.currentTarget as HTMLElement).style.display = 'none'
                             }}
                           />
                         ) : (
-                          <Package className="size-5 text-muted-foreground/60" />
+                          <Package className="size-7 text-muted-foreground/60" />
                         )}
                       </div>
-                      <p className="mt-0.5 truncate text-center text-[0.5rem] font-medium text-foreground">{item.name}</p>
-                      {outOfStock ? (
-                        <span className="mt-0.5 flex w-full items-center justify-center rounded-full bg-destructive/15 px-1 py-0.5 text-center text-[0.45rem] font-bold uppercase tracking-[0.08em] text-destructive">
-                          NOT AVAILABLE
+                      <p className="mt-1 line-clamp-2 text-center text-[0.68rem] font-medium leading-snug text-foreground" title={item.name}>{item.name}</p>
+                      {fullyReserved ? (
+                        <span className="mt-1 flex w-full items-center justify-center rounded-full bg-destructive/15 px-1.5 py-1 text-center text-[0.58rem] font-bold uppercase tracking-[0.04em] text-destructive">
+                          Fully reserved
                         </span>
                       ) : (
-                        <span className="mt-0.5 block text-center text-[0.45rem] font-medium text-muted-foreground/70">{stock} in physical stock</span>
+                        <span className="mt-1 block text-center text-[0.58rem] leading-snug text-muted-foreground/70">
+                          {availability === 'loading'
+                            ? 'Checking availability…'
+                            : availability === 'error'
+                              ? `${formatStock(item.availableStock)} ${item.unit} in inventory`
+                              : typeof availability === 'object' && availability !== null
+                                ? `${formatStock(availability.availableQuantity)} ${item.unit} available`
+                                : `${formatStock(item.availableStock)} ${item.unit} in inventory`}
+                        </span>
                       )}
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
-                          setTooltip({ id: item.id, label: item.name, src: item.src, category: item.category, stock, description: item.description })
+                          setTooltip({ id: item.id, label: item.name, src: item.src, category: item.category, description: item.description, unit: item.unit, atRisk: fullyReserved })
                         }}
                         aria-label={`Info for ${item.name}`}
-                        className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-background/80 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-foreground"
+                        className="absolute right-1 top-1 flex size-6 items-center justify-center rounded-full bg-background/80 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-foreground"
                       >
-                        <Info className="size-2.5" />
+                        <Info className="size-3.5" />
                       </button>
                     </div>
                   )
@@ -432,29 +441,6 @@ function ElementsTab({
           ))
         )}
       </div>
-      {blocked && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/60 backdrop-blur-sm">
-          <div ref={blockedRef} className="w-60 rounded-2xl border border-border bg-card p-4 shadow-2xl">
-            <div className="mb-2 flex items-center gap-2">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-destructive/15"><AlertTriangle className="size-3.5 text-destructive" /></div>
-              <span className="text-[0.65rem] font-bold uppercase tracking-[0.1em] text-destructive">NOT AVAILABLE</span>
-            </div>
-            <p className="mb-3 text-[0.62rem] text-muted-foreground leading-relaxed">
-              <span className="font-semibold text-foreground">{blocked.label}</span> has zero verified physical stock right now.
-            </p>
-            <div className="flex flex-col gap-1.5">
-              <button type="button" onClick={() => { onRouteToDeficit({ id: blocked.id, name: blocked.label, unit: blocked.unit }); setBlocked(null) }}
-                className="w-full rounded-xl bg-primary py-2 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">
-                Route to Deficit Queue
-              </button>
-              <button type="button" onClick={() => setBlocked(null)}
-                className="w-full rounded-xl border border-border py-2 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted-foreground hover:bg-accent hover:text-foreground transition">
-                Skip
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {tooltip && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/60 backdrop-blur-sm">
           <div ref={tooltipRef} className="w-60 rounded-2xl border border-border bg-card p-4 shadow-2xl">
@@ -478,14 +464,11 @@ function ElementsTab({
                 <span className="text-muted-foreground">Asset ID</span>
                 <span className="font-mono text-foreground">{tooltip.id}</span>
               </div>
-              <div className="flex justify-between text-[0.6rem]">
-                <span className="text-muted-foreground">Physical Stock</span>
-                <span className="text-foreground font-semibold">{tooltip.stock}</span>
-              </div>
               {tooltip.description && (
                 <p className="text-[0.58rem] text-muted-foreground line-clamp-2 pt-1">{tooltip.description}</p>
               )}
             </div>
+            {tooltip.atRisk && <p className="mt-2 rounded-md bg-destructive/10 px-2 py-1.5 text-[0.55rem] font-semibold text-destructive">Fully reserved for this event window. It will be added only as an unallocated, at-risk placeholder.</p>}
             <button type="button" onClick={() => addToCanvas(tooltip)}
               className="mt-3 w-full rounded-lg bg-primary py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">
               Add to Canvas
@@ -510,30 +493,9 @@ const PRESET_PALETTE = [
 
 function TextTab({
   onPlacePresetText,
-  selectedAsset,
-  onUpdateFormatting,
-  onUpdateColor,
 }: {
   onPlacePresetText: (preset: { label: string; text: string; fontSize: number; fontWeight?: string; fontStyle?: string; fill?: string }) => void
-  selectedAsset: CanvasAsset | null
-  onUpdateFormatting: (type: 'bold' | 'italic' | 'underline' | 'align') => void
-  onUpdateColor?: (color: string) => void
 }) {
-  const isTextSelected = Boolean(selectedAsset && (selectedAsset.kind === 'text' || selectedAsset.kind === 'sticky'))
-  const currentColor = selectedAsset?.fill || selectedAsset?.strokeColor || '#000000'
-  const [hexInput, setHexInput] = useState(currentColor)
-
-  useEffect(() => {
-    setHexInput(currentColor)
-  }, [currentColor])
-
-  function handleColorChange(color: string) {
-    setHexInput(color)
-    if (onUpdateColor && isTextSelected) {
-      onUpdateColor(color)
-    }
-  }
-
   return (
     <div className="flex flex-col gap-3 p-3 overflow-y-auto flex-1">
       <p className="text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Click to add text</p>
@@ -560,89 +522,13 @@ function TextTab({
               onClick={() => onPlacePresetText(preset)}
               className="group flex w-full flex-col gap-0.5 rounded-xl border border-border bg-background px-3 py-2.5 text-left transition hover:border-primary/50 hover:bg-accent cursor-pointer"
             >
-              <span className={cn('text-foreground leading-tight font-sans', s.size, s.weight)}>{s.sample}</span>
+              <span className={cn('text-foreground leading-tight font-sans', s.label === 'Header' ? 'whitespace-nowrap text-xl' : s.size, s.weight)}>{s.sample}</span>
               <span className="text-[0.55rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{s.label}</span>
             </button>
           )
         })}
       </div>
 
-      <p className="mt-1 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Font Color</p>
-      <div className="flex flex-col gap-2 rounded-xl border border-border bg-background p-2.5">
-        {/* Color Palette Presets */}
-        <div className="grid grid-cols-4 gap-1.5">
-          {PRESET_PALETTE.map((p) => (
-            <button
-              key={p.name}
-              type="button"
-              title={p.name}
-              disabled={!isTextSelected}
-              onClick={() => handleColorChange(p.hex)}
-              className={cn(
-                'flex items-center gap-1.5 rounded-md border p-1 text-[0.55rem] font-medium transition cursor-pointer',
-                currentColor.toLowerCase() === p.hex.toLowerCase() ? 'border-primary ring-1 ring-primary' : 'border-border',
-                !isTextSelected && 'opacity-60 cursor-not-allowed',
-              )}
-            >
-              <span className="size-3.5 shrink-0 rounded-full border border-black/20" style={{ backgroundColor: p.hex }} />
-              <span className="truncate text-[0.52rem] text-foreground">{p.name}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Custom Hex input */}
-        <div className="flex items-center gap-2 pt-1 border-t border-border">
-          <input
-            type="color"
-            value={currentColor.startsWith('#') && currentColor.length === 7 ? currentColor : '#000000'}
-            disabled={!isTextSelected}
-            onChange={(e) => handleColorChange(e.target.value)}
-            className="size-7 shrink-0 rounded border border-border bg-transparent cursor-pointer disabled:cursor-not-allowed"
-          />
-          <div className="relative flex-1">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">#</span>
-            <input
-              type="text"
-              value={hexInput.replace('#', '')}
-              disabled={!isTextSelected}
-              onChange={(e) => {
-                const val = '#' + e.target.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 6)
-                setHexInput(val)
-                if (val.length === 7) handleColorChange(val)
-              }}
-              placeholder="000000"
-              className="w-full rounded-md border border-input bg-card py-1 pl-6 pr-2 font-mono text-xs text-foreground uppercase outline-none focus:border-primary"
-            />
-          </div>
-        </div>
-      </div>
-
-      <p className="mt-1 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Quick formatting</p>
-      <div className="grid grid-cols-4 gap-1">
-        {[
-          { icon: Bold, label: 'Bold', type: 'bold' as const },
-          { icon: Italic, label: 'Italic', type: 'italic' as const },
-          { icon: Underline, label: 'Underline', type: 'underline' as const },
-          { icon: AlignLeft, label: 'Align', type: 'align' as const },
-        ].map(({ icon: Icon, label, type }) => (
-          <button
-            key={label}
-            type="button"
-            aria-label={label}
-            disabled={!isTextSelected}
-            onClick={() => onUpdateFormatting(type)}
-            className={cn(
-              'flex flex-col items-center gap-1 rounded-lg border py-2 text-muted-foreground transition',
-              isTextSelected
-                ? 'border-border bg-background hover:border-primary/50 hover:text-foreground cursor-pointer'
-                : 'border-border/40 bg-muted/20 text-muted-foreground/40 cursor-not-allowed opacity-40',
-            )}
-          >
-            <Icon className="size-3.5" />
-            <span className="text-[0.5rem] uppercase tracking-wide">{label}</span>
-          </button>
-        ))}
-      </div>
     </div>
   )
 }
@@ -1138,15 +1024,10 @@ function EventReferencePanel({ eventAlias }: { eventAlias: string }) {
 function LeftPanel({
   onDropAsset,
   eventAlias,
-  assets,
-  onRouteToDeficit,
   onApplyBackground,
   activeTool,
   onToolChange,
   onPlacePresetText,
-  selectedAsset,
-  onUpdateFormatting,
-  onUpdateColor,
   onInsertPage,
   onInsertAllPages,
   canonicalAssets,
@@ -1154,18 +1035,14 @@ function LeftPanel({
   assetsError,
   onRetryFetch,
   onSearchChange,
+  serverAvailability,
 }: {
   onDropAsset: (asset: DroppedAsset) => void
   eventAlias?: string
-  assets: AllocatedAsset[]
-  onRouteToDeficit: (item: { id: string; name: string; unit: string }) => void
   onApplyBackground: (color: string | null, photoDataUrl: string | null) => void
   activeTool: CanvasTool
   onToolChange: (tool: CanvasTool) => void
   onPlacePresetText: (preset: { label: string; text: string; fontSize: number; fontWeight?: string; fontStyle?: string; fill?: string }) => void
-  selectedAsset: CanvasAsset | null
-  onUpdateFormatting: (type: 'bold' | 'italic' | 'underline' | 'align') => void
-  onUpdateColor?: (color: string) => void
   onInsertPage: (sourceProjId: string, pageTitle: string) => void
   onInsertAllPages: (sourceProjId: string) => void
   canonicalAssets: CanonicalCanvasItem[]
@@ -1173,32 +1050,33 @@ function LeftPanel({
   assetsError: string | null
   onRetryFetch?: () => void
   onSearchChange?: (term: string) => void
+  serverAvailability: Record<string, AssetAvailabilityDto | 'loading' | 'error'>
 }) {
   const [activeTab, setActiveTab] = useState<PanelTab>('elements')
   const [collapsed, setCollapsed] = useState(false)
   return (
-    <div className={cn('flex shrink-0 overflow-hidden border-r border-border bg-card transition-all duration-200', collapsed ? 'w-11' : 'w-64')}>
-      <div className="flex w-11 shrink-0 flex-col items-center border-r border-border py-2 gap-0.5">
+    <div className={cn('flex shrink-0 overflow-hidden border-r border-border bg-card transition-all duration-200', collapsed ? 'w-20' : 'w-80')}>
+      <div className="flex w-20 shrink-0 flex-col items-center border-r border-border py-2 gap-0.5">
         {PANEL_TABS.map(({ id, icon: Icon, label }) => (
           <button key={id} type="button" aria-label={label}
             onClick={() => { setActiveTab(id); setCollapsed(false) }}
-            className={cn('flex flex-col items-center gap-0.5 w-full px-1 py-2 rounded-none transition',
+            className={cn('flex w-full flex-col items-center gap-0.5 px-0.5 py-2 transition',
               activeTab === id && !collapsed ? 'bg-primary/10 text-primary border-r-2 border-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
-            <Icon className="size-4" />
-            <span className="text-[0.4rem] font-bold uppercase tracking-wide leading-tight">{label}</span>
+            <Icon className="size-3.5" />
+            <span className="text-[9px] font-semibold uppercase tracking-[0.02em] leading-tight">{label}</span>
           </button>
         ))}
         <div className="flex-1" />
         <button type="button" aria-label={collapsed ? 'Expand panel' : 'Collapse panel'} onClick={() => setCollapsed((c) => !c)}
-          className="flex size-9 items-center justify-center text-muted-foreground transition hover:bg-accent hover:text-foreground">
-          {collapsed ? <ChevronRight className="size-3.5" /> : <ChevronLeft className="size-3.5" />}
+          className="flex size-7 items-center justify-center text-muted-foreground transition hover:bg-accent hover:text-foreground">
+          {collapsed ? <ChevronRight className="size-3" /> : <ChevronLeft className="size-3" />}
         </button>
       </div>
       {!collapsed && (
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
           {eventAlias && <EventReferencePanel eventAlias={eventAlias} />}
-          <div className="flex items-center justify-between border-b border-border px-3 py-2 shrink-0">
-            <span className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-foreground">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3 shrink-0">
+            <span className="text-[length:var(--canvas-type-heading)] font-semibold uppercase tracking-[0.06em] text-foreground">
               {PANEL_TABS.find((t) => t.id === activeTab)?.label}
             </span>
           </div>
@@ -1206,16 +1084,15 @@ function LeftPanel({
             {activeTab === 'elements'   && (
               <ElementsTab
                 onDropAsset={onDropAsset}
-                assets={assets}
                 canonicalAssets={canonicalAssets}
                 assetsLoading={assetsLoading}
                 assetsError={assetsError}
                 onRetryFetch={onRetryFetch}
-                onRouteToDeficit={onRouteToDeficit}
                 onSearchChange={onSearchChange}
+                serverAvailability={serverAvailability}
               />
             )}
-            {activeTab === 'text'       && <TextTab onPlacePresetText={onPlacePresetText} selectedAsset={selectedAsset} onUpdateFormatting={onUpdateFormatting} onUpdateColor={onUpdateColor} />}
+            {activeTab === 'text'       && <TextTab onPlacePresetText={onPlacePresetText} />}
             {activeTab === 'uploads'    && <UploadsTab onDropAsset={onDropAsset} />}
             {activeTab === 'tools'      && <ToolsTab activeTool={activeTool} onToolChange={onToolChange} />}
             {activeTab === 'projects'   && <ProjectsTab onInsertPage={onInsertPage} onInsertAllPages={onInsertAllPages} />}
@@ -1231,14 +1108,11 @@ function LeftPanel({
    CONTEXTUAL EDITING TOOLBAR PANELS
    ══════════════════════════════════════════ */
 
-function AdjustPanel({ onClose }: { onClose: () => void }) {
-  const [vals, setVals] = useState({
-    temp: 50, tint: 50, brightness: 50, contrast: 50, highlights: 50,
-    shadows: 50, whites: 50, blacks: 50, vibrance: 50, saturation: 50,
-    sharpness: 50, clarity: 50,
-  })
-  type AdjKey = keyof typeof vals
-  function set(k: AdjKey) { return (v: number) => setVals((s) => ({ ...s, [k]: v })) }
+function AdjustPanel({ asset, onUpdate, onClose }: {
+  asset: CanvasAsset
+  onUpdate: (id: string, changes: Partial<CanvasAsset>) => void
+  onClose: () => void
+}) {
   const ref = useRef<HTMLDivElement>(null)
   useOutsideClick(ref, onClose)
 
@@ -1250,23 +1124,11 @@ function AdjustPanel({ onClose }: { onClose: () => void }) {
           <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="size-3.5" /></button>
         </div>
         <div className="px-4 py-3 flex flex-col gap-3">
-          <p className="text-[0.55rem] font-bold uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5"><Sun className="size-3" />White Balance</p>
-          <Slider label="Temp"       value={vals.temp}       onChange={set('temp')} />
-          <Slider label="Tint"       value={vals.tint}       onChange={set('tint')} />
-          <p className="mt-1 text-[0.55rem] font-bold uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5"><Contrast className="size-3" />Light</p>
-          <Slider label="Brightness" value={vals.brightness} onChange={set('brightness')} />
-          <Slider label="Contrast"   value={vals.contrast}   onChange={set('contrast')} />
-          <Slider label="Highlights" value={vals.highlights} onChange={set('highlights')} />
-          <Slider label="Shadows"    value={vals.shadows}    onChange={set('shadows')} />
-          <Slider label="Whites"     value={vals.whites}     onChange={set('whites')} />
-          <Slider label="Blacks"     value={vals.blacks}     onChange={set('blacks')} />
-          <p className="mt-1 text-[0.55rem] font-bold uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5"><Droplets className="size-3" />Color</p>
-          <Slider label="Vibrance"   value={vals.vibrance}   onChange={set('vibrance')} />
-          <Slider label="Saturation" value={vals.saturation} onChange={set('saturation')} />
-          <p className="mt-1 text-[0.55rem] font-bold uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5"><Sparkles className="size-3" />Texture</p>
-          <Slider label="Sharpness"  value={vals.sharpness}  onChange={set('sharpness')} />
-          <Slider label="Clarity"    value={vals.clarity}    onChange={set('clarity')} />
-          <button type="button" onClick={() => setVals({ temp:50,tint:50,brightness:50,contrast:50,highlights:50,shadows:50,whites:50,blacks:50,vibrance:50,saturation:50,sharpness:50,clarity:50 })}
+          <p className="text-[0.55rem] font-bold uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5"><Sun className="size-3" />Image adjustments</p>
+          <Slider label="Brightness" value={Math.round((asset.brightness ?? 0) * 50 + 50)} onChange={(value) => onUpdate(asset.id, { brightness: (value - 50) / 50 })} />
+          <Slider label="Contrast" value={Math.round((asset.contrast ?? 0) / 2 + 50)} onChange={(value) => onUpdate(asset.id, { contrast: (value - 50) * 2 })} />
+          <p className="text-[0.58rem] leading-relaxed text-muted-foreground">Changes apply directly to this image and stay with the canvas item.</p>
+          <button type="button" onClick={() => onUpdate(asset.id, { brightness: 0, contrast: 0 })}
             className="mt-1 w-full rounded-lg border border-border py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted-foreground transition hover:bg-accent hover:text-foreground">
             Reset all
           </button>
@@ -1276,35 +1138,129 @@ function AdjustPanel({ onClose }: { onClose: () => void }) {
   )
 }
 
-function CropPanel({ onClose }: { onClose: () => void }) {
-  const [mode, setMode] = useState<'freeform' | 'original' | '1:1' | 'custom'>('freeform')
-  const [rotation, setRotation] = useState(0)
+function CropPanel({ asset, onUpdate, onClose }: {
+  asset: CanvasAsset
+  onUpdate: (id: string, changes: Partial<CanvasAsset>) => void
+  onClose: () => void
+}) {
+  const [mode, setMode] = useState<'freeform' | 'original' | '1:1'>('freeform')
+  const [rotation, setRotation] = useState(asset.rotation)
+  const [horizontalTrim, setHorizontalTrim] = useState(Math.round((1 - (asset.cropWidth ?? 1)) * 50))
+  const [verticalTrim, setVerticalTrim] = useState(Math.round((1 - (asset.cropHeight ?? 1)) * 50))
+  const [crop, setCrop] = useState({ x: asset.cropX ?? 0, y: asset.cropY ?? 0, width: asset.cropWidth ?? 1, height: asset.cropHeight ?? 1 })
+  const cropDrag = useRef<{ mode: 'move' | 'resize'; startX: number; startY: number; crop: typeof crop } | null>(null)
+  // The canvas frame should always follow the source image's aspect ratio.
+  // Keep this stable reference while the crop rectangle is being adjusted.
+  const frameBase = useRef({
+    width: asset.w / (asset.cropWidth ?? 1),
+    height: asset.h / (asset.cropHeight ?? 1),
+  })
   const ref = useRef<HTMLDivElement>(null)
-  useOutsideClick(ref, onClose)
+  const original = useRef({
+    rotation: asset.rotation,
+    w: asset.w,
+    h: asset.h,
+    cropX: asset.cropX,
+    cropY: asset.cropY,
+    cropWidth: asset.cropWidth,
+    cropHeight: asset.cropHeight,
+  })
+  const applyCropPreview = (nextCrop: typeof crop, nextRotation = rotation) => {
+    setCrop(nextCrop)
+    onUpdate(asset.id, {
+      rotation: nextRotation,
+      cropX: nextCrop.x,
+      cropY: nextCrop.y,
+      cropWidth: nextCrop.width,
+      cropHeight: nextCrop.height,
+      w: Math.max(20, Math.round(frameBase.current.width * nextCrop.width)),
+      h: Math.max(20, Math.round(frameBase.current.height * nextCrop.height)),
+    })
+  }
+  const preview = (horizontal: number, vertical: number, nextRotation = rotation) => {
+    const cropWidth = Math.max(0.1, 1 - horizontal / 50)
+    const cropHeight = Math.max(0.1, 1 - vertical / 50)
+    applyCropPreview({ x: (1 - cropWidth) / 2, y: (1 - cropHeight) / 2, width: cropWidth, height: cropHeight }, nextRotation)
+  }
+  const cancelCrop = () => {
+    onUpdate(asset.id, original.current)
+    onClose()
+  }
+  useOutsideClick(ref, cancelCrop)
   const modes = [
     { id: 'freeform', label: 'Freeform' },
     { id: 'original', label: 'Original' },
     { id: '1:1',      label: '1 : 1' },
   ] as const
+  const beginCropDrag = (event: React.PointerEvent<HTMLElement>, mode: 'move' | 'resize') => {
+    event.currentTarget.setPointerCapture(event.pointerId)
+    cropDrag.current = { mode, startX: event.clientX, startY: event.clientY, crop }
+  }
+  const moveCropDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = cropDrag.current
+    if (!drag) return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const dx = (event.clientX - drag.startX) / bounds.width
+    const dy = (event.clientY - drag.startY) / bounds.height
+    if (drag.mode === 'move') {
+      applyCropPreview({ ...drag.crop, x: Math.max(0, Math.min(1 - drag.crop.width, drag.crop.x + dx)), y: Math.max(0, Math.min(1 - drag.crop.height, drag.crop.y + dy)) })
+    } else {
+      applyCropPreview({ ...drag.crop, width: Math.max(0.1, Math.min(1 - drag.crop.x, drag.crop.width + dx)), height: Math.max(0.1, Math.min(1 - drag.crop.y, drag.crop.height + dy)) })
+    }
+  }
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center pt-14 pointer-events-none">
       <div ref={ref} className="pointer-events-auto w-60 rounded-2xl border border-border bg-card shadow-2xl">
         <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
           <span className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-foreground flex items-center gap-1.5"><Crop className="size-3.5 text-primary" />Crop</span>
-          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="size-3.5" /></button>
+          <button type="button" onClick={cancelCrop} aria-label="Cancel crop" className="text-muted-foreground hover:text-foreground"><X className="size-3.5" /></button>
         </div>
         <div className="px-4 py-3 flex flex-col gap-3">
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-[1.25fr_1fr_0.75fr] gap-2">
             {modes.map((m) => (
-              <button key={m.id} type="button" onClick={() => setMode(m.id as typeof mode)}
-                className={cn('rounded-lg border py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
+              <button key={m.id} type="button" onClick={() => {
+                setMode(m.id)
+                if (m.id === 'original') {
+                  setHorizontalTrim(0)
+                  setVerticalTrim(0)
+                  preview(0, 0)
+                }
+                if (m.id === '1:1') {
+                  const sourceRatio = asset.w / asset.h
+                  if (sourceRatio >= 1) {
+                    const nextHorizontal = Math.round((1 - 1 / sourceRatio) * 50)
+                    setHorizontalTrim(nextHorizontal)
+                    setVerticalTrim(0)
+                    preview(nextHorizontal, 0)
+                  } else {
+                    setHorizontalTrim(0)
+                    const nextVertical = Math.round((1 - sourceRatio) * 50)
+                    setVerticalTrim(nextVertical)
+                    preview(0, nextVertical)
+                  }
+                }
+              }}
+                className={cn('min-w-0 whitespace-nowrap rounded-lg border py-1.5 text-[0.55rem] font-bold uppercase leading-none tracking-[0.04em] transition',
                   mode === m.id ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/40')}>
                 {m.label}
               </button>
             ))}
           </div>
-          <Slider label="Rotation" value={rotation} onChange={setRotation} min={-180} max={180} />
-          <button type="button" className="w-full rounded-xl bg-primary py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">
+          <div className="relative h-44 overflow-hidden rounded-lg bg-muted touch-none" onPointerMove={moveCropDrag} onPointerUp={() => { cropDrag.current = null }} onPointerCancel={() => { cropDrag.current = null }}>
+            <img src={asset.src} alt="Crop preview" draggable={false} className="size-full select-none object-contain" />
+            <div
+              className="absolute cursor-move border-2 border-primary bg-primary/5 shadow-[0_0_0_999px_rgba(0,0,0,0.45)]"
+              style={{ left: `${crop.x * 100}%`, top: `${crop.y * 100}%`, width: `${crop.width * 100}%`, height: `${crop.height * 100}%` }}
+              onPointerDown={(event) => beginCropDrag(event, 'move')}
+            >
+              <span className="absolute -bottom-1.5 -right-1.5 size-3 cursor-nwse-resize rounded-sm border-2 border-primary bg-card" onPointerDown={(event) => { event.stopPropagation(); beginCropDrag(event, 'resize') }} />
+            </div>
+          </div>
+          <p className="text-[0.55rem] leading-relaxed text-muted-foreground">Drag the frame to reposition the crop. Drag its lower-right handle to resize it.</p>
+          <Slider label="Rotation" value={rotation} onChange={(value) => { setRotation(value); preview(horizontalTrim, verticalTrim, value) }} min={-180} max={180} />
+          <button type="button" onClick={() => {
+            onClose()
+          }} className="w-full rounded-xl bg-primary py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">
             Apply crop
           </button>
         </div>
@@ -1313,9 +1269,11 @@ function CropPanel({ onClose }: { onClose: () => void }) {
   )
 }
 
-function FlipPanel({ onClose }: { onClose: () => void }) {
-  const [flippedH, setFlippedH] = useState(false)
-  const [flippedV, setFlippedV] = useState(false)
+function FlipPanel({ asset, onUpdate, onClose }: {
+  asset: CanvasAsset
+  onUpdate: (id: string, changes: Partial<CanvasAsset>) => void
+  onClose: () => void
+}) {
   const ref = useRef<HTMLDivElement>(null)
   useOutsideClick(ref, onClose)
   return (
@@ -1326,14 +1284,14 @@ function FlipPanel({ onClose }: { onClose: () => void }) {
           <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="size-3.5" /></button>
         </div>
         <div className="px-4 py-3 flex flex-col gap-2">
-          <button type="button" onClick={() => setFlippedH((v) => !v)}
+          <button type="button" onClick={() => onUpdate(asset.id, { flipX: !asset.flipX })}
             className={cn('flex items-center gap-2 rounded-xl border px-3 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] transition',
-              flippedH ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground')}>
+              asset.flipX ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground')}>
             <FlipHorizontal className="size-3.5" />Horizontal
           </button>
-          <button type="button" onClick={() => setFlippedV((v) => !v)}
+          <button type="button" onClick={() => onUpdate(asset.id, { flipY: !asset.flipY })}
             className={cn('flex items-center gap-2 rounded-xl border px-3 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] transition',
-              flippedV ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground')}>
+              asset.flipY ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground')}>
             <FlipVertical className="size-3.5" />Vertical
           </button>
         </div>
@@ -1507,7 +1465,7 @@ function PositionPanel({
             {/* Z-index */}
             <div>
               <p className="mb-2 text-[0.55rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">Z-index</p>
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-2 gap-2">
                 {[
                   { icon: ArrowUp,   label: 'Forward',  act: () => onUpdate(asset.id, { zIndex: asset.zIndex + 1 }) },
                   { icon: ArrowDown, label: 'Backward', act: () => onUpdate(asset.id, { zIndex: Math.max(0, asset.zIndex - 1) }) },
@@ -1515,9 +1473,9 @@ function PositionPanel({
                   { icon: MoveDown,  label: 'Back',     act: () => onUpdate(asset.id, { zIndex: 0 }) },
                 ].map(({ icon: Icon, label, act }) => (
                   <button key={label} type="button" onClick={act}
-                    className="flex flex-col items-center gap-1 rounded-lg border border-border bg-background py-2 text-muted-foreground transition hover:border-primary/50 hover:text-foreground">
+                    className="flex min-h-14 flex-row items-center justify-center gap-2 rounded-lg border border-border bg-background px-2 py-2 text-muted-foreground transition hover:border-primary/50 hover:text-foreground">
                     <Icon className="size-3.5" />
-                    <span className="text-[0.48rem] uppercase tracking-wide">{label}</span>
+                    <span className="whitespace-nowrap text-[0.56rem] uppercase tracking-wide">{label}</span>
                   </button>
                 ))}
               </div>
@@ -1563,10 +1521,10 @@ function PositionPanel({
                   <span className="flex-1 truncate text-[0.62rem] font-semibold text-foreground">{a.label}</span>
                   <span className="text-[0.55rem] tabular-nums text-muted-foreground">z{a.zIndex}</span>
                   <div className="flex gap-1">
-                    <button type="button" aria-label="Move up" className="flex size-5 items-center justify-center rounded text-muted-foreground hover:text-foreground transition">
+                    <button type="button" aria-label="Move up" onClick={() => onUpdate(a.id, { zIndex: a.zIndex + 1 })} className="flex size-5 items-center justify-center rounded text-muted-foreground hover:text-foreground transition">
                       <ChevronUp className="size-3" />
                     </button>
-                    <button type="button" aria-label="Move down" className="flex size-5 items-center justify-center rounded text-muted-foreground hover:text-foreground transition">
+                    <button type="button" aria-label="Move down" onClick={() => onUpdate(a.id, { zIndex: Math.max(0, a.zIndex - 1) })} className="flex size-5 items-center justify-center rounded text-muted-foreground hover:text-foreground transition">
                       <ChevronDown className="size-3" />
                     </button>
                   </div>
@@ -1595,11 +1553,35 @@ function ContextualBar({
   canvasAssets: CanvasAsset[]
 }) {
   const [openPanel, setOpenPanel] = useState<EditToolbar>(null)
+  const isText = asset.kind === 'text'
+  const textColor = asset.fill || asset.strokeColor || '#000000'
+  const textStyle = asset.fontStyle || 'normal'
+  const isBold = textStyle.includes('bold')
+  const isItalic = textStyle.includes('italic')
+  const TextAlignmentIcon = asset.align === 'center'
+    ? AlignCenter
+    : asset.align === 'right'
+      ? AlignRight
+      : asset.align === 'justify'
+        ? AlignJustify
+        : AlignLeft
 
   function toggle(t: EditToolbar) { setOpenPanel((p) => (p === t ? null : t)) }
 
+  function toggleTextStyle(style: 'bold' | 'italic') {
+    const nextBold = style === 'bold' ? !isBold : isBold
+    const nextItalic = style === 'italic' ? !isItalic : isItalic
+    onUpdate(asset.id, { fontStyle: nextBold && nextItalic ? 'bold italic' : nextBold ? 'bold' : nextItalic ? 'italic' : 'normal' })
+  }
+
+  function cycleTextAlignment() {
+    const aligns = ['left', 'center', 'right', 'justify']
+    const current = aligns.indexOf(asset.align || 'left')
+    onUpdate(asset.id, { align: aligns[(current + 1) % aligns.length] })
+  }
+
   const TOOLS: { id: EditToolbar; label: string; icon: React.ElementType }[] = [
-    { id: 'color',        label: 'Color',          icon: Palette },
+    ...(asset.kind === 'image' ? [] : [{ id: 'color' as EditToolbar, label: 'Color', icon: Palette }]),
     { id: 'adjust',       label: 'Edit / Adjust', icon: Sliders },
     { id: 'crop',         label: 'Crop',           icon: Crop },
     { id: 'flip',         label: 'Flip',           icon: FlipHorizontal },
@@ -1609,25 +1591,70 @@ function ContextualBar({
 
   return (
     <>
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-primary/30 bg-primary/5 px-4">
-        <span className="mr-2 text-[0.6rem] font-bold uppercase tracking-[0.12em] text-primary truncate max-w-[120px]">{asset.label}</span>
-        {TOOLS.map(({ id, label, icon: Icon }) => (
-          <button key={id} type="button" onClick={() => toggle(id)}
-            className={cn('flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] transition',
-              openPanel === id ? 'bg-primary text-primary-foreground' : 'border border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}>
-            <Icon className="size-3.5" />{label}
-          </button>
-        ))}
+      <div className="flex h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-primary/30 bg-primary/5 px-4 scrollbar-none">
+        {isText ? (
+          <>
+            <span className="mr-1 text-[0.6rem] font-bold uppercase tracking-[0.12em] text-primary">Text</span>
+            <select
+              aria-label="Font family"
+              value={asset.fontFamily || 'sans-serif'}
+              onChange={(event) => onUpdate(asset.id, { fontFamily: event.target.value })}
+              className="h-7 max-w-28 rounded-lg border border-border bg-background px-2 text-xs font-medium text-foreground outline-none focus:border-primary"
+            >
+              <option value="sans-serif">Sans serif</option>
+              <option value="serif">Serif</option>
+              <option value="monospace">Monospace</option>
+            </select>
+            <div className="flex h-7 items-center rounded-lg border border-border bg-background">
+              <button type="button" aria-label="Decrease font size" onClick={() => onUpdate(asset.id, { fontSize: Math.max(8, (asset.fontSize || 16) - 1) })}
+                className="flex size-7 items-center justify-center text-sm text-muted-foreground hover:text-foreground">−</button>
+              <span className="min-w-7 text-center text-[0.65rem] font-semibold text-foreground">{asset.fontSize || 16}</span>
+              <button type="button" aria-label="Increase font size" onClick={() => onUpdate(asset.id, { fontSize: Math.min(180, (asset.fontSize || 16) + 1) })}
+                className="flex size-7 items-center justify-center text-sm text-muted-foreground hover:text-foreground">+</button>
+            </div>
+            <label title="Text color" className="flex size-7 cursor-pointer items-center justify-center rounded-lg border border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground">
+              <span className="size-4 rounded-full border border-black/20" style={{ backgroundColor: textColor }} />
+              <input
+                aria-label="Text color"
+                type="color"
+                value={textColor.startsWith('#') && textColor.length === 7 ? textColor : '#000000'}
+                onChange={(event) => onUpdate(asset.id, { fill: event.target.value, strokeColor: event.target.value })}
+                className="sr-only"
+              />
+            </label>
+            <button type="button" aria-label="Bold" aria-pressed={isBold} onClick={() => toggleTextStyle('bold')}
+              className={cn('flex size-7 items-center justify-center rounded-lg border transition', isBold ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}><Bold className="size-3.5" /></button>
+            <button type="button" aria-label="Italic" aria-pressed={isItalic} onClick={() => toggleTextStyle('italic')}
+              className={cn('flex size-7 items-center justify-center rounded-lg border transition', isItalic ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}><Italic className="size-3.5" /></button>
+            <button type="button" aria-label="Underline" aria-pressed={asset.textDecoration === 'underline'} onClick={() => onUpdate(asset.id, { textDecoration: asset.textDecoration === 'underline' ? '' : 'underline' })}
+              className={cn('flex size-7 items-center justify-center rounded-lg border transition', asset.textDecoration === 'underline' ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}><Underline className="size-3.5" /></button>
+            <button type="button" aria-label="Text alignment" title={`Alignment: ${asset.align || 'left'}`} onClick={cycleTextAlignment}
+              className="flex size-7 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:border-primary/50 hover:text-foreground"><TextAlignmentIcon className="size-3.5" /></button>
+            <button type="button" aria-label="Position" onClick={() => toggle('position')}
+              className={cn('flex items-center gap-1 rounded-lg border px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.08em] transition', openPanel === 'position' ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}><Layers className="size-3.5" />Position</button>
+          </>
+        ) : (
+          <>
+            <span className="mr-2 text-[0.6rem] font-bold uppercase tracking-[0.12em] text-primary truncate max-w-[120px]">{asset.label}</span>
+            {TOOLS.map(({ id, label, icon: Icon }) => (
+              <button key={id} type="button" onClick={() => toggle(id)}
+                className={cn('flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] transition',
+                  openPanel === id ? 'bg-primary text-primary-foreground' : 'border border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}>
+                <Icon className="size-3.5" />{label}
+              </button>
+            ))}
+          </>
+        )}
         <div className="flex-1" />
         <button type="button" onClick={onDeselect} aria-label="Deselect"
           className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground transition hover:bg-accent hover:text-foreground">
           <X className="size-3" />Deselect
         </button>
       </div>
-      {openPanel === 'color'        && <ColorPickerPanel color={asset.fill || asset.strokeColor || '#000000'} onChange={(c) => onUpdate(asset.id, { fill: c, strokeColor: c })} onClose={() => setOpenPanel(null)} />}
-      {openPanel === 'adjust'       && <AdjustPanel onClose={() => setOpenPanel(null)} />}
-      {openPanel === 'crop'         && <CropPanel onClose={() => setOpenPanel(null)} />}
-      {openPanel === 'flip'         && <FlipPanel onClose={() => setOpenPanel(null)} />}
+      {!isText && openPanel === 'color' && <ColorPickerPanel color={asset.fill || asset.strokeColor || '#000000'} onChange={(c) => onUpdate(asset.id, { fill: c, strokeColor: c })} onClose={() => setOpenPanel(null)} />}
+      {openPanel === 'adjust'       && <AdjustPanel asset={asset} onUpdate={onUpdate} onClose={() => setOpenPanel(null)} />}
+      {openPanel === 'crop'         && <CropPanel asset={asset} onUpdate={onUpdate} onClose={() => setOpenPanel(null)} />}
+      {openPanel === 'flip'         && <FlipPanel asset={asset} onUpdate={onUpdate} onClose={() => setOpenPanel(null)} />}
       {openPanel === 'transparency' && <TransparencyPanel opacity={asset.opacity} onChange={(v) => onUpdate(asset.id, { opacity: v })} onClose={() => setOpenPanel(null)} />}
       {openPanel === 'position'     && <PositionPanel asset={asset} onClose={() => setOpenPanel(null)} onUpdate={onUpdate} canvasAssets={canvasAssets} />}
     </>
@@ -1745,10 +1772,10 @@ function PageBar({
       )}
 
       {/* Bottom bar row */}
-      <div className="flex h-9 items-center justify-between gap-3 px-4">
+      <div className="flex h-[var(--canvas-bottombar)] items-center justify-between gap-3 px-4">
         {/* Left: Layout Mode Segmented Control (Vertical/Flowy vs Horizontal/Thumbnail) */}
         <div className="flex items-center gap-2 shrink-0">
-          <div className="inline-flex items-center rounded-lg border border-border bg-background p-0.5 shrink-0" role="radiogroup" aria-label="Page layout mode">
+          <div className="inline-flex shrink-0 items-center rounded-lg border border-border bg-background p-0.5" role="radiogroup" aria-label="Page layout mode">
             <button
               type="button"
               role="radio"
@@ -1756,13 +1783,13 @@ function PageBar({
               onClick={() => pageNavMode !== 'flow' && onTogglePageNavMode()}
               title="Vertical / Flowy Mode (continuous vertical scroll)"
               className={cn(
-                'flex items-center gap-1 rounded-md px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.08em] transition',
+                'flex h-10 items-center gap-1.5 rounded-md px-3 text-xs font-semibold uppercase tracking-[0.05em] transition',
                 pageNavMode === 'flow'
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              <GalleryVertical className="size-3" aria-hidden="true" />
+              <GalleryVertical className="size-4" aria-hidden="true" />
               <span className="hidden sm:inline">Flowy</span>
             </button>
             <button
@@ -1772,38 +1799,38 @@ function PageBar({
               onClick={() => pageNavMode !== 'thumbnail' && onTogglePageNavMode()}
               title="Horizontal / Thumbnail Mode (filmstrip single artboard)"
               className={cn(
-                'flex items-center gap-1 rounded-md px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.08em] transition',
+                'flex h-10 items-center gap-1.5 rounded-md px-3 text-xs font-semibold uppercase tracking-[0.05em] transition',
                 pageNavMode === 'thumbnail'
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              <LayoutGrid className="size-3" aria-hidden="true" />
+              <LayoutGrid className="size-4" aria-hidden="true" />
               <span className="hidden sm:inline">Thumbnail</span>
             </button>
           </div>
-          <span className="text-[0.6rem] tabular-nums font-semibold text-muted-foreground">
+          <span className="text-sm tabular-nums font-semibold text-muted-foreground">
             Page {currentIdx + 1} of {pages.length}
           </span>
         </div>
 
         {/* Center: zoom controls */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <button type="button" onClick={() => onZoomChange(Math.max(10, zoom - 10))} aria-label="Zoom out"
-            className="flex size-6 items-center justify-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground">
-            <ZoomOut className="size-3.5" />
+            className="flex size-9 items-center justify-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground">
+            <ZoomOut className="size-5" />
           </button>
           <input type="range" min={10} max={200} step={5} value={zoom} onChange={(e) => onZoomChange(Number(e.target.value))}
-            className="w-24 h-1.5 cursor-pointer accent-primary" />
+            className="h-2 w-28 cursor-pointer accent-primary" />
           <button type="button" onClick={() => onZoomChange(Math.min(200, zoom + 10))} aria-label="Zoom in"
-            className="flex size-6 items-center justify-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground">
-            <ZoomIn className="size-3.5" />
+            className="flex size-9 items-center justify-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground">
+            <ZoomIn className="size-5" />
           </button>
-          <span className="w-10 text-center text-[0.62rem] tabular-nums font-semibold text-muted-foreground">{zoom}%</span>
+          <span className="w-12 text-center text-sm tabular-nums font-semibold text-muted-foreground">{zoom}%</span>
         </div>
 
         {/* Right: fit / grid / fullscreen */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <button type="button" onClick={onFitToScreen} aria-label="Fit to screen"
             className="flex size-6 items-center justify-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground">
             <Maximize2 className="size-3.5" />
@@ -2593,7 +2620,17 @@ function VerifyReplenishmentModal({ item, onClose, onVerify }: { item: PendingRe
 // Fires automatically from on-canvas drag activity — advisory only.
 // This warning is based on physicalStock from the asset catalog, not server-authoritative
 // event-window availability. It is an early UX guide, not an operational availability gate.
-function StockAvailabilityWarningModal({ asset, onClose }: { asset: AllocatedAsset; onClose: () => void }) {
+function StockAvailabilityWarningModal({
+  asset,
+  onClose,
+  onProceedWithProcurement,
+  onChooseAlternative,
+}: {
+  asset: AllocatedAsset
+  onClose: () => void
+  onProceedWithProcurement: () => void
+  onChooseAlternative: () => void
+}) {
   const ref = useRef<HTMLDivElement>(null)
   useOutsideClick(ref, onClose)
   return (
@@ -2601,20 +2638,26 @@ function StockAvailabilityWarningModal({ asset, onClose }: { asset: AllocatedAss
       <div ref={ref} className="w-72 rounded-2xl border border-amber-500/40 bg-card p-4 shadow-2xl">
         <div className="mb-3 flex items-center gap-2">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-500/15"><AlertTriangle className="size-4 text-amber-400" /></div>
-          <span className="text-[0.68rem] font-bold uppercase tracking-[0.12em] text-foreground">Advisory: Catalog Stock Reached</span>
+          <span className="text-[0.68rem] font-bold uppercase tracking-[0.12em] text-foreground">More stock is needed</span>
         </div>
         <p className="mb-3 text-[0.64rem] text-muted-foreground leading-relaxed">
           You&apos;ve placed <span className="font-semibold text-foreground">{asset.dragCount} {asset.unit}</span> of{' '}
-          <span className="font-semibold text-foreground">{asset.name}</span> on the canvas, reaching its catalog stock of{' '}
-          <span className="font-semibold text-foreground">{asset.availableStock} {asset.unit}</span>.
+          <span className="font-semibold text-foreground">{asset.name}</span>, but only{' '}
+          <span className="font-semibold text-foreground">{asset.availableStock} {asset.unit}</span> are in inventory.
         </p>
         <p className="mb-3 text-[0.60rem] text-amber-400/80 leading-relaxed">
-          This is an advisory based on physical stock. Event-window availability (accounting for other committed events) is verified by the server at canvas validation and approval.
+          You can keep the item on the canvas and send the extra {asset.dragCount - asset.availableStock} {asset.unit} to Procurement, or remove the excess item and choose an alternative.
         </p>
-        <button type="button" onClick={onClose}
-          className="w-full rounded-xl bg-primary py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">
-          Got It
-        </button>
+        <div className="space-y-2">
+          <button type="button" onClick={onProceedWithProcurement}
+            className="w-full rounded-xl bg-primary py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90 transition">
+            Continue via procurement
+          </button>
+          <button type="button" onClick={onChooseAlternative}
+            className="w-full rounded-xl border border-border py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-foreground hover:bg-muted transition">
+            Choose an alternative
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -2701,13 +2744,23 @@ function RightPanel({
   const [tab, setTab] = useState<RightPanelTab>('allocated')
   const [selectedAsset, setSelectedAsset] = useState<AllocatedAsset | null>(null)
   const [verifyItem, setVerifyItem] = useState<PendingReplenishment | null>(null)
+  // The allocation panel is about the current design, not the full inventory.
+  // Only show items that have actually been placed or assigned on this canvas.
+  const canvasAssets = assets.filter((asset) => asset.dragCount > 0 || asset.allocated)
+
+  function availableFor(asset: AllocatedAsset) {
+    const availability = serverAvailability?.[asset.id]
+    return typeof availability === 'object' && availability !== null
+      ? Math.max(0, availability.availableQuantity)
+      : asset.availableStock
+  }
 
   function handleDelete(id: string) {
     setAssets((a) => a.filter((x) => x.id !== id))
     onRemoveDropped(id)
   }
   function handleSaveAllocation(id: string, qty: number, unit: string) {
-    setAssets((current) => current.map((x) => x.id === id ? { ...x, quantity: qty, unit, allocated: true, availableStock: Math.max(0, x.availableStock - qty) } : x))
+    setAssets((current) => current.map((x) => x.id === id ? { ...x, quantity: qty, unit, allocated: true } : x))
   }
   async function handleStrategy(path: StrategyPath, id: string, qty: number, unit: string) {
     if (qty <= 0) return
@@ -2750,14 +2803,14 @@ function RightPanel({
     <>
       {/* Collapsed icon rail — shown only when panel is closed */}
       {!isOpen && (
-        <div className="flex shrink-0 flex-col items-center gap-2 border-l border-border bg-card py-3 w-10 transition-all duration-300 ease-in-out">
+        <div className="flex w-12 shrink-0 flex-col items-center gap-3 border-l border-border bg-card py-4 transition-all duration-300 ease-in-out">
           <button
             type="button"
             onClick={() => setIsOpen(true)}
             aria-label="Open logistics panel"
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            className="flex size-10 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
           >
-            <PanelRightOpen className="size-3.5" />
+            <PanelRightOpen className="size-5" />
           </button>
           <Package className="size-3.5 text-primary/50 mt-1" />
           {pending.length > 0 && (
@@ -2770,30 +2823,30 @@ function RightPanel({
 
       <aside className={cn(
         'flex shrink-0 flex-col border-l border-border bg-card overflow-hidden transition-all duration-300 ease-in-out',
-        isOpen ? (expanded ? 'w-96' : 'w-80') : 'w-0 border-l-0',
+        isOpen ? (expanded ? 'w-96' : 'w-72 xl:w-[22rem]') : 'w-0 border-l-0',
       )}>
-        <div className="flex items-center justify-between border-b border-border px-3 py-2.5 shrink-0">
-          <div className="flex items-center gap-1.5">
-            <Package className="size-3.5 text-primary" />
-            <span className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-foreground whitespace-nowrap">Logistics</span>
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Package className="size-5 text-primary" />
+            <span className="text-[length:var(--canvas-type-heading)] font-semibold uppercase tracking-[0.06em] text-foreground whitespace-nowrap">Logistics</span>
           </div>
           <div className="flex items-center gap-0.5">
             <button type="button" onClick={onToggleExpand} aria-label={expanded ? 'Shrink panel' : 'Expand panel'}
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition">
-              {expanded ? <Minimize className="size-3.5" /> : <Maximize className="size-3.5" />}
+              className="flex size-9 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition">
+              {expanded ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
             </button>
             <button type="button" onClick={() => setIsOpen(false)} aria-label="Collapse logistics panel"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition">
-              <PanelRightClose className="size-3.5" />
+              className="flex size-9 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition">
+              <PanelRightClose className="size-5" />
             </button>
           </div>
         </div>
-        <div className="flex shrink-0 border-b border-border">
+        <div className="grid shrink-0 grid-cols-2 border-b border-border">
           {(['allocated', 'pending'] as RightPanelTab[]).map((t) => (
             <button key={t} type="button" onClick={() => setTab(t)}
-              className={cn('flex-1 py-2 text-[0.58rem] font-bold uppercase tracking-[0.1em] transition border-b-2',
+              className={cn('min-w-0 px-2 py-3 text-center text-xs font-semibold uppercase tracking-[0.03em] leading-snug transition border-b-2',
                 tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}>
-              {t === 'allocated' ? 'Allocated Assets' : 'Pending Replenishment'}
+              {t === 'allocated' ? 'Canvas Assets' : 'Pending Replenishment'}
               {t === 'pending' && pending.length > 0 && (
                 <span className="ml-1.5 inline-flex size-3.5 items-center justify-center rounded-full bg-amber-500 text-[0.45rem] font-bold text-white">{pending.length}</span>
               )}
@@ -2801,28 +2854,31 @@ function RightPanel({
           ))}
         </div>
         {tab === 'allocated' && (
-          <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
-            {assets.length === 0 && (
+          <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+            {canvasAssets.length === 0 && (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center"><Boxes className="size-8 text-border" /><p className="text-[0.62rem] text-muted-foreground uppercase tracking-[0.1em]">No assets on canvas</p></div>
             )}
-            {assets.map((asset) => (
+            {canvasAssets.map((asset) => (
               <div key={asset.id} role="button" tabIndex={0} aria-label={`Allocate ${asset.name}`}
                 onClick={() => setSelectedAsset(asset)} onKeyDown={(e) => e.key === 'Enter' && setSelectedAsset(asset)}
-                className={cn('group relative flex items-center gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition',
+                className={cn('group relative flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer transition',
                   asset.allocated ? 'border-amber-700/50 bg-amber-900/20 hover:border-amber-600/70' : 'border-border bg-background hover:border-primary/40')}>
                 <div className={cn('size-2 shrink-0 rounded-full', asset.allocated ? 'bg-amber-400' : 'bg-muted-foreground/40')} />
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate text-[0.65rem] font-semibold text-foreground">{asset.name}</span>
-                  <span className="text-[0.56rem] text-muted-foreground">{asset.allocated ? `${asset.quantity} ${asset.unit} allocated` : `Suggested: ${asset.dragCount} ${asset.unit} — unallocated`}</span>
+                  <span className="truncate text-xs font-semibold text-foreground">{asset.name}</span>
+                  <span className="text-[0.68rem] text-muted-foreground">
+                    On canvas: {asset.dragCount} {asset.unit} · Available: {formatStock(availableFor(asset))} {asset.unit}
+                  </span>
+                  <span className={cn('text-[0.58rem] font-semibold uppercase tracking-[0.07em]', asset.allocated ? 'text-amber-400' : 'text-muted-foreground')}>
+                    {asset.allocated ? `${asset.quantity} ${asset.unit} assigned` : 'Needs assignment'}
+                  </span>
                 </div>
                 <button type="button" aria-label={`Remove ${asset.name}`} onClick={(e) => { e.stopPropagation(); handleDelete(asset.id) }}
-                  className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition"><X className="size-3" /></button>
+                  className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition"><X className="size-4" /></button>
               </div>
             ))}
-            <div className="mt-2 flex flex-col gap-1 border-t border-border pt-3">
-              <p className="text-[0.55rem] font-bold uppercase tracking-[0.12em] text-muted-foreground mb-1">Legend</p>
-              <div className="flex items-center gap-2"><div className="size-2 rounded-full bg-muted-foreground/40" /><span className="text-[0.58rem] text-muted-foreground">Gray — on canvas, unallocated</span></div>
-              <div className="flex items-center gap-2"><div className="size-2 rounded-full bg-amber-400" /><span className="text-[0.58rem] text-muted-foreground">Amber — successfully allocated</span></div>
+            <div className="mt-2 border-t border-border pt-4 text-[0.6rem] leading-relaxed text-muted-foreground">
+              Select an asset to set the assigned quantity or request additional stock.
             </div>
           </div>
         )}
@@ -2868,12 +2924,10 @@ const SETTINGS_ITEMS = [
   { icon: Ruler,         label: 'Rulers' },
   { icon: Grid3x3,       label: 'Guides' },
   { icon: AlignJustify,  label: 'Margin' },
-  { icon: MessageSquare, label: 'Comments' },
 ]
 
-function SettingsDropdown() {
+function SettingsDropdown({ active, onToggle }: { active: Record<string, boolean>; onToggle: (label: string) => void }) {
   const [open, setOpen] = useState(false)
-  const [active, setActive] = useState<Record<string, boolean>>({})
   const ref = useRef<HTMLDivElement>(null)
   useOutsideClick(ref, () => setOpen(false))
   return (
@@ -2885,7 +2939,7 @@ function SettingsDropdown() {
       {open && (
         <div className="absolute left-0 top-full z-50 mt-1 w-44 rounded-xl border border-border bg-popover py-1 shadow-2xl">
           {SETTINGS_ITEMS.map(({ icon: Icon, label }) => (
-            <button key={label} type="button" onClick={() => setActive((a) => ({ ...a, [label]: !a[label] }))}
+            <button key={label} type="button" onClick={() => onToggle(label)}
               className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs text-popover-foreground transition hover:bg-accent">
               <span className="flex items-center gap-2"><Icon className="size-3.5 text-muted-foreground" />{label}</span>
               {active[label] && <Check className="size-3 text-primary" />}
@@ -2897,95 +2951,24 @@ function SettingsDropdown() {
   )
 }
 
-const MODES: WorkspaceMode[] = ['Viewing', 'Commenting', 'Planning', 'Designing', 'Asset Planning']
-
-function ModeDropdown({ mode, onChange }: { mode: WorkspaceMode; onChange: (m: WorkspaceMode) => void }) {
+function PresentDropdown({ onPresent, onFullScreen }: { onPresent: () => void; onFullScreen: () => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useOutsideClick(ref, () => setOpen(false))
+  const options = [
+    { icon: Monitor, label: 'Present', action: onPresent },
+    { icon: Maximize2, label: 'Full screen', action: onFullScreen },
+  ]
   return (
     <div ref={ref} className="relative">
       <button type="button" onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-foreground transition hover:border-primary/50">
-        <Eye className="size-3 text-primary" />{mode}
-        <ChevronDown className={cn('size-3 transition-transform', open && 'rotate-180')} />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-border bg-popover py-1 shadow-2xl">
-          {MODES.map((m) => (
-            <button key={m} type="button" onClick={() => { onChange(m); setOpen(false) }}
-              className={cn('flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs transition hover:bg-accent',
-                m === mode ? 'text-primary font-semibold' : 'text-popover-foreground')}>
-              {m}{LOCKED_MODES.includes(m) && <Lock className="size-3 text-muted-foreground" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function PinModal({ targetMode, onSuccess, onCancel }: { targetMode: WorkspaceMode; onSuccess: (pin: string) => Promise<void>; onCancel: () => void }) {
-  const [digits, setDigits] = useState<string[]>(['', '', '', ''])
-  const [error, setError] = useState(false)
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
-  useEffect(() => { inputRefs.current[0]?.focus() }, [])
-
-  function handleDigit(index: number, val: string) {
-    if (!/^\d?$/.test(val)) return
-    const next = [...digits]; next[index] = val; setDigits(next); setError(false)
-    if (val && index < 3) inputRefs.current[index + 1]?.focus()
-  }
-  function handleKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Backspace' && !digits[index] && index > 0) inputRefs.current[index - 1]?.focus()
-  }
-  async function handleSubmit() {
-    const pin = digits.join('')
-    if (pin.length < 4 || pin === '0000') { setError(true); return }
-    await onSuccess(pin)
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-2xl">
-        <div className="mb-1 flex items-center justify-between">
-          <h2 className="font-display text-sm uppercase tracking-[0.2em] text-foreground">Unlock {targetMode}</h2>
-          <button type="button" onClick={onCancel} aria-label="Cancel"
-            className="flex size-7 items-center justify-center rounded-full text-muted-foreground transition hover:bg-accent hover:text-foreground"><X className="size-4" /></button>
-        </div>
-        <p className="mb-6 text-[0.68rem] text-muted-foreground tracking-wide">Enter your 4-digit PIN to switch to <span className="font-semibold text-primary">{targetMode}</span> mode.</p>
-        <div className="mb-6 flex justify-center gap-3">
-          {digits.map((d, i) => (
-            <input key={i} ref={(el) => { inputRefs.current[i] = el }} type="password" inputMode="numeric"
-              maxLength={1} value={d} onChange={(e) => handleDigit(i, e.target.value)} onKeyDown={(e) => handleKeyDown(i, e)}
-              className={cn('size-12 rounded-xl border bg-background text-center text-xl font-bold tracking-widest outline-none transition focus:ring-2',
-                error ? 'border-destructive text-destructive focus:ring-destructive/30' : 'border-border text-foreground focus:border-primary focus:ring-primary/30')} />
-          ))}
-        </div>
-        {error && <p className="mb-4 text-center text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-destructive">Invalid PIN. Please try again.</p>}
-        <button type="button" onClick={handleSubmit}
-          className="w-full rounded-xl bg-primary py-2.5 text-[0.7rem] font-bold uppercase tracking-[0.15em] text-primary-foreground transition hover:opacity-90">Confirm</button>
-        <p className="mt-4 text-center text-[0.6rem] text-muted-foreground">Use any 4-digit PIN (except 0000) to unlock for demo purposes.</p>
-      </div>
-    </div>
-  )
-}
-
-function PresentDropdown() {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useOutsideClick(ref, () => setOpen(false))
-  const options = [{ icon: Monitor, label: 'Present' }, { icon: Maximize2, label: 'Full Screen' }, { icon: Eye, label: 'Presenter View' }]
-  return (
-    <div ref={ref} className="relative">
-      <button type="button" onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1 rounded-lg border border-border bg-card px-3 py-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-foreground transition hover:border-primary/50">
+        className="flex h-7 items-center gap-1 rounded-lg border border-border bg-card px-2 text-[0.62rem] font-semibold uppercase tracking-[0.06em] text-foreground transition hover:border-primary/50">
         Present<ChevronDown className={cn('size-3 transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
         <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-border bg-popover py-1 shadow-2xl">
-          {options.map(({ icon: Icon, label }) => (
-            <button key={label} type="button" onClick={() => setOpen(false)}
+          {options.map(({ icon: Icon, label, action }) => (
+            <button key={label} type="button" onClick={() => { action(); setOpen(false) }}
               className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-popover-foreground transition hover:bg-accent">
               <Icon className="size-3.5 text-muted-foreground" />{label}
             </button>
@@ -3016,8 +2999,9 @@ function CommentsPanel({ pageId, selectedAsset, comments, onAdd, onClose }: { pa
 
 export function CanvasWorkspacePage() {
   const { navigate } = useNav()
-  const { adminName, hasConfirmationPin, verifyConfirmationPin } = useAuth()
+  const { adminName } = useAuth()
   const { events: portalEvents } = usePortal()
+  const catalogAssets = useCatalogAssets()
   const { events, selectedEventId, approveDesign, eventMaterials } = usePlanner()
   // In-workspace Event Pipeline drawer (Logistical Overview / Material Requirement / Design
   // Documents / Team Assignments) — reuses the exact same panel + data source as the
@@ -3027,11 +3011,22 @@ export function CanvasWorkspacePage() {
   const pipelineEvent = events.find((e) => e.id === selectedEventId) ?? events[0]
   const [pipelineDrawerOpen, setPipelineDrawerOpen] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
+  const [canvasStatus, setCanvasStatus] = useState<'Draft' | 'Approved'>('Draft')
 
   const [card] = useState<WorkspaceCard | null>(() => {
-    try { const raw = sessionStorage.getItem('lumiere-workspace-card'); return raw ? JSON.parse(raw) : null }
+    try {
+      const raw = sessionStorage.getItem('lumiere-workspace-card')
+      if (raw) return JSON.parse(raw)
+      const projectId = new URLSearchParams(window.location.search).get('project')
+      if (!projectId) return null
+      const savedCards = JSON.parse(localStorage.getItem('lumiere-recents-cards') ?? '[]')
+      return Array.isArray(savedCards) ? savedCards.find((project) => project?.id === projectId) ?? null : null
+    }
     catch { return null }
   })
+  // Event-derived cards must always use the API GUID, not the local card ID
+  // (for example `pc-event-...`) or a planner seed ID.
+  const canonicalEventId = card?.eventId || pipelineEvent?.id || card?.id
 
   const isMoodBoard = card?.type === 'Mood Board'
   const [boardName, setBoardName] = useState(card?.title ?? (isMoodBoard ? 'Untitled Mood Board' : 'Untitled Design'))
@@ -3040,8 +3035,6 @@ export function CanvasWorkspacePage() {
   const [starred, setStarred] = useState(card?.starred ?? false)
   // Per the spec: ALL projects (event-based Designs and Mood Boards alike)
   // open in Viewing mode by default. Switching to any edit mode requires PIN verification.
-  const [mode, setMode] = useState<WorkspaceMode>('Viewing')
-  const [pendingMode, setPendingMode] = useState<WorkspaceMode | null>(null)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [collaborationOpen, setCollaborationOpen] = useState(false)
   const [rightExpanded, setRightExpanded] = useState(false)
@@ -3226,6 +3219,8 @@ export function CanvasWorkspacePage() {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
   const [zoom, setZoom] = useState(77)
   const [showGrid, setShowGrid] = useState(false)
+  const [showRulers, setShowRulers] = useState(false)
+  const [showMargin, setShowMargin] = useState(false)
   // History state for Undo (Ctrl+Z) and Redo (Ctrl+Y / Ctrl+Shift+Z)
   const [pastHistory, setPastHistory] = useState<CanvasAsset[][]>([])
   const [futureHistory, setFutureHistory] = useState<CanvasAsset[][]>([])
@@ -3265,50 +3260,25 @@ export function CanvasWorkspacePage() {
   })
 
   /* Canonical Asset Inventory state */
-  const [canonicalCatalogAssets, setCanonicalCatalogAssets] = useState<CanonicalCanvasItem[]>([])
-  const [assetsLoading, setAssetsLoading] = useState(true)
-  const [assetsError, setAssetsError] = useState<string | null>(null)
   // Current server-side search term (debounced from ElementsTab)
   const [assetSearchTerm, setAssetSearchTerm] = useState('')
-
-  const loadCanonicalAssets = useCallback((params?: SearchAssetsParams) => {
-    setAssetsLoading(true)
-    setAssetsError(null)
-    fetchAssetsApi(params)
-      .then((items) => {
-        const mapped: CanonicalCanvasItem[] = (items || []).map((item) => ({
-          id: item.id || (item as any).assetId || `asset-${Math.random().toString(36).slice(2, 8)}`,
-          name: item.name || 'Unnamed Asset',
-          category: item.category || 'Event Assets',
-          description: item.description,
-          src: item.image || (item as any).catalogPhotoUrl || '',
-          physicalStock: item.currentStock ?? (item as { quantity?: number }).quantity ?? 0,
-          unit: item.unit || 'pcs',
-        }))
-        setCanonicalCatalogAssets(mapped)
-        setAssetsLoading(false)
-      })
-      .catch((err) => {
-        console.warn('[CanvasWorkspace] Failed to fetch canonical assets:', err)
-        setAssetsError('Failed to load asset catalog from server.')
-        setAssetsLoading(false)
-      })
-  }, [])
-
-  // Initial load
-  useEffect(() => {
-    loadCanonicalAssets()
-  }, [loadCanonicalAssets])
-
-  // Re-fetch when search term changes (server-side search/theme/category)
-  useEffect(() => {
-    if (assetSearchTerm !== '') {
-      loadCanonicalAssets({ search: assetSearchTerm })
-    } else {
-      // Empty search: reload full list
-      loadCanonicalAssets()
-    }
-  }, [assetSearchTerm, loadCanonicalAssets])
+  const canonicalCatalogAssets = useMemo<CanonicalCanvasItem[]>(() => {
+    const search = assetSearchTerm.trim().toLowerCase()
+    const mapped = catalogAssets.map((item) => ({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      description: item.description,
+      src: item.image,
+      unit: item.unit,
+      availableStock: Math.max(0, item.currentStock ?? 0),
+    }))
+    const filtered = !search ? mapped : mapped.filter((item) => `${item.name} ${item.category}`.toLowerCase().includes(search))
+    const demoAssets = import.meta.env.DEV ? DEV_DEMO_CANVAS_ASSETS.filter((item) => !search || `${item.name} ${item.category}`.toLowerCase().includes(search)) : []
+    return [...demoAssets, ...filtered]
+  }, [catalogAssets, assetSearchTerm])
+  const assetsLoading = false
+  const assetsError: string | null = null
 
   // Per-asset server availability: keyed by assetId, fetched when an asset is focused
   // in the allocation workflow. Uses AbortController to cancel stale requests.
@@ -3322,7 +3292,7 @@ export function CanvasWorkspacePage() {
    */
   const getEventWindow = useCallback((): { start: string; end: string } | null => {
     // Try portal events (have ingressDate, targetDate)
-    const activeEventId = pipelineEvent?.id || card?.id
+    const activeEventId = canonicalEventId
     const portalEv = activeEventId ? portalEvents.find((e) => e.id === activeEventId) : null
     if (portalEv) {
       const start = portalEv.ingressDate || portalEv.installationStart || portalEv.targetDate
@@ -3341,7 +3311,7 @@ export function CanvasWorkspacePage() {
       return { start: `${d}T00:00:00Z`, end: `${d}T23:59:59Z` }
     }
     return null
-  }, [pipelineEvent, card, portalEvents])
+  }, [canonicalEventId, pipelineEvent, card, portalEvents])
 
   /**
    * Fetches server-authoritative event-window availability for a single asset.
@@ -3362,7 +3332,7 @@ export function CanvasWorkspacePage() {
     availabilityAbortRef.current[assetId] = controller
 
     setServerAvailability((prev) => ({ ...prev, [assetId]: 'loading' }))
-    const activeEventId = pipelineEvent?.id || card?.id
+    const activeEventId = canonicalEventId
     const result = await getAssetAvailabilityApi(
       { assetId, start: window.start, end: window.end, quantity, eventId: activeEventId || undefined },
       controller.signal,
@@ -3375,7 +3345,31 @@ export function CanvasWorkspacePage() {
       setServerAvailability((prev) => ({ ...prev, [assetId]: 'error' }))
     }
     return false
-  }, [getEventWindow, pipelineEvent, card])
+  }, [getEventWindow, canonicalEventId])
+
+  // The asset side panel always reflects the selected Design Project's event window.
+  // Availability is checkpoint-based; the response contains no reservation-owner data.
+  useEffect(() => {
+    if (!getEventWindow()) return
+    canonicalCatalogAssets.forEach((asset) => { void fetchAssetAvailability(asset.id) })
+  }, [canonicalCatalogAssets, fetchAssetAvailability, getEventWindow])
+
+  const fullyReservedAssetIds = useMemo(() => new Set(
+    Object.entries(serverAvailability)
+      .filter(([, value]) => typeof value === 'object' && value !== null && value.availableQuantity <= 0)
+      .map(([assetId]) => assetId),
+  ), [serverAvailability])
+  const hasAtRiskPlaceholder = droppedAssets.some((asset) => asset.atRisk || fullyReservedAssetIds.has(asset.id))
+
+  // A confirmed fully-reserved asset remains visible only as an unallocated placeholder.
+  useEffect(() => {
+    const riskNames = new Set(droppedAssets.filter((asset) => asset.atRisk || fullyReservedAssetIds.has(asset.id)).map((asset) => asset.name))
+    if (riskNames.size === 0) return
+    setCanvasAssets((previous) => previous.map((asset) => {
+      if (!riskNames.has(asset.label) || asset.label.startsWith('⚠ Unallocated — ')) return asset
+      return { ...asset, label: `⚠ Unallocated — ${asset.label}`, opacity: 35, kind: 'rect', fill: '#9ca3af', strokeColor: '#dc2626' }
+    }))
+  }, [droppedAssets, fullyReservedAssetIds])
 
   // Structured 409 conflict state (from approval rejection)
   const [approval409, setApproval409] = useState<{ message: string; conflicts: AssetConflictDetail[] } | null>(null)
@@ -3415,7 +3409,7 @@ export function CanvasWorkspacePage() {
             quantity: existing?.quantity ?? null,
             unit: c.unit || 'pcs',
             allocated: existing?.allocated ?? false,
-            availableStock: c.physicalStock,
+            availableStock: c.availableStock ?? existing?.availableStock ?? 0,
             existingAllocations: existing?.existingAllocations ?? [],
           }
         })
@@ -3454,8 +3448,9 @@ export function CanvasWorkspacePage() {
       // Persist canvas layout state to PUT /api/canvas/event/{eventId}.
       // Result is checked — backend failure is logged but does not throw (fire-and-forget
       // is intentional for auto-save; user will see stale state on reload if backend is down).
-      const eventId = pipelineEvent?.id || card.id
-      import('@/lib/canvasApi').then(({ saveCanvasLayoutApi }) => {
+      const eventId = canonicalEventId
+      if (!eventId) return
+      import('@/features/canvas/api/canvasApi').then(({ saveCanvasLayoutApi }) => {
         saveCanvasLayoutApi(eventId, JSON.stringify(droppedAssets)).then((result) => {
           if (!result.ok) {
             console.warn(
@@ -3467,14 +3462,14 @@ export function CanvasWorkspacePage() {
         })
       })
     }
-  }, [droppedAssets, card?.id, pipelineEvent?.id])
+  }, [droppedAssets, card?.id, canonicalEventId])
 
   // Hydrate canvas layout state from GET /api/canvas/event/{eventId}
   useEffect(() => {
     let active = true
-    const eventId = pipelineEvent?.id || card?.id
+    const eventId = canonicalEventId
     if (!eventId) return
-    import('@/lib/canvasApi').then(({ fetchCanvasLayoutApi }) => {
+    import('@/features/canvas/api/canvasApi').then(({ fetchCanvasLayoutApi }) => {
       fetchCanvasLayoutApi(eventId).then((layoutDto) => {
         if (!active || !layoutDto?.canvasState) return
         try {
@@ -3490,7 +3485,7 @@ export function CanvasWorkspacePage() {
     return () => {
       active = false
     }
-  }, [pipelineEvent?.id, card?.id])
+  }, [canonicalEventId])
 
   // Part 3 — Debounced toDataURL() thumbnail capture (1000ms interval chosen to eliminate UI lag during active editing)
   useEffect(() => {
@@ -3525,6 +3520,7 @@ export function CanvasWorkspacePage() {
   }, [pending, card?.id])
   const [stockWarning, setStockWarning] = useState<AllocatedAsset | null>(null)
   const warnedDragCounts = useRef<Record<string, number>>({})
+  const procurementRequestedCounts = useRef<Record<string, number>>({})
 
   /* Canvas fit-to-screen + full-screen controls */
   const canvasHandleRef = useRef<KonvaInfiniteCanvasHandle>(null)
@@ -3559,7 +3555,7 @@ export function CanvasWorkspacePage() {
       w: 240,
       h: preset.fontSize * 2,
       rotation: 0,
-      opacity: 1,
+      opacity: 100,
       locked: false,
       hidden: false,
       zIndex: canvasAssets.length + 1,
@@ -3574,39 +3570,6 @@ export function CanvasWorkspacePage() {
     pushCanvasAssetsChange((prev) => [...prev, newAsset])
     setSelectedAssetId(newAsset.id)
     showToast(`Placed ${preset.label} on canvas`)
-  }
-
-  function handleUpdateFormatting(type: 'bold' | 'italic' | 'underline' | 'align') {
-    if (!selectedAssetId) return
-    const targetAsset = canvasAssets.find((a) => a.id === selectedAssetId)
-    if (!targetAsset || (targetAsset.kind !== 'text' && targetAsset.kind !== 'sticky')) return
-
-    const changes: Partial<KonvaCanvasAsset> = {}
-    const currStyle = targetAsset.fontStyle || 'normal'
-    const isBold = currStyle.includes('bold')
-    const isItalic = currStyle.includes('italic')
-
-    if (type === 'bold') {
-      const nextBold = !isBold
-      if (nextBold && isItalic) changes.fontStyle = 'bold italic'
-      else if (nextBold) changes.fontStyle = 'bold'
-      else if (isItalic) changes.fontStyle = 'italic'
-      else changes.fontStyle = 'normal'
-    } else if (type === 'italic') {
-      const nextItalic = !isItalic
-      if (nextItalic && isBold) changes.fontStyle = 'bold italic'
-      else if (nextItalic) changes.fontStyle = 'italic'
-      else if (isBold) changes.fontStyle = 'bold'
-      else changes.fontStyle = 'normal'
-    } else if (type === 'underline') {
-      changes.textDecoration = targetAsset.textDecoration === 'underline' ? '' : 'underline'
-    } else if (type === 'align') {
-      const aligns = ['left', 'center', 'right', 'justify']
-      const currIdx = aligns.indexOf(targetAsset.align || 'left')
-      changes.align = aligns[(currIdx + 1) % aligns.length]
-    }
-
-    setCanvasAssets((prev) => prev.map((a) => (a.id === targetAsset.id ? { ...a, ...changes } : a)))
   }
 
   function handleInsertPage(sourceProjId: string, sourcePageTitle: string) {
@@ -3797,6 +3760,13 @@ export function CanvasWorkspacePage() {
     }
   }
 
+  function presentCanvas() {
+    canvasHandleRef.current?.fitToScreen()
+    if (!document.fullscreenElement) {
+      canvasColumnRef.current?.requestFullscreen()
+    }
+  }
+
   // Keep the allocated list in sync with what's actually been dragged onto the
   // canvas/panel: new asset types show up unallocated with a live suggested count.
   useEffect(() => {
@@ -3818,7 +3788,7 @@ export function CanvasWorkspacePage() {
             quantity: null,
             unit: dropped?.defaultUnit ?? canonical?.unit ?? 'pcs',
             allocated: false,
-            availableStock: canonical?.physicalStock ?? 0,
+            availableStock: canonical?.availableStock ?? 0,
             existingAllocations: [],
           })
         }
@@ -3831,15 +3801,15 @@ export function CanvasWorkspacePage() {
   // this session — not from manually opening AllocationModal, and not from any
   // preset/demo dragCount that was never actually dropped. Recompute live counts
   // straight from droppedAssets (rather than trusting assets[].dragCount, which
-  // can include stale seed values) and trigger the moment an unallocated asset's
-  // live canvas usage reaches or exceeds its real-time availableStock.
+  // can include stale seed values) and trigger when an unallocated asset's
+  // live canvas usage exceeds its inventory quantity.
   useEffect(() => {
     const liveCounts = new Map<string, number>()
     droppedAssets.forEach((d) => liveCounts.set(d.id, (liveCounts.get(d.id) ?? 0) + 1))
     for (const [id, count] of liveCounts) {
       const a = assets.find((x) => x.id === id)
       if (!a || a.allocated) continue
-      if (count >= a.availableStock) {
+      if (count > a.availableStock) {
         const lastWarned = warnedDragCounts.current[id] ?? 0
         if (count > lastWarned) {
           warnedDragCounts.current[id] = count
@@ -3850,21 +3820,8 @@ export function CanvasWorkspacePage() {
     }
   }, [droppedAssets, assets])
 
-  async function handleRouteToDeficit(item: { id: string; name: string; unit: string }) {
-    const activeEventId = pipelineEvent?.id || selectedEventId
-    try {
-      await createDeficitItemApi({
-        eventId: activeEventId || undefined,
-        itemName: item.name,
-        quantityNeeded: 1,
-      })
-    } catch (err) {
-      console.warn('[handleRouteToDeficit] Failed to route item to deficit queue API:', err)
-    }
-    setPending((current) => [...current, { id: `pr-${Date.now()}`, name: item.name, requestedQty: 1, unit: item.unit || 'pcs', event: pipelineEvent?.title || 'Current canvas event' }])
-  }
 
-  // R5: Real-time asset double-booking conflict detection for canvas placed items
+  // Checkpoint-based asset double-booking conflict detection for canvas placed items
   const allocationConflicts = useMemo(() => {
     const targetDate = pipelineEvent?.date || card?.eventDate || '2026-09-02'
     const eventId = pipelineEvent?.id || card?.id
@@ -3887,9 +3844,13 @@ export function CanvasWorkspacePage() {
   //   - NO success state is applied on a 409
   //   - Planner remains on Canvas to revise
   async function handleApproveCanvas() {
+    if (hasAtRiskPlaceholder) {
+      showToast('Approval is blocked until fully reserved placeholders are removed or resolved.')
+      return
+    }
     setIsApproving(true)
     try {
-      const eventId = pipelineEvent?.id || card?.id
+      const eventId = canonicalEventId
 
       // R5: Pre-approval server canvas validation using canonical asset IDs + quantities
       const window = getEventWindow()
@@ -3957,6 +3918,7 @@ export function CanvasWorkspacePage() {
       if (eventId) {
         setServerAvailability({})
       }
+      setCanvasStatus('Approved')
       showToast('Canvas approved. Dispatch queue will be updated by the server.')
     } catch (err) {
       console.error('Canvas approval failed:', err)
@@ -4111,20 +4073,36 @@ export function CanvasWorkspacePage() {
     }
     const newAsset: CanvasAsset = {
       id: `asset-${Date.now()}`,
-      label: dropped.name,
+      label: dropped.atRisk ? `⚠ Unallocated — ${dropped.name}` : dropped.name,
       src: dropped.src,
       x: x ?? 260,
       y: y ?? 200,
       w: 160,
       h: 160,
       rotation: 0,
-      opacity: 100,
+      opacity: dropped.atRisk ? 35 : 100,
+      kind: dropped.atRisk ? 'rect' : 'image',
+      fill: dropped.atRisk ? '#9ca3af' : undefined,
+      strokeColor: dropped.atRisk ? '#dc2626' : undefined,
       locked: false,
       hidden: false,
       zIndex: canvasAssets.length + 1,
       pageId,
     }
     pushCanvasAssetsChange((prev) => [...prev, newAsset])
+    if (!dropped.atRisk && dropped.src) {
+      const image = new Image()
+      image.onload = () => {
+        if (!image.naturalWidth || !image.naturalHeight) return
+        const maximumSide = 160
+        const ratio = image.naturalWidth / image.naturalHeight
+        const dimensions = ratio >= 1
+          ? { w: maximumSide, h: Math.max(40, Math.round(maximumSide / ratio)) }
+          : { w: Math.max(40, Math.round(maximumSide * ratio)), h: maximumSide }
+        pushCanvasAssetsChange((previous) => previous.map((asset) => asset.id === newAsset.id ? { ...asset, ...dimensions } : asset))
+      }
+      image.src = dropped.src
+    }
     setSelectedAssetId(newAsset.id)
     setDroppedAssets((prev) => [...prev, dropped])
   }
@@ -4134,21 +4112,50 @@ export function CanvasWorkspacePage() {
   function handleDropOnCanvas(dropped: DroppedAsset, x: number, y: number, pageId?: string) {
     placeAssetOnCanvas(dropped, x, y, pageId)
   }
+  function chooseAlternativeForOverstock(asset: AllocatedAsset) {
+    setDroppedAssets((previous) => {
+      const index = previous.map((item) => item.id).lastIndexOf(asset.id)
+      return index < 0 ? previous : previous.filter((_, itemIndex) => itemIndex !== index)
+    })
+    pushCanvasAssetsChange((previous) => {
+      const index = previous.map((item) => item.label).lastIndexOf(asset.name)
+      return index < 0 ? previous : previous.filter((_, itemIndex) => itemIndex !== index)
+    })
+    setStockWarning(null)
+    showToast(`Removed the excess ${asset.name}. Choose an alternative from Elements.`)
+  }
+  async function continueOverstockViaProcurement(asset: AllocatedAsset) {
+    const excess = Math.max(0, asset.dragCount - asset.availableStock)
+    const alreadyRequested = procurementRequestedCounts.current[asset.id] ?? 0
+    const quantityNeeded = Math.max(0, excess - alreadyRequested)
+    if (quantityNeeded === 0) {
+      setStockWarning(null)
+      showToast('The extra quantity is already in the Procurement queue.')
+      return
+    }
+    try {
+      const result = await createDeficitItemApi({
+        eventId: pipelineEvent?.id || card?.id || undefined,
+        assetId: asset.id,
+        itemName: asset.name,
+        quantityNeeded,
+        triggerSource: 'Canvas',
+        urgencyLevel: 'Medium',
+      })
+      if (!result?.id) throw new Error('Procurement request was not accepted.')
+      procurementRequestedCounts.current[asset.id] = alreadyRequested + quantityNeeded
+      setPending((current) => [...current, { id: result.id, name: asset.name, requestedQty: quantityNeeded, unit: asset.unit, event: 'Current canvas event' }])
+      setStockWarning(null)
+      showToast(`${quantityNeeded} ${asset.unit} sent to Procurement for ${asset.name}.`)
+    } catch (error) {
+      console.error('[CanvasWorkspace] Unable to create procurement request:', error)
+      showToast('Could not send this request to Procurement. Please try again.')
+    }
+  }
   function handleRemoveDropped(id: string) {
     setDroppedAssets((prev) => prev.filter((d) => d.id !== id))
   }
 
-  function requestModeChange(m: WorkspaceMode) {
-    if (m === 'Viewing') { setMode('Viewing'); return }
-    if (!hasConfirmationPin) { setPendingMode(m); return }
-    setMode(m)
-  }
-  async function onPinSuccess(pin: string) {
-    const isValid = await verifyConfirmationPin(pin)
-    if (!isValid) return
-    if (pendingMode) setMode(pendingMode)
-    setPendingMode(null)
-  }
   function commitName() {
     const nextName = nameDraft.trim() || boardName
     setBoardName(nextName)
@@ -4170,67 +4177,65 @@ export function CanvasWorkspacePage() {
   const selectedAsset =
     canvasAssets.find((a) => a.id === selectedAssetId && (a.pageId || pages[0]?.id) === currentPage) ?? null
 
+  const editorSettings = {
+    Rulers: showRulers,
+    Guides: showGrid,
+    Margin: showMargin,
+  }
+
+  function toggleEditorSetting(label: string) {
+    if (label === 'Rulers') setShowRulers((visible) => !visible)
+    if (label === 'Guides') setShowGrid((visible) => !visible)
+    if (label === 'Margin') setShowMargin((visible) => !visible)
+  }
+
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground font-sans">
+    <div className="canvas-editor flex h-screen flex-col overflow-hidden bg-background text-foreground font-sans">
 
       {/* ══════════ TOP NAV ══════════ */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-card px-4 gap-2">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+      <header className="relative z-[100] flex h-[var(--canvas-topbar)] shrink-0 items-center justify-between gap-3 overflow-visible border-b border-border bg-card px-4">
+        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-visible">
           <button type="button" onClick={() => navigate('canvas')} aria-label="Back to Creatives Dashboard"
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition hover:bg-accent hover:text-foreground shrink-0">
-            <Home className="size-3.5" /><span className="hidden sm:inline">Home</span>
+            className="flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-[length:var(--canvas-type-label)] font-semibold uppercase tracking-[0.04em] text-muted-foreground transition hover:bg-accent hover:text-foreground">
+            <Home className="size-4" /><span className="hidden sm:inline">Home</span>
           </button>
           <span className="text-border shrink-0">/</span>
           {editingName ? (
             <span className="flex items-center gap-1 min-w-0">
               <input autoFocus value={nameDraft} onChange={(e) => setNameDraft(e.target.value)}
                 onBlur={commitName} onKeyDown={(e) => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setEditingName(false) }}
-                className="w-36 rounded border border-input bg-background px-2 py-0.5 text-[0.7rem] font-semibold text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-ring/30" />
+                className="h-9 w-40 rounded border border-input bg-background px-3 text-sm font-semibold text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-ring/30" />
               <button type="button" onClick={commitName} aria-label="Save name"
                 className="flex size-6 items-center justify-center rounded text-primary transition hover:bg-primary/10"><Check className="size-3" /></button>
             </span>
           ) : (
             <button type="button" onClick={() => { setNameDraft(boardName); setEditingName(true) }}
-              className="group flex min-w-0 items-center gap-1 rounded px-1.5 py-1 transition hover:bg-accent" title={isMoodBoard ? 'Rename mood board' : 'Rename design'}>
-              <span className="truncate text-[0.7rem] font-semibold text-foreground">{boardName}</span>
-              <Pencil className="size-2.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
+              className="group flex min-w-0 max-w-52 items-center gap-1.5 rounded px-2 py-2 transition hover:bg-accent" title={isMoodBoard ? 'Rename mood board' : 'Rename design'}>
+              <span className="truncate text-sm font-semibold text-foreground">{boardName}</span>
+              <Pencil className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
             </button>
-          )}
-          {isMoodBoard ? (
-            <span className="rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30 px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider shrink-0">
-              MOOD BOARD
-            </span>
-          ) : (
-            <span className="rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider shrink-0">
-              DESIGN PROJECT
-            </span>
           )}
           {/* Alias/date/last-edited meta only applies to a linked/existing project */}
           {card && (
-            <div className="hidden items-center gap-2 lg:flex shrink-0">
+            <div className="hidden shrink-0 items-center gap-2 border-l border-border pl-3 lg:flex">
               {card.eventAlias ? (
-                <>
-                  <span className="text-border">·</span>
-                  <span className="text-[0.58rem] font-medium uppercase tracking-[0.1em] text-muted-foreground">{card.eventAlias}</span>
-                </>
+                <span className="text-xs font-medium uppercase tracking-[0.05em] text-muted-foreground">{card.eventAlias}</span>
               ) : null}
               {card.eventDate ? (
                 <>
                   <span className="text-border">·</span>
-                  <span className="text-[0.58rem] text-muted-foreground">{card.eventDate}</span>
+                  <span className="text-xs text-muted-foreground">{card.eventDate}</span>
                 </>
               ) : null}
-              <span className="text-border">·</span>
-              <span className="text-[0.58rem] text-muted-foreground italic">{card.lastEdited}</span>
             </div>
           )}
-          <SettingsDropdown />
-          <div className="hidden items-center gap-0.5 xl:flex shrink-0">
-            <button type="button" onClick={handleUndo} disabled={pastHistory.length === 0} aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)" className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-30"><Undo2 className="size-3.5" /></button>
-            <button type="button" onClick={handleRedo} disabled={futureHistory.length === 0} aria-label="Redo (Ctrl+Y)" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-30"><Redo2 className="size-3.5" /></button>
-            <span title="Cloud sync active" className="flex size-7 items-center justify-center rounded-md text-emerald-400"><Cloud className="size-3.5" /></span>
+          <SettingsDropdown active={editorSettings} onToggle={toggleEditorSetting} />
+          <div className="hidden shrink-0 items-center gap-1 xl:flex">
+            <button type="button" onClick={handleUndo} disabled={pastHistory.length === 0} aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)" className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-30"><Undo2 className="size-3.5" /></button>
+            <button type="button" onClick={handleRedo} disabled={futureHistory.length === 0} aria-label="Redo (Ctrl+Y)" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-30"><Redo2 className="size-3.5" /></button>
+            <span title="Cloud sync active" className="flex size-8 items-center justify-center rounded-md text-emerald-400"><Cloud className="size-3.5" /></span>
             <button type="button" onClick={() => setStarred((s) => !s)} aria-label={starred ? 'Unstar' : 'Star'}
-              className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground">
+              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground">
               <Star className={cn('size-3.5', starred && 'fill-primary text-primary')} />
             </button>
             <button
@@ -4262,13 +4267,13 @@ export function CanvasWorkspacePage() {
 
                 showToast('Canvas exported as PNG & thumbnail updated!')
               }}
-              className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground cursor-pointer"
+              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground cursor-pointer"
             >
               <Download className="size-3.5" />
             </button>
           </div>
           {/* Page Layout Mode Segmented Toggle Control (Vertical/Flowy vs Horizontal/Thumbnail) */}
-          <div className="inline-flex items-center rounded-lg border border-border bg-background p-0.5 shrink-0" role="radiogroup" aria-label="Page layout mode">
+          <div className="hidden" aria-hidden="true">
             <button
               type="button"
               role="radio"
@@ -4276,13 +4281,13 @@ export function CanvasWorkspacePage() {
               onClick={() => setPageNavMode('flow')}
               title="Vertical / Flowy Mode (continuous vertical scroll)"
               className={cn(
-                'flex items-center gap-1 rounded-md px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.08em] transition',
+                'flex h-10 items-center gap-1.5 rounded-md px-3 text-xs font-semibold uppercase tracking-[0.05em] transition',
                 pageNavMode === 'flow'
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              <GalleryVertical className="size-3" aria-hidden="true" />
+              <GalleryVertical className="size-4" aria-hidden="true" />
               <span className="hidden md:inline">Flowy</span>
             </button>
             <button
@@ -4292,53 +4297,60 @@ export function CanvasWorkspacePage() {
               onClick={() => setPageNavMode('thumbnail')}
               title="Horizontal / Thumbnail Mode (filmstrip single artboard)"
               className={cn(
-                'flex items-center gap-1 rounded-md px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.08em] transition',
+                'flex h-10 items-center gap-1.5 rounded-md px-3 text-xs font-semibold uppercase tracking-[0.05em] transition',
                 pageNavMode === 'thumbnail'
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              <LayoutGrid className="size-3" aria-hidden="true" />
+              <LayoutGrid className="size-4" aria-hidden="true" />
               <span className="hidden md:inline">Thumbnail</span>
             </button>
           </div>
-          <ModeDropdown mode={mode} onChange={requestModeChange} />
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 border-l border-border pl-3">
+          <span className={cn(
+            'inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-semibold uppercase tracking-[0.04em]',
+            canvasStatus === 'Approved'
+              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500'
+              : 'border-border bg-background text-muted-foreground',
+          )}>
+            {canvasStatus}
+          </span>
           <button
             type="button"
             onClick={() => setCollaborationOpen(true)}
             aria-label="Share & Manage Canvas Collaborators"
             title="Share & Collaborators"
-            className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-foreground transition hover:border-primary/50 hover:bg-accent cursor-pointer shrink-0"
+            className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-semibold uppercase tracking-[0.04em] text-foreground transition hover:border-primary/50 hover:bg-accent cursor-pointer"
           >
-            <Users className="size-3.5 text-primary" />
+            <Users className="size-3 text-primary" />
             <span className="hidden sm:inline">Share</span>
           </button>
           <button type="button" onClick={() => setCommentsOpen((o) => !o)} aria-label="Toggle comments" aria-pressed={commentsOpen}
             className={cn('flex size-7 items-center justify-center rounded-md border transition',
               commentsOpen ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}>
-            <MessageSquare className="size-3.5" />
+            <MessageSquare className="size-3" />
           </button>
-          <PresentDropdown />
+          <PresentDropdown onPresent={presentCanvas} onFullScreen={toggleCanvasFullscreen} />
           {!isMoodBoard && (
             <button type="button" onClick={() => setPipelineDrawerOpen((o) => !o)} aria-label="Toggle Event Pipeline panel" aria-pressed={pipelineDrawerOpen}
               title="Event Pipeline"
               className={cn('flex size-7 items-center justify-center rounded-md border transition',
                 pipelineDrawerOpen ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground')}>
-              <GalleryVerticalEnd className="size-3.5" />
+              <GalleryVerticalEnd className="size-3" />
             </button>
           )}
           {!isMoodBoard && (
             <button
               type="button"
               onClick={handleApproveCanvas}
-              disabled={isApproving}
-              title="Approve Canvas & auto-populate warehouse dispatch queue"
-              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-white transition hover:bg-emerald-700 disabled:opacity-50 shadow-sm"
+              disabled={isApproving || hasAtRiskPlaceholder}
+              title={hasAtRiskPlaceholder ? 'Resolve or remove fully reserved placeholders before approval.' : 'Approve Canvas & auto-populate warehouse dispatch queue'}
+              className="flex h-7 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 text-xs font-bold uppercase tracking-[0.04em] text-white transition hover:bg-emerald-700 disabled:opacity-50 shadow-sm"
             >
               <Check className="size-3" />
-              {isApproving ? 'Approving...' : 'Approve & Route'}
+              {hasAtRiskPlaceholder ? 'Resolve placeholders' : isApproving ? 'Approving...' : 'Approve & Route'}
             </button>
           )}
         </div>
@@ -4374,22 +4386,18 @@ export function CanvasWorkspacePage() {
         <LeftPanel
           onDropAsset={handleDropFromPanel}
           eventAlias={card?.eventAlias}
-          assets={assets}
-          onRouteToDeficit={handleRouteToDeficit}
           onApplyBackground={handleApplyBackground}
           activeTool={activeTool}
           onToolChange={setActiveTool}
           onPlacePresetText={handlePlacePresetText}
-          selectedAsset={selectedAsset}
-          onUpdateFormatting={handleUpdateFormatting}
-          onUpdateColor={(c) => selectedAssetId && updateAsset(selectedAssetId, { fill: c, strokeColor: c })}
           onInsertPage={handleInsertPage}
           onInsertAllPages={handleInsertAllPages}
           canonicalAssets={canonicalCatalogAssets}
           assetsLoading={assetsLoading}
           assetsError={assetsError}
-          onRetryFetch={loadCanonicalAssets}
+          onRetryFetch={() => undefined}
           onSearchChange={setAssetSearchTerm}
+          serverAvailability={serverAvailability}
         />
 
         {/* Canvas + bottom bar */}
@@ -4412,6 +4420,8 @@ export function CanvasWorkspacePage() {
             selectedId={selectedAssetId}
             zoom={zoom}
             showGrid={showGrid}
+            showRulers={showRulers}
+            showMargin={showMargin}
             onSelect={setSelectedAssetId}
             onUpdate={updateAsset}
             onDeselect={() => setSelectedAssetId(null)}
@@ -4516,11 +4526,15 @@ export function CanvasWorkspacePage() {
         )}
       </div>
 
-      {/* PIN Modal */}
-      {pendingMode && <PinModal targetMode={pendingMode} onSuccess={onPinSuccess} onCancel={() => setPendingMode(null)} />}
-
-      {/* Proactive Stock Availability Warning — advisory, fired from drag activity only */}
-      {stockWarning && <StockAvailabilityWarningModal asset={stockWarning} onClose={() => setStockWarning(null)} />}
+      {/* Proactive stock warning: offers a Procurement path or an immediate alternative. */}
+      {stockWarning && (
+        <StockAvailabilityWarningModal
+          asset={stockWarning}
+          onClose={() => setStockWarning(null)}
+          onProceedWithProcurement={() => { void continueOverstockViaProcurement(stockWarning) }}
+          onChooseAlternative={() => chooseAlternativeForOverstock(stockWarning)}
+        />
+      )}
 
       {/* Structured HTTP 409 Conflict Modal — shown on approval or pre-validation conflict */}
       {approval409 && (

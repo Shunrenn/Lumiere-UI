@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
-import { KeyRound, Lock } from 'lucide-react'
+import { KeyRound, Lock, X } from 'lucide-react'
 import { ConsoleLayout } from '@/components/ConsoleLayout'
-import { PendingUserActions, type PendingActionItem } from '@/components/PendingUserActions'
-import { SecurityIncidents } from '@/components/SecurityIncidents'
-import { TrendChart } from '@/components/TrendChart'
+import { PendingUserActions, type PendingActionItem } from '@/components/dashboard/PendingUserActions'
+import { SecurityIncidents } from '@/components/dashboard/SecurityIncidents'
+import { TrendChart } from '@/components/dashboard/TrendChart'
 import { usePortal } from '@/lib/store'
 import { useNav } from '@/lib/nav'
 
@@ -111,8 +111,13 @@ export function OverviewPage() {
   const { navigate } = useNav()
   const { staff, userActions, isBackendConnected } = usePortal()
   const [chartMode, setChartMode] = useState('users')
+  const [activeUsersOpen, setActiveUsersOpen] = useState(false)
 
-  const totalUsers = staff.length
+  const activeUsers = useMemo(
+    () => staff.filter((s) => (s.accountStatus ?? s.sessionStatus) === 'Active'),
+    [staff],
+  )
+  const totalUsers = activeUsers.length
   const lockedAccounts = userActions.filter(
     (a) => a.status === 'pending' && a.type === 'account-locked',
   ).length
@@ -161,11 +166,9 @@ export function OverviewPage() {
 
       {/* Row 1: Metric cards */}
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <MetricCard
-          label="Total Users"
-          value={String(totalUsers)}
-          caption="Provisioned portal accounts"
-        />
+        <button type="button" onClick={() => setActiveUsersOpen(true)} className="text-left transition hover:-translate-y-0.5">
+          <MetricCard label="Active Users" value={String(totalUsers)} caption="Accounts currently enabled" />
+        </button>
         <MetricCard
           label="Locked Accounts"
           value={String(lockedAccounts)}
@@ -216,6 +219,23 @@ export function OverviewPage() {
           />
         </div>
       </div>
+
+      {activeUsersOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4" role="dialog" aria-modal="true" aria-labelledby="active-users-title" onClick={() => setActiveUsersOpen(false)}>
+          <div className="w-full max-w-lg overflow-hidden rounded-xl border border-border bg-card shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between border-b border-border px-5 py-4">
+              <div><p className="text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">System Dashboard</p><h2 id="active-users-title" className="mt-1 font-serif text-xl text-foreground">Active Users</h2></div>
+              <button type="button" onClick={() => setActiveUsersOpen(false)} className="text-muted-foreground hover:text-foreground" aria-label="Close active users"><X className="size-5" /></button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto p-5">
+              <div className="grid grid-cols-[1fr_1fr_auto] gap-3 border-b border-border pb-2 text-[0.58rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground"><span>Name</span><span>Role</span><span>Status</span></div>
+              <div className="divide-y divide-border">
+                {activeUsers.map((user) => <div key={user.id} className="grid grid-cols-[1fr_1fr_auto] gap-3 py-3 text-xs"><span className="font-medium text-foreground">{user.fullName || `${user.firstName} ${user.surname}`}</span><span className="text-muted-foreground">{user.role}</span><span className="font-semibold text-emerald-500">Active</span></div>)}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </ConsoleLayout>
   )
 }

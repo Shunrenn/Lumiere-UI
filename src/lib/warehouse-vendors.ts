@@ -1,7 +1,7 @@
 // Canonical data layer for the Vendor Management module.
 // Renders authoritative backend vendor records only. Zero frontend fixture records.
 import { useEffect, useSyncExternalStore } from 'react'
-import { createVendorApi, fetchVendorsApi, type VendorDto } from './vendorApi'
+import { createVendorApi, fetchVendorsApi, type VendorDto } from '@/features/vendors/api/vendorApi'
 
 export function deriveContactName(v: VendorDto): string {
   if (v.contactName && v.contactName.trim()) return v.contactName.trim()
@@ -19,14 +19,20 @@ export function mapVendorDtoToWarehouseVendor(v: VendorDto): WarehouseVendor {
   const canonicalId = v.id || v.vendorId || ''
   return {
     id: canonicalId,
-    name: v.name || 'Unnamed Vendor',
+    name: (v.name || 'Unnamed Vendor').replaceAll('&amp;', '&'),
     contactName: deriveContactName(v),
-    email: v.email || '—',
-    phone: v.phone || '—',
+    email: v.email?.trim() || '',
+    phone: v.phone?.trim() || '',
+    category: 'General Supplier',
+    address: v.address || '',
+    city: '',
     specialty: v.specialty || 'General Supplier',
+    leadTimeValue: 24,
+    leadTimeUnit: 'hours',
     leadTimeHours: 24,
     status: normalizeVendorStatus(v.status),
     performanceNotes: v.address ? `Address: ${v.address}` : '',
+    statusReason: '',
     orderHistory: [],
   }
 }
@@ -48,9 +54,15 @@ export interface WarehouseVendor {
   contactName: string
   email: string
   phone: string
+  category: string
+  address: string
+  city: string
   specialty: string
+  leadTimeValue: number
+  leadTimeUnit: 'hours' | 'days'
   leadTimeHours: number
   status: VendorStatus
+  statusReason?: string
   performanceNotes: string
   orderHistory: VendorOrderRecord[]
 }
@@ -115,9 +127,14 @@ export interface VendorDraft {
   contactName: string
   email: string
   phone: string
+  category: string
+  address: string
+  city: string
   specialty: string
-  leadTimeHours: number
+  leadTimeValue: number
+  leadTimeUnit: 'hours' | 'days'
   status: VendorStatus
+  statusReason?: string
   performanceNotes?: string
 }
 
@@ -126,13 +143,19 @@ export function addVendor(draft: VendorDraft): WarehouseVendor {
   const existing = getWarehouseVendors()
   const vendor: WarehouseVendor = {
     id: `ven-custom-${Date.now()}`,
-    name: draft.name.trim(),
+    name: draft.name.trim().replaceAll('&amp;', '&'),
     contactName: draft.contactName.trim(),
     email: draft.email.trim(),
     phone: draft.phone.trim(),
+    category: draft.category,
+    address: draft.address.trim(),
+    city: draft.city.trim(),
     specialty: draft.specialty.trim(),
-    leadTimeHours: Math.max(1, draft.leadTimeHours),
+    leadTimeValue: Math.max(1, draft.leadTimeValue),
+    leadTimeUnit: draft.leadTimeUnit,
+    leadTimeHours: Math.max(1, draft.leadTimeValue) * (draft.leadTimeUnit === 'days' ? 24 : 1),
     status: draft.status,
+    statusReason: draft.statusReason?.trim(),
     performanceNotes: draft.performanceNotes?.trim() || 'Newly registered vendor.',
     orderHistory: [],
   }
@@ -144,7 +167,7 @@ export function addVendor(draft: VendorDraft): WarehouseVendor {
     contactName: vendor.contactName,
     email: vendor.email,
     phone: vendor.phone,
-    specialty: vendor.specialty,
+    specialty: vendor.specialty || undefined,
   })
 
   return vendor
@@ -152,8 +175,17 @@ export function addVendor(draft: VendorDraft): WarehouseVendor {
 
 export function updateVendor(id: string, changes: Partial<Omit<WarehouseVendor, 'id'>>) {
   const existing = getWarehouseVendors()
-  cachedVendors = existing.map((vendor) => (vendor.id === id ? { ...vendor, ...changes } : vendor))
+  cachedVendors = existing.map((vendor) => {
+    if (vendor.id !== id) return vendor
+    const next = { ...vendor, ...changes, name: (changes.name ?? vendor.name).replaceAll('&amp;', '&') }
+    next.leadTimeHours = next.leadTimeValue * (next.leadTimeUnit === 'days' ? 24 : 1)
+    return next
+  })
   publish()
+}
+
+export function formatVendorLeadTime(vendor: Pick<WarehouseVendor, 'leadTimeValue' | 'leadTimeUnit'>) {
+  return `${vendor.leadTimeValue}${vendor.leadTimeUnit === 'days' ? 'd' : 'h'}`
 }
 
 export function getVendorById(id: string | undefined): WarehouseVendor | undefined {

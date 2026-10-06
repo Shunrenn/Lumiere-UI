@@ -35,10 +35,10 @@ const verdictConfig: Record<
   { label: string; confirmTitle: string; confirmBody: string; tone: string; Icon: typeof Scale }
 > = {
   Validated: {
-    label: 'Validate Damage',
-    confirmTitle: 'Confirm Damage Validation',
+    label: 'Validate Claim',
+    confirmTitle: 'Confirm Claim Validation',
     confirmBody:
-      'This will validate the exception and post the estimated liability against the inventory ledger. This action is logged to the audit trail.',
+      'This confirms that the damage claim is valid and moves it to the final disposition stage, where Repair or Write-off can be selected.',
     tone: 'text-emerald-700',
     Icon: CheckCircle2,
   },
@@ -152,8 +152,6 @@ export function DamageVerdictModal({
   const [ackChecked, setAckChecked] = useState(false)
 
   const isReviewable = exception.declarationState === 'Reviewable'
-  const isFinalized = exception.declarationState === 'Finalized'
-  const canAmend = editable && isFinalized
 
   useEffect(() => {
     setNote('')
@@ -236,9 +234,12 @@ export function DamageVerdictModal({
     }
 
     const effectiveNote = note.trim() || selfValJustification.trim()
+    // A validated claim advances to the second, WOM-owned disposition stage.
+    // The existing API represents that intermediate state as Held for Audit.
+    const resolvedVerdict = pendingVerdict === 'Validated' ? 'Held for Audit' : pendingVerdict
     onResolve(
       exception.id,
-      pendingVerdict,
+      resolvedVerdict,
       effectiveNote,
       overrideUnblockMeta,
       selfRecord
@@ -728,27 +729,12 @@ export function DamageVerdictModal({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              {canAmend && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAmendReason('')
-                    setAmendQuantity(exception.damagedQuantity ?? 1)
-                    setAmendDamageType(exception.damageType)
-                    setAmendError(null)
-                    setShowAmendModal(true)
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-[0.68rem] font-semibold uppercase tracking-wider text-card-foreground hover:bg-muted"
-                >
-                  <History className="size-3.5 text-primary" />
-                  Supervisory Amendment
-                </button>
-              )}
             </div>
           )}
           <div className="flex items-center justify-end gap-2">
             {!isReviewable && showControls && exception.status === 'Pending Verdict' ? (
               <>
+                <span className="mr-auto text-[0.58rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">Part 1 · Claim review</span>
                 <button
                   type="button"
                   onClick={() => setPendingVerdict('Dismissed')}
@@ -759,23 +745,16 @@ export function DamageVerdictModal({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPendingVerdict('Held for Audit')}
-                  className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-amber-800 transition hover:bg-amber-100"
-                >
-                  <Scale className="size-3.5" />
-                  Hold for Audit
-                </button>
-                <button
-                  type="button"
                   onClick={() => setPendingVerdict('Validated')}
                   className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-primary-foreground transition hover:opacity-90"
                 >
                   <CheckCircle2 className="size-3.5" />
-                  Validate Damage
+                  Validate Claim
                 </button>
               </>
             ) : !isReviewable && showControls && (isHeldForAudit || isPendingSecondSignOff) && !isStrictBlock ? (
               <>
+                <span className="mr-auto text-[0.58rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">Part 2 · Final disposition</span>
                 <button
                   type="button"
                   onClick={() => setPendingVerdict('Write-off')}

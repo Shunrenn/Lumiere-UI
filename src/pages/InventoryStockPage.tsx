@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { Search, Plus, ChevronDown, Grid2X2, List, PackageSearch, ArrowLeft } from 'lucide-react'
 import { ConsoleLayout } from '@/components/ConsoleLayout'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
+import { PLANNER_RAIL_DESTINATIONS, PLANNER_RAIL_IDENTITY } from '@/lib/executive-destinations'
 import { AdminShell } from '@/components/admin/AdminShell'
-import { AddNewAssetModal } from '@/components/AddNewAssetModal'
+import { AddNewAssetModal } from '@/components/warehouse/asset-catalog/AddNewAssetModal'
 import { AssetInformationModal } from '@/components/AssetInformationModal'
-import { ReorderRequisitionModal } from '@/components/ReorderRequisitionModal'
+import { ReorderRequisitionModal } from '@/components/warehouse/replenishment/ReorderRequisitionModal'
 import { EmptyState } from '@/components/EmptyState'
 import { cn } from '@/lib/utils'
-import { supabase } from '@/lib/supabase'
 import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
@@ -17,23 +17,7 @@ import { CompactStatStrip } from '@/components/CompactStatStrip'
 import { GridRevealContainer } from '@/components/GridRevealContainer'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ErrorFallback } from '@/components/ErrorFallback'
-import { ASSET_CATEGORIES, type InventoryItem, type ProcurementItem, type StockStatus } from '@/lib/types'
-
-// Map a warehouse inventory category onto an Event Planner décor category so a
-// newly registered asset lands in the right group of the canvas side panel.
-function toDecorCategory(warehouseCategory: string): string {
-  const c = warehouseCategory.toLowerCase()
-  if (c.includes('light') || c.includes('ambiance') || c.includes('wax')) {
-    return 'Lighting & Atmosphere'
-  }
-  if (c.includes('textile') || c.includes('glass') || c.includes('beverage') || c.includes('table')) {
-    return 'Textiles & Tableware'
-  }
-  if (c.includes('décor') || c.includes('decor') || c.includes('backdrop') || c.includes('floristry') || c.includes('greenery')) {
-    return 'Moodboard & Inspiration'
-  }
-  return 'Furniture Stock'
-}
+import { ASSET_CATEGORIES, type InventoryItem, type ProcurementItem, type StockStatus, type Route } from '@/lib/types'
 
 const statusMeta: Record<StockStatus, { badge: string; dot: string; bar: string }> = {
   Available: { badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/60', dot: 'bg-emerald-500', bar: 'bg-emerald-600 dark:bg-emerald-500' },
@@ -430,21 +414,6 @@ export function InventoryStockPage() {
           }
           addInventoryItem(newItem)
           setIsAddModalOpen(false)
-
-          // Publish to the Event Planner décor library so the new asset shows up
-          // in the canvas side panel. Fire-and-forget; UI already updated.
-          void supabase
-            .from('planner_assets')
-            .insert({
-              sku: assetId,
-              name: data.assetName,
-              decor_category: toDecorCategory(data.category),
-              image: data.image || null,
-              warehouse_stock: quantity,
-            })
-            .then(({ error }) => {
-              if (error) console.error('[v0] Failed to publish asset to planner library:', error)
-            })
         }}
       />
 
@@ -517,9 +486,14 @@ export function InventoryStockPage() {
 
   const { navigate } = useNav()
 
-  if (isExecutive) {
+  if (isExecutive || isPlanner) {
     return (
-      <ExecutiveShell activeId="dashboard" onSelect={(id) => navigate(id)}>
+      <ExecutiveShell
+        activeId={isPlanner ? 'inventory' : 'dashboard'}
+        onSelect={(id) => navigate(id as Route)}
+        destinations={isPlanner ? PLANNER_RAIL_DESTINATIONS : undefined}
+        identityRoleLabel={isPlanner ? PLANNER_RAIL_IDENTITY.roleLabel : undefined}
+      >
         <div className="mb-4">
           <button
             type="button"
@@ -527,7 +501,7 @@ export function InventoryStockPage() {
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="size-3.5" />
-            Back to Executive Dashboard
+            Back to {isPlanner ? 'Planner Dashboard' : 'Executive Dashboard'}
           </button>
         </div>
         {headerBlock}

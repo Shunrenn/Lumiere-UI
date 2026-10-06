@@ -1,11 +1,28 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { isTeamLead, isTeamLeadToday, QUALIFIED_LEAD_ROLES } from '@/lib/warehouse-crew'
-import { removeManningApi, removeManningOverrideApi } from './manningApi'
+import { isTeamLead, isTeamLeadToday, QUALIFIED_LEAD_ROLES, registerCrewLeaveHandler } from '@/lib/warehouse-crew'
+import { expandDateRange } from '@/lib/utils'
+import {
+  fetchAllManningAssignmentsApi,
+  inheritManningAssignmentApi,
+  fetchManningTasksApi,
+  createManningTaskApi,
+  submitManningTaskApi,
+  updateManningTaskStatusApi,
+  confirmManningTaskApi,
+  rejectManningTaskApi,
+  escalateManningTasksApi,
+  fetchManningWarningsApi,
+  createManningWarningApi,
+  removeManningApi,
+  removeManningOverrideApi,
+} from '@/features/manning/api/manningApi'
+
+export { expandDateRange }
+
 
 // =====================================================================
-// Manning Delegation + Incident Reporting data access
-// (WOM / Manning designated modules). All persistence is Supabase.
+// Manning delegation data access
+// (WOM / Manning designated modules). All persistence is ASP.NET Core REST API.
 // =====================================================================
 
 // ---- Types -----------------------------------------------------------
@@ -24,15 +41,6 @@ export type ManningTaskStatus =
   | 'Escalated'
   | 'Rejected'
 
-export type IncidentStatus = 'Submitted' | 'Under Review' | 'Resolved' | 'Dismissed'
-export type IncidentSeverity = 'Low' | 'Medium' | 'High' | 'Critical'
-export type IncidentCategory =
-  | 'General'
-  | 'Safety'
-  | 'Equipment'
-  | 'Personnel'
-  | 'Security'
-  | 'Logistics'
 
 export interface ManningAssignment {
   id: string
@@ -96,136 +104,6 @@ export interface ManningWarning {
   acknowledged_at: string | null
 }
 
-export interface IncidentReport {
-  id: string
-  reference: string
-  title: string
-  category: IncidentCategory
-  severity: IncidentSeverity
-  description: string
-  location: string | null
-  reported_by_name: string
-  reported_by_email: string | null
-  occurred_at: string | null
-  status: IncidentStatus
-  resolution_notes: string | null
-  resolved_by: string | null
-  resolved_at: string | null
-  created_at: string
-  image_url?: string | null
-}
-
-
-const PRESET_INCIDENTS: IncidentReport[] = [
-  {
-    id: 'incident-2026-001',
-    reference: 'INC-26001',
-    title: 'Forklift contact with outbound staging rack',
-    category: 'Safety',
-    severity: 'High',
-    description: 'During the 06:40 outbound preparation, a forklift clipped the lower guard rail of Rack B-14 while reversing from the loading lane. No injury was reported, but two cases were displaced and the aisle was isolated pending inspection. The operator stopped work, notified the shift lead, and preserved the area for review.',
-    location: 'North loading bay · Rack B-14',
-    reported_by_name: 'Lucia Mendes',
-    reported_by_email: 'lucia.mendes@lumiere.example',
-    occurred_at: '2026-08-20T06:40:00.000Z',
-    status: 'Submitted',
-    resolution_notes: null,
-    resolved_by: null,
-    resolved_at: null,
-    created_at: '2026-08-20T06:54:00.000Z',
-    image_url: '/incidents/forklift-rack.png',
-  },
-  {
-    id: 'incident-2026-002',
-    reference: 'INC-26002',
-    title: 'Cold-chain scanner battery failure',
-    category: 'Equipment',
-    severity: 'Medium',
-    description: 'The handheld scanner assigned to the cold-chain lane shut down during a temperature verification round. The battery indicator had shown 40 percent earlier in the shift. A spare device was issued and the affected pallet checks were repeated manually before release.',
-    location: 'Cold-chain lane 2',
-    reported_by_name: 'Noah Williams',
-    reported_by_email: 'noah.williams@lumiere.example',
-    occurred_at: '2026-08-20T08:15:00.000Z',
-    status: 'Under Review',
-    resolution_notes: null,
-    resolved_by: null,
-    resolved_at: null,
-    created_at: '2026-08-20T08:31:00.000Z',
-    image_url: '/incidents/scanner-battery.png',
-  },
-  {
-    id: 'incident-2026-003',
-    reference: 'INC-26003',
-    title: 'Contractor access badge not returned',
-    category: 'Security',
-    severity: 'High',
-    description: 'A temporary contractor left the site at the end of the evening shift without returning a visitor access badge. Security checked the sign-out desk, vehicle staging area, and supervisor locker. The badge was recovered from the contractor van the following morning and deactivated until reconciliation was complete.',
-    location: 'Security desk · East entrance',
-    reported_by_name: 'Sofia Reyes',
-    reported_by_email: 'sofia.reyes@lumiere.example',
-    occurred_at: '2026-08-19T22:10:00.000Z',
-    status: 'Resolved',
-    resolution_notes: 'Badge recovered and deactivated. Visitor sign-out checklist updated for the evening team.',
-    resolved_by: 'Amara Okafor',
-    resolved_at: '2026-08-20T07:20:00.000Z',
-    created_at: '2026-08-19T22:26:00.000Z',
-    image_url: '/incidents/access-badge.png',
-  },
-  {
-    id: 'incident-2026-004',
-    reference: 'INC-26004',
-    title: 'Two crew members missing from event call sheet',
-    category: 'Personnel',
-    severity: 'Medium',
-    description: 'The 12:00 event call sheet listed two crew members against the wrong deployment zone. The discrepancy was found during the pre-opening roll call and corrected before doors opened. Both crew members received the revised briefing and the printed call sheets were replaced.',
-    location: 'Briefing room A',
-    reported_by_name: 'Amara Okafor',
-    reported_by_email: 'amara.okafor@lumiere.example',
-    occurred_at: '2026-08-20T11:45:00.000Z',
-    status: 'Submitted',
-    resolution_notes: null,
-    resolved_by: null,
-    resolved_at: null,
-    created_at: '2026-08-20T11:58:00.000Z',
-    image_url: '/incidents/call-sheet.png',
-  },
-  {
-    id: 'incident-2026-005',
-    reference: 'INC-26005',
-    title: 'Inbound delivery arrived without seal record',
-    category: 'Logistics',
-    severity: 'Low',
-    description: 'A scheduled inbound delivery arrived with the trailer seal intact, but the seal number was absent from the advance paperwork. Receiving held the load for a secondary count and photographed the seal before breaking it. The count matched the manifest with no variance.',
-    location: 'Inbound receiving dock 3',
-    reported_by_name: 'Daniel Price',
-    reported_by_email: 'daniel.price@lumiere.example',
-    occurred_at: '2026-08-20T09:05:00.000Z',
-    status: 'Dismissed',
-    resolution_notes: 'No stock variance found. Supplier paperwork issue logged for follow-up outside the incident queue.',
-    resolved_by: 'Amara Okafor',
-    resolved_at: '2026-08-20T10:10:00.000Z',
-    created_at: '2026-08-20T09:18:00.000Z',
-    image_url: '/incidents/inbound-seal.png',
-  },
-  {
-    id: 'incident-2026-006',
-    reference: 'INC-26006',
-    title: 'Water ingress near electrical distribution panel',
-    category: 'General',
-    severity: 'Critical',
-    description: 'Water was observed on the floor within two metres of the temporary electrical distribution panel after heavy rain. Power to the affected bay was isolated, the area was cordoned off, and facilities were called to inspect the roof and cable protection. No one entered the cordoned area after isolation.',
-    location: 'South warehouse · Bay 7',
-    reported_by_name: 'Marcus Chen',
-    reported_by_email: 'marcus.chen@lumiere.example',
-    occurred_at: '2026-08-20T13:22:00.000Z',
-    status: 'Submitted',
-    resolution_notes: null,
-    resolved_by: null,
-    resolved_at: null,
-    created_at: '2026-08-20T13:29:00.000Z',
-    image_url: '/incidents/water-ingress.png',
-  },
-]
 
 let localAssignments: ManningAssignment[] = []
 let localTasks: ManningTask[] = []
@@ -245,29 +123,8 @@ function dedupeActiveAssignments(assignments: ManningAssignment[]): ManningAssig
   })
 }
 let localWarnings: ManningWarning[] = []
-let localIncidents = [...PRESET_INCIDENTS]
-let incidentsUsingPreset = false
 
 // ---- Task helpers -----------------------------------------------------
-
-/** Expand a date or start/end date range into discrete YYYY-MM-DD calendar date strings. */
-export function expandDateRange(startDate: string, endDate?: string | null): string[] {
-  if (!startDate) return []
-  const start = new Date(`${startDate}T00:00:00`)
-  if (isNaN(start.getTime())) return [startDate]
-  if (!endDate || startDate === endDate) return [startDate]
-
-  const end = new Date(`${endDate}T00:00:00`)
-  if (isNaN(end.getTime()) || end.getTime() < start.getTime()) return [startDate]
-
-  const dates: string[] = []
-  const current = new Date(start)
-  while (current.getTime() <= end.getTime()) {
-    dates.push(current.toISOString().slice(0, 10))
-    current.setDate(current.getDate() + 1)
-  }
-  return dates
-}
 
 /** Whether a submitted task has exceeded its confirmation window. */
 export function isSlaOverdue(task: ManningTask, now: Date = new Date()): boolean {
@@ -301,13 +158,24 @@ export function formatSlaCountdown(ms: number): string {
 
 export async function fetchAssignments(): Promise<ManningAssignment[]> {
   try {
-    const { data, error } = await supabase
-      .from('manning_assignments')
-      .select('*')
-      .order('work_date', { ascending: false })
-      .order('created_at', { ascending: false })
-    if (error) throw error
-    localAssignments = dedupeActiveAssignments((data ?? []) as ManningAssignment[])
+    const data = await fetchAllManningAssignmentsApi()
+    const mapped: ManningAssignment[] = data.map((dto) => ({
+      id: dto.id,
+      work_date: dto.shiftDate ? dto.shiftDate.split('T')[0] : '',
+      event_name: dto.eventName || '',
+      venue: dto.venue || 'Main Venue',
+      deployment_ref: dto.eventName || dto.eventId || '',
+      lead_name: dto.userName || '',
+      lead_email: dto.userEmail || '',
+      member_names: [dto.userName].filter(Boolean),
+      sub_role: dto.subRole || dto.roleName || 'General',
+      notes: dto.notes ?? null,
+      status: 'Active',
+      inherited_from: null,
+      created_by: null,
+      created_at: dto.createdAt || new Date().toISOString(),
+    }))
+    localAssignments = dedupeActiveAssignments(mapped)
     return localAssignments
   } catch (error) {
     console.warn('[manning] Manning assignments unavailable:', error)
@@ -413,24 +281,31 @@ export async function inheritAssignment(
     created_by: createdBy ?? null,
   } as const
 
-  const { data, error } = await supabase
-    .from('manning_assignments')
-    .select('*')
-    .eq('work_date', workDate)
-    .eq('event_name', source.event_name)
-    .eq('venue', source.venue)
-    .eq('deployment_ref', source.deployment_ref)
-    .eq('status', 'Active')
-    .order('created_at', { ascending: true })
-    .limit(1)
-
-  if (!error && data?.[0]) {
-    const assignment = data[0] as ManningAssignment
-    localAssignments = [
-      assignment,
-      ...localAssignments.filter((item) => item.id !== assignment.id),
-    ]
-    return assignment
+  try {
+    const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(source.id)
+    if (isGuid) {
+      const inheritedDto = await inheritManningAssignmentApi(source.id, workDate, source.notes ?? undefined)
+      const mapped: ManningAssignment = {
+        id: inheritedDto.id,
+        work_date: inheritedDto.shiftDate ? inheritedDto.shiftDate.split('T')[0] : workDate,
+        event_name: inheritedDto.eventName || source.event_name,
+        venue: inheritedDto.venue || source.venue,
+        deployment_ref: source.deployment_ref,
+        lead_name: inheritedDto.userName || source.lead_name,
+        lead_email: inheritedDto.userEmail || source.lead_email,
+        member_names: source.member_names,
+        sub_role: inheritedDto.subRole || source.sub_role,
+        notes: inheritedDto.notes ?? source.notes,
+        status: 'Active',
+        inherited_from: source.id,
+        created_by: createdBy ?? null,
+        created_at: inheritedDto.createdAt || new Date().toISOString(),
+      }
+      localAssignments = [mapped, ...localAssignments.filter((item) => item.id !== mapped.id)]
+      return mapped
+    }
+  } catch (e) {
+    console.warn('[manning] Backend assignment inheritance failed, falling back to local assignment creation:', e)
   }
 
   return createAssignment(carried, quotaConfig)
@@ -579,16 +454,35 @@ export async function handleCrewLeaveAutoRelease(
   }
 }
 
+// Wire automatic crew-leave release handler to warehouse-crew daily duty / shift grid
+registerCrewLeaveHandler(handleCrewLeaveAutoRelease)
+
 // ---- Tasks -----------------------------------------------------------
 
 export async function fetchTasks(): Promise<ManningTask[]> {
   try {
-    const { data, error } = await supabase
-      .from('manning_tasks')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (error) throw error
-    localTasks = (data ?? []) as ManningTask[]
+    const data = await fetchManningTasksApi()
+    localTasks = data.map((dto) => ({
+      id: dto.id,
+      title: dto.title,
+      description: dto.description ?? null,
+      task_type: (dto.taskType as 'personal' | 'generic') || 'personal',
+      assignee_name: dto.assigneeName ?? null,
+      assignee_email: dto.assigneeEmail ?? null,
+      lead_name: dto.leadName || '',
+      assignment_id: dto.assignmentId ?? null,
+      work_date: dto.workDate,
+      deadline: dto.deadline ?? null,
+      status: (dto.status as ManningTaskStatus) || 'Assigned',
+      submitted_at: dto.submittedAt ?? null,
+      sla_due: dto.slaDueAt ?? null,
+      confirmed_at: dto.confirmedAt ?? null,
+      confirmed_by: dto.confirmedByName ?? null,
+      escalated: dto.escalated,
+      escalated_at: dto.escalatedAt ?? null,
+      created_by: dto.createdByUserId ?? null,
+      created_at: dto.createdAt,
+    }))
     return localTasks
   } catch (error) {
     console.warn('[manning] Manning tasks unavailable:', error)
@@ -605,55 +499,85 @@ export async function createTask(
       >
     >,
 ): Promise<ManningTask> {
-  const { data, error } = await supabase
-    .from('manning_tasks')
-    .insert({ task_type: 'personal', ...input })
-    .select('*')
-    .single()
+  try {
+    const dto = await createManningTaskApi({
+      title: input.title,
+      description: input.description ?? null,
+      taskType: input.task_type ?? 'personal',
+      assigneeName: input.assignee_name ?? null,
+      assigneeEmail: input.assignee_email ?? null,
+      leadName: input.lead_name,
+      assignmentId: input.assignment_id ?? null,
+      workDate: input.work_date ?? new Date().toISOString().slice(0, 10),
+      deadline: input.deadline ?? null,
+    })
 
-  if (!error && data) {
-    localTasks = [data as ManningTask, ...localTasks.filter((task) => task.id !== data.id)]
-    return data as ManningTask
-  }
+    const task: ManningTask = {
+      id: dto.id,
+      title: dto.title,
+      description: dto.description ?? null,
+      task_type: (dto.taskType as 'personal' | 'generic') || 'personal',
+      assignee_name: dto.assigneeName ?? null,
+      assignee_email: dto.assigneeEmail ?? null,
+      lead_name: dto.leadName || input.lead_name,
+      assignment_id: dto.assignmentId ?? null,
+      work_date: dto.workDate,
+      deadline: dto.deadline ?? null,
+      status: (dto.status as ManningTaskStatus) || 'Assigned',
+      submitted_at: dto.submittedAt ?? null,
+      sla_due: dto.slaDueAt ?? null,
+      confirmed_at: dto.confirmedAt ?? null,
+      confirmed_by: dto.confirmedByName ?? null,
+      escalated: dto.escalated,
+      escalated_at: dto.escalatedAt ?? null,
+      created_by: dto.createdByUserId ?? null,
+      created_at: dto.createdAt,
+    }
 
-  // Keep the preview interactive when Supabase was intentionally skipped.
-  const now = new Date().toISOString()
-  const fallback: ManningTask = {
-    id: `preset-task-${Date.now()}`,
-    title: input.title,
-    description: input.description ?? null,
-    task_type: input.task_type ?? 'personal',
-    assignee_name: input.assignee_name ?? null,
-    assignee_email: input.assignee_email ?? null,
-    lead_name: input.lead_name,
-    assignment_id: input.assignment_id ?? null,
-    work_date: input.work_date ?? now.slice(0, 10),
-    deadline: input.deadline ?? null,
-    status: 'Assigned',
-    submitted_at: null,
-    sla_due: null,
-    confirmed_at: null,
-    confirmed_by: null,
-    escalated: false,
-    escalated_at: null,
-    created_by: input.created_by ?? null,
-    created_at: now,
+    localTasks = [task, ...localTasks.filter((t) => t.id !== task.id)]
+    return task
+  } catch (error) {
+    console.warn('[manning] Backend task create failed; fallback applied locally:', error)
+    const now = new Date().toISOString()
+    const fallback: ManningTask = {
+      id: `preset-task-${Date.now()}`,
+      title: input.title,
+      description: input.description ?? null,
+      task_type: input.task_type ?? 'personal',
+      assignee_name: input.assignee_name ?? null,
+      assignee_email: input.assignee_email ?? null,
+      lead_name: input.lead_name,
+      assignment_id: input.assignment_id ?? null,
+      work_date: input.work_date ?? now.slice(0, 10),
+      deadline: input.deadline ?? null,
+      status: 'Assigned',
+      submitted_at: null,
+      sla_due: null,
+      confirmed_at: null,
+      confirmed_by: null,
+      escalated: false,
+      escalated_at: null,
+      created_by: input.created_by ?? null,
+      created_at: now,
+    }
+    localTasks = [fallback, ...localTasks]
+    return fallback
   }
-  localTasks = [fallback, ...localTasks]
-  console.warn('[manning] Task save unavailable; applied locally.', error)
-  return fallback
 }
 
 /** Member submits work item. */
 export async function submitTask(id: string): Promise<void> {
   const now = new Date()
   const slaDue = new Date(now.getTime() + 48 * 3_600_000)
-  const { error } = await supabase
-    .from('manning_tasks')
-    .update({ status: 'Submitted', submitted_at: now.toISOString(), sla_due: slaDue.toISOString() })
-    .eq('id', id)
 
-  if (!error) return
+  try {
+    const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    if (isGuid) {
+      await submitManningTaskApi(id)
+    }
+  } catch (err) {
+    console.warn('[manning] Backend submitTask failed, applying locally:', err)
+  }
 
   if (localTasks.some((task) => task.id === id)) {
     localTasks = localTasks.map((task) =>
@@ -661,15 +585,22 @@ export async function submitTask(id: string): Promise<void> {
         ? { ...task, status: 'Submitted', submitted_at: now.toISOString(), sla_due: slaDue.toISOString() }
         : task,
     )
-    return
   }
-
-  throw error
 }
 
 export async function setTaskStatus(id: string, status: ManningTaskStatus): Promise<void> {
-  const { error } = await supabase.from('manning_tasks').update({ status }).eq('id', id)
-  if (error) throw error
+  try {
+    const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    if (isGuid) {
+      await updateManningTaskStatusApi(id, status)
+    }
+  } catch (err) {
+    console.warn('[manning] Backend setTaskStatus failed, applying locally:', err)
+  }
+
+  if (localTasks.some((task) => task.id === id)) {
+    localTasks = localTasks.map((task) => (task.id === id ? { ...task, status } : task))
+  }
 }
 
 /** Lead confirms a submitted task. */
@@ -677,10 +608,8 @@ export async function confirmTask(id: string, confirmedBy: string): Promise<void
   const existing = localTasks.find((t) => t.id === id)
   if (existing && (existing.status === 'Confirmed' || existing.status === 'Rejected')) {
     if (existing.status === 'Confirmed') {
-      // Matching outcome ('Confirmed' === 'Confirmed'): First commit retained, silent no-op (no dispute log needed)
       return
     }
-    // Differing outcome ('Confirmed' vs existing 'Rejected'): First-Commit-Wins tie-breaker intercepted write
     await logAuditEvent({
       actor_id: confirmedBy,
       actor_name: confirmedBy,
@@ -705,16 +634,14 @@ export async function confirmTask(id: string, confirmedBy: string): Promise<void
   }
 
   const confirmedAt = new Date().toISOString()
-  const { error } = await supabase
-    .from('manning_tasks')
-    .update({
-      status: 'Confirmed',
-      confirmed_at: confirmedAt,
-      confirmed_by: confirmedBy,
-    })
-    .eq('id', id)
-
-  if (!error) return
+  try {
+    const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    if (isGuid) {
+      await confirmManningTaskApi(id, confirmedBy)
+    }
+  } catch (err) {
+    console.warn('[manning] Backend confirmTask failed, applying locally:', err)
+  }
 
   if (localTasks.some((task) => task.id === id)) {
     localTasks = localTasks.map((task) =>
@@ -722,20 +649,15 @@ export async function confirmTask(id: string, confirmedBy: string): Promise<void
         ? { ...task, status: 'Confirmed', confirmed_at: confirmedAt, confirmed_by: confirmedBy }
         : task,
     )
-    return
   }
-
-  throw error
 }
 
 export async function rejectTask(id: string, rejectedBy: string = 'Team Lead'): Promise<void> {
   const existing = localTasks.find((t) => t.id === id)
   if (existing && (existing.status === 'Confirmed' || existing.status === 'Rejected')) {
     if (existing.status === 'Rejected') {
-      // Matching outcome ('Rejected' === 'Rejected'): First commit retained, silent no-op (no dispute log needed)
       return
     }
-    // Differing outcome ('Rejected' vs existing 'Confirmed'): First-Commit-Wins tie-breaker intercepted write
     await logAuditEvent({
       actor_id: rejectedBy,
       actor_name: rejectedBy,
@@ -759,15 +681,18 @@ export async function rejectTask(id: string, rejectedBy: string = 'Team Lead'): 
     return
   }
 
-  const { error } = await supabase.from('manning_tasks').update({ status: 'Rejected' }).eq('id', id)
-  if (!error) return
+  try {
+    const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    if (isGuid) {
+      await rejectManningTaskApi(id, rejectedBy)
+    }
+  } catch (err) {
+    console.warn('[manning] Backend rejectTask failed, applying locally:', err)
+  }
 
   if (localTasks.some((task) => task.id === id)) {
     localTasks = localTasks.map((task) => (task.id === id ? { ...task, status: 'Rejected' } : task))
-    return
   }
-
-  throw error
 }
 
 /**
@@ -779,11 +704,19 @@ export async function escalateOverdueTasks(tasks: ManningTask[]): Promise<string
   const overdue = tasks.filter((t) => isSlaOverdue(t, now))
   if (overdue.length === 0) return []
   const ids = overdue.map((t) => t.id)
-  const { error } = await supabase
-    .from('manning_tasks')
-    .update({ status: 'Escalated', escalated: true, escalated_at: now.toISOString() })
-    .in('id', ids)
-  if (error) throw error
+
+  try {
+    const guidIds = ids.filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))
+    if (guidIds.length > 0) {
+      await escalateManningTasksApi(guidIds)
+    }
+  } catch (err) {
+    console.warn('[manning] Backend escalateOverdueTasks failed, applying locally:', err)
+  }
+
+  localTasks = localTasks.map((t) =>
+    ids.includes(t.id) ? { ...t, status: 'Escalated', escalated: true, escalated_at: now.toISOString() } : t,
+  )
   return ids
 }
 
@@ -791,12 +724,19 @@ export async function escalateOverdueTasks(tasks: ManningTask[]): Promise<string
 
 export async function fetchWarnings(): Promise<ManningWarning[]> {
   try {
-    const { data, error } = await supabase
-      .from('manning_warnings')
-      .select('*')
-      .order('issued_at', { ascending: false })
-    if (error) throw error
-    localWarnings = (data ?? []) as ManningWarning[]
+    const data = await fetchManningWarningsApi()
+    localWarnings = data.map((dto) => ({
+      id: dto.id,
+      subject_name: dto.subjectName,
+      subject_email: dto.subjectEmail ?? null,
+      tier: (dto.tier as 1 | 2 | 3) || 1,
+      reason: dto.reason,
+      related_task_id: dto.relatedTaskId ?? null,
+      issued_by: dto.issuedByName || null,
+      issued_at: dto.issuedAt,
+      acknowledged: Boolean(dto.acknowledgedAt),
+      acknowledged_at: dto.acknowledgedAt ?? null,
+    }))
     return localWarnings
   } catch (error) {
     console.warn('[manning] Manning warnings unavailable:', error)
@@ -808,13 +748,29 @@ export async function issueWarning(
   input: Pick<ManningWarning, 'subject_name' | 'tier' | 'reason'> &
     Partial<Pick<ManningWarning, 'subject_email' | 'related_task_id' | 'issued_by'>>,
 ): Promise<ManningWarning> {
-  const { data, error } = await supabase
-    .from('manning_warnings')
-    .insert(input)
-    .select('*')
-    .single()
-  if (error) throw error
-  return data as ManningWarning
+  const dto = await createManningWarningApi({
+    subjectName: input.subject_name,
+    subjectEmail: input.subject_email ?? null,
+    tier: input.tier,
+    reason: input.reason,
+    relatedTaskId: input.related_task_id ?? null,
+  })
+
+  const warning: ManningWarning = {
+    id: dto.id,
+    subject_name: dto.subjectName,
+    subject_email: dto.subjectEmail ?? null,
+    tier: (dto.tier as 1 | 2 | 3) || 1,
+    reason: dto.reason,
+    related_task_id: dto.relatedTaskId ?? null,
+    issued_by: dto.issuedByName || null,
+    issued_at: dto.issuedAt,
+    acknowledged: Boolean(dto.acknowledgedAt),
+    acknowledged_at: dto.acknowledgedAt ?? null,
+  }
+
+  localWarnings = [warning, ...localWarnings.filter((w) => w.id !== warning.id)]
+  return warning
 }
 
 /** Next tier for a subject given how many warnings they already hold (caps at 3). */
@@ -823,156 +779,6 @@ export function nextWarningTier(existing: ManningWarning[], subjectName: string)
   return Math.min(count + 1, 3) as 1 | 2 | 3
 }
 
-// ---- Incidents -------------------------------------------------------
-
-export async function fetchIncidents(): Promise<IncidentReport[]> {
-  try {
-    const { data, error } = await supabase
-      .from('incident_reports')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (error) throw error
-    localIncidents = (data ?? []) as IncidentReport[]
-    return localIncidents
-  } catch (error) {
-    incidentsUsingPreset = true
-    console.warn('[v0] Incident reports unavailable; using preset example data.', error)
-    return localIncidents
-  }
-}
-
-export async function createIncident(
-  input: Pick<IncidentReport, 'title' | 'description' | 'reported_by_name'> &
-    Partial<
-      Pick<IncidentReport, 'category' | 'severity' | 'location' | 'reported_by_email' | 'occurred_at'>
-    >,
-): Promise<IncidentReport> {
-  const reference = `INC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`
-  const category: IncidentCategory = input.category ?? 'General'
-  const severity: IncidentSeverity = input.severity ?? 'Medium'
-  const payload = { ...input, reference, category, severity }
-  const { data, error } = await supabase
-    .from('incident_reports')
-    .insert(payload)
-    .select('*')
-    .single()
-  if (!error && data) {
-    localIncidents = [data as IncidentReport, ...localIncidents]
-    return data as IncidentReport
-  }
-
-  const now = new Date().toISOString()
-  const fallback: IncidentReport = {
-    id: `preset-incident-${Date.now()}`,
-    reference,
-    title: payload.title,
-    category: payload.category ?? 'General',
-    severity: payload.severity ?? 'Medium',
-    description: payload.description,
-    location: payload.location ?? null,
-    reported_by_name: payload.reported_by_name,
-    reported_by_email: payload.reported_by_email ?? null,
-    occurred_at: payload.occurred_at ?? now,
-    status: 'Submitted',
-    resolution_notes: null,
-    resolved_by: null,
-    resolved_at: null,
-    created_at: now,
-  }
-  localIncidents = [fallback, ...localIncidents]
-  incidentsUsingPreset = true
-  console.warn('[v0] Incident save unavailable; applied the report to preset data.', error)
-  return fallback
-}
-
-export async function reviewIncident(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('incident_reports')
-    .update({ status: 'Under Review' })
-    .eq('id', id)
-  if (!error) return
-
-  const presetIncident = localIncidents.some((incident) => incident.id === id)
-  if (presetIncident) {
-    localIncidents = localIncidents.map((incident) =>
-      incident.id === id ? { ...incident, status: 'Under Review' } : incident,
-    )
-    incidentsUsingPreset = true
-    console.warn('[v0] Review update unavailable; applied the change to preset incident data.', error)
-    return
-  }
-
-  throw error
-}
-
-export async function resolveIncident(
-  id: string,
-  status: 'Resolved' | 'Dismissed',
-  resolutionNotes: string,
-  resolvedBy: string,
-): Promise<void> {
-  const resolvedAt = new Date().toISOString()
-  const { error } = await supabase
-    .from('incident_reports')
-    .update({
-      status,
-      resolution_notes: resolutionNotes,
-      resolved_by: resolvedBy,
-      resolved_at: resolvedAt,
-    })
-    .eq('id', id)
-  if (!error) {
-    localIncidents = localIncidents.map((incident) =>
-      incident.id === id
-        ? { ...incident, status, resolution_notes: resolutionNotes, resolved_by: resolvedBy, resolved_at: resolvedAt }
-        : incident,
-    )
-    return
-  }
-
-  if (localIncidents.some((incident) => incident.id === id)) {
-    localIncidents = localIncidents.map((incident) =>
-      incident.id === id
-        ? { ...incident, status, resolution_notes: resolutionNotes, resolved_by: resolvedBy, resolved_at: resolvedAt }
-        : incident,
-    )
-    incidentsUsingPreset = true
-    console.warn('[v0] Incident resolution unavailable; applied the change to preset data.', error)
-    return
-  }
-
-  throw error
-}
-
-// ---- Settings (incident review PIN) ---------------------------------
-
-export const DEFAULT_WOM_REVIEW_PIN = '246810'
-
-export async function fetchIncidentPin(): Promise<string> {
-  try {
-    const { data, error } = await supabase
-      .from('manning_settings')
-      .select('incident_pin')
-      .eq('id', 1)
-      .single()
-    if (error) throw error
-
-    const configuredPin = String(data?.incident_pin ?? '').trim()
-    return configuredPin || DEFAULT_WOM_REVIEW_PIN
-  } catch (error) {
-    // The settings table is optional for the preset/demo workspace.
-    console.warn('[v0] WOM settings unavailable; using the default review PIN.', error)
-    return DEFAULT_WOM_REVIEW_PIN
-  }
-}
-
-export async function updateIncidentPin(pin: string): Promise<void> {
-  const { error } = await supabase
-    .from('manning_settings')
-    .update({ incident_pin: pin, updated_at: new Date().toISOString() })
-    .eq('id', 1)
-  if (error) throw error
-}
 
 // ---- Hook: manning workspace ----------------------------------------
 
@@ -1051,43 +857,8 @@ export function useManningData(): ManningData {
   return { assignments, tasks, warnings, loading, error, usingPreset, reload }
 }
 
-// ---- Hook: incidents workspace --------------------------------------
 
-export interface IncidentData {
-  incidents: IncidentReport[]
-  loading: boolean
-  error: string | null
-  usingPreset: boolean
-  reload: () => Promise<void>
-}
-
-export function useIncidentData(): IncidentData {
-  const [incidents, setIncidents] = useState<IncidentReport[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [usingPreset, setUsingPreset] = useState(false)
-
-  const reload = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      setUsingPreset(false)
-      setIncidents(await withManningTimeout(fetchIncidents(), 'Incident workspace'))
-      setUsingPreset(incidentsUsingPreset)
-    } catch (err) {
-      console.warn('[v0] Incident tables unavailable; using preset incident data.', err)
-      setIncidents(localIncidents)
-      setUsingPreset(true)
-      setError(null)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  return { incidents, loading, error, usingPreset, reload }
-}
-
-// ---- Manning Overrides (Supabase + Local Fallback) -------------------
+// ---- Manning Overrides (REST API + Local Fallback) -------------------
 
 export interface ManningOverride {
   id: string

@@ -1,14 +1,17 @@
 import { logAuditEvent } from '@/lib/audit-logger'
-import * as damageApi from '@/lib/damageApi'
-import * as partialEgressApi from '@/lib/partialEgressApi'
-import { fetchAuditLogs } from '@/lib/auditApi'
-import { API_BASE_URL, getAuthToken } from '@/lib/apiConfig'
+import * as damageApi from '@/features/damage/api/damageApi'
+import * as partialEgressApi from '@/features/warehouse/api/partialEgressApi'
+import { fetchAuditLogs } from '@/features/audit/api/auditApi'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
+import { completeAccessRequest, fetchAccessRequests } from '@/features/access-requests/api'
+import { fetchEventsApi, createEventApi, updateEventApi, isGuid } from '@/features/events/api/eventsApi'
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type ReactNode,
@@ -42,7 +45,6 @@ import type {
   UserAction,
   Vendor,
 } from '@/lib/types'
-import { supabase } from '@/lib/supabase'
 import {
   GROUND_CREW_TREE_SEED,
   PARENT_ROLES,
@@ -88,8 +90,11 @@ function rowToStaff(row: any): Staff {
     : ((row.session_status ?? row.sessionStatus ?? 'Offline Session') as Staff['sessionStatus'])
 
   const unclaimedTemp = Boolean(row.temporaryPassword ?? row.temporary_password)
+  const mustChangePassword = Boolean(row.mustChangePassword ?? row.must_change_password)
+  const activationStatus = String(row.activationStatus ?? row.activation_status ?? '').trim()
+  const isPendingActivation = activationStatus.toLowerCase() === 'pendingactivation' || unclaimedTemp || mustChangePassword
   const accountStatus: AccountStatus =
-    sessionStatus === 'Suspended' ? 'Suspended' : unclaimedTemp ? 'Pending' : 'Active'
+    sessionStatus === 'Suspended' ? 'Suspended' : isPendingActivation ? 'Pending' : 'Active'
 
   const rawDate = row.updatedAt ?? row.updated_at ?? row.createdAt ?? row.created_at
   const lastAccess = rawDate
@@ -115,6 +120,9 @@ function rowToStaff(row: any): Staff {
     lastAccess,
     recordKind: 'full-account',
     accountStatus,
+    employmentType: (row.employmentType ?? row.employment_type ?? 'Full Time') as Staff['employmentType'],
+    mustChangePassword,
+    activationStatus: activationStatus || undefined,
     tempPassword: undefined,
   }
 }
@@ -1462,29 +1470,45 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   })
   const [partialEgressesByEvent, setPartialEgressesByEvent] = useState<Record<string, EventEgressResponse>>({})
   const [partialEgressPolicy, setPartialEgressPolicy] = useState<PostEgressPolicyResponse | null>(null)
+  const eventsRequestRef = useRef<Promise<PortalEvent[]> | null>(null)
+  const eventsRef = useRef(events)
+  const lastEventsRequestAtRef = useRef(0)
 
-  // Hydrate events list from backend REST API (GET /api/events)
-  const loadEvents = useCallback(async (): Promise<PortalEvent[]> => {
-    try {
-      const { fetchEventsApi } = await import('@/lib/eventsApi')
-      const remoteEvents = await fetchEventsApi()
-      setEvents(remoteEvents)
+  // Hydrate events list from backend REST API (GET /api/events). Cached state is
+  // rendered immediately; remote hydration stays in the background and is
+  // coalesced so focus events cannot create duplicate requests.
+  const loadEvents = useCallback(async (force = false): Promise<PortalEvent[]> => {
+    const now = Date.now()
+    if (!force && now - lastEventsRequestAtRef.current < 2_000) return eventsRequestRef.current ?? events
+    if (eventsRequestRef.current) return eventsRequestRef.current
+
+    lastEventsRequestAtRef.current = now
+    const request = (async () => {
       try {
-        localStorage.setItem('_lumiere_cached_events', JSON.stringify(remoteEvents))
-      } catch {}
-      return remoteEvents
-    } catch (err) {
-      console.warn('[store] loadEvents failed:', err)
-      return []
-    }
+        const remoteEvents = await fetchEventsApi()
+        eventsRef.current = remoteEvents
+        setEvents(remoteEvents)
+        try {
+          localStorage.setItem('_lumiere_cached_events', JSON.stringify(remoteEvents))
+        } catch {}
+        return remoteEvents
+      } catch (err) {
+        console.warn('[store] loadEvents failed:', err)
+        return eventsRef.current
+      } finally {
+        eventsRequestRef.current = null
+      }
+    })()
+    eventsRequestRef.current = request
+    return request
   }, [])
 
   useEffect(() => {
     let active = true
 
-    const syncEvents = () => {
+    const syncEvents = (force = false) => {
       if (!active) return
-      loadEvents()
+      void loadEvents(force)
     }
 
     syncEvents()
@@ -1495,7 +1519,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     window.addEventListener('focus', onFocus)
 
     // Periodic checkpoint refresh (30s polling fallback)
-    const interval = setInterval(syncEvents, 30000)
+    const interval = setInterval(() => syncEvents(true), 30000)
 
     return () => {
       active = false
@@ -1610,24 +1634,21 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     let active = true
 
     const loadAccessRequests = async () => {
-      const { data, error } = await supabase
-        .from('access_requests')
-        .select('id, email, type, status')
-        .order('created_at', { ascending: false })
-
       if (!active) return
-      if (error) {
-        console.error('[v0] Failed to load access requests:', error)
-        return
-      }
-      if (data) {
-        const fromDb: UserAction[] = data.map((row: any) => ({
+      try {
+        const data = await fetchAccessRequests()
+        if (!active) return
+        const fromApi: UserAction[] = data.map((row) => ({
           id: row.id,
-          type: row.type as UserAction['type'],
-          user: row.email,
-          status: row.status as UserAction['status'],
+          type: row.requestedRole === 'Password Recovery' ? 'forgot-password' : 'access-request',
+          user: row.fullName,
+          email: row.email,
+          status: row.status.toLowerCase() === 'completed' ? 'completed' : 'pending',
         }))
-        setUserActions([...fromDb, ...seedUserActions])
+        setUserActions(fromApi)
+      } catch (error) {
+        console.error('[AccessRequests] Failed to load requests from API:', error)
+        setUserActions([])
       }
     }
 
@@ -1774,9 +1795,10 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       const payload = {
         email,
         fullName,
-        roleName: role,
-        contactNumber,
-        employeeId,
+    roleName: role,
+    employmentType: 'Full Time',
+    contactNumber,
+    employeeId,
         subRole,
       }
 
@@ -1829,13 +1851,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
       setStaff((prev) => prev.filter((s) => s.id !== id))
 
-      if (target?.employeeId && supabase) {
-        try {
-          await supabase.from('crew_roster').update({ status: 'Inactive' }).eq('employee_id', target.employeeId)
-        } catch (err) {
-          console.warn('[Workforce] Soft-deactivating crew_roster row failed silently:', err)
-        }
-      }
       if (target) {
         pushLog({
           account: target.employeeId,
@@ -2075,7 +2090,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       initiatorRole = 'Executive',
       allowConflictOverride = false,
     ): Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }> => {
-      const { createEventApi, isGuid } = await import('@/lib/eventsApi')
 
       const sanitizeToIsoDate = (val?: string): string => {
         if (!val) return ''
@@ -2166,7 +2180,6 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       initiatorRole = 'Executive',
       allowConflictOverride = false,
     ): Promise<{ success: boolean; conflict?: boolean; message?: string; conflictingEvents?: any[] }> => {
-      const { updateEventApi } = await import('@/lib/eventsApi')
       const result = await updateEventApi(id, draft, allowConflictOverride)
 
       if (result.conflict) {
@@ -2204,38 +2217,24 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
   const resolveUserAction = useCallback(
     (id: string) => {
-      setUserActions((prev) =>
-        prev.map((a) => {
-          if (a.id !== id || a.status === 'completed') return a
-          pushLog({
-            account: a.user,
-            initiatorRole: 'Admin',
-            action:
-              a.type === 'access-request'
-                ? 'Access Request Approved & Account Created'
-                : a.type === 'forgot-password'
-                  ? 'Temporary Password Generated'
-                  : 'Account Unlocked & Temp Password Sent',
-            detail:
-              a.type === 'access-request'
-                ? `Access request approved for ${a.user}. Account created.`
-                : a.type === 'forgot-password'
-                  ? `Temporary password generated and dispatched to ${a.user}. User must reset on next login.`
-                  : `Account ${a.user} unlocked. Temporary password issued pending reset.`,
-            ip: randomIp(),
-            status: 'Success',
-          })
-          // Persist the resolution so the request leaves the pending queue.
-          void supabase
-            .from('access_requests')
-            .update({ status: 'completed' })
-            .eq('id', id)
-            .then(({ error }) => {
-              if (error) console.error('[v0] Failed to resolve access request:', error)
-            })
-          return { ...a, status: 'completed' }
-        }),
-      )
+      void completeAccessRequest(id)
+        .then(() => {
+          setUserActions((prev) =>
+            prev.map((a) => {
+              if (a.id !== id || a.status === 'completed') return a
+              pushLog({
+                account: a.user,
+                initiatorRole: 'Admin',
+                action: 'Access Request Marked Complete',
+                detail: `Access request marked complete for ${a.user}. Account provisioning remains a separate workflow.`,
+                ip: randomIp(),
+                status: 'Success',
+              })
+              return { ...a, status: 'completed' }
+            }),
+          )
+        })
+        .catch((error) => console.error('[AccessRequests] Failed to resolve request through API:', error))
     },
     [pushLog],
   )

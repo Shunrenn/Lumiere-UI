@@ -47,11 +47,12 @@ export function ExecutiveAssetInventoryPage() {
     <div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
-            Asset Inventory
+          <span className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2.5 py-1 text-[0.58rem] font-bold uppercase tracking-[0.16em] text-primary">Asset Kiosk</span>
+          <h1 className="mt-1 font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+            Asset Allocation
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Portfolio-level asset catalog, tier-grouped inventory oversight, and stock distribution.
+            Browse, search, and review assets by classification.
           </p>
         </div>
       </div>
@@ -85,6 +86,7 @@ export function ExecutiveAssetInventoryPage() {
   return (
     <ExecutiveShell activeId="inventory" onSelect={destination} stickyHeader={stickyHeader}>
       <div className="mt-2 overflow-hidden rounded-xl border border-border bg-card">
+        <div className="hidden">
         <CompactStatStrip
           stats={[
             { label: 'Total Assets', value: stats.totalSKUs },
@@ -95,8 +97,9 @@ export function ExecutiveAssetInventoryPage() {
             { label: 'Lost In Action', value: stats.lostInAction },
           ]}
         />
+        </div>
         <div className="p-4 sm:p-6">
-          <AssetCatalogModule readOnly embedded />
+          <AssetCatalogModule readOnly embedded executiveKiosk />
         </div>
       </div>
     </ExecutiveShell>

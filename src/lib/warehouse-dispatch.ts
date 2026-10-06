@@ -324,6 +324,16 @@ export function updateBatchInfo(
   publish()
 }
 
+export function updateBatchCrew(eventId: string, batchId: string, crew: DispatchBatch['crew']) {
+  const batches = batchesByEvent.get(eventId)
+  if (!batches) return
+  batchesByEvent.set(
+    eventId,
+    batches.map((batch) => (batch.id === batchId ? { ...batch, crew } : batch)),
+  )
+  publish()
+}
+
 const VEHICLE_TYPES = ['Truck Alpha (6-Ton)', 'Van Beta (Transit)', 'Truck Gamma (4-Ton)', 'Van Delta (Transit)']
 
 function plateFor(seed: number) {
@@ -451,9 +461,8 @@ export function createReturnBatchFromDelivered(eventId: string, outboundBatch: D
   return returnBatch
 }
 
-import jsPDF from 'jspdf'
-
-export function exportBatchPdf(eventInfo: { eventTitle: string; venue: string; targetDate: string }, batch: DispatchBatch) {
+export async function exportBatchPdf(eventInfo: { eventTitle: string; venue: string; targetDate: string }, batch: DispatchBatch) {
+  const { default: jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'pt', format: 'letter' })
   const margin = 40
   let y = margin

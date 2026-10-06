@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Lock, Plus, RefreshCw, Search } from 'lucide-react'
-import { mapVendorDtoToWarehouseVendor, updateVendor, useWarehouseVendors, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
-import { fetchVendorsResultApi } from '@/lib/vendorApi'
+import { AlertTriangle, Lock, Pencil, Plus, RefreshCw, Search } from 'lucide-react'
+import { formatVendorLeadTime, mapVendorDtoToWarehouseVendor, updateVendor, useWarehouseVendors, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
+import { fetchVendorsResultApi } from '@/features/vendors/api/vendorApi'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { VENDOR_STATUS_TONE } from '@/components/warehouse/replenishment/tone'
 import { VendorDetailModal } from '@/components/warehouse/vendors/VendorDetailModal'
@@ -13,8 +13,8 @@ const STATUS_FILTERS: Array<VendorStatus | 'All'> = ['All', 'Active', 'On Hold',
 type FetchState =
   | { status: 'loading' }
   | { status: 'success' }
-  | { status: 'auth-error'; message: string }
-  | { status: 'request-error'; message: string }
+  | { status: 'auth-error'; message: string; httpStatus: number }
+  | { status: 'request-error'; message: string; httpStatus: number }
 
 export function VendorManagementModule() {
   const initialVendors = useWarehouseVendors()
@@ -23,18 +23,12 @@ export function VendorManagementModule() {
   const [statusFilter, setStatusFilter] = useState<VendorStatus | 'All'>('All')
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [editingVendor, setEditingVendor] = useState<WarehouseVendor | null>(null)
   const [fetchState, setFetchState] = useState<FetchState>({ status: 'loading' })
 
   // Keep vendors in sync with initialVendors from useWarehouseVendors store
   useEffect(() => {
-    if (initialVendors.length > 0) {
-      setVendors((prev) => {
-        const ids = new Set(prev.map((item) => item.id))
-        const newItems = initialVendors.filter((item) => !ids.has(item.id))
-        if (newItems.length === 0) return prev
-        return [...newItems, ...prev]
-      })
-    }
+    setVendors(initialVendors)
   }, [initialVendors])
 
   const loadVendors = useCallback(async () => {
@@ -49,9 +43,9 @@ export function VendorManagementModule() {
       })
       setFetchState({ status: 'success' })
     } else if (result.kind === 'auth-error') {
-      setFetchState({ status: 'auth-error', message: result.message })
+      setFetchState({ status: 'auth-error', message: result.message, httpStatus: result.status })
     } else {
-      setFetchState({ status: 'request-error', message: result.message })
+      setFetchState({ status: 'request-error', message: result.message, httpStatus: result.status })
     }
   }, [])
 
@@ -68,7 +62,8 @@ export function VendorManagementModule() {
         q.length === 0 ||
         (vendor.name || '').toLowerCase().includes(q) ||
         (vendor.specialty || '').toLowerCase().includes(q) ||
-        (vendor.contactName || '').toLowerCase().includes(q)
+        (vendor.contactName || '').toLowerCase().includes(q) ||
+        vendor.category.toLowerCase().includes(q) || vendor.city.toLowerCase().includes(q)
       return matchesStatus && matchesQuery
     })
   }, [vendors, query, statusFilter])
@@ -100,7 +95,7 @@ export function VendorManagementModule() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search vendors, specialty, contact"
+            placeholder="Search vendors, category, city, specialty…"
             className="w-full rounded-md border border-input bg-background py-2 pl-8 pr-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
           />
         </div>
@@ -135,7 +130,7 @@ export function VendorManagementModule() {
         <table className="w-full text-left">
           <thead>
             <tr className="bg-background">
-              {['Vendor', 'Specialty', 'Contact', 'Lead time', 'Status'].map((heading) => (
+              {['Vendor', 'Category', 'Specialty', 'Contact', 'Location', 'Lead time', 'Status', 'Actions'].map((heading) => (
                 <th
                   key={heading}
                   className="px-4 py-3 text-[0.58rem] font-bold uppercase tracking-[0.1em] text-muted-foreground"
@@ -148,7 +143,7 @@ export function VendorManagementModule() {
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted-foreground">
                   {fetchState.status === 'loading' && vendors.length === 0 ? (
                     <div className="flex items-center justify-center gap-2">
                       <RefreshCw className="size-4 animate-spin text-primary" />
@@ -160,7 +155,9 @@ export function VendorManagementModule() {
                         <Lock className="size-5" />
                       </div>
                       <p className="font-medium text-foreground">Authentication Required</p>
-                      <p className="max-w-md text-xs text-muted-foreground">{fetchState.message}</p>
+                      <p className="max-w-md text-xs text-muted-foreground">
+                        GET /api/vendors returned HTTP {fetchState.httpStatus}. {fetchState.message}
+                      </p>
                       <button
                         type="button"
                         onClick={() => loadVendors()}
@@ -176,7 +173,10 @@ export function VendorManagementModule() {
                         <AlertTriangle className="size-5" />
                       </div>
                       <p className="font-medium text-foreground">Vendor Registry Unavailable</p>
-                      <p className="max-w-md text-xs text-muted-foreground">{fetchState.message}</p>
+                      <p className="max-w-md text-xs text-muted-foreground">
+                        {fetchState.httpStatus > 0 ? `GET /api/vendors returned HTTP ${fetchState.httpStatus}. ` : ''}
+                        {fetchState.message}
+                      </p>
                       <button
                         type="button"
                         onClick={() => loadVendors()}
@@ -202,15 +202,17 @@ export function VendorManagementModule() {
                   <p className="text-sm font-medium text-card-foreground">{vendor.name}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{vendor.contactName}</p>
                 </td>
+                <td className="px-4 py-3.5 text-sm text-muted-foreground">{vendor.category}</td>
                 <td className="px-4 py-3.5 text-sm text-muted-foreground">{vendor.specialty}</td>
                 <td className="px-4 py-3.5">
-                  <p className="text-xs text-muted-foreground">{vendor.email}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{vendor.phone}</p>
+                  {vendor.email || vendor.phone ? <><p className="text-xs text-muted-foreground">{vendor.email}</p><p className="mt-0.5 text-xs text-muted-foreground">{vendor.phone}</p></> : <span className="text-sm text-muted-foreground">—</span>}
                 </td>
-                <td className="px-4 py-3.5 text-sm text-muted-foreground">{vendor.leadTimeHours}h</td>
+                <td className="px-4 py-3.5 text-sm text-muted-foreground">{vendor.city || '—'}</td>
+                <td className="px-4 py-3.5 text-sm text-muted-foreground">{formatVendorLeadTime(vendor)}</td>
                 <td className="px-4 py-3.5">
                   <Pill tone={VENDOR_STATUS_TONE[vendor.status] || 'positive'}>{vendor.status || 'Active'}</Pill>
                 </td>
+                <td className="px-4 py-3.5" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => setEditingVendor(vendor)} aria-label={`Edit ${vendor.name}`} className="rounded-md p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground"><Pencil className="size-3.5" /></button></td>
               </tr>
             ))}
           </tbody>
@@ -230,6 +232,7 @@ export function VendorManagementModule() {
       {addOpen && (
         <AddVendorModal onClose={() => setAddOpen(false)} onCreated={(vendor) => setSelectedVendorId(vendor.id)} />
       )}
+      {editingVendor && <AddVendorModal vendor={editingVendor} onClose={() => setEditingVendor(null)} />}
     </div>
   )
 }

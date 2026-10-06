@@ -18,7 +18,7 @@ import {
   canPerformOverrideRemoval,
   canPerformResourceOverride,
   overrideAssignmentApi,
-} from '@/lib/manningApi'
+} from '@/features/manning/api/manningApi'
 import {
   useCrewRows,
   getPresetSquads,
@@ -38,6 +38,7 @@ import {
   type ManningAssignment,
 } from '@/lib/manning'
 import { cn } from '@/lib/utils'
+import { WarehouseModuleHeader } from '@/components/warehouse/WarehouseModuleHeader'
 import { exportCrewRosterPdf } from '@/lib/pdf-exporter'
 
 function Avatar({ name }: { name: string }) {
@@ -53,8 +54,7 @@ function Avatar({ name }: { name: string }) {
   )
 }
 
-type TopLevelTab = 'daily' | 'event'
-type EventSubTab = 'schedule' | 'assignments'
+type ManningView = 'weekly' | 'coverage' | 'events' | 'rosters'
 
 interface ManningModuleProps {
   onClose: () => void
@@ -72,9 +72,8 @@ export function ManningModule({ onClose }: ManningModuleProps) {
   const declarations = useGroundCrewDeclarations()
 
   // Navigation State
-  const [topTab, setTopTab] = useState<TopLevelTab>('daily')
-  const [dailyViewMode, setDailyViewMode] = useState<'matrix' | 'detail'>('matrix')
-  const [eventSubTab, setEventSubTab] = useState<EventSubTab>('schedule')
+  const [view, setView] = useState<ManningView>('weekly')
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
 
   // Roster Directory Search & Filter State
   const [directoryQuery, setDirectoryQuery] = useState('')
@@ -87,6 +86,11 @@ export function ManningModule({ onClose }: ManningModuleProps) {
 
   // Card Click Inspection Detail Modals
   const [selectedAssignment, setSelectedAssignment] = useState<ManningAssignment | null>(null)
+
+  const selectedEvent = events.find((event) => event.id === selectedEventId) ?? null
+  const selectedEventAssignments = selectedEvent
+    ? assignments.filter((assignment) => assignment.event_name.toLowerCase() === selectedEvent.title.toLowerCase() || assignment.deployment_ref === selectedEvent.id)
+    : assignments
 
   useEffect(() => {
     reconcileExpiredDeclarations()
@@ -147,15 +151,9 @@ export function ManningModule({ onClose }: ManningModuleProps) {
   return (
     <div className="flex h-full flex-1 flex-col overflow-y-auto bg-background">
       {/* ─── Header & Title ─── */}
-      <div className="flex flex-col gap-4 border-b border-border px-6 py-5 sm:px-10">
+      <div className="flex flex-col gap-4 border-b border-border px-0 py-7">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[0.6rem] font-bold uppercase tracking-[0.24em] text-primary">Warehouse module</p>
-            <h1 className="mt-1 font-serif text-2xl font-medium text-foreground">Manning Delegation</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Ground crew scheduling, event deployments, and zone duty rosters.
-            </p>
-          </div>
+          <WarehouseModuleHeader title="Manning Delegation" description="Ground crew scheduling, event deployments, and zone duty rosters." />
           <button
             type="button"
             onClick={onClose}
@@ -166,37 +164,23 @@ export function ManningModule({ onClose }: ManningModuleProps) {
           </button>
         </div>
 
-        {/* ─── Top-Level Navigation Tabs ─── */}
+        {/* ─── Primary navigation: four peer views, grouped by purpose ─── */}
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="inline-flex rounded-lg border border-border bg-card p-1">
-            <button
-              type="button"
-              onClick={() => setTopTab('daily')}
-              aria-pressed={topTab === 'daily'}
-              className={cn(
-                'flex items-center gap-2 rounded-md px-4 py-2 text-xs font-bold uppercase tracking-[0.08em] transition',
-                topTab === 'daily'
-                  ? 'bg-foreground text-background shadow-sm'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              <Clock className="size-3.5" />
-              Daily Operations
-            </button>
-            <button
-              type="button"
-              onClick={() => setTopTab('event')}
-              aria-pressed={topTab === 'event'}
-              className={cn(
-                'flex items-center gap-2 rounded-md px-4 py-2 text-xs font-bold uppercase tracking-[0.08em] transition',
-                topTab === 'event'
-                  ? 'bg-foreground text-background shadow-sm'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              <CalendarClock className="size-3.5" />
-              Event-Based Operations
-            </button>
+          <div className="flex flex-wrap items-end gap-4">
+            <div>
+              <p className="mb-1 px-1 text-[0.55rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">Daily Operations</p>
+              <div className="inline-flex rounded-lg border border-border bg-card p-1">
+                <button type="button" onClick={() => setView('weekly')} aria-pressed={view === 'weekly'} className={cn('flex items-center gap-2 rounded-md px-3 py-2 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition', view === 'weekly' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}><Clock className="size-3.5" />Weekly Roster</button>
+                <button type="button" onClick={() => setView('coverage')} aria-pressed={view === 'coverage'} className={cn('rounded-md px-3 py-2 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition', view === 'coverage' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>Daily Coverage</button>
+              </div>
+            </div>
+            <div>
+              <p className="mb-1 px-1 text-[0.55rem] font-bold uppercase tracking-[0.16em] text-muted-foreground">Event Staffing</p>
+              <div className="inline-flex rounded-lg border border-border bg-card p-1">
+                <button type="button" onClick={() => setView('events')} aria-pressed={view === 'events'} className={cn('flex items-center gap-2 rounded-md px-3 py-2 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition', view === 'events' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}><CalendarClock className="size-3.5" />Upcoming Events</button>
+                <button type="button" onClick={() => setView('rosters')} aria-pressed={view === 'rosters'} className={cn('rounded-md px-3 py-2 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition', view === 'rosters' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>Event Rosters</button>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -215,78 +199,19 @@ export function ManningModule({ onClose }: ManningModuleProps) {
               Crew Directory ({filteredDirectoryRows.length}/{crewRows.length})
             </button>
 
-            {topTab === 'event' && (
+            {(view === 'events' || view === 'rosters') && (
               <button
                 type="button"
                 onClick={() => setAssignOpen(true)}
                 className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90"
               >
                 <UserPlus className="size-3.5" />
-                Assign Field Crew
+                Assign Event Crew
               </button>
             )}
           </div>
         </div>
 
-        {/* ─── Nested Sub-Tabs (when topTab === 'daily') ─── */}
-        {topTab === 'daily' && (
-          <div className="flex flex-col gap-3 border-t border-border pt-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="inline-flex rounded-md border border-border bg-background p-1">
-              <button
-                type="button"
-                onClick={() => setDailyViewMode('matrix')}
-                aria-pressed={dailyViewMode === 'matrix'}
-                className={cn(
-                  'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
-                  dailyViewMode === 'matrix' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
-                )}
-              >
-                Weekly Roster Matrix
-              </button>
-              <button
-                type="button"
-                onClick={() => setDailyViewMode('detail')}
-                aria-pressed={dailyViewMode === 'detail'}
-                className={cn(
-                  'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
-                  dailyViewMode === 'detail' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
-                )}
-              >
-                Daily Department &amp; Zone Detail
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ─── Nested Sub-Tabs (when topTab === 'event') ─── */}
-        {topTab === 'event' && (
-          <div className="flex flex-col gap-3 border-t border-border pt-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="inline-flex rounded-md border border-border bg-background p-1">
-              <button
-                type="button"
-                onClick={() => setEventSubTab('schedule')}
-                aria-pressed={eventSubTab === 'schedule'}
-                className={cn(
-                  'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
-                  eventSubTab === 'schedule' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
-                )}
-              >
-                Event Schedule
-              </button>
-              <button
-                type="button"
-                onClick={() => setEventSubTab('assignments')}
-                aria-pressed={eventSubTab === 'assignments'}
-                className={cn(
-                  'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
-                  eventSubTab === 'assignments' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
-                )}
-              >
-                Assignments
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ─── Compact Scrollable Crew Roster Directory with Search & Filters ─── */}
@@ -380,9 +305,9 @@ export function ManningModule({ onClose }: ManningModuleProps) {
       )}
 
       {/* ─── Main Content Area ─── */}
-      <div className="flex-1 px-6 py-6 sm:px-10">
-        {topTab === 'daily' ? (
-          dailyViewMode === 'matrix' ? (
+      <div className="flex-1 px-0 py-7">
+        {view === 'weekly' || view === 'coverage' ? (
+          view === 'weekly' ? (
             <CrewOpsGrid staff={staff} />
           ) : (
             <DailyZoneDutyView crewRows={crewRows} presetSquads={presetSquads} />
@@ -390,12 +315,12 @@ export function ManningModule({ onClose }: ManningModuleProps) {
         ) : (
           <div className="flex flex-col gap-5">
             {/* SUB-TAB: EVENT SCHEDULE */}
-            {eventSubTab === 'schedule' && (
+            {view === 'events' && (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-sm font-bold text-foreground">Event Schedule &amp; Manning Requirement</h2>
-                    <p className="text-xs text-muted-foreground">Event-centric schedule of upcoming events and ground crew manning status.</p>
+                    <h2 className="font-serif text-xl font-medium text-foreground">Upcoming Event Staffing</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">Review crew readiness by event, then open the staffing plan for the event that needs attention.</p>
                   </div>
                 </div>
 
@@ -417,12 +342,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                         >
                           <div className="flex items-start justify-between gap-4">
                             <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-foreground text-sm">{event.title}</span>
-                                <span className="rounded bg-muted px-2 py-0.5 text-[0.6rem] font-mono text-muted-foreground">
-                                  {event.id}
-                                </span>
-                              </div>
+                              <span className="font-semibold text-foreground text-sm">{event.title}</span>
                               <p className="mt-1 text-xs text-muted-foreground">
                                 Target Date: <span className="font-medium text-foreground">{event.targetDate || 'TBD'}</span> · Venue:{' '}
                                 <span className="font-medium text-foreground">{event.venue || 'TBD'}</span>
@@ -442,19 +362,20 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                           <div className="flex items-center justify-between border-t border-border/60 pt-3 text-xs">
                             <span className="text-muted-foreground">
                               {activeAssignment ? (
-                                <>
-                                  Assigned Lead: <strong className="text-foreground">{activeAssignment.lead_name}</strong> ({activeAssignment.member_names.length} crew)
-                                </>
+                                <>Crew lead: <strong className="text-foreground">{activeAssignment.lead_name}</strong> · {activeAssignment.member_names.length} assigned</>
                               ) : (
                                 <span className="text-amber-600 dark:text-amber-400 font-semibold">No Ground Crew Deployment Assigned Yet</span>
                               )}
                             </span>
                             <button
                               type="button"
-                              onClick={() => setAssignOpen(true)}
+                              onClick={() => {
+                                setSelectedEventId(event.id)
+                                setView('rosters')
+                              }}
                               className="rounded border border-border bg-background px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wider text-primary hover:bg-accent"
                             >
-                              Assign Crew
+                              {activeAssignment ? 'Open Staffing Plan' : 'Staff This Event'}
                             </button>
                           </div>
                         </div>
@@ -466,13 +387,14 @@ export function ManningModule({ onClose }: ManningModuleProps) {
             )}
 
             {/* SUB-TAB: ASSIGNMENTS */}
-            {eventSubTab === 'assignments' && (
+            {view === 'rosters' && (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-sm font-bold text-foreground">Ground Crew Deployment Roster</h2>
-                    <p className="text-xs text-muted-foreground">Active ground crew deployment records per event.</p>
+                    <h2 className="font-serif text-xl font-medium text-foreground">{selectedEvent ? `${selectedEvent.title} Roster` : 'Event Rosters'}</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">{selectedEvent ? `${selectedEvent.targetDate || 'Date TBD'} · ${selectedEvent.venue || 'Venue TBD'} · review the event team before deployment.` : 'Open an event from Upcoming Events to focus on one staffing plan.'}</p>
                   </div>
+                  {selectedEvent && <button type="button" onClick={() => { setSelectedEventId(null); setView('events') }} className="rounded-md border border-border px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-foreground">Back to events</button>}
                 </div>
 
                 <div className="space-y-3">
@@ -485,12 +407,13 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                       <p className="font-semibold">Unable to load manning assignments</p>
                       <p className="mt-1 text-[0.7rem] text-muted-foreground">{assignmentsError}</p>
                     </div>
-                  ) : assignments.length === 0 ? (
+                  ) : selectedEventAssignments.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-xs text-muted-foreground">
-                      No ground crew deployment rosters assigned.
+                      <p>No crew roster has been created for this event.</p>
+                      {selectedEvent && <button type="button" onClick={() => setAssignOpen(true)} className="mt-4 rounded-md bg-primary px-3 py-2 text-[0.6rem] font-bold uppercase tracking-wider text-primary-foreground">Assign crew</button>}
                     </div>
                   ) : (
-                    assignments.map((assignment) => (
+                    selectedEventAssignments.map((assignment) => (
                       <div
                         key={assignment.id}
                         onClick={() => setSelectedAssignment(assignment)}
@@ -500,11 +423,6 @@ export function ManningModule({ onClose }: ManningModuleProps) {
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-semibold text-foreground text-sm">{assignment.event_name}</span>
-                              {assignment.deployment_ref && (
-                                <span className="rounded bg-muted px-2 py-0.5 text-[0.6rem] font-mono text-muted-foreground">
-                                  {assignment.deployment_ref}
-                                </span>
-                              )}
                             </div>
                             <p className="mt-1 text-xs text-muted-foreground">
                               Date: <span className="font-medium text-foreground">{assignment.work_date}</span> · Lead:{' '}
@@ -584,6 +502,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
           events={events}
           crewRows={crewRows}
           presetSquads={presetSquads}
+          initialEventId={selectedEventId ?? undefined}
           onClose={() => setAssignOpen(false)}
         />
       )}
