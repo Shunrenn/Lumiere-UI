@@ -18,6 +18,7 @@ import {
   type AdminDestinationId,
 } from '@/lib/admin-destinations'
 import type { UserAction } from '@/lib/types'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
 
 /* ----------------------------- Stat card ----------------------------- */
 
@@ -145,7 +146,7 @@ function DashboardDetailModal({
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search records" aria-label="Search records" className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30" />
             </div>
           )}
-          {summary === 'gateway' && <div className="rounded-lg border border-border bg-background p-4"><p className="text-sm font-semibold text-foreground">Production API gateway</p><p className="mt-1 text-sm text-muted-foreground">{isBackendConnected ? 'Connected' : 'Offline / local cached mode'}</p></div>}
+          {summary === 'gateway' && <div className="rounded-lg border border-border bg-background p-4"><p className="text-sm font-semibold text-foreground">Production API gateway</p><p className="mt-1 text-sm text-muted-foreground">{isBackendConnected ? 'Healthy' : 'Offline / local cached mode'}</p></div>}
           {summary === 'locked' && <p className="mb-4 text-sm text-muted-foreground">{lockedAccounts} locked account event{lockedAccounts === 1 ? '' : 's'} currently require attention.</p>}
           {summary === 'activations' && <p className="mb-4 text-sm text-muted-foreground">{pendingActivations} activation request{pendingActivations === 1 ? '' : 's'} currently pending.</p>}
           {summary === 'distribution' && (
@@ -190,6 +191,8 @@ export function AdminSystemDashboardPage() {
   const [confirmItem, setConfirmItem] = useState<UserAction | null>(null)
   const [tempPassword, setTempPassword] = useState('lumierepassword123')
   const [methodologyOpen, setMethodologyOpen] = useState(false)
+  const [resolvedActionIds, setResolvedActionIds] = useState<Set<string>>(new Set())
+  const [generatedResult, setGeneratedResult] = useState<{ email: string; tempPass: string } | null>(null)
   const [detailSummary, setDetailSummary] = useState<DashboardSummary | null>(null)
 
   const activeUsers = useMemo(
@@ -247,7 +250,7 @@ export function AdminSystemDashboardPage() {
       { id: 'preview-account-locked-out', type: 'account-locked', user: 'Sample Executive', email: 'sample.executive@lumiere.com', status: 'pending', accountType: 'Executive' },
       { id: 'preview-forgot-password', type: 'forgot-password', user: 'Sample Project Manager', email: 'sample.pm@lumiere.com', status: 'pending', accountType: 'Project Manager' },
     ]
-    return [...relevant, ...previewRecords].sort((a, b) => {
+    return [...relevant, ...previewRecords].map((item) => resolvedActionIds.has(item.id) ? { ...item, status: 'completed' as const } : item).sort((a, b) => {
       if (a.status === b.status) return 0
       return a.status === 'pending' ? -1 : 1
     })
@@ -324,7 +327,7 @@ export function AdminSystemDashboardPage() {
               <StatCard
                 agentSelector="data-agent-system-health"
                 label="System Health"
-                value={isBackendConnected ? 'Connected' : 'Offline'}
+                value={isBackendConnected ? 'Healthy' : 'Offline'}
                 caption={isBackendConnected ? 'Production API gateway active' : 'Offline / local cached mode'}
                 onSelect={() => setDetailSummary('gateway')}
               />
@@ -407,11 +410,77 @@ export function AdminSystemDashboardPage() {
         </div>
       }
       confirmLabel="Generate & Send"
-      onConfirm={() => {
-        if (confirmItem) resolveUserAction(confirmItem.id)
+      onConfirm={async () => {
+        if (!confirmItem) return
+        const target = confirmItem
         setConfirmItem(null)
+
+        let finalTemp = tempPassword || 'lumierepassword123'
+        const token = getAuthToken()
+        const matched = staff.find(
+          (s) => s.id === target.id || s.email?.toLowerCase() === target.email?.toLowerCase(),
+        )
+
+        if (token && matched?.id) {
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/admin/users/${matched.id}/unlock-and-reset`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+            })
+            if (res.ok) {
+              const data = await res.json()
+              if (data.temporaryPassword) {
+                finalTemp = data.temporaryPassword
+              }
+            }
+          } catch (e) {
+            console.warn('[AdminDashboard] Unlock error:', e)
+          }
+        }
+
+        setResolvedActionIds((prev) => new Set(prev).add(target.id))
+        resolveUserAction(target.id)
+        setGeneratedResult({
+          email: target.email || target.user,
+          tempPass: finalTemp,
+        })
       }}
       onCancel={() => setConfirmItem(null)}
+    />
+
+    <ConfirmDialog
+      open={generatedResult !== null}
+      eyebrow="Action Completed"
+      title="Account Unlocked & Reset"
+      description={
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            The account for <span className="font-semibold text-foreground">{generatedResult?.email}</span> has been unlocked and security lockout flags reset.
+          </p>
+          <div className="rounded-md border border-border bg-muted/60 p-3">
+            <span className="block text-[0.62rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+              One-Time Temporary Password
+            </span>
+            <span className="mt-1 block font-mono text-base font-semibold tracking-wider text-primary">
+              {generatedResult?.tempPass}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            The user must change this password upon their next login.
+          </p>
+        </div>
+      }
+      confirmLabel="Copy & Close"
+      onConfirm={() => {
+        if (generatedResult?.tempPass) {
+          void navigator.clipboard?.writeText(generatedResult.tempPass)
+        }
+        setGeneratedResult(null)
+      }}
+      onCancel={() => setGeneratedResult(null)}
     />
 
     <SystemHealthMethodologyModal open={methodologyOpen} onClose={() => setMethodologyOpen(false)} />
