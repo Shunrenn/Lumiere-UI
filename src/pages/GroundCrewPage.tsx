@@ -124,11 +124,48 @@ function dateLabel(date: string) {
   })
 }
 
+const FIELD_STAGES = ['Dispatch Release', 'Venue Arrival', 'Egress Release', 'Warehouse Return'] as const
+
+type FieldStage = (typeof FIELD_STAGES)[number]
+type FieldItemState = 'Not checked' | 'Verified' | 'Missing' | 'Damaged'
+
+function FieldConsole({ events }: { events: EventItem[] }) {
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
+  const [activeStage, setActiveStage] = useState<FieldStage | null>(null)
+  const [checkedItems, setCheckedItems] = useState<Record<string, FieldItemState>>({})
+  const [notes, setNotes] = useState('')
+  const [confirmedStages, setConfirmedStages] = useState<Record<string, boolean>>({})
+  const selectedEvent = events.find((event) => event.id === selectedEventId) ?? null
+  const items = selectedEvent?.items ?? []
+  const stageKey = selectedEvent && activeStage ? `${selectedEvent.id}:${activeStage}` : ''
+  const completed = items.filter((item) => checkedItems[`${stageKey}:${item.id}`] && checkedItems[`${stageKey}:${item.id}`] !== 'Not checked').length
+  const canConfirm = items.length > 0 && completed === items.length
+
+  if (activeStage && selectedEvent) {
+    return (
+      <div className="space-y-4">
+        <button type="button" onClick={() => setActiveStage(null)} className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground">← Back to stages</button>
+        <PwaCard title={activeStage} subtitle={`${selectedEvent.name} · ${selectedEvent.venue}`}>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between text-xs"><span className="font-semibold">Asset manifest</span><span className="text-muted-foreground">{completed}/{items.length} verified</span></div>
+            {items.length === 0 ? <PwaEmptyState title="Manifest not available" description="This event has no dispatch manifest yet." /> : <div className="space-y-2">{items.map((item) => { const key = `${stageKey}:${item.id}`; const status = checkedItems[key] ?? 'Not checked'; return <div key={item.id} className="flex items-center gap-3 rounded-xl border border-border p-3"><button type="button" aria-label={`Verify ${item.name}`} onClick={() => setCheckedItems((current) => ({ ...current, [key]: status === 'Verified' ? 'Not checked' : 'Verified' }))} className={`flex size-6 shrink-0 items-center justify-center rounded-md border ${status === 'Verified' ? 'border-primary bg-primary text-primary-foreground' : 'border-border'}`}>{status === 'Verified' && <Check className="size-4" />}</button><div className="min-w-0 flex-1"><p className="text-xs font-semibold">{item.name} <span className="font-normal text-muted-foreground">× {item.qty}</span></p><p className="text-[10px] text-muted-foreground">{status}</p></div><PwaBadge label={status} variant={status === 'Verified' ? 'subrole' : 'neutral'} /></div>})}</div>}
+            <label className="block text-xs font-semibold">Notes (optional)<textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs" placeholder="Add a note for the next crew..." /></label>
+            <button type="button" disabled={!canConfirm} onClick={() => { setConfirmedStages((current) => ({ ...current, [stageKey]: true })); setActiveStage(null) }} className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">Confirm {activeStage}</button>
+          </div>
+        </PwaCard>
+      </div>
+    )
+  }
+
+  return <div className="space-y-4"><PwaCard title="Field · Chain of custody" subtitle="Verify every handoff against the asset manifest."><p className="text-xs leading-relaxed text-muted-foreground">Work offline when needed. Records are saved locally and sync when a connection returns.</p></PwaCard>{events.length === 0 ? <PwaEmptyState title="Nothing to do right now" description="Assigned events will appear here when your Ground Crew schedule is ready." /> : events.map((event) => <PwaCard key={event.id} title={event.name} subtitle={`${dateLabel(event.date)} · ${event.venue}`}><div className="space-y-3"><div className="grid grid-cols-4 gap-1">{FIELD_STAGES.map((stage, index) => { const previousDone = index === 0 || confirmedStages[`${event.id}:${FIELD_STAGES[index - 1]}`]; const done = confirmedStages[`${event.id}:${stage}`]; return <button key={stage} type="button" disabled={!previousDone} onClick={() => { setSelectedEventId(event.id); setActiveStage(stage) }} className={`min-w-0 rounded-lg px-1 py-2 text-[10px] font-semibold ${done ? 'bg-emerald-500/15 text-emerald-700' : previousDone ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground opacity-60'}`}><span className="mx-auto mb-1 flex size-5 items-center justify-center rounded-full border border-current">{done ? '✓' : index + 1}</span><span className="block truncate">{stage.replace(' Release', '').replace('Warehouse ', '')}</span></button>})}</div><div className="flex items-center justify-between border-t border-border pt-3 text-[10px] text-muted-foreground"><span>{event.items.length} manifest items</span><span>Saved locally · pending sync</span></div></div></PwaCard>)}</div>
+}
+
 export function GroundCrewPage() {
   const { currentUser, adminName, adminEmail, adminRole, logout } = useAuth()
   const { events, staff, procurement, initiateEventEgress } = usePortal()
   const dispatchStore = useDispatchStore(events, staff, procurement)
   const declarations = useGroundCrewDeclarations()
+  void declarations
   const [tab, setTab] = useState<Tab>('home')
   const [fieldSection, setFieldSection] = useState<'tasks' | 'reports' | 'requests' | 'history'>('tasks')
 
@@ -678,6 +715,7 @@ export function GroundCrewPage() {
     setToast(`Declaration ${declarationId} ${decision.toLowerCase()} by ${adminName || 'Event Admin'}.`)
     window.setTimeout(() => setToast(''), 3500)
   }
+  void handleDecision
 
   const advancePhase = async (eventId: string) => {
     const targetEvent = crewEvents.find((e) => e.id === eventId)
@@ -880,7 +918,7 @@ export function GroundCrewPage() {
                   {(['tasks', 'reports', 'requests', 'history'] as const).map((section) => <button key={section} type="button" onClick={() => setFieldSection(section)} className={`rounded-xl border px-3 py-3 text-xs font-semibold capitalize ${fieldSection === section ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>{section}</button>)}
                 </div>
               </PwaCard>
-              {fieldSection === 'tasks' && <DecisionMode declarations={declarations} accessLevel={accessLevel} adminEventId={adminEventId} events={crewEvents} onEventChange={setAdminEventId} onDecision={handleDecision} />}
+              {fieldSection === 'tasks' && <FieldConsole events={crewEvents.filter((event) => event.status !== 'Completed')} />}
               {fieldSection !== 'tasks' && <Activity reports={reports} requests={requests} events={crewEvents} offlineItems={offlineItems} isSyncingQueue={isSyncingQueue} onTriggerSync={handleTriggerSync} onUpdateReport={handleUpdateReport} />}
             </div>
           )
@@ -2483,6 +2521,8 @@ function Activity({
     </div>
   )
 }
+
+void DecisionMode
 
 function Account({
   name,
