@@ -800,7 +800,7 @@ export function GroundCrewPage() {
   const navItems: PwaNavItem[] = [
     { id: 'home', label: 'Home', icon: MapPin },
     { id: 'schedule', label: 'Schedule', icon: CalendarDays },
-    { id: 'field', label: 'Field', icon: ClipboardList, badgeCount: pendingDeclarationsForCurrentAdmin.length, isCenter: true },
+    { id: 'field', label: 'Field', icon: ClipboardList, badgeCount: pendingDeclarationsForCurrentAdmin.length },
     { id: 'account', label: 'Profile', icon: UserCircle2 },
   ]
 
