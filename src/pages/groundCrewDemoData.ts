@@ -48,7 +48,12 @@ const batch = (id: string, stage: DispatchBatch['stage']): DispatchBatch => ({
   stage,
   handoffNote: 'Development demo batch',
   crew: [],
-  reconciliation: [{ id: `demo-item-${id}`, itemName: 'Linen centerpiece', planned: 12, actual: stage === 'Returned' ? 12 : 0, status: stage === 'Returned' ? 'Matched' : 'Pahabol', justification: '' }],
+  reconciliation: [
+    { id: `demo-item-${id}-linen`, itemName: 'Linen centerpiece', planned: 12, actual: stage === 'Returned' ? 12 : 0, status: stage === 'Returned' ? 'Matched' : 'Pahabol', justification: '' },
+    { id: `demo-item-${id}-chair`, itemName: 'Ghost chair', planned: 24, actual: stage === 'Returned' ? 24 : 0, status: stage === 'Returned' ? 'Matched' : 'Pahabol', justification: '' },
+    { id: `demo-item-${id}-arch`, itemName: 'Modular arch panel', planned: 6, actual: stage === 'Returned' ? 6 : 0, status: stage === 'Returned' ? 'Matched' : 'Pahabol', justification: '' },
+    { id: `demo-item-${id}-light`, itemName: 'Warm pin light', planned: 8, actual: stage === 'Returned' ? 8 : 0, status: stage === 'Returned' ? 'Matched' : 'Pahabol', justification: '' },
+  ],
   stalled: false,
   stalledReason: '',
 })
@@ -59,7 +64,7 @@ export function getGroundCrewDemoData(caseName: GroundCrewDemoCase): GroundCrewD
   const todayId = 'demo-today-event'
   const futureId = 'demo-future-event'
   const pastId = 'demo-past-event'
-  const today = { id: todayId, name: 'Test Event', date: atDate(0), venue: 'Test Venue', status: 'Current' as const, editable: true, phase: null, items: [] as never[] }
+  const today = { id: todayId, name: 'Lumière Live Operational Demonstration', date: atDate(0), venue: 'The Glasshouse, Makati', status: 'Current' as const, editable: true, phase: null, items: [] as never[] }
   const events = caseName === 'none'
     ? []
     : [today, { id: futureId, name: 'Future Event', date: atDate(7), venue: 'Future Venue', status: 'Upcoming' as const, editable: false, phase: null, items: [] as never[] }, { id: pastId, name: 'Past Event', date: atDate(-7), venue: 'Past Venue', status: 'Completed' as const, editable: false, phase: null, items: [] as never[] }]
@@ -68,6 +73,9 @@ export function getGroundCrewDemoData(caseName: GroundCrewDemoCase): GroundCrewD
   if (caseName === 'mixed') batches.set(todayId, [batch('planned', 'Planned'), batch('transit', 'In Transit')])
   if (caseName === 'damage') batches.set(todayId, [batch('damage', 'Delivered')])
   if (caseName === 'lead' || caseName === 'member' || caseName === 'warehouse') batches.set(todayId, [batch('today', 'Delivered')])
-  const declarations = caseName === 'damage' ? [{ id: 'demo-report', eventId: todayId, eventName: 'Test Event', item: 'Linen centerpiece', status: 'Reported', submittedAt: new Date().toISOString() }] : []
+  const declarations = caseName === 'damage' ? [
+    { id: 'demo-report-1', eventId: todayId, eventName: today.name, item: 'Linen centerpiece', condition: 'Damaged', quantity: 2, status: 'Pending Event Admin', submittedAt: new Date().toISOString(), description: 'Two pieces arrived with chipped bases.' },
+    { id: 'demo-report-2', eventId: todayId, eventName: today.name, item: 'Ghost chair', condition: 'Missing', quantity: 3, status: 'Reported', submittedAt: new Date(Date.now() - 45 * 60_000).toISOString(), description: 'Three chairs were not present at unloading.' },
+  ] : []
   return { assignments, events, batches, declarations, subRole: role }
 }
