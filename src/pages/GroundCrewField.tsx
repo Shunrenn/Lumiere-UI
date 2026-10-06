@@ -10,11 +10,12 @@ import { PwaCard, PwaEmptyState } from '@/components/pwa'
 type FieldEvent = { id: string; name: string; date: string; venue: string }
 type Asset = { id: string; name: string; sku: string; qty: number; color: string }
 
-export function GroundCrewField({ event, events, assignments, batches, declarations, loading, error, isCachedData, isLeadForEvent, scope, onOpenEvent, onBack, onReport }: {
+export function GroundCrewField({ event, events, assignments, batches, batchesByEvent, declarations, loading, error, isCachedData, isLeadForEvent, scope, onOpenEvent, onBack, onReport }: {
   event: FieldEvent | null
   events: FieldEvent[]
   assignments: MyManningAssignmentDto[]
   batches: DispatchBatch[]
+  batchesByEvent: Map<string, DispatchBatch[]>
   declarations: GroundCrewDeclaration[]
   loading: boolean
   error: string | null
@@ -31,8 +32,17 @@ export function GroundCrewField({ event, events, assignments, batches, declarati
   const rostered = new Set(assignments.map((assignment) => assignment.eventId))
   const activeEvents = events.filter((item) => rostered.has(item.id))
   const today = new Date().toISOString().slice(0, 10)
-  const visibleEvents = activeEvents.filter((item) => item.date >= today || item.date === today)
+  const visibleEvents = activeEvents.filter((item) => item.date >= today)
   const states = event ? getStageStates(event.id) : []
+  const stageSummaryFor = (item: FieldEvent) => {
+    const itemBatches = batchesByEvent.get(item.id) ?? []
+    if (!itemBatches.length) return 'Not started yet'
+    const itemStates = getStageStates(item.id)
+    const currentState = itemStates.find((state) => state.status === 'current')
+    if (itemStates.every((state) => state.status === 'done')) return 'All stages done'
+    if (!currentState) return 'Stage unavailable'
+    return `Stage ${itemStates.indexOf(currentState) + 1} of 4 · ${currentState.stage}`
+  }
   const current = states.find((state) => state.status === 'current')?.stage
   const assets = batches.flatMap((batch) => batch.reconciliation.map((row) => ({ id: row.id, name: row.itemName, sku: row.id, qty: row.planned, color: 'bg-primary/10' }))).filter((item, index, list) => list.findIndex((candidate) => candidate.name === item.name) === index)
 
@@ -53,6 +63,6 @@ export function GroundCrewField({ event, events, assignments, batches, declarati
   return <div className="space-y-4">
     <GroundCrewSyncPill assignments={assignments} isCachedData={isCachedData} />
     <div className="grid grid-cols-2 rounded-xl bg-muted p-1"><button type="button" onClick={() => setSection('events')} className={`rounded-lg px-3 py-2 text-sm font-semibold ${section === 'events' ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}>Events</button><button type="button" onClick={() => setSection('reports')} className={`rounded-lg px-3 py-2 text-sm font-semibold ${section === 'reports' ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}>My reports</button></div>
-    {section === 'events' ? loading ? <div className="h-28 animate-pulse rounded-2xl bg-muted" /> : error ? <PwaEmptyState title="Couldn't load. Try again." /> : visibleEvents.length ? visibleEvents.map((item) => <button key={item.id} type="button" onClick={() => onOpenEvent(item.id)} className="w-full text-left"><PwaCard title={item.name} subtitle={`${item.venue} • ${item.date}`}><p className="text-xs font-semibold text-primary">Stage 1 of 4 · {scopeStages[0]}</p><p className="mt-1 text-xs text-muted-foreground">Your stages: {scopeStages.join(', ')}</p><MapPin className="mt-2 size-4 text-muted-foreground" /></PwaCard></button>) : <PwaEmptyState title="Nothing to do right now" /> : declarations.length ? declarations.map((report) => <PwaCard key={report.id} title={report.item} subtitle={`${report.eventName} • ${new Date(report.submittedAt).toLocaleDateString()}`}><p className="text-xs text-muted-foreground">{report.status}</p></PwaCard>) : <PwaEmptyState title="No reports yet" />}
+    {section === 'events' ? loading ? <div className="h-28 animate-pulse rounded-2xl bg-muted" /> : error ? <PwaEmptyState title="Couldn't load. Try again." /> : visibleEvents.length ? visibleEvents.map((item) => <button key={item.id} type="button" onClick={() => onOpenEvent(item.id)} className="w-full text-left"><PwaCard title={item.name} subtitle={`${item.venue} • ${item.date}`}><p className="text-xs font-semibold text-primary">{stageSummaryFor(item)}</p><p className="mt-1 text-xs text-muted-foreground">Your stages: {scopeStages.join(', ')}</p><MapPin className="mt-2 size-4 text-muted-foreground" /></PwaCard></button>) : <PwaEmptyState title="Nothing to do right now" /> : declarations.length ? declarations.map((report) => <PwaCard key={report.id} title={report.item} subtitle={`${report.eventName} • ${new Date(report.submittedAt).toLocaleDateString()}`}><p className="text-xs text-muted-foreground">{report.status}</p></PwaCard>) : <PwaEmptyState title="No reports yet" />}
   </div>
 }
