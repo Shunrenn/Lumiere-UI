@@ -31,7 +31,7 @@ export function getStageStates(eventId: string): StageState[] {
   const currentIndex = Math.min(...mapped.map((value) => value!.index).filter((index) => index < 4))
   return GROUND_CREW_STAGES.map((stage, index) => ({
     stage,
-    status: mapped.every((value) => value!.index >= index + 1) ? 'done' : index === currentIndex ? 'current' : index > currentIndex ? 'locked' : 'unavailable',
+    status: mapped.every((value) => value!.index >= index + 1) ? 'done' : index === currentIndex ? 'current' : 'locked',
     detail: index > currentIndex ? `Waiting for ${GROUND_CREW_STAGES[index - 1]}` : undefined,
   }))
 }
