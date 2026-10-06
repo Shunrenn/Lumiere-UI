@@ -12,6 +12,8 @@ import {
   Trash2,
   Save,
   RotateCcw,
+  Wand2,
+  Loader2,
 } from 'lucide-react'
 import {
   formatSmartDuration,
@@ -70,12 +72,38 @@ export function AssetDetailModal({
 }: AssetDetailModalProps) {
   const vendors = useWarehouseVendors()
   const [tab, setTab] = useState<TabId>('preview')
-  const [isEditing, setIsEditing] = useState(false)
+    const [isEditing, setIsEditing] = useState(false)
   const [currentAsset, setCurrentAsset] = useState<CatalogAsset>(asset)
   const [draft, setDraft] = useState<CatalogAsset>(asset)
   const [imageError, setImageError] = useState('')
   const [savedToast, setSavedToast] = useState(false)
+  const [isRemovingBg, setIsRemovingBg] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleRemoveBg = async () => {
+    if (!draft.image) return
+    setIsRemovingBg(true)
+    setImageError('')
+    try {
+      const { default: removeBackground } = await import('@imgly/background-removal')
+      const blob = await removeBackground(draft.image)
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string
+        setDraft((prev) => ({ ...prev, image: dataUrl }))
+        setIsRemovingBg(false)
+      }
+      reader.onerror = () => {
+        setImageError('Failed to read processed image cutout.')
+        setIsRemovingBg(false)
+      }
+      reader.readAsDataURL(blob)
+    } catch (err) {
+      console.error('Background removal error:', err)
+      setImageError('Failed to remove background. Please verify the image.')
+      setIsRemovingBg(false)
+    }
+  }
 
   const glance = getTierGlanceDisplay(currentAsset)
   const tone = ASSET_STATUS_TONE[currentAsset.status]
@@ -271,7 +299,7 @@ export function AssetDetailModal({
                 </p>
                 
                 <div className="grid gap-4 sm:grid-cols-[minmax(0,180px)_1fr] items-center">
-                  <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-border bg-muted">
+                  <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-border bg-[linear-gradient(45deg,#f3f4f6_25%,transparent_25%),linear-gradient(-45deg,#f3f4f6_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#f3f4f6_75%),linear-gradient(-45deg,transparent_75%,#f3f4f6_75%)] bg-[size:16px_16px] dark:bg-[linear-gradient(45deg,#1f2937_25%,transparent_25%),linear-gradient(-45deg,#1f2937_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#1f2937_75%),linear-gradient(-45deg,transparent_75%,#1f2937_75%)]">
                     {draft.image ? (
                       <img
                         src={draft.image}
@@ -299,7 +327,8 @@ export function AssetDetailModal({
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition"
+                        disabled={isRemovingBg}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition disabled:opacity-50"
                       >
                         <Upload className="size-3.5" /> Upload / Replace Image
                       </button>
@@ -307,8 +336,29 @@ export function AssetDetailModal({
                       {draft.image && (
                         <button
                           type="button"
+                          onClick={handleRemoveBg}
+                          disabled={isRemovingBg}
+                          title="Remove image background using instant AI cutout"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 transition shadow-sm disabled:opacity-50"
+                        >
+                          {isRemovingBg ? (
+                            <>
+                              <Loader2 className="size-3.5 animate-spin text-amber-600" /> Removing Background...
+                            </>
+                          ) : (
+                            <>
+                              <Wand2 className="size-3.5 text-amber-600" /> Remove Background
+                            </>
+                          )}
+                        </button>
+                      )}
+
+                      {draft.image && (
+                        <button
+                          type="button"
                           onClick={() => setDraft((prev) => ({ ...prev, image: '' }))}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition"
+                          disabled={isRemovingBg}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition disabled:opacity-50"
                         >
                           <Trash2 className="size-3.5" /> Remove Image
                         </button>

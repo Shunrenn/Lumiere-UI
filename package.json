@@ -11,6 +11,7 @@
     "start": "sirv dist --host 0.0.0.0 --port $PORT --single"
   },
   "dependencies": {
+    "@imgly/background-removal": "^1.7.0",
     "@microsoft/signalr": "^10.0.11",
     "clsx": "^2.1.1",
     "exifr": "^7.1.3",
