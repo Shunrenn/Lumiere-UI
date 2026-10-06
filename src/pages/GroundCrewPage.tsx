@@ -776,14 +776,10 @@ export function GroundCrewPage() {
     window.setTimeout(() => setToast(''), 5000)
   }
 
-  const pendingDeclarationsForCurrentAdmin = declarations.filter(
-    (d) => d.eventId === adminEventId && d.status === 'Pending Event Admin'
-  )
-
   const navItems: PwaNavItem[] = [
     { id: 'home', label: 'Home', icon: MapPin },
     { id: 'schedule', label: 'Schedule', icon: CalendarDays },
-    { id: 'field', label: 'Field', icon: ClipboardList, badgeCount: pendingDeclarationsForCurrentAdmin.length },
+    { id: 'field', label: 'Field', icon: ClipboardList },
     { id: 'account', label: 'Profile', icon: UserCircle2 },
   ]
 
@@ -840,6 +836,7 @@ export function GroundCrewPage() {
             onOpenToday={(item) => { setSelectedEventId(item.id); setTab('field') }}
             onOpenNext={() => setTab('schedule')}
             assignments={myAssignments}
+            batchesByEvent={dispatchStore}
             loadingAssignments={loadingAssignments}
             assignmentError={assignmentError}
             isCachedData={isCachedData}
@@ -1039,6 +1036,7 @@ function Home({
   onOpenToday,
   onOpenNext,
   assignments,
+  batchesByEvent,
   loadingAssignments,
   assignmentError,
   isCachedData,
@@ -1047,6 +1045,7 @@ function Home({
   onOpenToday: (event: EventItem) => void
   onOpenNext: () => void
   assignments: MyManningAssignmentDto[]
+  batchesByEvent: Map<string, DispatchBatch[]>
   loadingAssignments: boolean
   assignmentError: string | null
   isCachedData?: boolean
@@ -1055,11 +1054,22 @@ function Home({
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
   const scope = assignments.some((a) => /warehouse/i.test(`${a.workArea} ${a.taskTitle}`)) ? 'Warehouse Crew' : 'Field Crew'
   const stages = ['Dispatch Release', 'Venue Arrival', 'Egress Release', 'Warehouse Return']
-  const stageFor = (items: MyManningAssignmentDto[]) => {
-    const completed = items.filter((a) => a.executionStatus === 'Completed').length
-    const match = items.find((a) => a.taskTitle && stages.some((stage) => a.taskTitle?.toLowerCase().includes(stage.toLowerCase())))?.taskTitle
-    const index = match ? stages.findIndex((stage) => match.toLowerCase().includes(stage.toLowerCase())) : Math.min(completed, 3)
-    return { index: Math.max(0, index), label: stages[Math.max(0, index)] }
+  const stageFor = (eventId: string) => {
+    const batches = (batchesByEvent.get(eventId) ?? []).filter((batch) => !batch.isArchived)
+    if (batches.length === 0) return { index: 0, label: 'Not started yet' }
+
+    const progressFor = (batch: DispatchBatch) => {
+      if (batch.direction === 'return') return batch.stage === 'Returned' ? 4 : 3
+      if (batch.stage === 'In Transit') return 1
+      if (batch.stage === 'Delivered') return 2
+      if (batch.stage === 'Returned') return 4
+      return 0
+    }
+    const earliestUnfinished = Math.min(...stages.map((_, index) =>
+      batches.some((batch) => progressFor(batch) <= index) ? index : stages.length,
+    ))
+    const index = Math.min(earliestUnfinished, stages.length - 1)
+    return { index, label: stages[index] }
   }
   const grouped = Array.from(new Set(assignments.map((a) => a.eventId))).map((eventId) => {
     const items = assignments.filter((a) => a.eventId === eventId)
@@ -1082,7 +1092,7 @@ function Home({
       {todayShift ? (
         <button type="button" onClick={() => onOpenToday(toEvent(todayShift))} className="block w-full text-left">
           <PwaCard title="Today" action={todayShift.isLead ? <PwaBadge variant="neutral" label="Shift Lead" /> : undefined}>
-            <div className="space-y-3"><div><h2 className="font-serif text-lg font-bold">{todayShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{todayShift.venue}{todayShift.time ? ` • Call ${todayShift.time}` : ''}</p></div><div><div className="grid grid-cols-4 gap-1">{stages.map((stage, index) => <span key={stage} className={`h-2 rounded-full ${index <= stageFor(todayShift.items).index ? 'bg-primary' : 'bg-muted'}`} />)}</div><p className="mt-2 text-xs text-muted-foreground">Stage {stageFor(todayShift.items).index + 1} of 4 · {stageFor(todayShift.items).label}</p></div><p className="text-xs text-muted-foreground">Your stages: {scope === 'Field Crew' ? 'Venue Arrival, Egress Release' : 'Dispatch Release, Warehouse Return'}</p></div>
+            <div className="space-y-3"><div><h2 className="font-serif text-lg font-bold">{todayShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{todayShift.venue}{todayShift.time ? ` • Call ${todayShift.time}` : ''}</p></div><div><div className="grid grid-cols-4 gap-1">{stages.map((stage, index) => <span key={stage} className={`h-2 rounded-full ${index <= stageFor(todayShift.id).index ? 'bg-primary' : 'bg-muted'}`} />)}</div><p className="mt-2 text-xs text-muted-foreground">Stage {stageFor(todayShift.id).index + 1} of 4 · {stageFor(todayShift.id).label}</p></div><p className="text-xs text-muted-foreground">Your stages: {scope === 'Field Crew' ? 'Venue Arrival, Egress Release' : 'Dispatch Release, Warehouse Return'}</p></div>
           </PwaCard>
         </button>
       ) : <PwaCard title="Today"><p className="text-sm text-muted-foreground">No shift today</p></PwaCard>}
