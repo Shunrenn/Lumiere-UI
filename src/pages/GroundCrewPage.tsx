@@ -1054,22 +1054,29 @@ function Home({
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
   const scope = assignments.some((a) => /warehouse/i.test(`${a.workArea} ${a.taskTitle}`)) ? 'Warehouse Crew' : 'Field Crew'
   const stages = ['Dispatch Release', 'Venue Arrival', 'Egress Release', 'Warehouse Return']
+  // Keep Home's batch-to-stage contract in one place so Field can share it later.
+  const BATCH_STAGE_PROGRESS: Record<string, Record<string, number>> = {
+    outbound: { Planned: 0, Loaded: 0, 'In Transit': 1, Delivered: 2, Returned: 4 },
+    return: { Planned: 2, Loaded: 2, 'In Transit': 3, Delivered: 3, Returned: 4 },
+  }
   const stageFor = (eventId: string) => {
     const batches = (batchesByEvent.get(eventId) ?? []).filter((batch) => !batch.isArchived)
-    if (batches.length === 0) return { index: 0, label: 'Not started yet' }
+    if (batches.length === 0) return { index: -1, label: 'Not started yet', state: 'empty' as const }
 
     const progressFor = (batch: DispatchBatch) => {
-      if (batch.direction === 'return') return batch.stage === 'Returned' ? 4 : 3
-      if (batch.stage === 'In Transit') return 1
-      if (batch.stage === 'Delivered') return 2
-      if (batch.stage === 'Returned') return 4
-      return 0
+      const progress = BATCH_STAGE_PROGRESS[batch.direction]?.[batch.stage]
+      if (progress === undefined) {
+        console.log('[v0] Unknown dispatch batch status:', { direction: batch.direction, stage: batch.stage, batchId: batch.id })
+        return null
+      }
+      return progress
     }
-    const earliestUnfinished = Math.min(...stages.map((_, index) =>
-      batches.some((batch) => progressFor(batch) <= index) ? index : stages.length,
-    ))
-    const index = Math.min(earliestUnfinished, stages.length - 1)
-    return { index, label: stages[index] }
+    const progress = batches.map(progressFor)
+    if (progress.some((value) => value === null)) return { index: -1, label: 'Stage unavailable', state: 'unavailable' as const }
+    if (progress.every((value) => value === 4)) return { index: stages.length - 1, label: 'All stages done', state: 'complete' as const }
+
+    const earliestUnfinished = Math.min(...(progress as number[]))
+    return { index: earliestUnfinished, label: stages[earliestUnfinished], state: 'active' as const }
   }
   const grouped = Array.from(new Set(assignments.map((a) => a.eventId))).map((eventId) => {
     const items = assignments.filter((a) => a.eventId === eventId)
@@ -1092,7 +1099,7 @@ function Home({
       {todayShift ? (
         <button type="button" onClick={() => onOpenToday(toEvent(todayShift))} className="block w-full text-left">
           <PwaCard title="Today" action={todayShift.isLead ? <PwaBadge variant="neutral" label="Shift Lead" /> : undefined}>
-            <div className="space-y-3"><div><h2 className="font-serif text-lg font-bold">{todayShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{todayShift.venue}{todayShift.time ? ` • Call ${todayShift.time}` : ''}</p></div><div><div className="grid grid-cols-4 gap-1">{stages.map((stage, index) => <span key={stage} className={`h-2 rounded-full ${index <= stageFor(todayShift.id).index ? 'bg-primary' : 'bg-muted'}`} />)}</div><p className="mt-2 text-xs text-muted-foreground">Stage {stageFor(todayShift.id).index + 1} of 4 · {stageFor(todayShift.id).label}</p></div><p className="text-xs text-muted-foreground">Your stages: {scope === 'Field Crew' ? 'Venue Arrival, Egress Release' : 'Dispatch Release, Warehouse Return'}</p></div>
+            <div className="space-y-3"><div><h2 className="font-serif text-lg font-bold">{todayShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{todayShift.venue}{todayShift.time ? ` • Call ${todayShift.time}` : ''}</p></div>{(() => { const stage = stageFor(todayShift.id); const showProgress = stage.state === 'active' || stage.state === 'complete'; return <div><div className="grid grid-cols-4 gap-1">{stages.map((stageName, index) => <span key={stageName} className={`h-2 rounded-full ${showProgress && index <= stage.index ? 'bg-primary' : 'bg-muted'}`} />)}</div><p className="mt-2 text-xs text-muted-foreground">{stage.state === 'active' || stage.state === 'complete' ? `Stage ${stage.index + 1} of 4 · ${stage.label}` : stage.label}</p></div> })()}<p className="text-xs text-muted-foreground">Your stages: {scope === 'Field Crew' ? 'Venue Arrival, Egress Release' : 'Dispatch Release, Warehouse Return'}</p></div>
           </PwaCard>
         </button>
       ) : <PwaCard title="Today"><p className="text-sm text-muted-foreground">No shift today</p></PwaCard>}
