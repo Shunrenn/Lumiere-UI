@@ -72,13 +72,6 @@ type AccessLevel = 'Ground Crew / Member' | 'Team Lead / Field Lead' | 'Receiver
 export type CheckpointPhase = 'Dispatch Loading' | 'Venue Arrival' | 'Pre-Event Setup' | 'Post-Event Egress'
 type EventStatus = 'Current' | 'Upcoming' | 'Completed'
 type RequestStatus = 'Pending' | 'Approved' | 'Denied'
-type GroundCrewDemoState = {
-  assignments: MyManningAssignmentDto[]
-  events: EventItem[]
-  batches: Map<string, DispatchBatch[]>
-  declarations: GroundCrewDeclaration[]
-  subRole: 'Warehouse' | 'Field'
-}
 
 interface EventItem {
   id: string
@@ -145,20 +138,6 @@ export function GroundCrewPage() {
   const [assignmentError, setAssignmentError] = useState<string | null>(null)
   const [mutatingAssignmentId, setMutatingAssignmentId] = useState<string | null>(null)
   const [isCachedData, setIsCachedData] = useState(false)
-  const [demoData, setDemoData] = useState<GroundCrewDemoState | null>(null)
-  const demoCase = import.meta.env.DEV && typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('demo') : null
-  useEffect(() => {
-    if (!import.meta.env.DEV || !demoCase) return
-    void import('./groundCrewDemoData').then(({ getGroundCrewDemoData }) => {
-      if (['none', 'lead', 'member', 'warehouse', 'mixed', 'damage'].includes(demoCase)) {
-        setDemoData(getGroundCrewDemoData(demoCase as never) as GroundCrewDemoState)
-      }
-    })
-  }, [demoCase])
-  const demoActive = Boolean(demoData)
-  const displayAssignments = demoData?.assignments ?? myAssignments
-  const displayDeclarations = demoData?.declarations ?? declarations
-  const displayBatches = demoData?.batches ?? dispatchStore
   const [blockerModalAssignment, setBlockerModalAssignment] = useState<MyManningAssignmentDto | null>(null)
   const [blockerReasonInput, setBlockerReasonInput] = useState('')
   const [blockerNotesInput, setBlockerNotesInput] = useState('')
@@ -171,9 +150,8 @@ export function GroundCrewPage() {
   const isLeadForEvent = useCallback((eventId: string | null | undefined): boolean => {
     if (!eventId) return false
     if (adminRole === 'Admin' || adminRole === 'Event Admin') return true
-    const assignments = demoData?.assignments ?? myAssignments
-    return assignments.some((a) => a.eventId === eventId && a.isLead === true)
-  }, [adminRole, myAssignments, demoData])
+    return myAssignments.some((a) => a.eventId === eventId && a.isLead === true)
+  }, [adminRole, myAssignments])
 
   const hasAnyLead = myAssignments.some((a) => a.isLead === true)
   const accessLevel: AccessLevel =
@@ -462,11 +440,6 @@ export function GroundCrewPage() {
   }
 
   useEffect(() => {
-    if (demoData) {
-      setCrewEvents(demoData.events)
-      setAdminEventId(demoData.events[0]?.id || '')
-      return
-    }
     if (derivedEvents.length > 0) {
       setCrewEvents(derivedEvents)
       if (!adminEventId) {
@@ -474,7 +447,7 @@ export function GroundCrewPage() {
       }
       void loadDeclarationsFromBackend(derivedEvents)
     }
-  }, [derivedEvents, adminEventId, demoData])
+  }, [derivedEvents, adminEventId])
 
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const selectedEvent = selectedEventId ? crewEvents.find((event) => event.id === selectedEventId) ?? null : null
@@ -848,8 +821,8 @@ export function GroundCrewPage() {
                 ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Tasks, reports, requests and history'
                 : adminEmail || undefined
         }
-        roleName={(demoData?.subRole ?? currentUser?.groundCrewSubRole) === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew'}
-        subRole={(demoData ? displayAssignments.some((a) => a.isLead) : hasAnyLead) ? 'Shift Lead' : undefined}
+        roleName={currentUser?.groundCrewSubRole === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew'}
+        subRole={hasAnyLead ? 'Shift Lead' : undefined}
         icon={
           tab === 'home' ? (
             <MapPin className="size-5 text-primary" />
@@ -865,7 +838,6 @@ export function GroundCrewPage() {
 
       {/* Main Tab Content */}
       <main className="mx-auto w-full max-w-[440px] px-4 pt-4 space-y-4">
-        {demoActive && <span className="inline-flex w-fit rounded-full border border-primary/40 bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary">Demo data</span>}
 
         {tab === 'schedule' && (
           <GroundCrewSyncPill assignments={myAssignments} isCachedData={isCachedData} />
@@ -876,10 +848,10 @@ export function GroundCrewPage() {
             events={crewEvents}
             onOpenToday={(item) => { setSelectedEventId(item.id); setTab('field') }}
             onOpenNext={() => setTab('schedule')}
-            assignments={displayAssignments}
-            batchesByEvent={displayBatches}
-            loadingAssignments={demoActive ? false : loadingAssignments}
-            assignmentError={demoActive ? null : assignmentError}
+            assignments={myAssignments}
+            batchesByEvent={dispatchStore}
+            loadingAssignments={loadingAssignments}
+            assignmentError={assignmentError}
             isCachedData={isCachedData}
           />
         )}
@@ -888,12 +860,12 @@ export function GroundCrewPage() {
           <CalendarView
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
-            assignments={displayAssignments}
+            assignments={myAssignments}
             events={crewEvents}
-            loading={demoActive ? false : loadingAssignments}
+            loading={loadingAssignments}
             error={assignmentError}
   isLeadForEvent={isLeadForEvent}
-  crewScope={(demoData?.subRole ?? currentUser?.groundCrewSubRole) === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew'}
+  crewScope={currentUser?.groundCrewSubRole === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew'}
   />
         )}
 
@@ -901,15 +873,15 @@ export function GroundCrewPage() {
           <GroundCrewField
             event={selectedEvent}
             events={crewEvents}
-            assignments={displayAssignments}
-            batches={selectedEvent ? (displayBatches.get(selectedEvent.id) ?? []) : []}
-            batchesByEvent={displayBatches}
-            declarations={displayDeclarations}
-            loading={demoActive ? false : loadingAssignments}
+            assignments={myAssignments}
+            batches={selectedEvent ? (dispatchStore.get(selectedEvent.id) ?? []) : []}
+            batchesByEvent={dispatchStore}
+            declarations={declarations}
+            loading={loadingAssignments}
             error={assignmentError}
             isCachedData={isCachedData}
             isLeadForEvent={isLeadForEvent}
-            scope={(demoData?.subRole ?? currentUser?.groundCrewSubRole) === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew'}
+            scope={currentUser?.groundCrewSubRole === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew'}
             onOpenEvent={setSelectedEventId}
             onBack={() => setSelectedEventId(null)}
             onReport={openReport}
