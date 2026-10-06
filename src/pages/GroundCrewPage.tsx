@@ -34,6 +34,7 @@ import { useDispatchStore } from '@/lib/warehouse-dispatch'
 import type { DispatchBatch } from '@/lib/event-detail'
 import { PartialEgressSection } from '@/components/warehouse/PartialEgressSection'
 import {
+  decideGroundCrewDeclaration,
   getDeclarationAging,
   loadDeclarationsFromBackend,
   submitGroundCrewDeclaration,
@@ -199,6 +200,7 @@ export function GroundCrewPage() {
     }))
   }, [events])
 
+  const [adminEventId, setAdminEventId] = useState('')
   const [crewEvents, setCrewEvents] = useState<EventItem[]>([])
 
   const loadAssignments = useCallback(async () => {
@@ -462,14 +464,17 @@ export function GroundCrewPage() {
   useEffect(() => {
     if (demoData) {
       setCrewEvents(demoData.events)
+      setAdminEventId(demoData.events[0]?.id || '')
       return
     }
     if (derivedEvents.length > 0) {
       setCrewEvents(derivedEvents)
-
+      if (!adminEventId) {
+        setAdminEventId(derivedEvents[0].id)
+      }
       void loadDeclarationsFromBackend(derivedEvents)
     }
-  }, [derivedEvents, demoData])
+  }, [derivedEvents, adminEventId, demoData])
 
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const selectedEvent = selectedEventId ? crewEvents.find((event) => event.id === selectedEventId) ?? null : null
@@ -707,6 +712,12 @@ export function GroundCrewPage() {
     }
   }
 
+  const handleDecision = (declarationId: string, decision: 'Confirmed' | 'Rejected') => {
+    decideGroundCrewDeclaration(declarationId, decision, adminName || 'Event Admin')
+    setToast(`Declaration ${declarationId} ${decision.toLowerCase()} by ${adminName || 'Event Admin'}.`)
+    window.setTimeout(() => setToast(''), 3500)
+  }
+
   const advancePhase = async (eventId: string) => {
     const targetEvent = crewEvents.find((e) => e.id === eventId)
     if (!targetEvent || !targetEvent.phase) return
@@ -804,6 +815,7 @@ export function GroundCrewPage() {
     window.setTimeout(() => setToast(''), 5000)
   }
 
+  void handleDecision
   void advancePhase
   void handleStartEgress
 
