@@ -50,6 +50,7 @@ import { queueOfflinePhaseAdvancement } from '@/lib/offline/checklistOutbox'
 import { triggerOutboxReplay, subscribeSyncEngine } from '@/lib/offline/offlineReplayEngine'
 import { setReadCache, getReadCache } from '@/lib/offline/db'
 import { StatusBadge } from '@/components/StatusBadge'
+import { GroundCrewSyncPill } from '@/pages/GroundCrewSyncPill'
 import {
   PwaBadge,
   PwaBottomNav,
@@ -821,13 +822,16 @@ export function GroundCrewPage() {
 
       {/* Main Tab Content */}
       <main className="mx-auto w-full max-w-[440px] px-4 pt-4 space-y-4">
-        {/* Unified Ground Crew Synchronization State */}
-          {tab !== 'home' && (
-            <PwaSyncStatusBar
-              userId={currentUser?.id || adminEmail || 'crew'}
-              onSyncComplete={loadAssignments}
-  />
-          )}
+        {tab === 'field' && (
+          <PwaSyncStatusBar
+            userId={currentUser?.id || adminEmail || 'crew'}
+            onSyncComplete={loadAssignments}
+          />
+        )}
+
+        {tab === 'schedule' && (
+          <GroundCrewSyncPill assignments={myAssignments} isCachedData={isCachedData} />
+        )}
 
         {tab === 'home' && (
           <Home
@@ -1081,14 +1085,12 @@ function Home({
   const todayShift = dated.find((item) => item.manilaDate === today)
   const nextShift = dated.filter((item) => item.manilaDate > today).sort((a, b) => a.manilaDate.localeCompare(b.manilaDate))[0]
   const toEvent = (item: typeof grouped[number]) => events.find((e) => e.id === item.id) || { id: item.id, name: item.name, venue: item.venue, date: item.date, status: 'Upcoming' as EventStatus, editable: false, phase: null, items: [] }
-  const syncLabel = !navigator.onLine ? 'Offline - changes are saved on this phone' : isCachedData ? 'Offline - changes are saved on this phone' : assignments.some((a) => a.pendingSync) ? `${assignments.filter((a) => a.pendingSync).length} waiting to sync` : 'Online'
-
   if (loadingAssignments) return <div className="space-y-3"><div className="h-5 w-20 animate-pulse rounded bg-muted" /><div className="h-44 animate-pulse rounded-2xl bg-muted" /><div className="h-28 animate-pulse rounded-2xl bg-muted" /></div>
   if (assignmentError && assignments.length === 0) return <p className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Couldn&apos;t load your shifts. Try again.</p>
 
   return (
     <div className="space-y-3">
-      <span className="inline-flex rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">{syncLabel}</span>
+      <GroundCrewSyncPill assignments={assignments} isCachedData={isCachedData} />
       {todayShift ? (
         <button type="button" onClick={() => onOpenToday(toEvent(todayShift))} className="block w-full text-left">
           <PwaCard title="Today" action={todayShift.isLead ? <PwaBadge variant="neutral" label="Shift Lead" /> : undefined}>
