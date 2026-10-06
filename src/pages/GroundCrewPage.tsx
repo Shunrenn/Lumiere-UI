@@ -890,11 +890,9 @@ export function GroundCrewPage() {
           <Account
             name={adminName || 'Ground Crew'}
             email={adminEmail || 'crew@lumiere.internal'}
-            requests={requests}
-            accessLevel={accessLevel}
-            effectiveRole={effectiveRole}
-            onRequest={() => setRequestOpen(true)}
-            onLogout={logout}
+  accessLevel={accessLevel}
+  effectiveRole={effectiveRole}
+  onLogout={logout}
           />
         )}
       </main>
@@ -2489,47 +2487,20 @@ function Activity({
 function Account({
   name,
   email,
-  requests,
   accessLevel,
   effectiveRole,
-  onRequest,
   onLogout,
 }: {
   name: string
   email: string
-  requests: CrewRequest[]
   accessLevel: AccessLevel
   effectiveRole: string
-  onRequest: () => void
   onLogout: () => void
 }) {
   return (
     <div className="space-y-4">
       <PwaCard title={name} subtitle={email} action={<PwaBadge subRole="Field" label="Active Operator" />}>
-        <div className="space-y-3 pt-1">
-          <div className="flex items-center justify-between">
-            <h4 className="font-serif text-sm font-bold text-foreground">Leave & Admin Requests</h4>
-            <PwaButton onClick={onRequest} variant="primary" size="sm">
-              New Request
-            </PwaButton>
-          </div>
-
-          <div className="divide-y divide-border/60">
-            {requests.length === 0 ? (
-              <p className="py-2 text-xs text-muted-foreground">No leave or schedule requests on record.</p>
-            ) : (
-              requests.slice(0, 3).map((req) => (
-                <div key={req.id} className="flex items-center justify-between py-2 text-xs">
-                  <span>{req.type} ({dateLabel(req.date)})</span>
-                  <PwaBadge
-                    variant={req.status === 'Approved' ? 'subrole' : req.status === 'Denied' ? 'destructive' : 'neutral'}
-                    label={req.status}
-                  />
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <span className="sr-only">Profile</span>
       </PwaCard>
 
       <PwaCard title="Access & Authority">
