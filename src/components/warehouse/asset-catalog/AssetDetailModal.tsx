@@ -1,15 +1,30 @@
-import { useState, useMemo } from 'react'
-import { X, Layers, Tag as TagIcon, ShieldCheck, Clock, User, Plus, Check } from 'lucide-react'
+import { useState, useMemo, useRef } from 'react'
 import {
-  computeStockHealth,
+  X,
+  Layers,
+  Tag as TagIcon,
+  ShieldCheck,
+  Plus,
+  Check,
+  Pencil,
+  Upload,
+  Image as ImageIcon,
+  Trash2,
+  Save,
+  RotateCcw,
+} from 'lucide-react'
+import {
   formatSmartDuration,
   getAssetLedger,
   updateAssetSimulation,
+  updateCatalogAsset,
   type CatalogAsset,
+  type AssetCategory,
+  type AssetStatus,
   type ReconciliationTag,
   type BespokeSimulationAttempt,
 } from '@/lib/warehouse-catalog'
-import { getVendorById } from '@/lib/warehouse-vendors'
+import { getVendorById, useWarehouseVendors } from '@/lib/warehouse-vendors'
 import { ASSET_STATUS_TONE, getTierGlanceDisplay } from '@/components/warehouse/asset-catalog/AssetCard'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import type { Tone } from '@/components/warehouse/event-detail/status-tone'
@@ -23,23 +38,54 @@ const RECON_TONE: Record<ReconciliationTag, Tone> = {
   Pahabol: 'critical',
 }
 
+const CATEGORIES: AssetCategory[] = [
+  'Event Assets',
+  'Production Assets',
+  'Stockroom Assets',
+  'Rental Assets',
+  'Administrative Assets',
+]
+
+const STATUSES: AssetStatus[] = [
+  'Available',
+  'Low Stock',
+  'Critical Deficit',
+  'Deployed',
+  'Lost In Action',
+  'In Maintenance',
+]
+
 interface AssetDetailModalProps {
   asset: CatalogAsset
   onClose: () => void
   onCompleteMaintenance?: () => void
+  readOnly?: boolean
 }
 
-export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: AssetDetailModalProps) {
+export function AssetDetailModal({
+  asset,
+  onClose,
+  onCompleteMaintenance,
+  readOnly = false,
+}: AssetDetailModalProps) {
+  const vendors = useWarehouseVendors()
   const [tab, setTab] = useState<TabId>('preview')
-  const glance = getTierGlanceDisplay(asset)
-  const tone = ASSET_STATUS_TONE[asset.status]
-  const primaryVendor = getVendorById(asset.primaryVendorId)
-  const backupVendor = getVendorById(asset.backupVendorId)
-  const ledger = getAssetLedger(asset)
+  const [isEditing, setIsEditing] = useState(false)
+  const [currentAsset, setCurrentAsset] = useState<CatalogAsset>(asset)
+  const [draft, setDraft] = useState<CatalogAsset>(asset)
+  const [imageError, setImageError] = useState('')
+  const [savedToast, setSavedToast] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const glance = getTierGlanceDisplay(currentAsset)
+  const tone = ASSET_STATUS_TONE[currentAsset.status]
+  const primaryVendor = getVendorById(currentAsset.primaryVendorId)
+  const backupVendor = getVendorById(currentAsset.backupVendorId)
+  const ledger = getAssetLedger(currentAsset)
 
   // Simulation State (Bespoke only)
-  const [attempts, setAttempts] = useState<BespokeSimulationAttempt[]>(asset.simulationAttempts || [])
-  const [headcount] = useState<number>(asset.simulationHeadcount || 1)
+  const [attempts, setAttempts] = useState<BespokeSimulationAttempt[]>(currentAsset.simulationAttempts || [])
+  const [headcount] = useState<number>(currentAsset.simulationHeadcount || 1)
   const [newDurationInput, setNewDurationInput] = useState('')
   const [isAddingAttempt, setIsAddingAttempt] = useState(false)
 
@@ -55,11 +101,55 @@ export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: Asse
       { id: 'detailed', label: 'Detailed' },
       { id: 'history', label: 'History' },
     ]
-    if (asset.category === 'Production Assets') {
+    if (currentAsset.category === 'Production Assets') {
       list.push({ id: 'simulation', label: 'Simulation' })
     }
     return list
-  }, [asset.category])
+  }, [currentAsset.category])
+
+  const handleStartEdit = () => {
+    setDraft({ ...currentAsset })
+    setIsEditing(true)
+    setImageError('')
+  }
+
+  const handleCancelEdit = () => {
+    setDraft({ ...currentAsset })
+    setIsEditing(false)
+    setImageError('')
+  }
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      setImageError('Please choose a valid image file.')
+      return
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      setImageError('Image file is too large (max 8MB).')
+      return
+    }
+
+    setImageError('')
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string
+      setDraft((prev) => ({ ...prev, image: dataUrl }))
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault()
+    updateCatalogAsset(currentAsset.id, draft)
+    setCurrentAsset({ ...draft })
+    setIsEditing(false)
+    setSavedToast(true)
+    setTimeout(() => setSavedToast(false), 3000)
+  }
 
   const handleAddAttempt = (e: React.FormEvent) => {
     e.preventDefault()
@@ -79,7 +169,7 @@ export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: Asse
     setAttempts(updated)
     setNewDurationInput('')
     setIsAddingAttempt(false)
-    updateAssetSimulation(asset.id, updated, headcount)
+    updateAssetSimulation(currentAsset.id, updated, headcount)
   }
 
   return (
@@ -90,508 +180,749 @@ export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: Asse
       onClick={onClose}
     >
       <div
-        className="flex h-full max-h-[42rem] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-card shadow-2xl"
+        className="flex h-full max-h-[44rem] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
-          <div>
+        <div className="flex items-start justify-between gap-4 border-b border-border bg-card/80 px-6 py-4 backdrop-blur">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="rounded bg-primary/15 px-2 py-0.5 text-[0.58rem] font-bold uppercase tracking-wider text-primary">
-                {asset.category}
+                {currentAsset.category}
               </span>
-              <span className="font-mono text-xs text-muted-foreground">{asset.assetId}</span>
-            </div>
-            <h2 className="mt-1 font-serif text-xl font-medium text-card-foreground">{asset.name}</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close modal"
-            className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </button>
-        </div>
-
-        {/* Modal Tabs Bar */}
-        <div className="flex gap-1 border-b border-border px-6">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              aria-current={tab === t.id ? 'true' : undefined}
-              className={cn(
-                'border-b-2 px-4 py-3 text-[0.65rem] font-bold uppercase tracking-[0.12em] transition-colors',
-                tab === t.id
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-card-foreground',
+              <span className="font-mono text-xs text-muted-foreground">{currentAsset.assetId}</span>
+              {savedToast && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[0.6rem] font-semibold text-emerald-600 dark:text-emerald-400 animate-in fade-in">
+                  <Check className="size-3" /> Saved live
+                </span>
               )}
+            </div>
+            <h2 className="mt-1 truncate font-serif text-xl font-medium text-card-foreground">
+              {isEditing ? `Edit: ${draft.name || 'Asset'}` : currentAsset.name}
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={isEditing ? handleCancelEdit : handleStartEdit}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm transition',
+                  isEditing
+                    ? 'border border-border bg-muted text-muted-foreground hover:bg-muted/80'
+                    : 'bg-primary text-primary-foreground hover:bg-primary/90'
+                )}
+              >
+                {isEditing ? (
+                  <>
+                    <RotateCcw className="size-3.5" /> Cancel Edit
+                  </>
+                ) : (
+                  <>
+                    <Pencil className="size-3.5" /> Edit Asset
+                  </>
+                )}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close modal"
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
-              {t.label}
+              <X className="size-4" aria-hidden="true" />
             </button>
-          ))}
+          </div>
         </div>
 
-        {/* Scrollable Tab Content */}
+        {/* Modal Tabs Bar (When not editing) */}
+        {!isEditing && (
+          <div className="flex gap-1 border-b border-border bg-muted/20 px-6">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                aria-current={tab === t.id ? 'true' : undefined}
+                className={cn(
+                  'border-b-2 px-4 py-3 text-[0.65rem] font-bold uppercase tracking-[0.12em] transition-colors',
+                  tab === t.id
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-card-foreground',
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Scrollable Modal Body */}
         <div className="flex-1 overflow-y-auto px-6 py-6">
-          {/* ────────────────── 1. PREVIEW TAB (100% Identical Structure for all 5 tiers) ────────────────── */}
-          {tab === 'preview' && (
-            <div className="flex flex-col gap-5">
-              <div className="grid gap-5 md:grid-cols-[minmax(0,1.15fr)_minmax(15rem,0.85fr)] md:items-stretch">
-                <div className="min-h-56 overflow-hidden rounded-lg bg-muted md:min-h-72">
-                  <img
-                    src={asset.image || '/placeholder.svg'}
-                    alt={asset.name}
-                    crossOrigin="anonymous"
-                    className="size-full object-cover"
+          {/* ===================== EDIT MODE ===================== */}
+          {isEditing ? (
+            <form onSubmit={handleSaveEdit} className="space-y-6">
+              {/* Image Upload / Change Section */}
+              <div className="rounded-xl border border-border bg-muted/20 p-4">
+                <p className="mb-2 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-primary flex items-center gap-1.5">
+                  <ImageIcon className="size-3.5" /> Asset Media / Visual Reference
+                </p>
+                
+                <div className="grid gap-4 sm:grid-cols-[minmax(0,180px)_1fr] items-center">
+                  <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-border bg-muted">
+                    {draft.image ? (
+                      <img
+                        src={draft.image}
+                        alt="Asset preview"
+                        className="size-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex size-full flex-col items-center justify-center p-3 text-center text-muted-foreground">
+                        <ImageIcon className="size-8 stroke-1 text-muted-foreground/50" />
+                        <span className="mt-1 text-[0.65rem]">No image set</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleImageFileChange}
+                      accept="image/*"
+                      className="hidden"
+                    />
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition"
+                      >
+                        <Upload className="size-3.5" /> Upload / Replace Image
+                      </button>
+
+                      {draft.image && (
+                        <button
+                          type="button"
+                          onClick={() => setDraft((prev) => ({ ...prev, image: '' }))}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition"
+                        >
+                          <Trash2 className="size-3.5" /> Remove Image
+                        </button>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                        Or specify Image URL
+                      </label>
+                      <input
+                        type="text"
+                        value={draft.image}
+                        onChange={(e) => setDraft((prev) => ({ ...prev, image: e.target.value }))}
+                        placeholder="/assets/inventory/... or https://..."
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                      />
+                    </div>
+
+                    {imageError && (
+                      <p className="text-xs text-destructive font-medium">{imageError}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Core Information Section */}
+              <div className="space-y-4">
+                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-primary flex items-center gap-1.5">
+                  <Layers className="size-3.5" /> Core Asset Information
+                </p>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-foreground block mb-1">
+                      Asset Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={draft.name}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-foreground block mb-1">
+                      Item Call Name
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.itemCallName ?? ''}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, itemCallName: e.target.value }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-foreground block mb-1">
+                      Classification Tier *
+                    </label>
+                    <select
+                      value={draft.category}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, category: e.target.value as AssetCategory }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    >
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-foreground block mb-1">
+                      Sub-Category
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.subCategory ?? ''}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, subCategory: e.target.value }))}
+                      placeholder="e.g. Staging, Audio, Lighting"
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-foreground block mb-1">
+                      Current Status *
+                    </label>
+                    <select
+                      value={draft.status}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, status: e.target.value as AssetStatus }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    >
+                      {STATUSES.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Primary Vendor */}
+<div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><div><label className="text-[0.65rem] font-bold uppercase tracking-wider text-foreground block mb-1">Primary Vendor</label><select value={draft.primaryVendorId} onChange={(e) => setDraft((prev) => ({ ...prev, primaryVendorId: e.target.value }))} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"><option value="">Select a vendor...</option>{vendors.map((v) => (<option key={v.id} value={v.id}>{v.name} ({v.specialty})</option>))}</select></div></div>
+{/* Stock & Thresholds */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-foreground block mb-1">
+                      Current Stock / Quantity
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={draft.currentStock ?? 0}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, currentStock: Number(e.target.value) }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-foreground block mb-1">
+                      Safety Threshold
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={draft.threshold ?? draft.criticalThreshold ?? 5}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, threshold: Number(e.target.value), criticalThreshold: Number(e.target.value) }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-foreground block mb-1">
+                      Unit of Measure
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.unit}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, unit: e.target.value }))}
+                      placeholder="panels, units, pcs, lots"
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-foreground block mb-1">
+                      Purchase / Unit Cost (PHP)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={draft.purchaseCost || draft.costPerUnit || 0}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, purchaseCost: Number(e.target.value), costPerUnit: Number(e.target.value) }))}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    />
+                  </div>
+                </div>
+
+                {/* Dimensions */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Height
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.dimensions?.height ?? ''}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, dimensions: { ...prev.dimensions, height: e.target.value } }))}
+                      placeholder="30 cm"
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Width
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.dimensions?.width ?? ''}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, dimensions: { ...prev.dimensions, width: e.target.value } }))}
+                      placeholder="244 cm"
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Depth
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.dimensions?.depth ?? ''}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, dimensions: { ...prev.dimensions, depth: e.target.value } }))}
+                      placeholder="122 cm"
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Weight
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.dimensions?.weight ?? ''}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, dimensions: { ...prev.dimensions, weight: e.target.value } }))}
+                      placeholder="28 kg"
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    />
+                  </div>
+                </div>
+
+                {/* Material, Color & Description */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-foreground block mb-1">
+                      Material Composition
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.material ?? ''}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, material: e.target.value }))}
+                      placeholder="e.g. Aluminium, Velvet, Solid Wood"
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[0.65rem] font-bold uppercase tracking-wider text-foreground block mb-1">
+                      Primary Color / Finish
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.colorPrimary ?? ''}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, colorPrimary: e.target.value }))}
+                      placeholder="e.g. Midnight Black, Gold, Ivory"
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[0.65rem] font-bold uppercase tracking-wider text-foreground block mb-1">
+                    Asset Description
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={draft.description ?? ''}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))}
+                    placeholder="Provide operational details, storage requirements, handling instructions..."
+                    className="w-full rounded-md border border-input bg-background p-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
                   />
                 </div>
-                <div className="flex flex-col gap-4 rounded-lg border border-border bg-background p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Pill tone={tone}>{asset.status}</Pill>
-                    {asset.subCategory && (
-                      <span className="rounded-full border border-border px-2.5 py-1 text-[0.55rem] font-semibold text-muted-foreground">
-                        {asset.subCategory}
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 md:grid-cols-1">
-                    <DetailField label="Classification" value={asset.category} />
-                    <DetailField label="Asset ID" value={asset.assetId} isMono />
-                    <DetailField label={glance.kind === 'fraction' ? 'Quantity / Stock' : 'Current State'} value={glance.text} />
-                  </div>
-                  {glance.kind === 'fraction' && (
-                    <div className="mt-auto h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className={cn('h-full rounded-full transition-all', tone === 'critical' ? 'bg-destructive' : tone === 'caution' ? 'bg-amber-500' : 'bg-primary')}
-                        style={{ width: `${glance.percent ?? 0}%` }}
+              </div>
+
+              {/* Form Action Buttons */}
+              <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="rounded-lg border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-5 py-2 text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90 shadow-md transition"
+                >
+                  <Save className="size-4" /> Save Changes
+                </button>
+              </div>
+            </form>
+          ) : (
+            /* ===================== VIEW MODE ===================== */
+            <>
+              {/* 1. PREVIEW TAB */}
+              {tab === 'preview' && (
+                <div className="flex flex-col gap-5">
+                  <div className="grid gap-5 md:grid-cols-[minmax(0,1.15fr)_minmax(15rem,0.85fr)] md:items-stretch">
+                    <div className="min-h-56 overflow-hidden rounded-xl border border-border bg-muted md:min-h-72">
+                      <img
+                        src={currentAsset.image || '/placeholder.svg'}
+                        alt={currentAsset.name}
+                        crossOrigin="anonymous"
+                        className="size-full object-cover"
                       />
                     </div>
-                  )}
-                </div>
-              </div>
-
-              {asset.status === 'In Maintenance' && (
-                <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[0.62rem] font-bold uppercase tracking-wider text-indigo-900">Asset Under Service / Maintenance</p>
-                      <p className="mt-0.5 text-xs text-indigo-700">This asset was placed in maintenance following a damage repair verdict.</p>
+                    <div className="flex flex-col gap-4 rounded-xl border border-border bg-background p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Pill tone={tone}>{currentAsset.status}</Pill>
+                        {currentAsset.subCategory && (
+                          <span className="rounded-full border border-border px-2.5 py-1 text-[0.55rem] font-semibold text-muted-foreground">
+                            {currentAsset.subCategory}
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 md:grid-cols-1">
+                        <DetailField label="Classification" value={currentAsset.category} />
+                        <DetailField label="Asset ID" value={currentAsset.assetId} isMono />
+                        <DetailField label={glance.kind === 'fraction' ? 'Quantity / Stock' : 'Current State'} value={glance.text} />
+                        <DetailField label="Unit Cost" value={`PHP ${(currentAsset.purchaseCost || currentAsset.costPerUnit || 0).toLocaleString()}`} />
+                      </div>
+                      {glance.kind === 'fraction' && (
+                        <div className="mt-auto h-1.5 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={cn('h-full rounded-full transition-all', tone === 'critical' ? 'bg-destructive' : tone === 'caution' ? 'bg-amber-500' : 'bg-primary')}
+                            style={{ width: `${glance.percent ?? 0}%` }}
+                          />
+                        </div>
+                      )}
                     </div>
-                    {onCompleteMaintenance && (
-                      <button type="button" onClick={onCompleteMaintenance} className="rounded bg-indigo-600 px-3.5 py-1.5 text-[0.65rem] font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-indigo-700">
-                        Complete Maintenance / Return to Stock
-                      </button>
-                    )}
                   </div>
-                </div>
-              )}
 
-              {asset.description && (
-                <div className="border-t border-border/60 pt-4 text-xs leading-relaxed text-muted-foreground">
-                  <p className="mb-1 font-semibold text-card-foreground">Asset Description</p>
-                  {asset.description}
-                </div>
-              )}
-            </div>
-          )}
+                  {currentAsset.status === 'In Maintenance' && (
+                    <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[0.62rem] font-bold uppercase tracking-wider text-indigo-900">Asset Under Service / Maintenance</p>
+                          <p className="mt-0.5 text-xs text-indigo-700">This asset was placed in maintenance following a damage repair verdict.</p>
+                        </div>
+                        {onCompleteMaintenance && (
+                          <button type="button" onClick={onCompleteMaintenance} className="rounded bg-indigo-600 px-3.5 py-1.5 text-[0.65rem] font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-indigo-700">
+                            Complete Maintenance / Return to Stock
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
-          {/* ────────────────── 2. DETAILED TAB (Tier-Aware Field Set) ────────────────── */}
-          {tab === 'detailed' && (
-            <div className="flex flex-col gap-6">
-              {/* === Shared Base Section (Always Shown for All Tiers) === */}
-              <div>
-                <p className="mb-2 text-[0.6rem] font-bold uppercase tracking-[0.14em] text-primary flex items-center gap-1.5">
-                  <Layers className="size-3.5" /> Shared Base Metadata
-                </p>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  <DetailField label="Asset ID" value={asset.assetId} isMono />
-                  <DetailField label="Asset Name" value={asset.name} />
-                  <DetailField label="Item Call Name" value={asset.itemCallName ?? asset.name} />
-                  <DetailField label="Category" value={asset.category} />
-                  <DetailField label="Sub-Category" value={asset.subCategory ?? 'General'} />
-                  <DetailField label="Date Added" value={asset.dateAdded} />
-                </div>
-              </div>
-
-              {/* Description */}
-              {asset.description && (
-                <div>
-                  <p className="mb-1 text-[0.55rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                    Description
-                  </p>
-                  <div className="rounded-lg border border-border bg-background p-3 text-xs text-card-foreground leading-relaxed">
-                    {asset.description}
-                  </div>
-                </div>
-              )}
-
-              {/* Dimensions (Height, Width, Depth, Weight + Shape & Circumference ONLY if is_circular === true) */}
-              <div>
-                <p className="mb-2 text-[0.6rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                  Dimensions &amp; Weight
-                </p>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <DetailField label="Height" value={asset.dimensions.height} />
-                  <DetailField label="Width" value={asset.dimensions.width} />
-                  <DetailField label="Depth" value={asset.dimensions.depth} />
-                  <DetailField label="Weight" value={asset.dimensions.weight} />
-                  {asset.is_circular && (
-                    <>
-                      <DetailField label="Shape" value={asset.shape ?? 'Circular'} />
-                      <DetailField label="Circumference" value={asset.circumference ?? '—'} />
-                    </>
+                  {currentAsset.description && (
+                    <div className="border-t border-border/60 pt-4 text-xs leading-relaxed text-muted-foreground">
+                      <p className="mb-1 font-semibold text-card-foreground">Asset Description</p>
+                      {currentAsset.description}
+                    </div>
                   )}
                 </div>
-              </div>
-
-              {/* Material & Color State */}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <DetailField label="Material Composition" value={asset.material ?? 'Standard Composite'} />
-                <div className="rounded-lg border border-border bg-background px-3.5 py-2.5">
-                  <p className="text-[0.55rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                    Color &amp; Finish State
-                  </p>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span className="rounded bg-primary/15 px-2 py-0.5 text-[0.58rem] font-bold uppercase text-primary">
-                      {asset.colorType ?? 'mono'}
-                    </span>
-                    <span className="text-xs font-semibold text-card-foreground">
-                      {asset.colorPrimary ?? 'Natural'}
-                    </span>
-                    {asset.colorSecondary && asset.colorSecondary.length > 0 && (
-                      <span className="text-[0.6rem] text-muted-foreground">
-                        (+ {asset.colorSecondary.join(', ')})
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Tags */}
-              {asset.tags && asset.tags.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-[0.55rem] font-bold uppercase tracking-[0.1em] text-muted-foreground flex items-center gap-1">
-                    <TagIcon className="size-3" /> Asset Tags
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {asset.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-md border border-border bg-muted/40 px-2.5 py-1 text-[0.58rem] font-semibold text-card-foreground"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
               )}
 
-              {/* === Tier-Specific Section (Appended Below Base Fields) === */}
-              <div className="border-t border-border pt-4">
-                <p className="mb-3 text-[0.62rem] font-bold uppercase tracking-[0.14em] text-primary flex items-center gap-1.5">
-                  <ShieldCheck className="size-3.5" /> Tier Details ({asset.category})
-                </p>
-
-                {/* 1. EVENT ASSET */}
-                {asset.category === 'Event Assets' && (
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <DetailField label="Primary Vendor" value={primaryVendor?.name ?? '—'} />
-                    <DetailField label="Backup Vendor" value={backupVendor?.name ?? '—'} />
-                    <DetailField label="Purchase Price" value={`₱${asset.purchaseCost.toLocaleString()}`} />
-                    <DetailField label="Expected Life Span" value={asset.lifeSpan ?? '3 Years'} />
-                    <DetailField
-                      label="Damage / Replacement Cost"
-                      value={asset.damageReplacementCost ? `₱${asset.damageReplacementCost.toLocaleString()}` : '₱1,500 / unit'}
-                    />
-                    <DetailField label="Reservable Stock" value={`${asset.currentStock ?? 0} ${asset.unit}`} />
-                  </div>
-                )}
-
-                {/* 2. PRODUCTION ASSETS */}
-                {asset.category === 'Production Assets' && (
-                  <div className="space-y-3">
+              {/* 2. DETAILED TAB */}
+              {tab === 'detailed' && (
+                <div className="flex flex-col gap-6">
+                  {/* Shared Base Section */}
+                  <div>
+                    <p className="mb-2 text-[0.6rem] font-bold uppercase tracking-[0.14em] text-primary flex items-center gap-1.5">
+                      <Layers className="size-3.5" /> Shared Base Metadata
+                    </p>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      <DetailField label="Fabrication Crew" value={asset.bespokeCrew ?? 'Fab Team — Ronnie'} />
-                      <DetailField label="Manpower Count" value={asset.manCount ? `${asset.manCount} Crew Members` : '3 Crew Members'} />
-                      <DetailField
-                        label="Estimated Finish Time"
-                        value={asset.finishTimeMinutes ? formatSmartDuration(asset.finishTimeMinutes) : '2h 15m'}
-                      />
-                      <DetailField
-                        label="Revision Buffer Time"
-                        value={asset.revisionTimeMinutes ? formatSmartDuration(asset.revisionTimeMinutes) : '45m'}
-                      />
-                      <DetailField label="Build Stage" value={asset.bespokeStage ?? 'Prepping'} />
-                      <DetailField label="Purchase Cost" value={`₱${asset.purchaseCost.toLocaleString()}`} />
+                      <DetailField label="Asset ID" value={currentAsset.assetId} isMono />
+                      <DetailField label="Asset Name" value={currentAsset.name} />
+                      <DetailField label="Item Call Name" value={currentAsset.itemCallName ?? currentAsset.name} />
+                      <DetailField label="Category" value={currentAsset.category} />
+                      <DetailField label="Sub-Category" value={currentAsset.subCategory ?? 'General'} />
+                      <DetailField label="Date Added" value={currentAsset.dateAdded} />
                     </div>
+                  </div>
 
+                  {/* Description */}
+                  {currentAsset.description && (
                     <div>
                       <p className="mb-1 text-[0.55rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                        Raw Materials Breakdown
+                        Description
+                      </p>
+                      <div className="rounded-lg border border-border bg-background p-3 text-xs text-card-foreground leading-relaxed">
+                        {currentAsset.description}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dimensions */}
+                  <div>
+                    <p className="mb-2 text-[0.6rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                      Dimensions & Weight
+                    </p>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <DetailField label="Height" value={currentAsset.dimensions.height} />
+                      <DetailField label="Width" value={currentAsset.dimensions.width} />
+                      <DetailField label="Depth" value={currentAsset.dimensions.depth} />
+                      <DetailField label="Weight" value={currentAsset.dimensions.weight} />
+                      {currentAsset.is_circular && (
+                        <>
+                          <DetailField label="Shape" value={currentAsset.shape ?? 'Circular'} />
+                          <DetailField label="Circumference" value={currentAsset.circumference ?? '—'} />
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Material & Color */}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <DetailField label="Material Composition" value={currentAsset.material ?? 'Standard Composite'} />
+                    <div className="rounded-lg border border-border bg-background px-3.5 py-2.5">
+                      <p className="text-[0.55rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+                        Color & Finish State
+                      </p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="rounded bg-primary/15 px-2 py-0.5 text-[0.58rem] font-bold uppercase text-primary">
+                          {currentAsset.colorType ?? 'mono'}
+                        </span>
+                        <span className="text-xs font-semibold text-card-foreground">
+                          {currentAsset.colorPrimary ?? 'Natural'}
+                        </span>
+                        {currentAsset.colorSecondary && currentAsset.colorSecondary.length > 0 && (
+                          <span className="text-[0.6rem] text-muted-foreground">
+                            (+ {currentAsset.colorSecondary.join(', ')})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tags */}
+                  {currentAsset.tags && currentAsset.tags.length > 0 && (
+                    <div>
+                      <p className="mb-1.5 text-[0.55rem] font-bold uppercase tracking-[0.1em] text-muted-foreground flex items-center gap-1">
+                        <TagIcon className="size-3" /> Asset Tags
                       </p>
                       <div className="flex flex-wrap gap-1.5">
-                        {(asset.rawMaterials ?? ['Plywood 3/4"', 'Acrylic Panel', 'Gold Leaf Coating', 'Steel Bracing']).map((mat) => (
-                          <span key={mat} className="rounded bg-accent px-2.5 py-1 text-[0.58rem] font-semibold text-accent-foreground">
-                            {mat}
+                        {currentAsset.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-md border border-border bg-muted/40 px-2.5 py-1 text-[0.58rem] font-semibold text-card-foreground"
+                          >
+                            #{tag}
                           </span>
                         ))}
                       </div>
                     </div>
-                  </div>
-                )}
-
-                {/* 3. STOCKROOM ASSETS */}
-                {asset.category === 'Stockroom Assets' && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      <DetailField label="Primary Vendor" value={primaryVendor?.name ?? '—'} />
-                      <DetailField label="Backup Vendor" value={backupVendor?.name ?? '—'} />
-                      <DetailField label="Price per Unit" value={`₱${asset.costPerUnit.toLocaleString()}`} />
-                      <DetailField
-                        label="Price per Pack"
-                        value={asset.pricePerPack ? `₱${asset.pricePerPack.toLocaleString()}` : `₱${(asset.costPerUnit * 12).toLocaleString()}`}
-                      />
-                      <DetailField label="Expected Life Span" value={asset.lifeSpan ?? '24 Months'} />
-                      <DetailField label="Safety Stock Threshold" value={`${asset.criticalThreshold ?? 30} ${asset.unit}`} />
-                      <DetailField label="Stock Ceiling Cap" value={`${asset.ceilingCap ?? 200} ${asset.unit}`} />
-                    </div>
-
-                    {/* Branded Stock Indicator */}
-                    <div className="rounded-lg border border-border bg-background p-3.5">
-                      <p className="text-[0.55rem] font-bold uppercase tracking-[0.1em] text-muted-foreground mb-1">
-                        Branded Stock Health Indicator
-                      </p>
-                      <div className="flex items-center gap-3">
-                        <span className="font-serif text-base font-medium text-card-foreground">
-                          {asset.currentStock ?? 0} / {asset.ceilingCap ?? 200} {asset.unit}
-                        </span>
-                        {(() => {
-                          const health = computeStockHealth(asset.currentStock, asset.criticalThreshold, asset.ceilingCap)
-                          const tone: Tone = health === 'Low Stock' ? 'caution' : health === 'Over Stock' ? 'progress' : 'positive'
-                          return <Pill tone={tone}>{health}</Pill>
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 4. RENTAL ASSETS */}
-                {asset.category === 'Rental Assets' && (
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <DetailField label="Supplier / Vendor" value={primaryVendor?.name ?? asset.supplierDetails ?? asset.rentalVendorName ?? 'Ritz Suppliers'} />
-                    <DetailField label="Supplier Contact" value={asset.supplierContact ?? 'Vendor Representative'} />
-                    <DetailField label="Rental Fee / Rate" value={`₱${asset.purchaseCost.toLocaleString()}`} />
-                    <DetailField label="Length of Rent" value={asset.lengthOfRent ?? '7 Days'} />
-                    <DetailField
-                      label="Overdue Penalty Fee"
-                      value={asset.overduePenaltyFee ? `₱${asset.overduePenaltyFee.toLocaleString()} / day` : '₱1,500 / day'}
-                    />
-                    <DetailField label="Due Back Date" value={asset.onLoanDueDate ?? 'In Warehouse'} />
-                  </div>
-                )}
-
-                {/* 5. ADMINISTRATIVE ASSETS */}
-                {asset.category === 'Administrative Assets' && (
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <DetailField label="Vendor / Source" value={primaryVendor?.name ?? asset.vendorDetails ?? 'Direct Purchase'} />
-                    <DetailField label="Purchase Cost" value={`₱${asset.purchaseCost.toLocaleString()}`} />
-                    <DetailField label="Life Span / Warranty" value={asset.lifeSpan ?? '5 Years Warranty'} />
-                    <DetailField label="Assigned Custodian" value={asset.custodian ?? 'Unassigned — In Storage'} />
-                    {asset.deviceModel && <DetailField label="Device Model" value={asset.deviceModel} />}
-                    {asset.serialNumber && <DetailField label="Serial Number" value={asset.serialNumber} />}
-                    {asset.deviceSpecs && <DetailField label="Hardware Specs" value={asset.deviceSpecs} />}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ────────────────── 3. HISTORY TAB (100% Identical Structure for all 5 tiers) ────────────────── */}
-          {tab === 'history' && (
-            <div>
-              <p className="mb-3 text-[0.6rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                Lifecycle ledger — newest first
-              </p>
-              <ol className="relative flex flex-col gap-5 border-l border-border pl-5">
-                {ledger.map((entry) => (
-                  <li key={entry.id} className="relative">
-                    <span className="absolute -left-[1.44rem] top-1 size-2.5 rounded-full border-2 border-card bg-primary" aria-hidden="true" />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-semibold text-card-foreground">{entry.type}</span>
-                      <span className="text-[0.6rem] text-muted-foreground">{entry.timestamp}</span>
-                      {entry.reconciliationTag && (
-                        <Pill tone={RECON_TONE[entry.reconciliationTag]} className="text-[0.5rem]">
-                          {entry.reconciliationTag}
-                        </Pill>
-                      )}
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{entry.note}</p>
-                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[0.6rem] text-muted-foreground">
-                      <span>Declared by {entry.declaredBy}</span>
-                      {entry.linkedBatchRef && <span>Linked batch {entry.linkedBatchRef}</span>}
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
-
-          {/* ────────────────── 4. SIMULATION TAB (Bespoke Estimation) ────────────────── */}
-          {tab === 'simulation' && (
-            <div className="flex flex-col gap-5">
-              {/* Baseline Headcount & Computed Mean Banner */}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-border bg-background p-4">
-                  <p className="text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-                    Baseline Headcount
-                  </p>
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <User className="size-4 text-primary" />
-                    <span className="font-serif text-lg font-bold text-card-foreground">
-                      {headcount} Worker
-                    </span>
-                    <span className="rounded bg-muted px-2 py-0.5 text-[0.55rem] font-bold uppercase text-muted-foreground">
-                      Fixed Standard
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[0.62rem] text-muted-foreground">
-                    Historical baseline reference crew for build time measurements.
-                  </p>
-                </div>
-
-                <div className="rounded-lg border border-primary/40 bg-primary/5 p-4">
-                  <p className="text-[0.58rem] font-bold uppercase tracking-[0.14em] text-primary">
-                    Auto-Computed Baseline Time
-                  </p>
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <Clock className="size-4 text-primary" />
-                    <span className="font-serif text-xl font-bold text-primary">
-                      {formatSmartDuration(computedMeanMinutes)}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      ({computedMeanMinutes} min mean)
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[0.62rem] text-muted-foreground">
-                    Mean of {attempts.length} logged attempt{attempts.length === 1 ? '' : 's'}. Basis for future scheduling.
-                  </p>
-                </div>
-              </div>
-
-              {/* Simulation Attempts Table */}
-              <div className="rounded-xl border border-border bg-card overflow-hidden">
-                <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3">
-                  <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-card-foreground">
-                      Build Duration Attempts
-                    </h3>
-                    <p className="text-[0.6rem] text-muted-foreground">
-                      Manual duration entries per completed build attempt
-                    </p>
-                  </div>
-                  {!isAddingAttempt && (
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingAttempt(true)}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider text-primary-foreground hover:opacity-90"
-                    >
-                      <Plus className="size-3" />
-                      Add Attempt
-                    </button>
                   )}
+
+                  {/* Tier Details */}
+                  <div className="border-t border-border pt-4">
+                    <p className="mb-3 text-[0.62rem] font-bold uppercase tracking-[0.14em] text-primary flex items-center gap-1.5">
+                      <ShieldCheck className="size-3.5" /> Tier Details ({currentAsset.category})
+                    </p>
+
+                    {currentAsset.category === 'Event Assets' && (
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        <DetailField label="Primary Vendor" value={primaryVendor?.name ?? '—'} />
+                        <DetailField label="Backup Vendor" value={backupVendor?.name ?? '—'} />
+                        <DetailField label="Purchase Price" value={`PHP ${currentAsset.purchaseCost.toLocaleString()}`} />
+                        <DetailField label="Expected Life Span" value={currentAsset.lifeSpan ?? '3 Years'} />
+                        <DetailField
+                          label="Damage / Replacement Cost"
+                          value={currentAsset.damageReplacementCost ? `PHP ${currentAsset.damageReplacementCost.toLocaleString()}` : 'PHP 1,500 / unit'}
+                        />
+                        <DetailField label="Reservable Stock" value={`${currentAsset.currentStock ?? 0} ${currentAsset.unit}`} />
+                      </div>
+                    )}
+
+                    {currentAsset.category === 'Production Assets' && (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                          <DetailField label="Fabrication Crew" value={currentAsset.bespokeCrew ?? 'Fab Team — Ronnie'} />
+                          <DetailField label="Manpower Count" value={currentAsset.manCount ? `${currentAsset.manCount} Crew Members` : '3 Crew Members'} />
+                          <DetailField
+                            label="Estimated Finish Time"
+                            value={currentAsset.finishTimeMinutes ? formatSmartDuration(currentAsset.finishTimeMinutes) : '2h 15m'}
+                          />
+                          <DetailField
+                            label="Revision Buffer Time"
+                            value={currentAsset.revisionTimeMinutes ? formatSmartDuration(currentAsset.revisionTimeMinutes) : '45m'}
+                          />
+                          <DetailField label="Build Stage" value={currentAsset.bespokeStage ?? 'Prepping'} />
+                          <DetailField label="Purchase Cost" value={`PHP ${currentAsset.purchaseCost.toLocaleString()}`} />
+                        </div>
+                      </div>
+                    )}
+
+                    {currentAsset.category === 'Stockroom Assets' && (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                          <DetailField label="Primary Vendor" value={primaryVendor?.name ?? '—'} />
+                          <DetailField label="Backup Vendor" value={backupVendor?.name ?? '—'} />
+                          <DetailField label="Price per Unit" value={`PHP ${currentAsset.costPerUnit.toLocaleString()}`} />
+                          <DetailField label="Safety Stock Threshold" value={`${currentAsset.criticalThreshold ?? 30} ${currentAsset.unit}`} />
+                          <DetailField label="Stock Ceiling Cap" value={`${currentAsset.ceilingCap ?? 200} ${currentAsset.unit}`} />
+                        </div>
+                      </div>
+                    )}
+
+                    {currentAsset.category === 'Rental Assets' && (
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        <DetailField label="Supplier / Vendor" value={primaryVendor?.name ?? currentAsset.supplierDetails ?? currentAsset.rentalVendorName ?? 'Legazpi Party Rentals'} />
+                        <DetailField label="Supplier Contact" value={currentAsset.supplierContact ?? '+63 917 555 0011'} />
+                        <DetailField label="Rental Fee / Rate" value={`PHP ${currentAsset.purchaseCost.toLocaleString()}`} />
+                        <DetailField label="Length of Rent" value={currentAsset.lengthOfRent ?? '7 Days'} />
+                        <DetailField label="Due Back Date" value={currentAsset.onLoanDueDate || 'In Warehouse'} />
+                      </div>
+                    )}
+
+                    {currentAsset.category === 'Administrative Assets' && (
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        <DetailField label="Vendor / Source" value={primaryVendor?.name ?? currentAsset.vendorDetails ?? 'Direct Purchase'} />
+                        <DetailField label="Purchase Cost" value={`PHP ${currentAsset.purchaseCost.toLocaleString()}`} />
+                        <DetailField label="Assigned Custodian" value={currentAsset.custodian ?? 'Unassigned — In Storage'} />
+                        {currentAsset.deviceModel && <DetailField label="Device Model" value={currentAsset.deviceModel} />}
+                        {currentAsset.serialNumber && <DetailField label="Serial Number" value={currentAsset.serialNumber} />}
+                        {currentAsset.deviceSpecs && <DetailField label="Hardware Specs" value={currentAsset.deviceSpecs} />}
+                      </div>
+                    )}
+                  </div>
                 </div>
+              )}
 
-                {isAddingAttempt && (
-                  <form onSubmit={handleAddAttempt} className="border-b border-border bg-primary/5 p-3 flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-semibold text-foreground">
-                      Attempt #{attempts.length + 1}:
-                    </span>
-                    <input
-                      type="text"
-                      autoFocus
-                      value={newDurationInput}
-                      onChange={(e) => setNewDurationInput(e.target.value)}
-                      placeholder="e.g. 45 min or 60"
-                      className="w-36 rounded border border-input bg-background px-2.5 py-1 text-xs text-foreground outline-none focus:border-primary"
-                    />
-                    <button
-                      type="submit"
-                      className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1 text-xs font-bold text-primary-foreground hover:opacity-90"
-                    >
-                      <Check className="size-3" />
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAddingAttempt(false)
-                        setNewDurationInput('')
-                      }}
-                      className="rounded border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted"
-                    >
-                      Cancel
-                    </button>
-                  </form>
-                )}
-
-                <div className="max-h-56 overflow-y-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="sticky top-0 bg-muted/80 text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground border-b border-border">
-                      <tr>
-                        <th className="px-4 py-2.5">Attempt</th>
-                        <th className="px-4 py-2.5">Finished Time (Duration)</th>
-                        <th className="px-4 py-2.5">Logged Date</th>
-                        <th className="px-4 py-2.5 text-right">Logged By</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {attempts.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="px-4 py-6 text-center text-xs text-muted-foreground">
-                            No simulation attempts logged yet. Click &quot;Add Attempt&quot; to log build times.
-                          </td>
-                        </tr>
-                      ) : (
-                        attempts.map((attempt) => (
-                          <tr key={attempt.id} className="hover:bg-muted/30">
-                            <td className="px-4 py-2.5 font-semibold text-foreground">
-                              Attempt #{attempt.attemptNumber}
-                            </td>
-                            <td className="px-4 py-2.5">
-                              <span className="font-mono font-bold text-primary">
-                                {formatSmartDuration(attempt.durationMinutes)}
-                              </span>
-                              <span className="ml-1.5 text-[0.6rem] text-muted-foreground">
-                                ({attempt.durationMinutes} min)
-                              </span>
-                            </td>
-                            <td className="px-4 py-2.5 text-muted-foreground text-[0.65rem]">
-                              {attempt.loggedAt}
-                            </td>
-                            <td className="px-4 py-2.5 text-right text-muted-foreground text-[0.65rem]">
-                              {attempt.loggedBy || 'Warehouse Team'}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+              {/* 3. HISTORY TAB */}
+              {tab === 'history' && (
+                <div>
+                  <p className="mb-3 text-[0.6rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                    Lifecycle ledger — newest first
+                  </p>
+                  <ol className="relative flex flex-col gap-5 border-l border-border pl-5">
+                    {ledger.map((entry) => (
+                      <li key={entry.id} className="relative">
+                        <span className="absolute -left-[1.44rem] top-1 size-2.5 rounded-full border-2 border-card bg-primary" aria-hidden="true" />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold text-card-foreground">{entry.type}</span>
+                          <span className="text-[0.6rem] text-muted-foreground">{entry.timestamp}</span>
+                          {entry.reconciliationTag && (
+                            <Pill tone={RECON_TONE[entry.reconciliationTag]} className="text-[0.5rem]">
+                              {entry.reconciliationTag}
+                            </Pill>
+                          )}
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">{entry.note}</p>
+                        <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[0.6rem] text-muted-foreground">
+                          <span>Declared by {entry.declaredBy}</span>
+                          {entry.linkedBatchRef && <span>Linked batch {entry.linkedBatchRef}</span>}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
                 </div>
-              </div>
+              )}
 
-              {/* Informational Guidance */}
-              <div className="rounded-lg border border-border/60 bg-muted/30 p-3.5 text-xs text-muted-foreground leading-relaxed">
-                <p className="font-semibold text-foreground">Scheduling Integration Note:</p>
-                <p className="mt-1">
-                  The computed arithmetic mean ({formatSmartDuration(computedMeanMinutes)}) automatically sets{' '}
-                  <code className="rounded bg-muted px-1.5 py-0.5 text-foreground font-mono text-[0.65rem]">baseSingleWorkerTime</code>{' '}
-                  for newly scheduled production orders of this item. Once a job is scheduled in the Production Module, its baseline is locked into a snapshot to ensure stability.
-                </p>
-              </div>
-            </div>
+              {/* 4. SIMULATION TAB */}
+              {tab === 'simulation' && (
+                <div className="flex flex-col gap-5">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="rounded-lg border border-border bg-background p-4">
+                      <p className="text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                        Baseline Headcount
+                      </p>
+                      <p className="mt-1 font-serif text-2xl font-medium text-card-foreground">
+                        {headcount} <span className="text-xs font-sans text-muted-foreground">Carpenter{headcount > 1 ? 's' : ''}</span>
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg border border-border bg-background p-4">
+                      <p className="text-[0.58rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                        Computed Mean Duration
+                      </p>
+                      <p className="mt-1 font-serif text-2xl font-medium text-primary">
+                        {computedMeanMinutes > 0 ? formatSmartDuration(computedMeanMinutes) : 'No attempts logged'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-foreground">
+                      Fabrication Attempts Log ({attempts.length})
+                    </p>
+                    {!isAddingAttempt && (
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingAttempt(true)}
+                        className="inline-flex items-center gap-1 rounded bg-primary/10 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-primary hover:bg-primary/20 transition"
+                      >
+                        <Plus className="size-3" /> Log Attempt
+                      </button>
+                    )}
+                  </div>
+
+                  {isAddingAttempt && (
+                    <form onSubmit={handleAddAttempt} className="flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3">
+                      <input
+                        type="number"
+                        min={1}
+                        placeholder="Minutes (e.g. 135)"
+                        value={newDurationInput}
+                        onChange={(e) => setNewDurationInput(e.target.value)}
+                        className="w-36 rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+                      />
+                      <button
+                        type="submit"
+                        className="rounded bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingAttempt(false)}
+                        className="rounded border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted transition"
+                      >
+                        Cancel
+                      </button>
+                    </form>
+                  )}
+
+                  <div className="space-y-2">
+                    {attempts.map((att) => (
+                      <div key={att.id} className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-xs">
+                        <span className="font-semibold text-card-foreground">Attempt #{att.attemptNumber}</span>
+                        <span className="font-mono text-primary font-bold">{att.rawInput}</span>
+                        <span className="text-[0.65rem] text-muted-foreground">{att.loggedAt}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -599,11 +930,11 @@ export function AssetDetailModal({ asset, onClose, onCompleteMaintenance }: Asse
   )
 }
 
-function DetailField({ label, value, isMono = false }: { label: string; value: string; isMono?: boolean }) {
+function DetailField({ label, value, isMono = false }: { label: string; value: string | number; isMono?: boolean }) {
   return (
-    <div className="rounded-lg border border-border bg-background px-3.5 py-2.5">
-      <p className="text-[0.55rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">{label}</p>
-      <p className={cn('mt-0.5 text-xs text-card-foreground font-semibold', isMono && 'font-mono')}>{value}</p>
+    <div className="flex flex-col">
+      <span className="text-[0.55rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">{label}</span>
+      <span className={cn('text-xs font-semibold text-card-foreground', isMono && 'font-mono text-[0.7rem]')}>{value}</span>
     </div>
   )
 }

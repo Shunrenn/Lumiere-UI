@@ -238,8 +238,94 @@ export function checkSymmetricConflict(
   return { hasConflict: false }
 }
 
+
+export const CANONICAL_CREW_MEMBERS: Staff[] = [
+  {
+    id: 'crew-01',
+    employeeId: 'EMP-CRW-01',
+    firstName: 'Ronnie',
+    surname: 'Alcantara',
+    fullName: 'Ronnie Alcantara',
+    email: 'ronnie.alcantara@lumiere.ph',
+    contact: '+63 917 111 2233',
+    role: 'Ground Crew',
+    accountStatus: 'Active',
+    sessionStatus: 'Active Session',
+    lastAccess: 'Today, 06:30 AM',
+    dateAdded: '2026-01-15',
+  },
+  {
+    id: 'crew-02',
+    employeeId: 'EMP-CRW-02',
+    firstName: 'Dante',
+    surname: 'Navarro',
+    fullName: 'Dante Navarro',
+    email: 'dante.navarro@lumiere.ph',
+    contact: '+63 917 222 3344',
+    role: 'Ground Crew',
+    accountStatus: 'Active',
+    sessionStatus: 'Active Session',
+    lastAccess: 'Today, 06:15 AM',
+    dateAdded: '2026-02-01',
+  },
+  {
+    id: 'crew-03',
+    employeeId: 'EMP-CRW-03',
+    firstName: 'Elena',
+    surname: 'Gomez',
+    fullName: 'Elena Gomez',
+    email: 'elena.gomez@lumiere.ph',
+    contact: '+63 917 333 4455',
+    role: 'Warehouse Lead',
+    accountStatus: 'Active',
+    sessionStatus: 'Active Session',
+    lastAccess: 'Today, 06:00 AM',
+    dateAdded: '2026-02-10',
+  },
+  {
+    id: 'crew-04',
+    employeeId: 'EMP-CRW-04',
+    firstName: 'Paolo',
+    surname: 'Reyes',
+    fullName: 'Paolo Reyes',
+    email: 'paolo.reyes@lumiere.ph',
+    contact: '+63 917 444 5566',
+    role: 'Warehouse Member',
+    accountStatus: 'Active',
+    sessionStatus: 'Active Session',
+    lastAccess: 'Yesterday',
+    dateAdded: '2026-03-01',
+  },
+  {
+    id: 'crew-05',
+    employeeId: 'EMP-CRW-05',
+    firstName: 'Aris',
+    surname: 'Mendoza',
+    fullName: 'Aris Mendoza',
+    email: 'aris.mendoza@lumiere.ph',
+    contact: '+63 917 555 6677',
+    role: 'Ground Crew',
+    accountStatus: 'Active',
+    sessionStatus: 'Active Session',
+    lastAccess: 'Yesterday',
+    dateAdded: '2026-03-15',
+  },
+]
+
 export function getCrewPool(staff: Staff[]) {
-  return staff.filter((member) => member.role === 'Ground Crew')
+  const matching = staff.filter((member) => 
+      member.role === 'Ground Crew' || 
+      member.role === 'Warehouse Lead' || 
+      member.role === 'Warehouse Member' || 
+      member.role === 'Warehouse Associate' ||
+      member.role.toLowerCase().includes('crew')
+    )
+    if (matching.length >= 3) return matching
+    const byId = new Map(matching.map((m) => [m.id, m]))
+    CANONICAL_CREW_MEMBERS.forEach((m) => {
+      if (!byId.has(m.id)) byId.set(m.id, m)
+    })
+    return Array.from(byId.values())
 }
 
 let cache: { key: string; rows: CrewRow[] } | null = null

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, Download, Plus, Search } from 'lucide-react'
 import { usePortal } from '@/lib/store'
-import { lineCost, type DeficitLine } from '@/lib/warehouse-replenishment'
+import { lineCost, getStoredDeficits, saveStoredDeficits, type DeficitLine } from '@/lib/warehouse-replenishment'
 import { createDeficitItemApi, fetchDeficitQueueApi, updateDeficitStatusApi } from '@/features/inventory/api/deficitApi'
 import { DeficitTable } from '@/components/warehouse/replenishment/DeficitTable'
 import { GeneratePOModal } from '@/components/warehouse/replenishment/GeneratePOModal'
@@ -15,7 +15,11 @@ type ViewMode = 'grouped' | 'consolidated'
 
 export function ReplenishmentModule() {
   const { events } = usePortal()
-  const [lines, setLines] = useState<DeficitLine[]>([])
+  const [lines, setLines] = useState<DeficitLine[]>(() => getStoredDeficits())
+
+  useEffect(() => {
+    saveStoredDeficits(lines)
+  }, [lines])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('grouped')
