@@ -27,7 +27,12 @@ export function GroundCrewField({ event, events, assignments, batches, batchesBy
   onReport: (item: Asset) => void
 }) {
   const [section, setSection] = useState<'events' | 'reports'>('events')
-  useEffect(() => { if (event) registerGroundCrewStageData(event.id, batches) }, [event, batches])
+  useEffect(() => {
+    if (event) registerGroundCrewStageData(event.id, batches)
+    for (const item of events) {
+      registerGroundCrewStageData(item.id, batchesByEvent.get(item.id) ?? [])
+    }
+  }, [event, batches, events, batchesByEvent])
   const scopeStages = scope === 'Warehouse Crew' ? ['Dispatch Release', 'Warehouse Return'] : ['Venue Arrival', 'Egress Release']
   const rostered = new Set(assignments.map((assignment) => assignment.eventId))
   const activeEvents = events.filter((item) => rostered.has(item.id))
