@@ -875,7 +875,6 @@ export function GroundCrewPage() {
             events={crewEvents}
             assignments={myAssignments}
             batches={selectedEvent ? (dispatchStore.get(selectedEvent.id) ?? []) : []}
-            batchesByEvent={dispatchStore}
             declarations={declarations}
             loading={loadingAssignments}
             error={assignmentError}
