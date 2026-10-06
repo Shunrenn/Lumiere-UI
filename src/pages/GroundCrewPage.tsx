@@ -11,7 +11,6 @@ import {
   ClipboardList,
   Layers,
   Lock,
-  LogOut,
   MapPin,
   MessageSquare,
   PackageCheck,
@@ -823,17 +822,6 @@ export function GroundCrewPage() {
             <UserCircle2 className="size-5 text-primary" />
           )
         }
-        actions={
-          <button
-            type="button"
-            onClick={logout}
-            className="flex size-10 items-center justify-center rounded-xl border border-sidebar-border bg-sidebar-accent/50 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
-            title="Sign out"
-            aria-label="Sign out"
-          >
-            <LogOut className="size-4" />
-          </button>
-        }
       />
 
       {/* Main Tab Content */}
@@ -849,7 +837,8 @@ export function GroundCrewPage() {
         {tab === 'home' && (
           <Home
             events={crewEvents}
-            onOpen={(item) => { setSelectedEventId(item.id); setTab('field') }}
+            onOpenToday={(item) => { setSelectedEventId(item.id); setTab('field') }}
+            onOpenNext={() => setTab('schedule')}
             assignments={myAssignments}
             loadingAssignments={loadingAssignments}
             assignmentError={assignmentError}
@@ -1047,19 +1036,22 @@ export function GroundCrewPage() {
 
 function Home({
   events,
-  onOpen,
+  onOpenToday,
+  onOpenNext,
   assignments,
   loadingAssignments,
   assignmentError,
   isCachedData,
 }: {
   events: EventItem[]
-  onOpen: (event: EventItem) => void
+  onOpenToday: (event: EventItem) => void
+  onOpenNext: () => void
   assignments: MyManningAssignmentDto[]
   loadingAssignments: boolean
   assignmentError: string | null
   isCachedData?: boolean
 }) {
+  const manilaDate = (value: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date(value.includes('T') ? value : `${value}T00:00:00Z`))
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
   const scope = assignments.some((a) => /warehouse/i.test(`${a.workArea} ${a.taskTitle}`)) ? 'Warehouse Crew' : 'Field Crew'
   const stages = ['Dispatch Release', 'Venue Arrival', 'Egress Release', 'Warehouse Return']
@@ -1075,8 +1067,9 @@ function Home({
     const event = events.find((e) => e.id === eventId)
     return { id: eventId, name: first.eventName || event?.name || 'Event', venue: event?.venue || first.workArea || 'Venue', date: first.shiftDate || event?.date || '', time: first.shiftStartTime, isLead: items.some((a) => a.isLead), items }
   }).filter((item) => item.date)
-  const todayShift = grouped.find((item) => item.date.slice(0, 10) === today)
-  const nextShift = grouped.filter((item) => item.date.slice(0, 10) > today).sort((a, b) => a.date.localeCompare(b.date))[0]
+  const dated = grouped.map((item) => ({ ...item, manilaDate: manilaDate(item.date) }))
+  const todayShift = dated.find((item) => item.manilaDate === today)
+  const nextShift = dated.filter((item) => item.manilaDate > today).sort((a, b) => a.manilaDate.localeCompare(b.manilaDate))[0]
   const toEvent = (item: typeof grouped[number]) => events.find((e) => e.id === item.id) || { id: item.id, name: item.name, venue: item.venue, date: item.date, status: 'Upcoming' as EventStatus, editable: false, phase: null, items: [] }
   const syncLabel = !navigator.onLine ? 'Offline - changes are saved on this phone' : isCachedData ? 'Offline - changes are saved on this phone' : assignments.some((a) => a.pendingSync) ? `${assignments.filter((a) => a.pendingSync).length} waiting to sync` : 'Online'
 
@@ -1087,13 +1080,13 @@ function Home({
     <div className="space-y-3">
       <span className="inline-flex rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">{syncLabel}</span>
       {todayShift ? (
-        <button type="button" onClick={() => onOpen(toEvent(todayShift))} className="block w-full text-left">
+        <button type="button" onClick={() => onOpenToday(toEvent(todayShift))} className="block w-full text-left">
           <PwaCard title="Today" action={todayShift.isLead ? <PwaBadge variant="neutral" label="Shift Lead" /> : undefined}>
             <div className="space-y-3"><div><h2 className="font-serif text-lg font-bold">{todayShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{todayShift.venue}{todayShift.time ? ` • Call ${todayShift.time}` : ''}</p></div><div><div className="grid grid-cols-4 gap-1">{stages.map((stage, index) => <span key={stage} className={`h-2 rounded-full ${index <= stageFor(todayShift.items).index ? 'bg-primary' : 'bg-muted'}`} />)}</div><p className="mt-2 text-xs text-muted-foreground">Stage {stageFor(todayShift.items).index + 1} of 4 · {stageFor(todayShift.items).label}</p></div><p className="text-xs text-muted-foreground">Your stages: {scope === 'Field Crew' ? 'Venue Arrival, Egress Release' : 'Dispatch Release, Warehouse Return'}</p></div>
           </PwaCard>
         </button>
       ) : <PwaCard title="Today"><p className="text-sm text-muted-foreground">No shift today</p></PwaCard>}
-      {nextShift ? <button type="button" onClick={() => onOpen(toEvent(nextShift))} className="block w-full text-left"><PwaCard title="Next shift"><h2 className="font-serif text-lg font-bold">{nextShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{nextShift.venue} • {dateLabel(nextShift.date)}</p></PwaCard></button> : <PwaCard title="Next shift"><p className="text-sm text-muted-foreground">No upcoming shifts</p></PwaCard>}
+      {nextShift ? <button type="button" onClick={onOpenNext} className="block w-full text-left"><PwaCard title="Next shift"><h2 className="font-serif text-lg font-bold">{nextShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{nextShift.venue} • {dateLabel(nextShift.date)}</p></PwaCard></button> : <PwaCard title="Next shift"><p className="text-sm text-muted-foreground">No upcoming shifts</p></PwaCard>}
     </div>
   )
 }
