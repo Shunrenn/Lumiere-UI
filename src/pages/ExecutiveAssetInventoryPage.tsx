@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { Search, Grid2X2, List, Sparkles, X, Layers } from 'lucide-react'
 import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
 import { AssetDetailModal } from '@/components/warehouse/asset-catalog/AssetDetailModal'
-import { useCatalogAssets, type CatalogAsset } from '@/lib/warehouse-catalog'
+import { useCatalogAssets, type CatalogAsset, type AssetCategory } from '@/lib/warehouse-catalog'
 import { useNav } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import type { ExecutiveDestinationId } from '@/lib/executive-destinations'
@@ -28,9 +28,14 @@ export function ExecutiveAssetInventoryPage() {
 
   const fallbackImage = '/images/decor/tiffany-chair.png'
 
-  // Build high-level luxury event classifications matching the executive kiosk specification
+  // The 6 canonical classifications requested: ALL, EVENT ASSET, BESPOKE, STOCKROOM, RENTAL, OFFICE ASSET
   const classifications: ClassificationGroup[] = useMemo(() => {
     const allFirstImage = assets.find((a) => a.image)?.image || fallbackImage
+
+    const getCategoryImage = (cat: AssetCategory, defaultImg: string) => {
+      const found = assets.find((a) => a.category === cat && a.image)?.image
+      return found || defaultImg
+    }
 
     const groups: ClassificationGroup[] = [
       {
@@ -41,194 +46,39 @@ export function ExecutiveAssetInventoryPage() {
         matcher: () => true,
       },
       {
-        id: 'display',
-        name: 'Display',
-        count: assets.filter((a) =>
-          Boolean(
-            a.subCategory?.toLowerCase().includes('display') ||
-            a.subCategory?.toLowerCase().includes('backdrop') ||
-            a.subCategory?.toLowerCase().includes('arch') ||
-            a.tags?.some((t) => ['display', 'backdrop', 'arch', 'wall', 'plinth'].includes(t.toLowerCase())) ||
-            a.name.toLowerCase().includes('display') ||
-            a.name.toLowerCase().includes('backdrop') ||
-            a.name.toLowerCase().includes('arch') ||
-            a.name.toLowerCase().includes('plinth')
-          )
-        ).length,
-        image:
-          assets.find(
-            (a) =>
-              a.subCategory?.toLowerCase().includes('backdrop') ||
-              a.name.toLowerCase().includes('wall') ||
-              a.name.toLowerCase().includes('plinth')
-          )?.image || '/assets/inventory/floral-arch.png',
-        matcher: (a) =>
-          Boolean(
-            a.subCategory?.toLowerCase().includes('display') ||
-            a.subCategory?.toLowerCase().includes('backdrop') ||
-            a.subCategory?.toLowerCase().includes('arch') ||
-            a.tags?.some((t) => ['display', 'backdrop', 'arch', 'wall', 'plinth'].includes(t.toLowerCase())) ||
-            a.name.toLowerCase().includes('display') ||
-            a.name.toLowerCase().includes('backdrop') ||
-            a.name.toLowerCase().includes('arch') ||
-            a.name.toLowerCase().includes('plinth')
-          ),
+        id: 'event-asset',
+        name: 'Event Asset',
+        count: assets.filter((a) => a.category === 'Event Assets').length,
+        image: getCategoryImage('Event Assets', fallbackImage),
+        matcher: (a) => a.category === 'Event Assets',
       },
       {
-        id: 'furniture',
-        name: 'Furniture',
-        count: assets.filter((a) =>
-          Boolean(
-            a.subCategory?.toLowerCase().includes('furniture') ||
-            a.subCategory?.toLowerCase().includes('seating') ||
-            a.tags?.some((t) => ['furniture', 'chair', 'lounge', 'table', 'sofa', 'seating'].includes(t.toLowerCase())) ||
-            a.name.toLowerCase().includes('chair') ||
-            a.name.toLowerCase().includes('lounge') ||
-            a.name.toLowerCase().includes('table') ||
-            a.name.toLowerCase().includes('bench')
-          )
-        ).length,
-        image:
-          assets.find(
-            (a) =>
-              a.subCategory?.toLowerCase().includes('furniture') ||
-              a.name.toLowerCase().includes('chair') ||
-              a.name.toLowerCase().includes('lounge')
-          )?.image || fallbackImage,
-        matcher: (a) =>
-          Boolean(
-            a.subCategory?.toLowerCase().includes('furniture') ||
-            a.subCategory?.toLowerCase().includes('seating') ||
-            a.tags?.some((t) => ['furniture', 'chair', 'lounge', 'table', 'sofa', 'seating'].includes(t.toLowerCase())) ||
-            a.name.toLowerCase().includes('chair') ||
-            a.name.toLowerCase().includes('lounge') ||
-            a.name.toLowerCase().includes('table') ||
-            a.name.toLowerCase().includes('bench')
-          ),
+        id: 'bespoke',
+        name: 'Bespoke',
+        count: assets.filter((a) => a.category === 'Production Assets').length,
+        image: getCategoryImage('Production Assets', '/assets/inventory/floral-arch.png'),
+        matcher: (a) => a.category === 'Production Assets',
       },
       {
-        id: 'lighting',
-        name: 'Lighting',
-        count: assets.filter((a) =>
-          Boolean(
-            a.subCategory?.toLowerCase().includes('lighting') ||
-            a.tags?.some((t) => ['lighting', 'light', 'led', 'beam', 'lamp', 'wash'].includes(t.toLowerCase())) ||
-            a.name.toLowerCase().includes('light') ||
-            a.name.toLowerCase().includes('beam') ||
-            a.name.toLowerCase().includes('led') ||
-            a.name.toLowerCase().includes('skypanel')
-          )
-        ).length,
-        image:
-          assets.find(
-            (a) =>
-              a.subCategory?.toLowerCase().includes('lighting') ||
-              a.name.toLowerCase().includes('light') ||
-              a.name.toLowerCase().includes('beam')
-          )?.image || '/images/decor/uplighting.png',
-        matcher: (a) =>
-          Boolean(
-            a.subCategory?.toLowerCase().includes('lighting') ||
-            a.tags?.some((t) => ['lighting', 'light', 'led', 'beam', 'lamp', 'wash'].includes(t.toLowerCase())) ||
-            a.name.toLowerCase().includes('light') ||
-            a.name.toLowerCase().includes('beam') ||
-            a.name.toLowerCase().includes('led') ||
-            a.name.toLowerCase().includes('skypanel')
-          ),
+        id: 'stockroom',
+        name: 'Stockroom',
+        count: assets.filter((a) => a.category === 'Stockroom Assets').length,
+        image: getCategoryImage('Stockroom Assets', '/images/decor/table-runner.png'),
+        matcher: (a) => a.category === 'Stockroom Assets',
       },
       {
-        id: 'signage',
-        name: 'Signage',
-        count: assets.filter((a) =>
-          Boolean(
-            a.subCategory?.toLowerCase().includes('signage') ||
-            a.tags?.some((t) => ['signage', 'neon', 'acrylic', 'sign'].includes(t.toLowerCase())) ||
-            a.name.toLowerCase().includes('sign') ||
-            a.name.toLowerCase().includes('neon') ||
-            a.name.toLowerCase().includes('mirror')
-          )
-        ).length,
-        image:
-          assets.find(
-            (a) =>
-              a.subCategory?.toLowerCase().includes('signage') ||
-              a.name.toLowerCase().includes('sign') ||
-              a.name.toLowerCase().includes('neon')
-          )?.image || '/images/elements/led-strip-roll.png',
-        matcher: (a) =>
-          Boolean(
-            a.subCategory?.toLowerCase().includes('signage') ||
-            a.tags?.some((t) => ['signage', 'neon', 'acrylic', 'sign'].includes(t.toLowerCase())) ||
-            a.name.toLowerCase().includes('sign') ||
-            a.name.toLowerCase().includes('neon') ||
-            a.name.toLowerCase().includes('mirror')
-          ),
+        id: 'rental',
+        name: 'Rental',
+        count: assets.filter((a) => a.category === 'Rental Assets').length,
+        image: getCategoryImage('Rental Assets', '/images/elements/led-strip-roll.png'),
+        matcher: (a) => a.category === 'Rental Assets',
       },
       {
-        id: 'styling',
-        name: 'Styling',
-        count: assets.filter((a) =>
-          Boolean(
-            a.subCategory?.toLowerCase().includes('styling') ||
-            a.subCategory?.toLowerCase().includes('tableware') ||
-            a.subCategory?.toLowerCase().includes('decor') ||
-            a.tags?.some((t) => ['styling', 'tableware', 'decor', 'floral', 'vase', 'glassware'].includes(t.toLowerCase())) ||
-            a.name.toLowerCase().includes('vase') ||
-            a.name.toLowerCase().includes('flower') ||
-            a.name.toLowerCase().includes('candelabra') ||
-            a.name.toLowerCase().includes('charger')
-          )
-        ).length,
-        image:
-          assets.find(
-            (a) =>
-              a.subCategory?.toLowerCase().includes('tableware') ||
-              a.name.toLowerCase().includes('flower') ||
-              a.name.toLowerCase().includes('charger')
-          )?.image || '/images/decor/table-runner.png',
-        matcher: (a) =>
-          Boolean(
-            a.subCategory?.toLowerCase().includes('styling') ||
-            a.subCategory?.toLowerCase().includes('tableware') ||
-            a.subCategory?.toLowerCase().includes('decor') ||
-            a.tags?.some((t) => ['styling', 'tableware', 'decor', 'floral', 'vase', 'glassware'].includes(t.toLowerCase())) ||
-            a.name.toLowerCase().includes('vase') ||
-            a.name.toLowerCase().includes('flower') ||
-            a.name.toLowerCase().includes('candelabra') ||
-            a.name.toLowerCase().includes('charger')
-          ),
-      },
-      {
-        id: 'textiles',
-        name: 'Textiles',
-        count: assets.filter((a) =>
-          Boolean(
-            a.subCategory?.toLowerCase().includes('textiles') ||
-            a.subCategory?.toLowerCase().includes('linen') ||
-            a.tags?.some((t) => ['textile', 'linen', 'velvet', 'runner', 'drape', 'fabric'].includes(t.toLowerCase())) ||
-            a.name.toLowerCase().includes('drape') ||
-            a.name.toLowerCase().includes('linen') ||
-            a.name.toLowerCase().includes('runner') ||
-            a.name.toLowerCase().includes('velvet')
-          )
-        ).length,
-        image:
-          assets.find(
-            (a) =>
-              a.subCategory?.toLowerCase().includes('textiles') ||
-              a.name.toLowerCase().includes('runner') ||
-              a.name.toLowerCase().includes('drape')
-          )?.image || '/images/decor/table-runner.png',
-        matcher: (a) =>
-          Boolean(
-            a.subCategory?.toLowerCase().includes('textiles') ||
-            a.subCategory?.toLowerCase().includes('linen') ||
-            a.tags?.some((t) => ['textile', 'linen', 'velvet', 'runner', 'drape', 'fabric'].includes(t.toLowerCase())) ||
-            a.name.toLowerCase().includes('drape') ||
-            a.name.toLowerCase().includes('linen') ||
-            a.name.toLowerCase().includes('runner') ||
-            a.name.toLowerCase().includes('velvet')
-          ),
+        id: 'office-asset',
+        name: 'Office Asset',
+        count: assets.filter((a) => a.category === 'Administrative Assets').length,
+        image: getCategoryImage('Administrative Assets', fallbackImage),
+        matcher: (a) => a.category === 'Administrative Assets',
       },
     ]
 
@@ -309,7 +159,7 @@ export function ExecutiveAssetInventoryPage() {
                 Classifications
               </span>
               <span className="text-[0.65rem] font-medium text-muted-foreground/80">
-                {classifications.length - 1} categories
+                {classifications.length} categories
               </span>
             </div>
 
