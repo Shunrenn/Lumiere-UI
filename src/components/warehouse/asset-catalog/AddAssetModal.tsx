@@ -1,3 +1,4 @@
+import { ImageViewerModal } from '@/components/warehouse/shared/ImageViewerModal'
 import { useRef, useState } from 'react'
 import { ImagePlus, Loader2, Sparkles, Trash2, X, Layers, ShieldCheck } from 'lucide-react'
 import type {
@@ -160,6 +161,7 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
   const [activePhotoMode, setActivePhotoMode] = useState<'bgRemoved' | 'original'>('bgRemoved')
   const [isProcessingBg, setIsProcessingBg] = useState(false)
   const [imageError, setImageError] = useState<string | null>(null)
+  const [isFullscreenPreviewOpen, setIsFullscreenPreviewOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Shared Base Fields (BLANK DEFAULTS)
@@ -402,13 +404,27 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
             </div>
 
             <div className="flex items-start gap-4">
-              <div className="relative flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-card shadow-xs">
+              <div
+                onClick={() => {
+                  if (activeDisplayImage) setIsFullscreenPreviewOpen(true)
+                }}
+                className={cn(
+                  "relative flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-card shadow-xs group",
+                  activeDisplayImage ? "cursor-zoom-in hover:border-primary/50" : ""
+                )}
+                title={activeDisplayImage ? "Click to view full screen" : undefined}
+              >
                 {activeDisplayImage ? (
-                  <img
-                    src={activeDisplayImage}
-                    alt="Asset photo"
-                    className="size-full object-contain p-1"
-                  />
+                  <>
+                    <img
+                      src={activeDisplayImage}
+                      alt="Asset photo"
+                      className="size-full object-contain p-1 transition-transform group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[0.6rem] font-semibold gap-1 backdrop-blur-2xs">
+                      <span>View Full</span>
+                    </div>
+                  </>
                 ) : (
                   <ImagePlus className="size-6 text-muted-foreground" aria-hidden="true" />
                 )}
@@ -880,6 +896,16 @@ export function AddAssetModal({ onClose, onCreate }: AddAssetModalProps) {
                       />
                       <span className="text-xs font-semibold">m</span>
                     </div>
+
+      {activeDisplayImage && isFullscreenPreviewOpen && (
+        <ImageViewerModal
+          src={activeDisplayImage}
+          alt={name || 'Asset Photo'}
+          title={name ? `${name} (${activePhotoMode === 'bgRemoved' ? 'AI Cutout' : 'Original'})` : 'Asset Photo Preview'}
+          onClose={() => setIsFullscreenPreviewOpen(false)}
+        />
+      )}
+
                   </div>
                 </div>
               </div>

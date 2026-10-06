@@ -1,3 +1,4 @@
+import { ImageViewerModal } from '@/components/warehouse/shared/ImageViewerModal'
 import { useState, useMemo, useRef } from 'react'
 import {
   X,
@@ -77,6 +78,7 @@ export function AssetDetailModal({
   const [draft, setDraft] = useState<CatalogAsset>(asset)
   const [imageError, setImageError] = useState('')
   const [savedToast, setSavedToast] = useState(false)
+  const [fullscreenImageSrc, setFullscreenImageSrc] = useState<string | null>(null)
   const [isRemovingBg, setIsRemovingBg] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -975,6 +977,16 @@ export function AssetDetailModal({
               )}
             </>
           )}
+
+      {fullscreenImageSrc && (
+        <ImageViewerModal
+          src={fullscreenImageSrc}
+          alt={currentAsset.name}
+          title={currentAsset.name}
+          onClose={() => setFullscreenImageSrc(null)}
+        />
+      )}
+
         </div>
       </div>
     </div>
