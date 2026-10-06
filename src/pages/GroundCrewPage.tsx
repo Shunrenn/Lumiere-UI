@@ -64,7 +64,7 @@ import {
   type CapturedEvidence,
   type PwaNavItem,
 } from '@/components/pwa'
-import type { GroundCrewSubRole, HavaDeclarationState, HavaEvidenceStatus } from '@/lib/types'
+import type { HavaDeclarationState, HavaEvidenceStatus } from '@/lib/types'
 
 type Tab = 'home' | 'schedule' | 'field' | 'account'
 type AccessLevel = 'Ground Crew / Member' | 'Team Lead / Field Lead' | 'Receiver' | 'Event Admin'
@@ -804,8 +804,8 @@ export function GroundCrewPage() {
                 ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Tasks, reports, requests and history'
                 : adminEmail || undefined
         }
-        roleName={tab === 'home' ? (currentUser?.groundCrewSubRole === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew') : accessLevel}
-        subRole={tab === 'home' ? undefined : effectiveRole as GroundCrewSubRole}
+        roleName={currentUser?.groundCrewSubRole === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew'}
+        subRole={hasAnyLead ? 'Shift Lead' : undefined}
         icon={
           tab === 'home' ? (
             <MapPin className="size-5 text-primary" />
@@ -826,6 +826,7 @@ export function GroundCrewPage() {
             <PwaSyncStatusBar
               userId={currentUser?.id || adminEmail || 'crew'}
               onSyncComplete={loadAssignments}
+              className={tab === 'schedule' ? '[&>div:first-child>div>span:last-child]:hidden' : undefined}
             />
           )}
 
@@ -2100,8 +2101,8 @@ function CalendarView({
   return (
     <div className="space-y-3">
       <PwaCard>
-        <div className="mb-2 flex items-center justify-between"><button type="button" aria-label="Previous month" onClick={() => shiftMonth(-1)} className="rounded-full p-2 hover:bg-accent"><ChevronLeft className="size-4" /></button><h2 className="font-serif text-base font-bold">{monthNames[view.month]} {view.year}</h2><button type="button" aria-label="Next month" onClick={() => shiftMonth(1)} className="rounded-full p-2 hover:bg-accent"><ChevronRight className="size-4" /></button></div>
-        <div className="grid grid-cols-7 gap-1 text-center text-[0.65rem] text-muted-foreground">{['S','M','T','W','T','F','S'].map((day, index) => <span key={`${day}-${index}`} className="py-1 font-bold">{day}</span>)}{Array.from({ length: firstWeekday }, (_, index) => <span key={`pad-${index}`} />)}{monthDays.map((day) => { const date = `${view.year}-${String(view.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`; const hasShift = shifts.some((shift) => shift.event.date === date); const past = date < today; const isToday = date === today; const isSelected = date === selectedDate; return <button type="button" key={date} onClick={() => setSelectedDate(date)} className={`relative flex min-h-9 flex-col items-center justify-center rounded-lg text-xs ${isSelected ? 'ring-2 ring-primary' : ''} ${isToday ? 'bg-primary text-primary-foreground font-bold' : 'text-foreground'}`}><span>{day}</span>{hasShift && <span className={`mt-1 size-1.5 rounded-full ${past ? 'bg-muted-foreground/50' : isToday ? 'bg-primary-foreground' : 'bg-primary'}`} />}</button>})}</div>
+        <div className="mb-1 flex items-center justify-between"><button type="button" aria-label="Previous month" onClick={() => shiftMonth(-1)} className="rounded-full p-1.5 hover:bg-accent"><ChevronLeft className="size-4" /></button><h2 className="font-serif text-base font-bold">{monthNames[view.month]} {view.year}</h2><button type="button" aria-label="Next month" onClick={() => shiftMonth(1)} className="rounded-full p-1.5 hover:bg-accent"><ChevronRight className="size-4" /></button></div>
+        <div className="grid grid-cols-7 gap-0.5 text-center text-[0.6rem] text-muted-foreground">{['S','M','T','W','T','F','S'].map((day, index) => <span key={`${day}-${index}`} className="py-0.5 font-bold">{day}</span>)}{Array.from({ length: firstWeekday }, (_, index) => <span key={`pad-${index}`} />)}{monthDays.map((day) => { const date = `${view.year}-${String(view.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`; const hasShift = shifts.some((shift) => shift.event.date === date); const past = date < today; const isToday = date === today; const isSelected = date === selectedDate; return <button type="button" key={date} onClick={() => setSelectedDate(date)} className={`relative flex min-h-7 flex-col items-center justify-center rounded-lg text-xs ${isSelected ? 'ring-2 ring-primary' : ''} ${isToday ? 'bg-primary text-primary-foreground font-bold' : 'text-foreground'}`}><span>{day}</span>{hasShift && <span className={`mt-0.5 size-1.5 rounded-full ${past ? 'bg-muted-foreground/50' : isToday ? 'bg-primary-foreground' : 'bg-primary'}`} />}</button>})}</div>
       </PwaCard>
       <section aria-labelledby="selected-shifts-heading"><h2 id="selected-shifts-heading" className="mb-2 font-serif text-base font-bold">{selectedDate === today ? `Today · ${dateLabel(selectedDate)}` : dateLabel(selectedDate)}</h2>{selected.length ? <div className="space-y-2">{selected.map(card)}</div> : <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">{selectedDate === today ? 'Not rostered today' : 'Not rostered on this day'}</div>}</section>
       {recent.length > 0 && <section aria-labelledby="recent-shifts-heading"><h2 id="recent-shifts-heading" className="mb-2 font-serif text-base font-bold">Recent shifts</h2><div className="space-y-2">{recent.map(card)}</div></section>}
