@@ -7,12 +7,14 @@ import {
   SlidersHorizontal,
   Search,
   Truck,
+  User,
   X,
 } from 'lucide-react'
 import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import {
   advanceBatchStage,
+  createReturnBatchFromDelivered,
   deleteBatch,
   exportBatchPdf,
   getEventDispatchSummaries,
@@ -50,7 +52,7 @@ function DispatchStatusPipeline({
   const activeIdx = sequence.indexOf(stage)
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1.5">
       {sequence.map((step, idx) => {
         const isCurrent = idx === activeIdx
         const isPast = idx < activeIdx
@@ -67,7 +69,7 @@ function DispatchStatusPipeline({
                   ? 'bg-[#8C6B4B] text-white shadow-2xs dark:bg-amber-700'
                   : isPast
                     ? 'bg-[#8C6B4B]/20 text-[#8C6B4B] dark:text-amber-300'
-                    : 'bg-muted/70 text-muted-foreground',
+                    : 'bg-[#f2ece2] dark:bg-stone-800 text-muted-foreground',
                 onSelectStage && 'hover:opacity-80 cursor-pointer',
               )}
             >
@@ -156,6 +158,14 @@ export function DispatchModule(_props?: DispatchModuleProps) {
     () => summaries.find((s) => s.eventId === selectedEventModalId) ?? null,
     [summaries, selectedEventModalId],
   )
+
+  const isSelectedEventCompleted = useMemo(() => {
+    if (!selectedEventModal) return false
+    return (
+      selectedEventModal.batches.length > 0 &&
+      selectedEventModal.batches.every((b) => b.stage === 'Delivered' || b.stage === 'Returned')
+    )
+  }, [selectedEventModal])
 
   // Filtered summaries
   const filteredSummaries = useMemo(() => {
@@ -623,7 +633,7 @@ export function DispatchModule(_props?: DispatchModuleProps) {
         )}
       </div>
 
-      {/* ─── LEVEL 2: EVENT DETAIL MODAL (Image 4) ─── */}
+      {/* ─── LEVEL 2: EVENT DETAIL / COMPLETED EVENT MODAL (Images 4 & 6) ─── */}
       {selectedEventModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
@@ -638,8 +648,8 @@ export function DispatchModule(_props?: DispatchModuleProps) {
             {/* Modal Header */}
             <div className="flex items-start justify-between border-b border-border/80 px-6 py-5 shrink-0">
               <div>
-                <span className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-                  Event Detail
+                <span className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[#8C6B4B] dark:text-amber-300">
+                  {isSelectedEventCompleted ? 'Completed Event' : 'Event Detail'}
                 </span>
                 <h2 className="font-serif text-2xl font-medium text-card-foreground mt-0.5">
                   {selectedEventModal.eventTitle}
@@ -742,96 +752,128 @@ export function DispatchModule(_props?: DispatchModuleProps) {
                         <Download className="size-3.5" />
                         Export Manifest (PDF)
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const event = events.find((e) => e.id === selectedEventModal.eventId)
-                          if (event && selectedEventModal.batches[0]) {
-                            advanceBatchStage(selectedEventModal.eventId, selectedEventModal.batches[0].id)
-                          }
-                        }}
-                        className="rounded-xl bg-[#8C6B4B] hover:bg-[#78593c] text-white px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider shadow-xs"
-                      >
-                        + New Outbound Batch
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          // new return batch trigger
-                        }}
-                        className="rounded-xl border border-border bg-background hover:bg-accent px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider"
-                      >
-                        + New Return Batch
-                      </button>
+                      {!isSelectedEventCompleted && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const event = events.find((e) => e.id === selectedEventModal.eventId)
+                              if (event && selectedEventModal.batches[0]) {
+                                advanceBatchStage(selectedEventModal.eventId, selectedEventModal.batches[0].id)
+                              }
+                            }}
+                            className="rounded-xl bg-[#8C6B4B] hover:bg-[#78593c] text-white px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider shadow-xs"
+                          >
+                            + New Outbound Batch
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const delivered = selectedEventModal.batches.find((b) => b.stage === 'Delivered')
+                              if (delivered) {
+                                createReturnBatchFromDelivered(selectedEventModal.eventId, delivered)
+                              }
+                            }}
+                            className="rounded-xl border border-border bg-background hover:bg-accent px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider"
+                          >
+                            + New Return Batch
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   {/* Batch Cards List */}
                   <div className="space-y-3">
-                    {selectedEventModal.batches.map((batch) => (
-                      <div
-                        key={batch.id}
-                        onClick={() => openBatchDetail(selectedEventModal.eventId, batch.id)}
-                        className="group flex flex-col gap-3 rounded-xl border border-border/80 bg-background p-4 transition-all hover:border-primary/50 hover:shadow-2xs cursor-pointer"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                              {batch.direction === 'outbound' ? (
-                                <ArrowUp className="size-4" />
-                              ) : (
-                                <ArrowDown className="size-4" />
+                    {selectedEventModal.batches.map((batch) => {
+                      const canCreateReturn = batch.direction === 'outbound' && batch.stage === 'Delivered'
+
+                      return (
+                        <div
+                          key={batch.id}
+                          onClick={() => openBatchDetail(selectedEventModal.eventId, batch.id)}
+                          className="group flex flex-col gap-3 rounded-xl border border-border/80 bg-background p-4 transition-all hover:border-primary/50 hover:shadow-2xs cursor-pointer"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                {batch.direction === 'outbound' ? (
+                                  <ArrowUp className="size-4" />
+                                ) : (
+                                  <ArrowDown className="size-4" />
+                                )}
+                              </span>
+                              <div>
+                                <h4 className="font-serif text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                                  {batch.vehicleType}
+                                </h4>
+                                <p className="text-[0.62rem] font-mono text-muted-foreground uppercase tracking-wider">
+                                  {batch.plateNumber} · Driver: {batch.driverName || 'Unassigned'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2.5">
+                              <button
+                                type="button"
+                                className="flex size-7 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground"
+                              >
+                                <User className="size-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  exportBatchPdf(
+                                    {
+                                      eventTitle: selectedEventModal.eventTitle,
+                                      venue: selectedEventModal.venue,
+                                      targetDate: selectedEventModal.targetDate,
+                                    },
+                                    batch,
+                                  )
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-[0.62rem] font-bold uppercase text-muted-foreground hover:bg-accent hover:text-foreground"
+                              >
+                                <Download className="size-3" /> PDF
+                              </button>
+
+                              {canCreateReturn && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    createReturnBatchFromDelivered(selectedEventModal.eventId, batch)
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded-md bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wider shadow-2xs"
+                                >
+                                  + Return Batch
+                                </button>
                               )}
-                            </span>
-                            <div>
-                              <h4 className="font-serif text-sm font-medium text-foreground group-hover:text-primary transition-colors">
-                                {batch.vehicleType}
-                              </h4>
-                              <p className="text-[0.62rem] font-mono text-muted-foreground uppercase">
-                                {batch.plateNumber} · Driver: {batch.driverName || 'Unassigned'}
-                              </p>
+
+                              <DispatchStatusPipeline stage={batch.stage} direction={batch.direction} />
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                exportBatchPdf(
-                                  {
-                                    eventTitle: selectedEventModal.eventTitle,
-                                    venue: selectedEventModal.venue,
-                                    targetDate: selectedEventModal.targetDate,
-                                  },
-                                  batch,
-                                )
-                              }}
-                              className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2 py-1 text-[0.62rem] font-bold uppercase text-muted-foreground hover:bg-accent hover:text-foreground"
-                            >
-                              <Download className="size-3" /> PDF
-                            </button>
-                            <DispatchStatusPipeline stage={batch.stage} direction={batch.direction} />
-                          </div>
-                        </div>
-
-                        {batch.reconciliation && batch.reconciliation.length > 0 && (
-                          <div className="flex flex-wrap items-center gap-1.5 border-t border-border/50 pt-2.5 text-xs">
-                            <span className="text-[0.62rem] font-bold uppercase text-muted-foreground">
-                              Contained Assets ({batch.reconciliation.length}):
-                            </span>
-                            {batch.reconciliation.map((item) => (
-                              <span
-                                key={item.id}
-                                className="rounded-md bg-muted/60 px-2 py-0.5 text-[0.65rem] text-muted-foreground"
-                              >
-                                {item.itemName} <strong className="text-foreground">({item.planned})</strong>
+                          {batch.reconciliation && batch.reconciliation.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 border-t border-border/50 pt-2.5 text-xs">
+                              <span className="text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground">
+                                Contained Assets ({batch.reconciliation.length}):
                               </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                              {batch.reconciliation.map((item) => (
+                                <span
+                                  key={item.id}
+                                  className="rounded-md bg-muted/60 px-2 py-0.5 text-[0.65rem] text-muted-foreground border border-border/40"
+                                >
+                                  {item.itemName} <strong className="text-foreground font-semibold">({item.planned})</strong>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
