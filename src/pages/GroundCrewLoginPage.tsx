@@ -26,7 +26,14 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
     setSigningIn(true)
     try {
       const result = await login(crewId, pin, 'pwa')
-      if (!result.ok) setError(result.message || 'Credentials not recognized. Check your Crew ID and access code.')
+      if (!result.ok) {
+        setError(result.message || 'Credentials not recognized. Check your Crew ID and access code.')
+        return
+      }
+
+      const redirectUrl = new URL(window.location.href)
+      redirectUrl.searchParams.set('seed', 'field')
+      window.location.assign(redirectUrl.toString())
     } finally {
       setSigningIn(false)
     }
