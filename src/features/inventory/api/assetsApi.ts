@@ -6,14 +6,26 @@ export interface BackendAssetPayload {
   description?: string
   quantity?: number
   catalogPhotoUrl?: string
+  photoUrl?: string
+  category?: string
+  cost?: number
+  originalValue?: number
+  assetState?: string
+  assetTier?: number
 }
 
 export function mapCatalogAssetToBackendPayload(asset: Partial<CatalogAsset>): BackendAssetPayload {
   return {
     name: asset.name || '',
     description: asset.description || '',
-    quantity: asset.currentStock ?? 0,
-    catalogPhotoUrl: asset.image || '',
+    quantity: asset.currentStock ?? (asset as any).quantity ?? (asset as any).stock ?? 0,
+    catalogPhotoUrl: asset.image || (asset as any).catalogPhotoUrl || (asset as any).photoUrl || '',
+    photoUrl: asset.image || (asset as any).photoUrl || (asset as any).catalogPhotoUrl || '',
+    category: asset.category || 'Stockroom Assets',
+    cost: asset.purchaseCost ?? asset.costPerUnit ?? (asset as any).cost,
+    originalValue: (asset as any).originalValue ?? asset.purchaseCost ?? asset.costPerUnit ?? (asset as any).cost,
+    assetState: asset.status || (asset as any).assetState || 'Available',
+    assetTier: (asset as any).assetTier ?? (asset as any).tier ?? 1,
   }
 }
 
@@ -28,14 +40,6 @@ function getAuthHeaders(): HeadersInit {
   return headers
 }
 
-/**
- * Query parameters forwarded to GET /api/assets.
- * Mirrors AssetController.GetAssets query params exactly:
- *   search   - free-text search (name / description)
- *   category - category filter
- *   theme    - theme/tag filter (maps to tagValue on backend)
- *   page, pageSize - pagination
- */
 export interface SearchAssetsParams {
   search?: string
   category?: string
@@ -44,16 +48,6 @@ export interface SearchAssetsParams {
   pageSize?: number
 }
 
-/**
- * Fetches canonical Asset Registry data from GET /api/assets.
- *
- * Supports backend-side search/theme/category filtering.
- * Backend contract (AssetController.cs):
- *   GET /api/assets?search=&category=&theme=&page=&pageSize=
- *
- * Returns [] on any failure — callers must handle empty state explicitly.
- * The empty result is a real backend response, not a fallback stock substitute.
- */
 export async function fetchAssetsApi(params?: SearchAssetsParams): Promise<Partial<CatalogAsset>[]> {
   try {
     const qs = new URLSearchParams()
@@ -69,8 +63,6 @@ export async function fetchAssetsApi(params?: SearchAssetsParams): Promise<Parti
     })
     if (!res.ok) return []
     const body = await res.json()
-    // AssetController may return a bare array or a paginated envelope.
-    // Normalize here so Canvas never mistakes a valid envelope for an empty catalog.
     if (Array.isArray(body)) return body
     if (Array.isArray(body?.items)) return body.items
     if (Array.isArray(body?.data)) return body.data
@@ -92,10 +84,13 @@ export async function createAssetApi(asset: Partial<CatalogAsset>): Promise<Part
       headers: getAuthHeaders(),
       body: JSON.stringify(payload),
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      console.warn(`[assetsApi] POST /api/assets failed with HTTP ${res.status}`)
+      return null
+    }
     return await res.json()
   } catch (err) {
-    console.warn('[assetsApi] Create asset API call skipped/fallback:', err)
+    console.error('[assetsApi] Create asset API call failed:', err)
     return null
   }
 }
@@ -108,9 +103,13 @@ export async function updateAssetApi(id: string, asset: Partial<CatalogAsset>): 
       headers: getAuthHeaders(),
       body: JSON.stringify(payload),
     })
-    return res.ok
-  } catch (err) {
-    console.warn('[assetsApi] Update asset API call skipped/fallback:', err)
+    if (!res.ok) {
+      console.warn(`[assetsApi] PUT /api/assets/${id} failed with HTTP ${res.status}`)
+      return false
+    }
     return true
+  } catch (err) {
+    console.error('[assetsApi] Update asset API call failed:', err)
+    return false
   }
 }

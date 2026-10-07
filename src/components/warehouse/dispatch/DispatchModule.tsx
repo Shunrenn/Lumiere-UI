@@ -14,6 +14,8 @@ import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import {
   advanceBatchStage,
+  setBatchStage,
+  addNewBatch,
   createReturnBatchFromDelivered,
   deleteBatch,
   exportBatchPdf,
@@ -757,12 +759,9 @@ export function DispatchModule(_props?: DispatchModuleProps) {
                           <button
                             type="button"
                             onClick={() => {
-                              const event = events.find((e) => e.id === selectedEventModal.eventId)
-                              if (event && selectedEventModal.batches[0]) {
-                                advanceBatchStage(selectedEventModal.eventId, selectedEventModal.batches[0].id)
-                              }
+                              addNewBatch(selectedEventModal.eventId, 'outbound', procurement)
                             }}
-                            className="rounded-xl bg-[#8C6B4B] hover:bg-[#78593c] text-white px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider shadow-xs"
+                            className="rounded-xl bg-[#8C6B4B] hover:bg-[#78593c] text-white px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider shadow-xs transition"
                           >
                             + New Outbound Batch
                           </button>
@@ -772,9 +771,11 @@ export function DispatchModule(_props?: DispatchModuleProps) {
                               const delivered = selectedEventModal.batches.find((b) => b.stage === 'Delivered')
                               if (delivered) {
                                 createReturnBatchFromDelivered(selectedEventModal.eventId, delivered)
+                              } else {
+                                addNewBatch(selectedEventModal.eventId, 'return', procurement)
                               }
                             }}
-                            className="rounded-xl border border-border bg-background hover:bg-accent px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider"
+                            className="rounded-xl border border-border bg-background hover:bg-accent px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider transition"
                           >
                             + New Return Batch
                           </button>
@@ -1084,8 +1085,8 @@ export function DispatchModule(_props?: DispatchModuleProps) {
                   <DispatchStatusPipeline
                     stage={activeBatch.stage}
                     direction={activeBatch.direction}
-                    onSelectStage={(_targetStage) => {
-                      advanceBatchStage(activeBatchEntry.eventId, activeBatch.id)
+                    onSelectStage={(targetStage) => {
+                      setBatchStage(activeBatchEntry.eventId, activeBatch.id, targetStage)
                     }}
                   />
                 </div>

@@ -56,9 +56,6 @@ export type VendorFetchResult =
   | { kind: 'auth-error'; status: number; message: string }
   | { kind: 'request-error'; status: number; message: string }
 
-/**
- * GET /api/vendors with structured status result
- */
 export async function fetchVendorsResultApi(): Promise<VendorFetchResult> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/vendors`, {
@@ -97,17 +94,11 @@ export async function fetchVendorsResultApi(): Promise<VendorFetchResult> {
   }
 }
 
-/**
- * GET /api/vendors
- */
 export async function fetchVendorsApi(): Promise<VendorDto[]> {
   const result = await fetchVendorsResultApi()
   return result.kind === 'success' ? result.vendors : []
 }
 
-/**
- * POST /api/vendors
- */
 export async function createVendorApi(req: CreateVendorRequestDto): Promise<VendorDto | null> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/vendors`, {
@@ -126,9 +117,33 @@ export async function createVendorApi(req: CreateVendorRequestDto): Promise<Vend
   }
 }
 
-/**
- * POST /api/vendors/{vendorId}/representatives
- */
+export async function updateVendorApi(vendorId: string, req: Partial<CreateVendorRequestDto>): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/vendors/${encodeURIComponent(vendorId)}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(req),
+    })
+    return res.ok
+  } catch (err) {
+    console.warn('[vendorApi] PUT /api/vendors failed:', err)
+    return false
+  }
+}
+
+export async function deleteVendorApi(vendorId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/vendors/${encodeURIComponent(vendorId)}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    })
+    return res.ok
+  } catch (err) {
+    console.warn('[vendorApi] DELETE /api/vendors failed:', err)
+    return false
+  }
+}
+
 export async function createVendorRepresentativeApi(
   vendorId: string,
   req: CreateRepresentativeRequestDto,

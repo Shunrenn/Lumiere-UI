@@ -1,7 +1,7 @@
 // Canonical data layer for the Vendor Management module.
 // Renders authoritative backend vendor records with rich canonical fallback directory.
 import { useEffect, useSyncExternalStore } from 'react'
-import { createVendorApi, fetchVendorsApi, type VendorDto } from '@/features/vendors/api/vendorApi'
+import { createVendorApi, fetchVendorsApi, deleteVendorApi, updateVendorApi, type VendorDto } from '@/features/vendors/api/vendorApi'
 
 export type VendorStatus = 'Active' | 'On Hold' | 'Inactive'
 
@@ -327,6 +327,7 @@ export function deleteVendor(id: string) {
   const existing = getWarehouseVendors()
   cachedVendors = existing.filter((vendor) => vendor.id !== id)
   publish()
+  void deleteVendorApi(id)
 }
 
 export function updateVendor(id: string, changes: Partial<Omit<WarehouseVendor, 'id'>>) {
@@ -338,6 +339,13 @@ export function updateVendor(id: string, changes: Partial<Omit<WarehouseVendor, 
     return next
   })
   publish()
+  void updateVendorApi(id, {
+    name: changes.name,
+    contactName: changes.contactName,
+    email: changes.email,
+    phone: changes.phone,
+    specialty: changes.specialty,
+  })
 }
 
 export function formatVendorLeadTime(vendor: Pick<WarehouseVendor, 'leadTimeValue' | 'leadTimeUnit'>) {
