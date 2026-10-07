@@ -220,6 +220,7 @@ export function GroundCrewPage() {
   void declarations
   const [tab, setTab] = useState<Tab>('home')
   const [fieldSection, setFieldSection] = useState<'tasks' | 'requests' | 'history'>('tasks')
+  const [cameraShortcutOpen, setCameraShortcutOpen] = useState(false)
   // Temporary frontend fixture: Ground Crew always opens with test data until the seed is removed.
   const isFieldSeed = true
 
@@ -992,9 +993,10 @@ export function GroundCrewPage() {
           ) : (
             <div className="space-y-4">
               <PwaCard title="Field Console" subtitle="Open an assigned event or review operational work.">
-                <div className="grid grid-cols-2 gap-2">
-                  {(['tasks', 'requests', 'history'] as const).map((section) => <button key={section} type="button" onClick={() => setFieldSection(section)} className={`rounded-xl border px-3 py-3 text-xs font-semibold capitalize ${fieldSection === section ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>{section}</button>)}
-                </div>
+  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+  {(['tasks', 'requests', 'history'] as const).map((section) => <button key={section} type="button" onClick={() => setFieldSection(section)} className={`rounded-xl border px-3 py-3 text-xs font-semibold capitalize ${fieldSection === section ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>{section}</button>)}
+  <button type="button" onClick={() => setCameraShortcutOpen(true)} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary/40 px-3 py-3 text-xs font-semibold text-primary"><Camera className="size-4" /> Camera</button>
+  </div>
               </PwaCard>
               {fieldSection === 'tasks' && <FieldConsole events={crewEvents.filter((event) => event.status !== 'Completed')} assignmentScope={assignmentScope} />}
               {fieldSection !== 'tasks' && <Activity reports={fieldSection === 'requests' ? reports : []} requests={fieldSection === 'requests' ? requests : []} events={crewEvents} offlineItems={offlineItems} isSyncingQueue={isSyncingQueue} onTriggerSync={handleTriggerSync} onUpdateReport={handleUpdateReport} />}
@@ -1019,8 +1021,19 @@ export function GroundCrewPage() {
       {/* Toast Notification */}
       {toast && <PwaToast message={toast} />}
 
-      {/* Shared Modals */}
-      {blockerModalAssignment && (
+  {/* Shared Modals */}
+  <HavaCameraCaptureModal
+    isOpen={cameraShortcutOpen}
+    onClose={() => setCameraShortcutOpen(false)}
+    onCaptureComplete={() => {
+      setCameraShortcutOpen(false)
+      setToast('Camera evidence captured. Attach it to a damage request from Requests.')
+      window.setTimeout(() => setToast(''), 3500)
+    }}
+    itemName="Field Crew evidence"
+    eventName={crewEvents[0]?.name ?? 'Active Ground Crew event'}
+  />
+  {blockerModalAssignment && (
         <PwaModal
           isOpen={Boolean(blockerModalAssignment)}
           onClose={() => {
