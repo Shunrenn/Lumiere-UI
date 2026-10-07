@@ -7,6 +7,7 @@ import { UpcomingEventsPanel } from '@/components/dashboard/UpcomingEventsPanel'
 
 interface WarehouseCalendarEventsViewProps {
   events: PortalEvent[]
+  searchQuery?: string
   onSelectEvent: (event: PortalEvent) => void
 }
 
@@ -109,7 +110,7 @@ function getIngressCountdownBadge(targetDateStr: string): { label: string; style
   }
   if (diffDays >= 2 && diffDays <= 3) {
     return {
-      label: `${diffDays} days left`,
+      label: String(diffDays) + ' days left',
       style: 'bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold',
     }
   }
@@ -117,7 +118,7 @@ function getIngressCountdownBadge(targetDateStr: string): { label: string; style
   // Amber (4–13 days): Medium Urgency
   if (diffDays >= 4 && diffDays <= 6) {
     return {
-      label: `${diffDays} days left`,
+      label: String(diffDays) + ' days left',
       style: 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400 font-bold',
     }
   }
@@ -132,7 +133,7 @@ function getIngressCountdownBadge(targetDateStr: string): { label: string; style
   if (diffDays >= 14 && diffDays <= 29) {
     const weeks = Math.floor(diffDays / 7)
     return {
-      label: `${weeks} week${weeks === 1 ? '' : 's'} left`,
+      label: String(weeks) + (weeks === 1 ? ' week left' : ' weeks left'),
       style: 'bg-slate-500/15 border-slate-500/30 text-slate-600 dark:text-slate-400 font-medium',
     }
   }
@@ -148,12 +149,12 @@ function getIngressCountdownBadge(targetDateStr: string): { label: string; style
   // 60+ days
   const months = Math.floor(diffDays / 30)
   return {
-    label: `${months} month${months === 1 ? '' : 's'} left`,
+    label: String(months) + (months === 1 ? ' month left' : ' months left'),
     style: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-medium',
   }
 }
 
-export function WarehouseCalendarEventsView({ events, onSelectEvent }: WarehouseCalendarEventsViewProps) {
+export function WarehouseCalendarEventsView({ events, searchQuery = '', onSelectEvent }: WarehouseCalendarEventsViewProps) {
   // Compute initial active calendar date matching the earliest event month so calendar cells display events immediately
   const initialCalendarDate = useMemo(() => {
     if (events.length > 0) {
@@ -163,7 +164,6 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
         .sort((a, b) => a.getTime() - b.getTime())
 
       if (parsedDates.length > 0) {
-        // Return 1st of month of earliest seeded event
         return new Date(parsedDates[0].getFullYear(), parsedDates[0].getMonth(), 1)
       }
     }
@@ -182,7 +182,7 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
 
   // Real runtime ISO date string for today (e.g. "2026-09-02")
   const realNow = new Date()
-  const realTodayIso = `${realNow.getFullYear()}-${String(realNow.getMonth() + 1).padStart(2, '0')}-${String(realNow.getDate()).padStart(2, '0')}`
+  const realTodayIso = String(realNow.getFullYear()) + '-' + String(realNow.getMonth() + 1).padStart(2, '0') + '-' + String(realNow.getDate()).padStart(2, '0')
 
   const handlePrevMonth = () => {
     setCurrentDate(new Date(year, month - 1, 1))
@@ -190,6 +190,11 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
 
   const handleNextMonth = () => {
     setCurrentDate(new Date(year, month + 1, 1))
+  }
+
+  const handleResetToCurrentMonth = () => {
+    const now = new Date()
+    setCurrentDate(new Date(now.getFullYear(), now.getMonth(), 1))
   }
 
   // Days in current month grid
@@ -209,33 +214,46 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
       const colIndex = (firstDay + day - 1) % 7
       const monthStr = String(month + 1).padStart(2, '0')
       const dayStr = String(day).padStart(2, '0')
-      const isoDate = `${year}-${monthStr}-${dayStr}`
+      const isoDate = String(year) + '-' + monthStr + '-' + dayStr
       cells.push({ dateNum: day, isoDate, colIndex })
     }
 
     return cells
   }, [year, month])
 
+  // Filter events by search query if provided
+  const query = searchQuery.trim().toLowerCase()
+  const filteredEvents = useMemo(() => {
+    if (!query) return events
+    return events.filter((evt) =>
+      [evt.title, evt.venue, evt.client, evt.refId, evt.status]
+        .filter(Boolean)
+        .some((val) => String(val).toLowerCase().includes(query))
+    )
+  }, [events, query])
+
   // Events map by ISO date for fast calendar cell lookup
   const eventsByDate = useMemo(() => {
     const map = new Map<string, PortalEvent[]>()
-    events.forEach((evt) => {
+    filteredEvents.forEach((evt) => {
       const d = parseEventDate(evt.targetDate)
       if (d) {
-        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        const iso = String(d.getFullYear()) + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
         const list = map.get(iso) ?? []
         list.push(evt)
         map.set(iso, list)
       }
     })
     return map
-  }, [events])
+  }, [filteredEvents])
 
-  const monthLabel = `${MONTH_NAMES[month]} ${year}`
+  const monthLabel = MONTH_NAMES[month] + ' ' + String(year)
+  const formattedMonthName = MONTH_NAMES[month][0] + MONTH_NAMES[month].slice(1).toLowerCase()
+  const upcomingPanelTitle = formattedMonthName + ' ' + String(year) + ' Events'
 
   // Right Side Upcoming Events List: Synced strictly to currently viewed calendar month & year
   const monthUpcomingEvents = useMemo(() => {
-    return events
+    return filteredEvents
       .filter((evt) => {
         const d = parseEventDate(evt.targetDate)
         return d !== null && d.getFullYear() === year && d.getMonth() === month
@@ -245,48 +263,36 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
         const dateB = parseEventDate(b.targetDate)?.getTime() ?? 0
         return dateA - dateB
       })
-  }, [events, year, month])
+  }, [filteredEvents, year, month])
 
   // Group events for this month into sticky section
-  const monthGroups = useMemo(() => {
+  const monthGroups: Array<[string, PortalEvent[]]> = useMemo(() => {
     if (monthUpcomingEvents.length === 0) return []
-    return [[monthLabel, monthUpcomingEvents] as [string, PortalEvent[]]]
+    return [[monthLabel, monthUpcomingEvents]]
   }, [monthUpcomingEvents, monthLabel])
 
   return (
     <div className="grid items-stretch gap-6 min-[1100px]:grid-cols-[minmax(0,1.35fr)_minmax(380px,1fr)]">
-      {/* ─── LEFT SIDE: Month Calendar Grid (8 cols) ─── */}
+      {/* ─── LEFT SIDE: Month Calendar Grid ─── */}
       <DashboardCalendarCard
         icon={CalendarIcon}
-        title={monthLabel}
-        subtitle="Monthly Event & Ingress Roster"
+        title="Booking Calendar"
+        subtitle={monthLabel + ' · Monthly Event & Ingress Roster'}
         className="min-h-[35rem]"
-        controls={<>
-          <button type="button" onClick={handlePrevMonth} aria-label="Previous month" className="flex size-8.5 items-center justify-center rounded-lg border border-border bg-background/80 text-foreground transition-all duration-150 hover:bg-accent hover:border-primary/40"><ChevronLeft className="size-4" /></button>
-          <button type="button" onClick={handleNextMonth} aria-label="Next month" className="flex size-8.5 items-center justify-center rounded-lg border border-border bg-background/80 text-foreground transition-all duration-150 hover:bg-accent hover:border-primary/40"><ChevronRight className="size-4" /></button>
-        </>}
-        legend={<div className="flex flex-wrap items-center gap-5 text-xs text-muted-foreground"><span className="text-[0.62rem] font-bold uppercase tracking-wider">Legend:</span><span className="flex items-center gap-1.5 text-[0.65rem] font-semibold text-card-foreground"><Circle className="size-3 fill-sky-500 text-sky-500" /> Ingress/Egress</span><span className="flex items-center gap-1.5 text-[0.65rem] font-semibold text-card-foreground"><Star className="size-3.5 fill-amber-500 text-amber-500" /> Actual Event</span></div>}
-      >
-        {/* Calendar Header & Month Navigation */}
-        <div className="hidden">
-          <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/20">
-              <CalendarIcon className="size-5" />
-            </span>
-            <div>
-              <h2 className="font-serif text-xl font-medium text-card-foreground">{monthLabel}</h2>
-              <p className="text-[0.62rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                Monthly Event &amp; Ingress Roster
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
+        controls={
+          <>
+            <button
+              type="button"
+              onClick={handleResetToCurrentMonth}
+              className="rounded-lg border border-border/80 bg-background/80 px-2.5 py-1 text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-foreground hover:border-primary/40"
+            >
+              Current Month
+            </button>
             <button
               type="button"
               onClick={handlePrevMonth}
               aria-label="Previous month"
-              className="flex size-8.5 items-center justify-center rounded-lg border border-border bg-background/80 text-foreground transition-all duration-150 hover:bg-accent hover:border-primary/40"
+              className="flex size-8 items-center justify-center rounded-lg border border-border bg-background/80 text-foreground transition-all duration-150 hover:bg-accent hover:border-primary/40"
             >
               <ChevronLeft className="size-4" />
             </button>
@@ -294,24 +300,24 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
               type="button"
               onClick={handleNextMonth}
               aria-label="Next month"
-              className="flex size-8.5 items-center justify-center rounded-lg border border-border bg-background/80 text-foreground transition-all duration-150 hover:bg-accent hover:border-primary/40"
+              className="flex size-8 items-center justify-center rounded-lg border border-border bg-background/80 text-foreground transition-all duration-150 hover:bg-accent hover:border-primary/40"
             >
               <ChevronRight className="size-4" />
             </button>
+          </>
+        }
+        legend={
+          <div className="flex flex-wrap items-center gap-5 text-xs text-muted-foreground">
+            <span className="text-[0.62rem] font-bold uppercase tracking-wider">Legend:</span>
+            <span className="flex items-center gap-1.5 text-[0.65rem] font-semibold text-card-foreground">
+              <Circle className="size-3 fill-sky-500 text-sky-500" /> Ingress/Egress
+            </span>
+            <span className="flex items-center gap-1.5 text-[0.65rem] font-semibold text-card-foreground">
+              <Star className="size-3.5 fill-amber-500 text-amber-500" /> Actual Event
+            </span>
           </div>
-        </div>
-
-        {/* Legend */}
-        <div className="hidden">
-          <span className="text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground">Legend:</span>
-          <span className="flex items-center gap-1.5 text-[0.65rem] font-semibold text-card-foreground">
-            <Circle className="size-3 fill-sky-500 text-sky-500" /> Ingress/Egress
-          </span>
-          <span className="flex items-center gap-1.5 text-[0.65rem] font-semibold text-card-foreground">
-            <Star className="size-3.5 fill-amber-500 text-amber-500" /> Actual Event
-          </span>
-        </div>
-
+        }
+      >
         {/* Days of Week Header */}
         <div className="grid grid-cols-7 gap-1 text-center font-semibold text-[0.65rem] uppercase tracking-wider text-muted-foreground">
           {DAYS_OF_WEEK.map((d, colIdx) => (
@@ -333,7 +339,7 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
             if (!cell.dateNum || !cell.isoDate) {
               return (
                 <div
-                  key={`empty-${idx}`}
+                  key={'empty-' + String(idx)}
                   className={cn(
                     'min-h-[4.75rem] rounded-lg border border-border/30 bg-muted/10',
                     (cell.colIndex === 0 || cell.colIndex === 6) && 'bg-muted/20',
@@ -369,7 +375,7 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
 
                 {/* Calendar Cell Event Markers */}
                 <div className="mt-1 flex flex-col gap-1 overflow-y-auto max-h-[3.3rem]">
-                  {dayEvents.map((evt, i) => {
+                  {dayEvents.map((evt: PortalEvent, i: number) => {
                     const isActualEvent = i % 2 === 0
                     return (
                       <button
@@ -396,29 +402,22 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
       </DashboardCalendarCard>
 
       {/* ─── RIGHT SIDE: Upcoming Events Side Panel (Month-Grouped Sticky Headers) ─── */}
-      <UpcomingEventsPanel title="Upcoming Events" count={monthUpcomingEvents.length} subtitle="Month-Grouped Roster" className="h-[35rem]">
-        {/* Side Panel Header (Static / Non-Scrolling) */}
-        <div className="hidden">
-          <div>
-            <h3 className="font-serif text-lg font-medium text-card-foreground">
-              Upcoming Events ({monthUpcomingEvents.length})
-            </h3>
-            <p className="text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-              Month-Grouped Roster
-            </p>
-          </div>
-        </div>
-
+      <UpcomingEventsPanel
+        title={upcomingPanelTitle}
+        count={monthUpcomingEvents.length}
+        subtitle="Month-Grouped Roster"
+        className="h-[35rem]"
+      >
         {/* Scrollable Row List with Sticky Month Headers */}
         <div className="space-y-4">
           {monthUpcomingEvents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <CalendarIcon className="size-8 text-muted-foreground/30 mb-2" />
               <p className="text-xs font-medium text-muted-foreground">No upcoming events scheduled for {MONTH_NAMES[month]} {year}.</p>
-              <p className="text-[0.68rem] text-muted-foreground/60 mt-1">Navigate using the calendar arrows to view other months.</p>
+              <p className="text-[0.68rem] text-muted-foreground/60 mt-1">Navigate using the calendar arrows or Current Month button to view other months.</p>
             </div>
           ) : (
-            monthGroups.map(([groupKey, groupEvents]) => (
+            monthGroups.map(([groupKey, groupEvents]: [string, PortalEvent[]]) => (
               <div key={groupKey} className="space-y-2">
                 {/* Sticky Month Section Header */}
                 <div className="sticky top-0 z-10 border-b border-border/80 bg-card/95 py-1.5 backdrop-blur-sm">
@@ -429,7 +428,7 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
 
                 {/* Event Row Buttons for this Month Group */}
                 <div className="space-y-2.5">
-                  {groupEvents.map((evt) => {
+                  {groupEvents.map((evt: PortalEvent) => {
                     const countdown = getIngressCountdownBadge(evt.targetDate)
                     return (
                       <button
@@ -439,7 +438,7 @@ export function WarehouseCalendarEventsView({ events, onSelectEvent }: Warehouse
                         className="group flex w-full flex-col gap-1.5 rounded-xl border border-border/80 bg-background/90 p-3.5 text-left shadow-xs transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-accent/40 hover:shadow-sm"
                       >
                         <div className="flex items-start justify-between gap-2">
-                            <h4 className="min-w-0 flex-1 truncate font-serif text-sm font-medium text-card-foreground transition-colors group-hover:text-primary">
+                          <h4 className="min-w-0 flex-1 truncate font-serif text-sm font-medium text-card-foreground transition-colors group-hover:text-primary">
                             {evt.title}
                           </h4>
                           {/* Urgency-Colored Ingress Countdown Badge */}
