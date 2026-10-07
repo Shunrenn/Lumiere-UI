@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
@@ -15,7 +15,21 @@ import { ProjectManagerLiteEventDetail } from '@/components/project-manager/Proj
 import { RegisterEventDrawer } from '@/components/RegisterEventDrawer'
 import { OfflineBanner } from '@/components/OfflineBanner'
 import type { PortalEvent } from '@/lib/types'
-import { CheckCircle2, Clock, Sparkles, Layers, AlertCircle, AlertTriangle, Info, RefreshCw, Plus, Search } from 'lucide-react'
+import {
+  CheckCircle2,
+  Clock,
+  Sparkles,
+  Layers,
+  AlertCircle,
+  AlertTriangle,
+  Info,
+  RefreshCw,
+  Plus,
+  Search,
+  Calendar,
+  MapPin,
+  ArrowRight,
+} from 'lucide-react'
 
 export function ProjectManagerLegacyPage() {
   const { events, staff, procurement, damageExceptions, refreshEvents } = usePortal()
@@ -34,7 +48,36 @@ export function ProjectManagerLegacyPage() {
 
   // Selected event for single-event workspace
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
-  const [activeSection, setActiveSection] = useState<'dashboard' | 'projects' | 'calendar' | 'pitches'>('dashboard')
+
+  // Hash synchronization for active rail tab
+  const getDestinationFromHash = (): 'dashboard' | 'projects' | 'calendar' | 'pitches' => {
+    if (typeof window === 'undefined') return 'dashboard'
+    const hash = window.location.hash.replace(/^#/, '')
+    if (hash === 'projects' || hash === 'calendar' || hash === 'pitches') return hash
+    return 'dashboard'
+  }
+
+  const [activeSection, setActiveSection] = useState<'dashboard' | 'projects' | 'calendar' | 'pitches'>(getDestinationFromHash)
+
+  useEffect(() => {
+    const onHashChange = () => {
+      setActiveSection(getDestinationFromHash())
+    }
+    window.addEventListener('hashchange', onHashChange)
+    window.addEventListener('popstate', onHashChange)
+    return () => {
+      window.removeEventListener('hashchange', onHashChange)
+      window.removeEventListener('popstate', onHashChange)
+    }
+  }, [])
+
+  const changeSection = (next: 'dashboard' | 'projects' | 'calendar' | 'pitches') => {
+    if (selectedEventId) setSelectedEventId(null)
+    setActiveSection(next)
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', `#${next}`)
+    }
+  }
 
   // Filters & search
   const [searchQuery, setSearchQuery] = useState('')
@@ -112,15 +155,7 @@ export function ProjectManagerLegacyPage() {
     <ExecutiveShell
       activeId={selectedEventId ? 'event-workspace' : activeSection}
       onSelect={(id) => {
-        if (selectedEventId) setSelectedEventId(null)
-        setActiveSection(id as 'dashboard' | 'projects' | 'calendar' | 'pitches')
-        if (id === 'projects') {
-          document.getElementById('pm-events-section')?.scrollIntoView({ behavior: 'smooth' })
-        } else if (id === 'calendar') {
-          document.getElementById('pm-calendar-section')?.scrollIntoView({ behavior: 'smooth' })
-        } else if (id === 'pitches') {
-          document.getElementById('pm-pitches-section')?.scrollIntoView({ behavior: 'smooth' })
-        }
+        changeSection(id as 'dashboard' | 'projects' | 'calendar' | 'pitches')
       }}
       destinations={PROJECT_MANAGER_RAIL_DESTINATIONS}
       identityRoleLabel="PROJECT COMMAND"
@@ -130,7 +165,15 @@ export function ProjectManagerLegacyPage() {
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[0.62rem] font-bold uppercase tracking-[0.14em] text-primary">
                 <Sparkles className="size-3" aria-hidden="true" />
-                {activeEvent ? 'Event Workspace' : 'Project Command'}
+                {activeEvent
+                  ? 'Event Workspace'
+                  : activeSection === 'projects'
+                    ? 'Project Portfolio'
+                    : activeSection === 'calendar'
+                      ? 'Execution Timeline'
+                      : activeSection === 'pitches'
+                        ? 'Client Proposals'
+                        : 'Project Command'}
               </span>
               {activeEvent && (
                 <button
@@ -138,19 +181,33 @@ export function ProjectManagerLegacyPage() {
                   onClick={() => setSelectedEventId(null)}
                   className="text-xs text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
                 >
-                  ← Return to Dashboard
+                  ← Return to {activeSection === 'projects' ? 'Projects' : activeSection === 'calendar' ? 'Schedule' : activeSection === 'pitches' ? 'Pitches' : 'Dashboard'}
                 </button>
               )}
             </div>
             <h1 className="mt-2 font-serif text-3xl font-medium tracking-tight sm:text-4xl">
-              {activeEvent ? activeEvent.title : 'Project Manager Dashboard'}
+              {activeEvent
+                ? activeEvent.title
+                : activeSection === 'projects'
+                  ? 'Projects & Events'
+                  : activeSection === 'calendar'
+                    ? 'Master Project Schedule'
+                    : activeSection === 'pitches'
+                      ? 'Client Pitches & Briefs'
+                      : 'Project Manager Dashboard'}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {activeEvent
                 ? `${activeEvent.client || 'Client'} · ${activeEvent.venue || 'Venue'} · Target: ${activeEvent.targetDate || 'Not set'}`
-                : isProjectManagerLite
-                  ? 'Event Operations & Allocation Oversight'
-                  : 'Strategic Event Lifecycle, Client Pitching & Scheduling'}
+                : activeSection === 'projects'
+                  ? 'Manage and coordinate assigned client event portfolios, team allocations, and production workflows.'
+                  : activeSection === 'calendar'
+                    ? 'Strategic timeline, execution milestones, logistics ingress dates, and scheduling.'
+                    : activeSection === 'pitches'
+                      ? 'Client proposals, design concept briefs, and event conversion tracking.'
+                      : isProjectManagerLite
+                        ? 'Event Operations & Allocation Oversight'
+                        : 'Strategic Event Lifecycle, Client Pitching & Scheduling'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -227,107 +284,8 @@ export function ProjectManagerLegacyPage() {
             onOpenCanvas={() => navigate('canvas')}
           />
         )
-      ) : (
-        <div className="flex flex-col gap-8 pb-12">
-        {/* Top KPI Metrics Strip */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
-            <span className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <Layers className="size-3.5 text-primary" />
-              Active Projects
-            </span>
-            <div className="text-2xl font-bold text-foreground mt-1">
-              {events.filter((e) => e.status !== 'Completed' && e.status !== 'Cancelled').length}
-            </div>
-            <p className="text-[0.68rem] text-muted-foreground mt-0.5">
-              Total assigned client accounts in active lifecycle
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
-            <span className="text-[0.65rem] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400 flex items-center gap-1.5">
-              <Clock className="size-3.5" />
-              In Production
-            </span>
-            <div className="text-2xl font-bold text-foreground mt-1">
-              {events.filter((e) => e.status === 'In Production').length}
-            </div>
-            <p className="text-[0.68rem] text-muted-foreground mt-0.5">
-              Fabrication, rigging & prep execution stage
-            </p>
-          </div>
-
-          {isProjectManagerLite ? (
-            <div className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
-              <span className="text-[0.65rem] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                <Clock className="size-3.5" />
-                Reserved / Initialized
-              </span>
-              <div className="text-2xl font-bold text-foreground mt-1">
-                {events.filter((e) => e.status === 'Reserved' || e.status === 'Initialized').length}
-              </div>
-              <p className="text-[0.68rem] text-muted-foreground mt-0.5">
-                Events pending production & asset allocations
-              </p>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
-              <span className="text-[0.65rem] font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
-                <Sparkles className="size-3.5" />
-                Client Pitches
-              </span>
-              <div className="text-2xl font-bold text-foreground mt-1">
-                {pitchesLoading ? '...' : pitches.length}
-              </div>
-              <p className="text-[0.68rem] text-muted-foreground mt-0.5">
-                Proposals in draft, presentation, or revision
-              </p>
-            </div>
-          )}
-
-          <div className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
-            <span className="text-[0.65rem] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-              <CheckCircle2 className="size-3.5" />
-              Completed Events
-            </span>
-            <div className="text-2xl font-bold text-foreground mt-1">
-              {events.filter((e) => e.status === 'Completed' || e.status === 'Settled').length}
-            </div>
-            <p className="text-[0.68rem] text-muted-foreground mt-0.5">
-              Successfully executed & delivered engagements
-            </p>
-          </div>
-        </div>
-
-        {/* Action Required Callouts */}
-        <ProjectManagerActionRequired
-          events={events}
-          staff={staff}
-          procurement={procurement}
-          damageExceptions={damageExceptions}
-          pitches={isProjectManagerLite ? [] : pitches}
-          onOpenEvent={(id) => setSelectedEventId(id)}
-          onOpenPitch={(pitchId) => {
-            const p = pitches.find((item) => item.id === pitchId)
-            if (p) {
-              setEditingPitch(p)
-              setPitchModalOpen(true)
-            }
-          }}
-        />
-
-        {/* Master Calendar */}
-        <div id="pm-calendar-section">
-          <ProjectManagerMasterCalendar
-            events={events}
-            selectedDate={selectedCalendarDate}
-            onSelectDate={setSelectedCalendarDate}
-            onOpenEvent={(id) => setSelectedEventId(id)}
-          />
-        </div>
-
-        {/* My / Assigned Events Section */}
-        <div id="pm-events-section">
+      ) : activeSection === 'projects' ? (
+        <div className="pb-12">
           <ProjectManagerEventsList
             events={displayedEvents}
             staff={staff}
@@ -337,43 +295,267 @@ export function ProjectManagerLegacyPage() {
             onOpenEvent={(id) => setSelectedEventId(id)}
           />
         </div>
+      ) : activeSection === 'calendar' ? (
+        <div className="pb-12">
+          <ProjectManagerMasterCalendar
+            events={events}
+            selectedDate={selectedCalendarDate}
+            onSelectDate={setSelectedCalendarDate}
+            onOpenEvent={(id) => setSelectedEventId(id)}
+          />
+        </div>
+      ) : activeSection === 'pitches' && !isProjectManagerLite ? (
+        <div className="flex flex-col gap-6 pb-12">
+          {pitchesError && (
+            <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-xs font-semibold text-rose-700 dark:text-rose-300 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="size-4 shrink-0" />
+                <span>Could not load pitches: {pitchesError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => refreshPitches()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-700"
+              >
+                <RefreshCw className="size-3.5" />
+                Retry
+              </button>
+            </div>
+          )}
 
-        {/* Client Pitching Summary Section */}
-        {!isProjectManagerLite && (
-          <div id="pm-pitches-section">
-            {pitchesError && (
-              <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-xs font-semibold text-rose-700 dark:text-rose-300 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="size-4 shrink-0" />
-                  <span>Could not load pitches: {pitchesError}</span>
+          <ProjectManagerPitchingSummary
+            pitches={pitches}
+            onNewPitch={() => {
+              setEditingPitch(null)
+              setPitchModalOpen(true)
+            }}
+            onOpenPitch={(pitch) => {
+              setEditingPitch(pitch)
+              setPitchModalOpen(true)
+            }}
+            onConvertToEvent={handleConvertToEvent}
+          />
+        </div>
+      ) : (
+        /* Dashboard Tab */
+        <div className="flex flex-col gap-8 pb-12">
+          {/* Top KPI Metrics Strip */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div
+              onClick={() => changeSection('projects')}
+              className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm cursor-pointer hover:border-primary/50 transition"
+              title="View Projects"
+            >
+              <span className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Layers className="size-3.5 text-primary" />
+                Active Projects
+              </span>
+              <div className="text-2xl font-bold text-foreground mt-1">
+                {events.filter((e) => e.status !== 'Completed' && e.status !== 'Cancelled').length}
+              </div>
+              <p className="text-[0.68rem] text-muted-foreground mt-0.5">
+                Total assigned client accounts in active lifecycle
+              </p>
+            </div>
+
+            <div
+              onClick={() => changeSection('projects')}
+              className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm cursor-pointer hover:border-primary/50 transition"
+              title="View Projects In Production"
+            >
+              <span className="text-[0.65rem] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400 flex items-center gap-1.5">
+                <Clock className="size-3.5" />
+                In Production
+              </span>
+              <div className="text-2xl font-bold text-foreground mt-1">
+                {events.filter((e) => e.status === 'In Production').length}
+              </div>
+              <p className="text-[0.68rem] text-muted-foreground mt-0.5">
+                Fabrication, rigging & prep execution stage
+              </p>
+            </div>
+
+            {isProjectManagerLite ? (
+              <div className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
+                <span className="text-[0.65rem] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                  <Clock className="size-3.5" />
+                  Reserved / Initialized
+                </span>
+                <div className="text-2xl font-bold text-foreground mt-1">
+                  {events.filter((e) => e.status === 'Reserved' || e.status === 'Initialized').length}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => refreshPitches()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-700"
-                >
-                  <RefreshCw className="size-3.5" />
-                  Retry
-                </button>
+                <p className="text-[0.68rem] text-muted-foreground mt-0.5">
+                  Events pending production & asset allocations
+                </p>
+              </div>
+            ) : (
+              <div
+                onClick={() => changeSection('pitches')}
+                className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm cursor-pointer hover:border-primary/50 transition"
+                title="View Client Pitches"
+              >
+                <span className="text-[0.65rem] font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
+                  <Sparkles className="size-3.5" />
+                  Client Pitches
+                </span>
+                <div className="text-2xl font-bold text-foreground mt-1">
+                  {pitchesLoading ? '...' : pitches.length}
+                </div>
+                <p className="text-[0.68rem] text-muted-foreground mt-0.5">
+                  Proposals in draft, presentation, or revision
+                </p>
               </div>
             )}
 
-            <ProjectManagerPitchingSummary
-              pitches={pitches}
-              onNewPitch={() => {
-                setEditingPitch(null)
-                setPitchModalOpen(true)
-              }}
-              onOpenPitch={(pitch) => {
-                setEditingPitch(pitch)
-                setPitchModalOpen(true)
-              }}
-              onConvertToEvent={handleConvertToEvent}
-            />
+            <div className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
+              <span className="text-[0.65rem] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <CheckCircle2 className="size-3.5" />
+                Completed Events
+              </span>
+              <div className="text-2xl font-bold text-foreground mt-1">
+                {events.filter((e) => e.status === 'Completed' || e.status === 'Settled').length}
+              </div>
+              <p className="text-[0.68rem] text-muted-foreground mt-0.5">
+                Successfully executed & delivered engagements
+              </p>
+            </div>
           </div>
-        )}
-      </div>
-    )}
+
+          {/* Action Required Callouts */}
+          <ProjectManagerActionRequired
+            events={events}
+            staff={staff}
+            procurement={procurement}
+            damageExceptions={damageExceptions}
+            pitches={isProjectManagerLite ? [] : pitches}
+            onOpenEvent={(id) => setSelectedEventId(id)}
+            onOpenPitch={(pitchId) => {
+              const p = pitches.find((item) => item.id === pitchId)
+              if (p) {
+                setEditingPitch(p)
+                setPitchModalOpen(true)
+              }
+            }}
+          />
+
+          {/* Recent / Active Project Highlights */}
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-serif text-xl font-medium">Recent Projects</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Priority client portfolios and execution statuses.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => changeSection('projects')}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline cursor-pointer"
+              >
+                View all projects ({events.length})
+                <ArrowRight className="size-3.5" />
+              </button>
+            </div>
+
+            {events.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
+                No active projects found. Click &quot;Register Event&quot; to initialize a new event.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {events.slice(0, 3).map((ev) => (
+                  <div
+                    key={ev.id}
+                    className="flex flex-col justify-between rounded-xl border border-border bg-card p-4 shadow-sm hover:border-primary/40 transition"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-[0.65rem] text-muted-foreground">
+                          {ev.refId || 'REF-TBD'}
+                        </span>
+                        <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-wide text-primary">
+                          {ev.status || 'Active'}
+                        </span>
+                      </div>
+                      <h3 className="mt-2 font-serif text-base font-medium line-clamp-1">
+                        {ev.title}
+                      </h3>
+                      <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5 truncate">
+                          <MapPin className="size-3 text-muted-foreground/70 shrink-0" />
+                          {ev.venue || 'Venue Pending'}
+                        </span>
+                        <span className="flex items-center gap-1.5 truncate">
+                          <Calendar className="size-3 text-muted-foreground/70 shrink-0" />
+                          {ev.targetDate || ev.installationStart || 'Target Date Pending'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
+                      <span className="text-[0.68rem] text-muted-foreground truncate">
+                        {ev.client || 'Client TBD'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedEventId(ev.id)}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline cursor-pointer"
+                      >
+                        Workspace
+                        <ArrowRight className="size-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Quick Hub Navigation Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div
+              onClick={() => changeSection('calendar')}
+              className="rounded-xl border border-border bg-card/60 p-4 shadow-sm backdrop-blur-sm cursor-pointer hover:border-primary/50 transition flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
+                  <Calendar className="size-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition">
+                    Master Project Schedule
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Inspect event dates, milestones, and logistics ingress times.
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="size-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition" />
+            </div>
+
+            {!isProjectManagerLite && (
+              <div
+                onClick={() => changeSection('pitches')}
+                className="rounded-xl border border-border bg-card/60 p-4 shadow-sm backdrop-blur-sm cursor-pointer hover:border-primary/50 transition flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
+                    <Sparkles className="size-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition">
+                      Client Pitches & Briefs
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      {pitches.length} proposals in review, presentation, or revision.
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="size-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition" />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Client Pitch Modal */}
       {!isProjectManagerLite && (
