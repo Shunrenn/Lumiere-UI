@@ -250,6 +250,23 @@ export function advanceBatchStage(eventId: string, batchId: string): boolean {
   return true
 }
 
+export function setBatchStage(eventId: string, batchId: string, stage: BatchStage): boolean {
+  const batches = batchesByEvent.get(eventId)
+  if (!batches) return false
+  const target = batches.find((batch) => batch.id === batchId)
+  if (!target) return false
+  batchesByEvent.set(
+    eventId,
+    batches.map((batch) => (batch.id === batchId ? { ...batch, stage } : batch)),
+  )
+  logActivity(
+    `${target.vehicleType} (${target.plateNumber}) marked as ${stage}.`,
+    stage === 'Delivered' || stage === 'Returned' ? 'success' : 'info',
+  )
+  publish()
+  return true
+}
+
 // Stalled In Transit — set by whichever crew member is executing the
 // checkpoint (Ground Crew's Chain of Custody screen) when a vehicle breaks
 // down or a batch is otherwise interrupted mid-leg. The batch's `stage` is
