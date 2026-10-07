@@ -554,11 +554,11 @@ export function useCatalogAssets(): CatalogAsset[] {
         mapped.forEach((serverAsset) => {
           if (byId.has(serverAsset.id)) {
             const prev = byId.get(serverAsset.id)!
-            byId.set(serverAsset.id, { ...prev, ...serverAsset })
+            byId.set(serverAsset.id, { ...serverAsset, ...prev, id: serverAsset.id, currentStock: prev.currentStock ?? serverAsset.currentStock })
           } else if (byName.has(serverAsset.name.toLowerCase().trim())) {
             const prev = byName.get(serverAsset.name.toLowerCase().trim())!
             byId.delete(prev.id)
-            byId.set(serverAsset.id, { ...prev, ...serverAsset, id: serverAsset.id })
+            byId.set(serverAsset.id, { ...serverAsset, ...prev, id: serverAsset.id, currentStock: prev.currentStock ?? serverAsset.currentStock })
           } else {
             byId.set(serverAsset.id, serverAsset)
           }

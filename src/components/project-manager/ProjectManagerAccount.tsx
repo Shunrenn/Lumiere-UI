@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { LayoutDashboard, Folder, CalendarDays, FileText, Menu, PanelLeftClose, PanelLeftOpen, X, Package, Search, Sparkles, Plus, LogOut } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { useThemeMode, type ThemeMode } from '@/lib/theme'
@@ -8,7 +8,6 @@ import type { PortalEvent } from '@/lib/types'
 import { realProject, realPitch, sampleProjects, samplePitches, type PMProject, type PMAsset, type PMPitch, workspaceTabs } from '@/lib/project-manager-sample-data'
 import { RegisterEventDrawer } from '@/components/RegisterEventDrawer'
 import { ProjectManagerModal, PMFields } from './ProjectManagerModal'
-import { ProjectManagerInitializeModal } from './ProjectManagerInitializeModal'
 import { ProjectManagerCreatePitchModal } from './ProjectManagerCreatePitchModal'
 import { ProjectManagerWorkspace, projectFields, planningFields } from './ProjectManagerWorkspace'
 import { useProjectManagerWorkspace } from './useProjectManagerWorkspace'
@@ -21,7 +20,7 @@ const destinations = [
   { id: 'pitches-briefs', label: 'Pitches & Briefs', icon: FileText },
 ] as const
 type Destination = typeof destinations[number]['id']
-type Modal = { kind: 'project'; id: string } | { kind: 'asset'; asset: PMAsset } | { kind: 'pitch'; id: string } | { kind: 'planning' } | { kind: 'activate' } | { kind: 'initialize' } | { kind: 'profile' } | { kind: 'create-pitch'; brief: boolean } | null
+type Modal = { kind: 'project'; id: string } | { kind: 'asset'; asset: PMAsset } | { kind: 'pitch'; id: string } | { kind: 'planning' } | { kind: 'activate' } | { kind: 'profile' } | { kind: 'create-pitch'; brief: boolean } | null
 const getDestination = (): Destination => {
   const hash = window.location.hash.slice(1)
   return destinations.find(destination => destination.id === hash)?.id || 'dashboard'
@@ -61,20 +60,24 @@ export function ProjectManagerAccount() {
   const [status, setStatus] = useState(''), [date, setDate] = useState(''), [client, setClient] = useState(''), [sort, setSort] = useState('Newest'), [pitchStatus, setPitchStatus] = useState('')
   const [message, setMessage] = useState(''), [liveDrawer, setLiveDrawer] = useState<{ mode: 'create' | 'edit'; event?: PortalEvent } | null>(null)
 
-  useEffect(() => {
-    let disposed = false, pending = false
-    const load = async () => {
-      if (pending) return
-      pending = true
-      try { const records = await fetchProjectManagerEvents(); if (!disposed) { setLiveEvents(records); setEventsError('') } }
-      catch { if (!disposed) setEventsError('Could not verify current projects. Any previously loaded records may be out of date.') }
-      finally { pending = false; if (!disposed) setEventsLoading(false) }
+  const loadEvents = useCallback(async () => {
+    try {
+      const records = await fetchProjectManagerEvents()
+      setLiveEvents(records)
+      setEventsError('')
+    } catch {
+      setEventsError('Could not verify current projects. Any previously loaded records may be out of date.')
+    } finally {
+      setEventsLoading(false)
     }
-    void load()
-    const interval = setInterval(load, 30000)
-    window.addEventListener('focus', load)
-    return () => { disposed = true; clearInterval(interval); window.removeEventListener('focus', load) }
   }, [])
+
+  useEffect(() => {
+    void loadEvents()
+    const interval = setInterval(loadEvents, 30000)
+    window.addEventListener('focus', loadEvents)
+    return () => { clearInterval(interval); window.removeEventListener('focus', loadEvents) }
+  }, [loadEvents])
   useEffect(() => {
     const interval = setInterval(refreshPitches, 30000)
     window.addEventListener('focus', refreshPitches)
@@ -128,7 +131,7 @@ export function ProjectManagerAccount() {
         <div className="pm-global-search"><Search size={15} /><input aria-label="Search Project Manager" placeholder="Search events, clients, venues, pitches..." value={globalSearch} onChange={event => setGlobalSearch(event.target.value)} />
           {query && <div className="pm-search-results"><button aria-label="Close search" onClick={() => setGlobalSearch('')}>Close search</button>{searchProjects.map(project => <button key={project.id} onClick={() => { setModal({ kind: 'project', id: project.id }); setGlobalSearch('') }}><span>Project · {project.refId}</span><strong>{project.title}</strong></button>)}{searchPitches.map(pitch => <button key={pitch.id} onClick={() => { showPitch(pitch); setGlobalSearch('') }}><span>Pitch · {pitch.client}</span><strong>{pitch.title}</strong></button>)}{!searchProjects.length && !searchPitches.length && <p>No matching projects or pitches.</p>}</div>}
         </div>
-        <div className="pm-topbar-actions"><button onClick={() => setModal({ kind: 'create-pitch', brief: false })}><Sparkles size={14} />New Client Pitch</button><button className="pm-primary" onClick={() => setModal({ kind: 'initialize' })}><Plus size={14} />Register Event</button><select aria-label="Theme" value={mode} onChange={event => setMode(event.target.value as ThemeMode)}><option value="light">Light</option><option value="dark">Dark</option><option value="system">System</option></select><button className="pm-profile" aria-label="Profile" onClick={() => setModal({ kind: 'profile' })}><span>{(adminName || 'PM').split(' ').map(word => word[0]).slice(0, 2).join('')}</span><div><strong>{adminName}</strong><small>{currentUser?.email}</small></div></button><button aria-label="Logout" onClick={() => setConfirmLogout(true)}><LogOut size={16} /></button></div>
+        <div className="pm-topbar-actions"><button onClick={() => setModal({ kind: 'create-pitch', brief: false })}><Sparkles size={14} />New Client Pitch</button><button className="pm-primary" onClick={() => setLiveDrawer({ mode: 'create' })}><Plus size={14} />Register Event</button><select aria-label="Theme" value={mode} onChange={event => setMode(event.target.value as ThemeMode)}><option value="light">Light</option><option value="dark">Dark</option><option value="system">System</option></select><button className="pm-profile" aria-label="Profile" onClick={() => setModal({ kind: 'profile' })}><span>{(adminName || 'PM').split(' ').map(word => word[0]).slice(0, 2).join('')}</span><div><strong>{adminName}</strong><small>{currentUser?.email}</small></div></button><button aria-label="Logout" onClick={() => setConfirmLogout(true)}><LogOut size={16} /></button></div>
       </header>
       <div className="pm-mode-line"><span>{preview ? 'SAMPLE ACCOUNT — frontend only. Changes reset on reload. No sample records are saved to the backend.' : 'Assigned projects · checkpoint-based updates every 30 seconds and on window focus.'}</span><button onClick={switchMode}>{preview ? 'Show live projects' : 'Preview sample account'}</button></div>
       {message && <p className="pm-notice" role="status">{message}</p>}
@@ -165,12 +168,11 @@ export function ProjectManagerAccount() {
     {modal?.kind === 'create-pitch' && <ProjectManagerCreatePitchModal sample={preview} brief={modal.brief} onClose={() => setModal(null)} onSample={pitch => { setPreviewPitches(previous => [pitch, ...previous]); changeDestination('pitches-briefs'); setMessage('Sample pitch saved — Draft.') }} onSave={async draft => { await addPitch(draft); await refreshPitches(); changeDestination('pitches-briefs'); setMessage('Pitch draft saved.'); }} />}
 
     {modal?.kind === 'project' && detailProject && <ProjectManagerModal title="Project Details" onClose={() => setModal(null)}>{detailProject.sample && <p className="pm-notice">SAMPLE</p>}<PMFields fields={projectFields(detailProject)} /><div className="pm-actions"><button onClick={() => setModal(null)}>Close</button><button className="pm-primary" onClick={() => openWorkspace(detailProject)}>Open Event Workspace</button></div></ProjectManagerModal>}
-    {modal?.kind === 'initialize' && <ProjectManagerInitializeModal projects={samples} manager={adminName || 'Sample Project Manager'} onClose={() => setModal(null)} onWorkspace={project => { setPreview(true); openWorkspace(project) }} onLive={() => { setModal(null); setLiveDrawer({ mode: 'create' }) }} onCreate={project => { setSamples(previous => [project, ...previous]); setPreview(true); openWorkspace(project); setMessage('Sample event created — Initialized.') }} />}
     {modal?.kind === 'activate' && selected?.sample && <ProjectManagerModal title="Activate Event" onClose={() => setModal(null)}><p>You are about to activate: <strong>{selected.title}</strong></p><p>This will make the event available to downstream planning workflows in this sample preview.</p><p className="pm-notice">SAMPLE — this simulates activation locally.</p><div className="pm-actions"><button onClick={() => setModal(null)}>Cancel</button><button className="pm-primary" onClick={() => { setSamples(previous => previous.map(project => project.id === selected.id ? { ...project, status: 'Active', activated: new Date().toISOString(), activatedBy: adminName, blockers: project.blockers.filter(blocker => blocker !== 'Project not activated') } : project)); setModal(null); setMessage('Sample event activated — Active. Planning can now start in the preview.') }}>Activate Event</button></div></ProjectManagerModal>}
     {modal?.kind === 'planning' && workspace.project && <ProjectManagerModal title="Planning Summary" onClose={() => setModal(null)}>{workspace.project.sample && <p className="pm-notice">SAMPLE</p>}<PMFields fields={[...planningFields(workspace.project), ['Assets Planned', workspace.project.assets?.length], ['Warnings', workspace.project.blockers.join(' · ') || 'None reported in available data']]} /><button onClick={() => setModal(null)}>Close</button></ProjectManagerModal>}
     {modal?.kind === 'asset' && <ProjectManagerModal title="Asset Details" onClose={() => setModal(null)}>{selected?.sample && <p className="pm-notice">SAMPLE</p>}{modal.asset.image ? <img className="pm-asset-image" src={modal.asset.image} alt={modal.asset.name} /> : <div className="pm-image-placeholder"><Package size={36} /><span>Image not available</span></div>}<PMFields fields={ [['Name', modal.asset.name], ['Classification', modal.asset.classification], ['Required Qty', modal.asset.required], ['Available Qty', modal.asset.available], ['Status', modal.asset.status]] } /><button onClick={() => setModal(null)}>Close</button></ProjectManagerModal>}
     {modal?.kind === 'pitch' && detailPitch && <ProjectManagerModal title="Pitch / Brief Details" onClose={() => setModal(null)}>{detailPitch.sample && <p className="pm-notice">SAMPLE</p>}<div className="pm-workspace-tabs" role="tablist" aria-label="Pitch detail sections">{(['Pitch', 'Concept Brief'] as const).map(tab => <button key={tab} role="tab" aria-selected={pitchTab === tab} onClick={() => setPitchTab(tab)}>{tab}</button>)}</div><section role="tabpanel" aria-label={pitchTab}><h3>{pitchTab}</h3><PMFields fields={pitchTab === 'Pitch' ? [['Client', detailPitch.client], ['Concept', detailPitch.concept], ['Theme', detailPitch.theme], ['Objectives', detailPitch.objectives], ['Audience', detailPitch.audience], ['Venue', detailPitch.venue], ['Budget', detailPitch.budget], ['Notes', detailPitch.notes], ['Status', detailPitch.status]] : [['Client', detailPitch.client], ['Contact', detailPitch.contact], ['Target Date', detailPitch.date], ['Guests', detailPitch.guests], ['Concept', detailPitch.concept], ['Venue', detailPitch.venue], ['Budget', detailPitch.budget], ['Notes', detailPitch.notes]]} /></section><button onClick={() => setModal(null)}>Close</button></ProjectManagerModal>}
-    {liveDrawer && <RegisterEventDrawer open mode={liveDrawer.mode} event={liveDrawer.event} onClose={() => { setLiveDrawer(null); setMessage('Live registration closed. Saved changes appear at the next checkpoint refresh.') }} />}
+    {liveDrawer && <RegisterEventDrawer open mode={liveDrawer.mode} event={liveDrawer.event} onClose={() => { setLiveDrawer(null); void loadEvents(); setMessage('Live registration closed. Saved changes appear at the next checkpoint refresh.') }} />}
   </div>
 }
 

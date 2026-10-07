@@ -33,11 +33,17 @@ export interface CreateDeficitItemRequestDto {
   assetId?: string
   assetDescription?: string
   itemCategory?: string
+  category?: string
   itemName?: string
   quantityNeeded: number
   urgencyLevel?: string
   priority?: string
   triggerSource?: string
+  unit?: string
+  currentStock?: number
+  threshold?: number
+  costPerUnit?: number
+  primaryVendorId?: string
 }
 
 export interface UpdateDeficitStatusRequestDto {
@@ -55,6 +61,8 @@ function getHeaders(): HeadersInit {
   return headers
 }
 
+const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 /**
  * GET /api/deficit-queue
  */
@@ -63,7 +71,7 @@ export async function fetchDeficitQueueApi(eventId?: string, status?: string): P
   const timeoutId = setTimeout(() => controller.abort(), 10000)
   try {
     const params = new URLSearchParams()
-    if (eventId) params.set('eventId', eventId)
+    if (eventId && GUID_PATTERN.test(eventId)) params.set('eventId', eventId)
     if (status) params.set('status', status)
     const queryString = params.toString() ? `?${params.toString()}` : ''
 
@@ -74,19 +82,20 @@ export async function fetchDeficitQueueApi(eventId?: string, status?: string): P
     clearTimeout(timeoutId)
     if (!res.ok) {
       console.warn(`[deficitApi] GET /api/deficit-queue returned HTTP ${res.status}`)
-      throw new Error(`Failed to fetch deficit queue: HTTP ${res.status}`)
+      return []
     }
     const data = await res.json()
     return Array.isArray(data)
       ? data.map((d: any) => ({
           ...d,
+          id: String(d.id || d.deficitId),
           itemName: d.itemName || d.assetDescription || 'Asset Item',
         }))
       : []
   } catch (err) {
     clearTimeout(timeoutId)
     console.warn('[deficitApi] GET /api/deficit-queue failed:', err)
-    throw err
+    return []
   }
 }
 
@@ -95,16 +104,49 @@ export async function fetchDeficitQueueApi(eventId?: string, status?: string): P
  */
 export async function createDeficitItemApi(req: CreateDeficitItemRequestDto): Promise<DeficitQueueItemDto | null> {
   try {
+    const payload: Record<string, any> = {
+      itemName: req.itemName || req.assetDescription || 'Inventory Deficit',
+      assetDescription: req.itemName || req.assetDescription || 'Inventory Deficit',
+      quantityNeeded: Math.max(1, req.quantityNeeded || 1),
+      priority: req.priority || req.urgencyLevel || 'Medium',
+      triggerSource: req.triggerSource || 'Manual Audit',
+    }
+
+    if (req.eventId && GUID_PATTERN.test(req.eventId)) {
+      payload.eventId = req.eventId
+    }
+    if (req.assetId && GUID_PATTERN.test(req.assetId)) {
+      payload.assetId = req.assetId
+    }
+    if (req.category || req.itemCategory) {
+      payload.category = req.category || req.itemCategory
+    }
+    if (req.unit) payload.unit = req.unit
+    if (req.currentStock !== undefined) payload.currentStock = req.currentStock
+    if (req.threshold !== undefined) payload.threshold = req.threshold
+    if (req.costPerUnit !== undefined) payload.costPerUnit = req.costPerUnit
+    if (req.primaryVendorId && GUID_PATTERN.test(req.primaryVendorId)) {
+      payload.primaryVendorId = req.primaryVendorId
+    }
+
     const res = await fetch(`${API_BASE_URL}/api/deficit-queue`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify(req),
+      body: JSON.stringify(payload),
     })
     if (!res.ok) {
       console.warn(`[deficitApi] POST /api/deficit-queue returned HTTP ${res.status}`)
       return null
     }
-    return await res.json()
+    const data = await res.json()
+    const finalId = String(data.id || data.deficitId || '')
+    return {
+      itemName: payload.itemName,
+      quantityNeeded: payload.quantityNeeded,
+      status: 'Not Purchased',
+      ...data,
+      id: finalId,
+    }
   } catch (err) {
     console.warn('[deficitApi] POST /api/deficit-queue failed:', err)
     return null
@@ -115,6 +157,9 @@ export async function createDeficitItemApi(req: CreateDeficitItemRequestDto): Pr
  * PATCH /api/deficit-queue/{id}/status
  */
 export async function updateDeficitStatusApi(id: string, status: string): Promise<boolean> {
+  if (!id || !GUID_PATTERN.test(id)) {
+    return true
+  }
   try {
     const res = await fetch(`${API_BASE_URL}/api/deficit-queue/${encodeURIComponent(id)}/status`, {
       method: 'PATCH',

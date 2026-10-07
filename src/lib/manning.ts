@@ -105,8 +105,49 @@ export interface ManningWarning {
 }
 
 
-let localAssignments: ManningAssignment[] = []
-let localTasks: ManningTask[] = []
+const MANNING_ASSIGNMENTS_KEY = '_lumiere_manning_assignments'
+const MANNING_TASKS_KEY = '_lumiere_manning_tasks'
+const MANNING_WARNINGS_KEY = '_lumiere_manning_warnings'
+
+function loadStoredManning<T>(key: string, fallback: T[]): T[] {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(key)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch {}
+  }
+  return fallback
+}
+
+function saveStoredManning<T>(key: string, data: T[]) {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(key, JSON.stringify(data))
+    } catch {}
+  }
+}
+
+let localAssignments: ManningAssignment[] = loadStoredManning<ManningAssignment>(MANNING_ASSIGNMENTS_KEY, [])
+let localTasks: ManningTask[] = loadStoredManning<ManningTask>(MANNING_TASKS_KEY, [])
+let localWarnings: ManningWarning[] = loadStoredManning<ManningWarning>(MANNING_WARNINGS_KEY, [])
+
+function syncLocalAssignments(next: ManningAssignment[]) {
+  localAssignments = next
+  saveStoredManning(MANNING_ASSIGNMENTS_KEY, next)
+}
+
+function syncLocalTasks(next: ManningTask[]) {
+  localTasks = next
+  saveStoredManning(MANNING_TASKS_KEY, next)
+}
+
+function syncLocalWarnings(next: ManningWarning[]) {
+  localWarnings = next
+  saveStoredManning(MANNING_WARNINGS_KEY, next)
+}
 
 function assignmentIdentity(assignment: ManningAssignment): string {
   return `${assignment.work_date}|${assignment.event_name}|${assignment.venue ?? ''}|${assignment.deployment_ref ?? ''}`
@@ -122,7 +163,6 @@ function dedupeActiveAssignments(assignments: ManningAssignment[]): ManningAssig
     return true
   })
 }
-let localWarnings: ManningWarning[] = []
 
 // ---- Task helpers -----------------------------------------------------
 
@@ -175,7 +215,7 @@ export async function fetchAssignments(): Promise<ManningAssignment[]> {
       created_by: null,
       created_at: dto.createdAt || new Date().toISOString(),
     }))
-    localAssignments = dedupeActiveAssignments(mapped)
+    syncLocalAssignments(dedupeActiveAssignments(mapped))
     return localAssignments
   } catch (error) {
     console.warn('[manning] Manning assignments unavailable:', error)
@@ -242,7 +282,7 @@ export async function createAssignment(
     created_by: input.created_by ?? null,
     created_at: now,
   }
-  localAssignments = dedupeActiveAssignments([fallback, ...localAssignments])
+  syncLocalAssignments(dedupeActiveAssignments([fallback, ...localAssignments]))
   return fallback
 }
 
@@ -301,7 +341,7 @@ export async function inheritAssignment(
         created_by: createdBy ?? null,
         created_at: inheritedDto.createdAt || new Date().toISOString(),
       }
-      localAssignments = [mapped, ...localAssignments.filter((item) => item.id !== mapped.id)]
+      syncLocalAssignments([mapped, ...localAssignments.filter((item) => item.id !== mapped.id)])
       return mapped
     }
   } catch (e) {
@@ -348,7 +388,7 @@ export async function closeAssignment(
     }
   }
 
-  localAssignments = localAssignments.map((a) => (a.id === id ? { ...a, status: 'Closed' } : a))
+  syncLocalAssignments(localAssignments.map((a) => (a.id === id ? { ...a, status: 'Closed' } : a)))
 }
 
 /**
@@ -462,7 +502,7 @@ registerCrewLeaveHandler(handleCrewLeaveAutoRelease)
 export async function fetchTasks(): Promise<ManningTask[]> {
   try {
     const data = await fetchManningTasksApi()
-    localTasks = data.map((dto) => ({
+    syncLocalTasks(data.map((dto) => ({
       id: dto.id,
       title: dto.title,
       description: dto.description ?? null,
@@ -482,7 +522,7 @@ export async function fetchTasks(): Promise<ManningTask[]> {
       escalated_at: dto.escalatedAt ?? null,
       created_by: dto.createdByUserId ?? null,
       created_at: dto.createdAt,
-    }))
+    })))
     return localTasks
   } catch (error) {
     console.warn('[manning] Manning tasks unavailable:', error)
@@ -534,7 +574,7 @@ export async function createTask(
       created_at: dto.createdAt,
     }
 
-    localTasks = [task, ...localTasks.filter((t) => t.id !== task.id)]
+    syncLocalTasks([task, ...localTasks.filter((t) => t.id !== task.id)])
     return task
   } catch (error) {
     console.warn('[manning] Backend task create failed; fallback applied locally:', error)
@@ -560,7 +600,7 @@ export async function createTask(
       created_by: input.created_by ?? null,
       created_at: now,
     }
-    localTasks = [fallback, ...localTasks]
+    syncLocalTasks([fallback, ...localTasks])
     return fallback
   }
 }
@@ -725,7 +765,7 @@ export async function escalateOverdueTasks(tasks: ManningTask[]): Promise<string
 export async function fetchWarnings(): Promise<ManningWarning[]> {
   try {
     const data = await fetchManningWarningsApi()
-    localWarnings = data.map((dto) => ({
+    syncLocalWarnings(data.map((dto) => ({
       id: dto.id,
       subject_name: dto.subjectName,
       subject_email: dto.subjectEmail ?? null,
@@ -736,7 +776,7 @@ export async function fetchWarnings(): Promise<ManningWarning[]> {
       issued_at: dto.issuedAt,
       acknowledged: Boolean(dto.acknowledgedAt),
       acknowledged_at: dto.acknowledgedAt ?? null,
-    }))
+    })))
     return localWarnings
   } catch (error) {
     console.warn('[manning] Manning warnings unavailable:', error)
@@ -769,7 +809,7 @@ export async function issueWarning(
     acknowledged_at: dto.acknowledgedAt ?? null,
   }
 
-  localWarnings = [warning, ...localWarnings.filter((w) => w.id !== warning.id)]
+  syncLocalWarnings([warning, ...localWarnings.filter((w) => w.id !== warning.id)])
   return warning
 }
 
@@ -825,13 +865,12 @@ export function useManningData(): ManningData {
       setUsingPreset(false)
       setTasks(t)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Manning data unavailable'
-      console.warn('[manning] Failed to load manning data:', err)
-      setAssignments([])
-      setTasks([])
-      setWarnings([])
-      setUsingPreset(false)
-      setError(msg)
+      console.warn('[manning] Server manning data unavailable, using local persisted records:', err)
+      setAssignments(localAssignments)
+      setTasks(localTasks)
+      setWarnings(localWarnings)
+      setUsingPreset(true)
+      setError(null)
     } finally {
       setLoading(false)
     }

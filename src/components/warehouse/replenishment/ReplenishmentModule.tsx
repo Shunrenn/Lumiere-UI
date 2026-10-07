@@ -42,7 +42,7 @@ export function ReplenishmentModule() {
           eventId: item.eventId || undefined,
           eventTitle: item.eventName || undefined,
           itemName: item.itemName,
-          category: (item.itemCategory as any) || 'General',
+          category: (item.itemCategory as any) || (item.category as any) || 'General',
           unit: item.unit || 'pcs',
           triggerSource: (item.triggerSource as any) || 'Auto-Threshold',
           currentStock: item.currentStock ?? 0,
@@ -53,7 +53,33 @@ export function ReplenishmentModule() {
           primaryVendorId: item.primaryVendorId || '',
           quantityNeeded: item.quantityNeeded,
         }))
-        setLines(mapped)
+
+        setLines((prev) => {
+          const map = new Map<string, DeficitLine>()
+          const stored = getStoredDeficits()
+          const base = prev.length > 0 ? prev : stored
+          base.forEach((l) => map.set(l.id, l))
+
+          const byName = new Map<string, string>()
+          base.forEach((l) => byName.set(l.itemName.toLowerCase().trim(), l.id))
+
+          mapped.forEach((serverLine) => {
+            if (map.has(serverLine.id)) {
+              map.set(serverLine.id, { ...map.get(serverLine.id)!, ...serverLine })
+            } else if (byName.has(serverLine.itemName.toLowerCase().trim())) {
+              const localId = byName.get(serverLine.itemName.toLowerCase().trim())!
+              const localLine = map.get(localId)
+              map.delete(localId)
+              map.set(serverLine.id, { ...localLine, ...serverLine, id: serverLine.id })
+            } else {
+              map.set(serverLine.id, serverLine)
+            }
+          })
+
+          const merged = Array.from(map.values())
+          saveStoredDeficits(merged)
+          return merged
+        })
         setLoading(false)
       })
       .catch((err) => {
@@ -123,16 +149,9 @@ export function ReplenishmentModule() {
 
   const handleAddMasterItem = async (draft: MasterItemDraft) => {
     const needed = Math.max(1, draft.threshold - draft.currentStock)
-    const res = await createDeficitItemApi({
-      eventId: draft.eventId,
-      itemCategory: draft.category,
-      itemName: draft.itemName,
-      quantityNeeded: needed,
-      urgencyLevel: draft.priority,
-    })
-
+    const tempId = `def-master-${Date.now()}`
     const newLine: DeficitLine = {
-      id: res?.id || `def-master-${Date.now()}`,
+      id: tempId,
       eventId: draft.eventId,
       eventTitle: draft.eventTitle,
       itemName: draft.itemName,
@@ -150,6 +169,27 @@ export function ReplenishmentModule() {
     setLines((prev) => [newLine, ...prev])
     setAddOpen(false)
     setAddPresetEvent(null)
+
+    try {
+      const res = await createDeficitItemApi({
+        eventId: draft.eventId,
+        itemCategory: draft.category,
+        itemName: draft.itemName,
+        quantityNeeded: needed,
+        urgencyLevel: draft.priority,
+        priority: draft.priority,
+        unit: draft.unit,
+        currentStock: draft.currentStock,
+        threshold: draft.threshold,
+        costPerUnit: draft.costPerUnit,
+        primaryVendorId: draft.primaryVendorId,
+      })
+      if (res && res.id) {
+        setLines((prev) => prev.map((l) => (l.id === tempId ? { ...l, id: res.id } : l)))
+      }
+    } catch (e) {
+      console.warn('[ReplenishmentModule] Deficit creation failed on server, preserved locally:', e)
+    }
   }
 
   const handleRemove = (id: string) => setLines((prev) => prev.filter((line) => line.id !== id))
