@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
-import type { WarehouseVendor } from '@/lib/warehouse-vendors'
+import { X, Trash2 } from 'lucide-react'
+import { deleteVendor, type WarehouseVendor } from '@/lib/warehouse-vendors'
 import { getCatalogAssets } from '@/lib/warehouse-catalog'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { VENDOR_STATUS_TONE } from '@/components/warehouse/replenishment/tone'
@@ -236,25 +236,40 @@ export function VendorDetailModal({ vendor, onClose, onSaveNotes, onSaveContact,
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-border px-6 py-4">
-          <button
-            type="button"
-            onClick={() => onDeactivate(vendor.id)}
-            className="rounded-md border border-destructive/40 px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-destructive transition-colors hover:bg-destructive/10"
-          >
-            {vendor.status === 'Inactive' ? 'Reactivate' : 'Deactivate'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onDeactivate(vendor.id)}
+              className="rounded-md border border-destructive/40 px-3.5 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-destructive transition-colors hover:bg-destructive/10 cursor-pointer"
+            >
+              {vendor.status === 'Inactive' ? 'Reactivate' : 'Deactivate'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Are you sure you want to permanently delete vendor "${vendor.name}"?`)) {
+                  deleteVendor(vendor.id)
+                  onClose()
+                }
+              }}
+              className="inline-flex items-center gap-1 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-destructive transition-colors hover:bg-destructive/20 cursor-pointer"
+            >
+              <Trash2 className="size-3" />
+              Delete
+            </button>
+          </div>
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => setEditingContact(true)}
-              className="rounded-md border border-border px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition-colors hover:bg-accent"
+              className="rounded-md border border-border px-4 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition-colors hover:bg-accent cursor-pointer"
             >
               Edit
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md bg-primary px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition-opacity hover:opacity-90"
+              className="rounded-md bg-primary px-4 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition-opacity hover:opacity-90 cursor-pointer"
             >
               Done
             </button>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Plus, Search, X, Calendar, Sliders, LayoutGrid, Table } from 'lucide-react'
+import { AlertTriangle, Plus, Search, Calendar, Sliders, LayoutGrid, Table } from 'lucide-react'
 import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import {
@@ -49,7 +49,7 @@ interface ProductionModuleProps {
   onClose: () => void
 }
 
-export function ProductionModule({ onClose }: ProductionModuleProps) {
+export function ProductionModule(_props?: ProductionModuleProps) {
   const { events, staff } = usePortal()
   const { hasFullWarehouseAccess, isProductionManager } = useAuth()
   const canApproveProduction = hasFullWarehouseAccess || isProductionManager
@@ -91,14 +91,7 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
             title="Production & Fabrication"
             description="Bespoke build estimation, Gantt timeline scheduling, and workshop capacity."
           />
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close and return to dashboard"
-            className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </button>
+          
         </div>
 
         {/* View Switcher Bar & Primary Action Buttons */}

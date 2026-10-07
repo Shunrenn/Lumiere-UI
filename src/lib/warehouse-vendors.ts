@@ -323,6 +323,12 @@ export function addVendor(draft: VendorDraft): WarehouseVendor {
   return vendor
 }
 
+export function deleteVendor(id: string) {
+  const existing = getWarehouseVendors()
+  cachedVendors = existing.filter((vendor) => vendor.id !== id)
+  publish()
+}
+
 export function updateVendor(id: string, changes: Partial<Omit<WarehouseVendor, 'id'>>) {
   const existing = getWarehouseVendors()
   cachedVendors = existing.map((vendor) => {

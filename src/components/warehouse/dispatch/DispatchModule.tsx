@@ -82,7 +82,7 @@ function Avatar({ name }: { name: string }) {
 
 import { useAuth } from '@/lib/auth'
 
-export function DispatchModule({ onClose }: DispatchModuleProps) {
+export function DispatchModule(_props?: DispatchModuleProps) {
   const { events, staff, procurement } = usePortal()
   const { adminEmail, adminName } = useAuth()
   // The store snapshot has to be part of the memo key — without it a stage
@@ -181,14 +181,7 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
       <div className="flex flex-col gap-4 border-b border-border px-0 py-7">
         <div className="flex items-start justify-between gap-4">
           <WarehouseModuleHeader title="Dispatch & Logistics" description="Delivery lists, vehicle assignments, and delivery updates." />
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close and return to dashboard"
-            className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </button>
+          
         </div>
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
-import { addVendor, updateVendor, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
+import { X, Trash2 } from 'lucide-react'
+import { addVendor, updateVendor, deleteVendor, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
 
 const STATUSES: VendorStatus[] = ['Active', 'On Hold', 'Inactive']
 const CATEGORIES = ['Linens & Textiles', 'Florals', 'Furniture Rental', 'Lighting', 'Printing & Signage', 'Props & Decor', 'Staging & Fabrication', 'General Supplier', 'Other'] as const
@@ -175,25 +175,42 @@ export function AddVendorModal({ onClose, onCreated, vendor: editingVendor }: Ad
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-border px-6 py-4">
-          <p className="text-[0.62rem] text-muted-foreground">
-            {missing.length > 0 ? `Still needed: ${missing.join(' and ')}.` : 'Ready to register.'}
-          </p>
           <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-border px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition-colors hover:bg-accent"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={!canSubmit}
-            onClick={handleSubmit}
-            className="rounded-md bg-primary px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
-          >
-            {editingVendor ? 'Save Changes' : 'Register vendor'}
-          </button>
+            {editingVendor && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Are you sure you want to delete vendor "${editingVendor.name}"?`)) {
+                    deleteVendor(editingVendor.id)
+                    onClose()
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-destructive transition-colors hover:bg-destructive/20 cursor-pointer"
+              >
+                <Trash2 className="size-3.5" />
+                Delete vendor
+              </button>
+            )}
+            <p className="text-[0.62rem] text-muted-foreground">
+              {missing.length > 0 ? `Still needed: ${missing.join(' and ')}.` : 'Ready to register.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-border px-4 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition-colors hover:bg-accent cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!canSubmit}
+              onClick={handleSubmit}
+              className="rounded-md bg-primary px-4 py-2 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40 cursor-pointer"
+            >
+              {editingVendor ? 'Save Changes' : 'Register vendor'}
+            </button>
           </div>
         </div>
       </div>

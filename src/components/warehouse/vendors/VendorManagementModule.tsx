@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Lock, Pencil, Plus, RefreshCw, Search } from 'lucide-react'
-import { formatVendorLeadTime, mapVendorDtoToWarehouseVendor, updateVendor, useWarehouseVendors, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
+import { AlertTriangle, Lock, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { formatVendorLeadTime, mapVendorDtoToWarehouseVendor, updateVendor, deleteVendor, useWarehouseVendors, type VendorStatus, type WarehouseVendor } from '@/lib/warehouse-vendors'
 import { fetchVendorsResultApi } from '@/features/vendors/api/vendorApi'
 import { Pill } from '@/components/warehouse/shared/Pill'
 import { VENDOR_STATUS_TONE } from '@/components/warehouse/replenishment/tone'
@@ -212,7 +212,32 @@ export function VendorManagementModule() {
                 <td className="px-4 py-3.5">
                   <Pill tone={VENDOR_STATUS_TONE[vendor.status] || 'positive'}>{vendor.status || 'Active'}</Pill>
                 </td>
-                <td className="px-4 py-3.5" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => setEditingVendor(vendor)} aria-label={`Edit ${vendor.name}`} className="rounded-md p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground"><Pencil className="size-3.5" /></button></td>
+                <td className="px-4 py-3.5" onClick={(event) => event.stopPropagation()}>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditingVendor(vendor)}
+                      aria-label={`Edit ${vendor.name}`}
+                      title="Edit vendor"
+                      className="rounded-md p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground cursor-pointer"
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Are you sure you want to delete vendor "${vendor.name}"?`)) {
+                          deleteVendor(vendor.id)
+                        }
+                      }}
+                      aria-label={`Delete ${vendor.name}`}
+                      title="Delete vendor"
+                      className="rounded-md p-2 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>

@@ -48,18 +48,10 @@ export function CompanionPanel({ moduleId, onClose }: CompanionPanelProps) {
   if (moduleId === 'vendors') {
     return (
       <div className="flex h-full flex-1 flex-col overflow-y-auto">
-        <div className="flex items-start justify-between gap-4 border-b border-border px-0 py-7">
+        <div className="flex items-start justify-between gap-4 border-b border-border px-0 py-6">
           <WarehouseModuleHeader title={module.label} description={module.blurb} />
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close and return to dashboard"
-            className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </button>
         </div>
-        <div className="flex-1 px-0 py-7">
+        <div className="flex-1 px-0 py-6">
           <VendorManagementModule />
         </div>
       </div>

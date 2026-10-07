@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Grid2X2, List, Palette, Plus, Search, X } from 'lucide-react'
+import { Grid2X2, List, Palette, Plus, Search } from 'lucide-react'
 import {
   addCatalogAsset,
   useCatalogAssets,
@@ -55,7 +55,7 @@ interface AssetCatalogModuleProps {
   executiveKiosk?: boolean
 }
 
-export function AssetCatalogModule({ onClose, readOnly = false, embedded = false, executiveKiosk = false }: AssetCatalogModuleProps) {
+export function AssetCatalogModule({ readOnly = false, embedded = false, executiveKiosk = false }: AssetCatalogModuleProps) {
   const { isWarehouseAssociate } = useAuth()
   const effectiveReadOnly = readOnly
   const assets = useCatalogAssets()
@@ -169,20 +169,11 @@ export function AssetCatalogModule({ onClose, readOnly = false, embedded = false
         {!embedded && (
           <div className="flex items-start justify-between gap-4">
             <WarehouseModuleHeader
-              eyebrow="Warehouse Module"
+              
               title={isWarehouseAssociate ? 'Inventory' : 'Asset Inventory'}
               description="Category-specific asset views, stock levels, and condition tracking."
             />
-            {onClose && (
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close and return to dashboard"
-                className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <X className="size-4" aria-hidden="true" />
-              </button>
-            )}
+            
           </div>
         )}
 

@@ -57,7 +57,7 @@ interface ManningModuleProps {
   onClose: () => void
 }
 
-export function ManningModule({ onClose }: ManningModuleProps) {
+export function ManningModule(_props?: ManningModuleProps) {
   const { staff, events } = usePortal()
 
   // Shared Crew Data
@@ -151,14 +151,7 @@ export function ManningModule({ onClose }: ManningModuleProps) {
       <div className="flex flex-col gap-4 border-b border-border px-0 py-7">
         <div className="flex items-start justify-between gap-4">
           <WarehouseModuleHeader title="Manning Delegation" description="Ground crew scheduling, event deployments, and zone duty rosters." />
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close and return to dashboard"
-            className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </button>
+          
         </div>
 
         {/* ─── Primary navigation: four peer views, grouped by purpose ─── */}
