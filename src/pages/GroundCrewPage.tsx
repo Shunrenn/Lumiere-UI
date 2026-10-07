@@ -114,7 +114,53 @@ interface CrewRequest {
   status: RequestStatus
 }
 
-// No fixture/seed data — all operational state derives from canonical backend or starts empty
+const FIELD_DEMO_ASSIGNMENT: MyManningAssignmentDto = {
+  assignmentId: 'demo-field-assignment',
+  eventId: 'demo-field-event',
+  eventName: 'Lumière Live Operational Demonstration',
+  shiftDate: new Date().toISOString().slice(0, 10),
+  shiftStartTime: '08:00',
+  shiftEndTime: '18:00',
+  workArea: 'Field',
+  taskTitle: 'Chain-of-custody field crew',
+  taskDescription: 'Verify venue arrival and egress release checkpoints.',
+  assetId: 'demo-stage-4x8',
+  assetName: 'Custom Modular Velvet Stage Platform 4×8',
+  productionTaskId: null,
+  taskPoolId: null,
+  taskPoolName: null,
+  taskPoolItemId: null,
+  manningRequirementId: null,
+  assignedRole: 'Field Crew',
+  isLead: true,
+  executionStatus: 'InProgress',
+  startedAt: new Date().toISOString(),
+  completedAt: null,
+  executionUpdatedAt: new Date().toISOString(),
+  blockerReason: null,
+  executionNotes: null,
+  pendingSync: false,
+  syncStatus: 'confirmed',
+  lastSyncError: null,
+}
+
+const FIELD_DEMO_EVENT: EventItem = {
+  id: 'demo-field-event',
+  name: 'Lumière Live Operational Demonstration',
+  date: new Date().toISOString().slice(0, 10),
+  venue: 'The Glasshouse, Makati',
+  status: 'Current',
+  editable: true,
+  phase: null,
+  items: [
+    { id: 'demo-item-1', name: 'Custom Modular Velvet Stage Platform 4×8', sku: 'STG-4X8-VELVET', qty: 1, color: 'Onyx' },
+    { id: 'demo-item-2', name: 'Ghost Chair', sku: 'CHR-GHOST', qty: 24, color: 'Clear' },
+    { id: 'demo-item-3', name: 'Warm Pin Light', sku: 'LGT-PIN-WARM', qty: 8, color: 'Warm white' },
+    { id: 'demo-item-4', name: 'Modular Arch Panel', sku: 'ARC-MOD-01', qty: 6, color: 'Ivory' },
+  ],
+}
+
+// Temporary frontend fixture. It is enabled only with ?seed=field and never changes backend data.
 
 function dateLabel(date: string) {
   return new Date(`${date}T12:00:00`).toLocaleDateString('en-US', {
@@ -174,6 +220,7 @@ export function GroundCrewPage() {
   void declarations
   const [tab, setTab] = useState<Tab>('home')
   const [fieldSection, setFieldSection] = useState<'tasks' | 'requests' | 'history'>('tasks')
+  const isFieldSeed = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('seed') === 'field'
 
   // Canonical Manning operational assignments for authenticated user
   const [myAssignments, setMyAssignments] = useState<MyManningAssignmentDto[]>([])
@@ -205,13 +252,15 @@ export function GroundCrewPage() {
         : 'Ground Crew / Member'
 
   const activeAssignment = useMemo(() => {
+    if (isFieldSeed) return FIELD_DEMO_ASSIGNMENT
     return [...myAssignments]
       .filter((assignment) => assignment.executionStatus !== 'Completed')
       .sort((a, b) => `${a.shiftDate ?? ''}${a.shiftStartTime ?? ''}`.localeCompare(`${b.shiftDate ?? ''}${b.shiftStartTime ?? ''}`))[0] ?? null
-  }, [myAssignments])
+  }, [isFieldSeed, myAssignments])
   const assignmentScope: CrewAssignmentScope = activeAssignment && /warehouse/i.test(`${activeAssignment.workArea ?? ''} ${activeAssignment.taskTitle ?? ''} ${activeAssignment.assignedRole ?? ''}`) ? 'Warehouse' : 'Field'
 
   const derivedEvents = useMemo<EventItem[]>(() => {
+    if (isFieldSeed) return [FIELD_DEMO_EVENT]
     if (!activeAssignment || !events || events.length === 0) return []
     const assignedEvent = events.find((event) => event.id === activeAssignment.eventId)
     if (!assignedEvent) return []
@@ -226,7 +275,7 @@ export function GroundCrewPage() {
       phase: null,
       items: [],
     }]
-  }, [activeAssignment, events])
+  }, [activeAssignment, events, isFieldSeed])
 
   const [adminEventId, setAdminEventId] = useState('')
   const [crewEvents, setCrewEvents] = useState<EventItem[]>([])
@@ -501,7 +550,22 @@ export function GroundCrewPage() {
 
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const selectedEvent = selectedEventId ? crewEvents.find((event) => event.id === selectedEventId) ?? null : null
-  const [reports, setReports] = useState<DamageReport[]>([])
+  const [reports, setReports] = useState<DamageReport[]>(() => isFieldSeed ? [{
+    id: 'demo-damage-report',
+    event: FIELD_DEMO_EVENT.name,
+    item: 'Ghost Chair',
+    phase: 'Venue Arrival',
+    quantity: 2,
+    description: 'Two chairs arrived with chipped legs.',
+    photo: '',
+    capturedAt: new Date().toISOString(),
+    location: 'The Glasshouse, Makati',
+    condition: 'Damaged',
+    evidenceStatus: 'Complete',
+    isEditable: true,
+    offlineSyncStatus: 'locally queued',
+    version: 1,
+  }] : [])
   const [offlineItems, setOfflineItems] = useState<QueuedDeclaration[]>([])
   const [isSyncingQueue, setIsSyncingQueue] = useState(false)
 
