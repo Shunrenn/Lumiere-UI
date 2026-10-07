@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { fetchCanvasLayoutApi } from '@/lib/canvasApi'
-import { fetchReservationsForEvent } from '@/lib/reservationsApi'
-import { fetchManningForEvent } from '@/lib/manningApi'
-import { fetchGanttScheduleForEvent } from '@/lib/productionApi'
-import { API_BASE_URL, getAuthToken } from '@/lib/apiConfig'
-import type { EventResponseDto } from '@/lib/eventsApi'
+import { fetchCanvasLayoutApi } from '@/features/canvas/api/canvasApi'
+import { fetchReservationsForEvent } from '@/features/events/api/reservationsApi'
+import { fetchManningForEvent } from '@/features/manning/api/manningApi'
+import { fetchGanttScheduleForEvent } from '@/features/production/api/productionApi'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
+import type { EventResponseDto } from '@/features/events/api/eventsApi'
 import type { PMProject } from '@/lib/project-manager-sample-data'
 
 async function fetchRegistry(id: string): Promise<EventResponseDto> {

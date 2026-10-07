@@ -1,5 +1,5 @@
-import { API_BASE_URL, getAuthToken } from './apiConfig'
-import { mapEventResponseToPortalEvent, type EventResponseDto } from './eventsApi'
+import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
+import { mapEventResponseToPortalEvent, type EventResponseDto } from '@/features/events/api/eventsApi'
 import type { PortalEvent } from './types'
 
 // Keep legacy presentation defaults out of PM verification and missing-data checks.
