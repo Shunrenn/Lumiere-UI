@@ -1,4 +1,4 @@
-import { LayoutGrid, ClipboardList, ClipboardCheck, Boxes, ListFilter, PenTool, Palette, type LucideIcon } from 'lucide-react'
+import { LayoutGrid, ClipboardList, ClipboardCheck, Boxes, ListFilter, PenTool, Palette, BriefcaseBusiness, CalendarRange, Layers3, type LucideIcon } from 'lucide-react'
 import type { Route } from '@/lib/types'
 
 // Executive console destinations.
@@ -32,6 +32,18 @@ export const PLANNER_RAIL_IDENTITY = {
   getName: (sessionName: string | undefined) => sessionName || 'Event Planner',
 } as const
 
+export const PROJECT_MANAGER_RAIL_DESTINATIONS: readonly SharedRailDestination[] = [
+  { id: 'dashboard', label: 'Project Manager Dashboard', icon: LayoutGrid, route: 'project-manager' },
+  { id: 'projects', label: 'Projects & Events', icon: BriefcaseBusiness, route: 'project-manager' },
+  { id: 'calendar', label: 'Master Schedule', icon: CalendarRange, route: 'project-manager' },
+  { id: 'pitches', label: 'Client Pitches & Briefs', icon: Layers3, route: 'project-manager' },
+]
+
+export const PROJECT_MANAGER_RAIL_IDENTITY = {
+  roleLabel: 'PROJECT COMMAND',
+  getName: (sessionName: string | undefined) => sessionName || 'Project Manager',
+} as const
+
 export const EXECUTIVE_DESTINATIONS: ExecutiveDestination[] = [
   { id: 'dashboard', label: 'Executive Dashboard', icon: LayoutGrid },
   { id: 'inventory', label: 'Asset Inventory', icon: Boxes },
@@ -43,3 +55,4 @@ export const EXECUTIVE_DESTINATIONS: ExecutiveDestination[] = [
 export function getExecutiveDestination(id: ExecutiveDestinationId) {
   return EXECUTIVE_DESTINATIONS.find((destination) => destination.id === id)
 }
+

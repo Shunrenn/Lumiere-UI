@@ -3,7 +3,8 @@ import { usePortal } from '@/lib/store'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { useProjectPitches, type ProjectPitch } from '@/lib/project-pitch'
-import { ProjectManagerHeader } from '@/components/project-manager/ProjectManagerHeader'
+import { ExecutiveShell } from '@/components/executive/ExecutiveShell'
+import { PROJECT_MANAGER_RAIL_DESTINATIONS } from '@/lib/executive-destinations'
 import { ProjectManagerMasterCalendar } from '@/components/project-manager/ProjectManagerMasterCalendar'
 import { ProjectManagerEventsList } from '@/components/project-manager/ProjectManagerEventsList'
 import { ProjectManagerActionRequired } from '@/components/project-manager/ProjectManagerActionRequired'
@@ -14,7 +15,7 @@ import { ProjectManagerLiteEventDetail } from '@/components/project-manager/Proj
 import { RegisterEventDrawer } from '@/components/RegisterEventDrawer'
 import { OfflineBanner } from '@/components/OfflineBanner'
 import type { PortalEvent } from '@/lib/types'
-import { CheckCircle2, Clock, Sparkles, Layers, AlertCircle, AlertTriangle, Info, RefreshCw } from 'lucide-react'
+import { CheckCircle2, Clock, Sparkles, Layers, AlertCircle, AlertTriangle, Info, RefreshCw, Plus, Search } from 'lucide-react'
 
 export function ProjectManagerLegacyPage() {
   const { events, staff, procurement, damageExceptions, refreshEvents } = usePortal()
@@ -33,6 +34,7 @@ export function ProjectManagerLegacyPage() {
 
   // Selected event for single-event workspace
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
+  const [activeSection, setActiveSection] = useState<'dashboard' | 'projects' | 'calendar' | 'pitches'>('dashboard')
 
   // Filters & search
   const [searchQuery, setSearchQuery] = useState('')
@@ -106,12 +108,97 @@ export function ProjectManagerLegacyPage() {
     }
   }
 
-  // If inside an event, render the dedicated Event Workspace
-  if (activeEvent) {
-    if (isProjectManagerLite) {
-      return (
-        <div className="min-h-screen bg-background text-foreground">
-          <OfflineBanner />
+  return (
+    <ExecutiveShell
+      activeId={selectedEventId ? 'event-workspace' : activeSection}
+      onSelect={(id) => {
+        if (selectedEventId) setSelectedEventId(null)
+        setActiveSection(id as 'dashboard' | 'projects' | 'calendar' | 'pitches')
+        if (id === 'projects') {
+          document.getElementById('pm-events-section')?.scrollIntoView({ behavior: 'smooth' })
+        } else if (id === 'calendar') {
+          document.getElementById('pm-calendar-section')?.scrollIntoView({ behavior: 'smooth' })
+        } else if (id === 'pitches') {
+          document.getElementById('pm-pitches-section')?.scrollIntoView({ behavior: 'smooth' })
+        }
+      }}
+      destinations={PROJECT_MANAGER_RAIL_DESTINATIONS}
+      identityRoleLabel="PROJECT COMMAND"
+      stickyHeader={
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[0.62rem] font-bold uppercase tracking-[0.14em] text-primary">
+                <Sparkles className="size-3" aria-hidden="true" />
+                {activeEvent ? 'Event Workspace' : 'Project Command'}
+              </span>
+              {activeEvent && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedEventId(null)}
+                  className="text-xs text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
+                >
+                  ← Return to Dashboard
+                </button>
+              )}
+            </div>
+            <h1 className="mt-2 font-serif text-3xl font-medium tracking-tight sm:text-4xl">
+              {activeEvent ? activeEvent.title : 'Project Manager Dashboard'}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {activeEvent
+                ? `${activeEvent.client || 'Client'} · ${activeEvent.venue || 'Venue'} · Target: ${activeEvent.targetDate || 'Not set'}`
+                : isProjectManagerLite
+                  ? 'Event Operations & Allocation Oversight'
+                  : 'Strategic Event Lifecycle, Client Pitching & Scheduling'}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex w-full items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm sm:w-64 lg:w-72">
+              <Search className="size-4 text-muted-foreground" aria-hidden="true" />
+              <span className="sr-only">Search events, clients, venues, pitches</span>
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search events, clients, pitches..."
+                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              />
+            </label>
+            {!isProjectManagerLite && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingPitch(null)
+                  setPitchModalOpen(true)
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3.5 py-2 text-xs font-semibold text-primary transition hover:bg-primary/20 cursor-pointer"
+              >
+                <Sparkles className="size-3.5" />
+                <span className="hidden sm:inline">New Client Pitch</span>
+                <span className="sm:hidden">Pitch</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveRegisterEvent(null)
+                setRegisterDrawerMode('create')
+                setRegisterDrawerOpen(true)
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow transition hover:opacity-90 cursor-pointer"
+            >
+              <Plus className="size-3.5" />
+              <span className="hidden sm:inline">Register Event</span>
+              <span className="sm:hidden">Event</span>
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <OfflineBanner />
+
+      {activeEvent ? (
+        isProjectManagerLite ? (
           <ProjectManagerLiteEventDetail
             event={activeEvent}
             staff={staff}
@@ -123,73 +210,25 @@ export function ProjectManagerLegacyPage() {
               setRegisterDrawerOpen(true)
             }}
           />
-
-          <RegisterEventDrawer
-            open={registerDrawerOpen}
-            onClose={() => {
-              setRegisterDrawerOpen(false)
-              setActiveRegisterEvent(null)
+        ) : (
+          <ProjectManagerEventWorkspace
+            event={activeEvent}
+            staff={staff}
+            procurement={procurement}
+            damageExceptions={damageExceptions}
+            pitches={pitches}
+            assignedPmName={adminName || 'Project Manager'}
+            onBack={() => setSelectedEventId(null)}
+            onEditRecord={(ev) => {
+              setActiveRegisterEvent(ev)
+              setRegisterDrawerMode('edit')
+              setRegisterDrawerOpen(true)
             }}
-            event={activeRegisterEvent}
-            mode={registerDrawerMode}
+            onOpenCanvas={() => navigate('canvas')}
           />
-        </div>
-      )
-    }
-
-    return (
-      <div className="min-h-screen bg-background text-foreground">
-        <OfflineBanner />
-        <ProjectManagerEventWorkspace
-          event={activeEvent}
-          staff={staff}
-          procurement={procurement}
-          damageExceptions={damageExceptions}
-          pitches={pitches}
-          assignedPmName={adminName || 'Project Manager'}
-          onBack={() => setSelectedEventId(null)}
-          onEditRecord={(ev) => {
-            setActiveRegisterEvent(ev)
-            setRegisterDrawerMode('edit')
-            setRegisterDrawerOpen(true)
-          }}
-          onOpenCanvas={() => navigate('canvas')}
-        />
-
-        <RegisterEventDrawer
-          open={registerDrawerOpen}
-          onClose={() => {
-            setRegisterDrawerOpen(false)
-            setActiveRegisterEvent(null)
-          }}
-          event={activeRegisterEvent}
-          mode={registerDrawerMode}
-        />
-      </div>
-    )
-  }
-
-  // Otherwise, render the PM Command Center Dashboard
-  return (
-    <div className="min-h-screen bg-background text-foreground pb-20">
-      <OfflineBanner />
-
-      {/* Top Header & Search Bar */}
-      <ProjectManagerHeader
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onNewPitch={() => {
-          setEditingPitch(null)
-          setPitchModalOpen(true)
-        }}
-        onRegisterEvent={() => {
-          setActiveRegisterEvent(null)
-          setRegisterDrawerMode('create')
-          setRegisterDrawerOpen(true)
-        }}
-      />
-
-      <main className="max-w-[94rem] mx-auto px-6 sm:px-8 py-8 flex flex-col gap-8">
+        )
+      ) : (
+        <div className="flex flex-col gap-8 pb-12">
         {/* Top KPI Metrics Strip */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="rounded-2xl border border-border/80 bg-card/70 p-4 shadow-sm backdrop-blur-sm">
@@ -278,26 +317,30 @@ export function ProjectManagerLegacyPage() {
         />
 
         {/* Master Calendar */}
-        <ProjectManagerMasterCalendar
-          events={events}
-          selectedDate={selectedCalendarDate}
-          onSelectDate={setSelectedCalendarDate}
-          onOpenEvent={(id) => setSelectedEventId(id)}
-        />
+        <div id="pm-calendar-section">
+          <ProjectManagerMasterCalendar
+            events={events}
+            selectedDate={selectedCalendarDate}
+            onSelectDate={setSelectedCalendarDate}
+            onOpenEvent={(id) => setSelectedEventId(id)}
+          />
+        </div>
 
         {/* My / Assigned Events Section */}
-        <ProjectManagerEventsList
-          events={displayedEvents}
-          staff={staff}
-          procurement={procurement}
-          assignedPmName={adminName || 'Project Manager'}
-          searchQuery={searchQuery}
-          onOpenEvent={(id) => setSelectedEventId(id)}
-        />
+        <div id="pm-events-section">
+          <ProjectManagerEventsList
+            events={displayedEvents}
+            staff={staff}
+            procurement={procurement}
+            assignedPmName={adminName || 'Project Manager'}
+            searchQuery={searchQuery}
+            onOpenEvent={(id) => setSelectedEventId(id)}
+          />
+        </div>
 
         {/* Client Pitching Summary Section */}
         {!isProjectManagerLite && (
-          <>
+          <div id="pm-pitches-section">
             {pitchesError && (
               <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-xs font-semibold text-rose-700 dark:text-rose-300 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -327,9 +370,10 @@ export function ProjectManagerLegacyPage() {
               }}
               onConvertToEvent={handleConvertToEvent}
             />
-          </>
+          </div>
         )}
-      </main>
+      </div>
+    )}
 
       {/* Client Pitch Modal */}
       {!isProjectManagerLite && (
@@ -447,7 +491,7 @@ export function ProjectManagerLegacyPage() {
         event={activeRegisterEvent}
         mode={registerDrawerMode}
       />
-    </div>
+    </ExecutiveShell>
   )
 }
 

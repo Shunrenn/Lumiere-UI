@@ -114,7 +114,8 @@ function getAuthHeaders(): HeadersInit {
  * fallback that is never sent as persisted Event truth.
  */
 export function mapEventResponseToPortalEvent(dto: EventResponseDto, index = 0): PortalEvent {
-  const eventTitle = dto.name || dto.title || 'Untitled Event'
+  const eventId = dto.id || (dto as any).eventId || (dto as any).EventId || ''
+  const eventTitle = dto.name || (dto as any).eventName || dto.title || 'Untitled Event'
   const rawDate = dto.dateOfEvent || dto.targetDate
   let eventDate = '2026-09-20'
   if (rawDate) {
@@ -129,10 +130,10 @@ export function mapEventResponseToPortalEvent(dto: EventResponseDto, index = 0):
     }
   }
 
-  const shortRef = dto.id ? dto.id.slice(0, 4).toUpperCase() : String(145 + index)
+  const shortRef = eventId ? eventId.slice(0, 4).toUpperCase() : String(145 + index)
 
   return {
-    id: dto.id,
+    id: eventId,
     refId: `PRT-2026-${shortRef}`,
     title: eventTitle,
     client: 'Client TBD', // Presentation-only; not persisted to backend Event model
@@ -445,7 +446,7 @@ export async function updateEventApi(
     clearTimeout(timeoutId)
 
     if (res.ok) {
-      const raw: EventResponseDto = await res.json()
+      const raw: EventResponseDto = res.status === 204 ? ({} as any) : await res.json().catch(() => ({}))
       const event = mapEventResponseToPortalEvent(raw)
       return { success: true, kind: 'success', event, raw }
     }
