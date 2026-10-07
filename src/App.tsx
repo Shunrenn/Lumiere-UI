@@ -197,14 +197,13 @@ function Router() {
   }
 
   // Client-side role guard for Project Manager:
-  // PM is restricted to project manager dashboard and design canvas oversight surfaces.
+  // Full PM uses its own account shell; planner tools remain in the planner account.
   // PM cannot mount Admin/Executive operational pages (security-audit, workforce, rbac, executive dashboard/logs).
   if (isProjectManager) {
     switch (route) {
       case 'canvas':
-        return <DesignCanvasHubPage />
       case 'canvas-workspace':
-        return <CanvasWorkspacePage />
+        return <UnauthorizedRedirect canonicalRoute="project-manager" />
       case 'project-manager':
       default:
         return <ProjectManagerDashboardPage />
@@ -359,7 +358,10 @@ function Gate() {
     (searchParams.has('highlight') || Boolean(window.history.state?.highlight))
 
   let initialRoute: Route
-  if (hasWorkforceHighlight && canAccessRoute(currentUser, 'workforce', canAccessAssetInventory)) {
+  if (currentUser?.role === 'Project Manager') {
+    // Canonicalize old PM deep links before mounting the navigation provider.
+    initialRoute = 'project-manager'
+  } else if (hasWorkforceHighlight && canAccessRoute(currentUser, 'workforce', canAccessAssetInventory)) {
     initialRoute = 'workforce'
   } else if (candidateRoute && canAccessRoute(currentUser, candidateRoute, canAccessAssetInventory)) {
     initialRoute = candidateRoute
