@@ -504,27 +504,27 @@ export function useCatalogAssets(): CatalogAsset[] {
     let active = true
     fetchAssetsApi().then((items) => {
       if (!active || !items.length) return
-      const mapped: CatalogAsset[] = items.map((raw, idx) => ({
-        id: raw.id || `cat-${idx}`,
-        assetId: raw.assetId || `LM-AST-${1000 + idx}`,
+      const mapped: CatalogAsset[] = items.map((raw: any, idx: number) => ({
+        id: String(raw.id || raw.assetId || `cat-${idx}`),
+        assetId: String(raw.assetId || `LM-${(raw.category || 'AS').slice(0, 2).toUpperCase()}-${1000 + idx}`),
         name: raw.name || 'Unnamed Asset',
         itemCallName: raw.itemCallName || raw.name || 'Asset',
         category: (raw.category as AssetCategory) || 'Stockroom Assets',
         subCategory: raw.subCategory || 'General',
         description: raw.description || '',
-        status: (raw.status as AssetStatus) || 'Available',
-        image: raw.image || '',
+        status: (raw.assetState || raw.status || 'Available') as AssetStatus,
+        image: raw.photoUrl || raw.catalogPhotoUrl || raw.image || '',
         unit: raw.unit || 'pcs',
         dimensions: raw.dimensions || { height: '—', width: '—', depth: '—', weight: '—' },
         material: raw.material || 'Standard',
-        purchaseCost: raw.purchaseCost || 0,
-        costPerUnit: raw.costPerUnit || 0,
-        dateAdded: raw.dateAdded || new Date().toISOString().slice(0, 10),
+        purchaseCost: raw.cost ?? raw.originalValue ?? raw.purchaseCost ?? 0,
+        costPerUnit: raw.cost ?? raw.costPerUnit ?? 0,
+        dateAdded: raw.dateAdded || raw.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10),
         primaryVendorId: raw.primaryVendorId || '',
-        currentStock: raw.currentStock,
-        threshold: raw.threshold,
-        criticalThreshold: raw.criticalThreshold,
-        ceilingCap: raw.ceilingCap,
+        currentStock: typeof raw.quantity === 'number' ? raw.quantity : (raw.currentStock ?? raw.baseCount ?? 0),
+        threshold: raw.threshold ?? 5,
+        criticalThreshold: raw.criticalThreshold ?? 2,
+        ceilingCap: raw.ceilingCap ?? 100,
       }))
       // API records replace only matching IDs. The local catalog remains usable
       // during an unavailable or partial API response.
@@ -552,7 +552,15 @@ export function addCatalogAsset(asset: CatalogAsset): CatalogAsset {
   const existing = getCatalogAssets()
   cachedCatalog = [asset, ...existing]
   publishCatalog()
-  void createAssetApi(asset)
+  createAssetApi(asset).then((res) => {
+    if (res && ((res as any).assetId || (res as any).id)) {
+      const serverId = String((res as any).assetId || (res as any).id)
+      cachedCatalog = (cachedCatalog || existing).map((a) => (a.id === asset.id ? { ...a, id: serverId } : a))
+      publishCatalog()
+    }
+  }).catch((err) => {
+    console.error('Failed to create asset in backend:', err)
+  })
   return asset
 }
 
