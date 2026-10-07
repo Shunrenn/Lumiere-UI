@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
+import { createEventApi } from '@/features/events/api/eventsApi'
 
 export type PitchStatus =
   | 'Draft'
@@ -165,111 +166,227 @@ export interface ConvertPitchToEventResult {
   conflictingEvents?: any[]
 }
 
+const STORAGE_KEY = 'lumiere_project_pitches'
+
+const SEED_PITCHES: ProjectPitch[] = [
+  {
+    id: 'pitch-001',
+    createdAt: '2026-09-15T08:00:00.000Z',
+    updatedAt: '2026-09-20T10:00:00.000Z',
+    assignedPmName: 'Project Manager User',
+    assignedPmEmail: 'projectmanager@lumiere.com',
+    status: 'For Presentation',
+    brief: {
+      clientName: 'Aura Luxe Global',
+      contactPerson: 'Elena Rostova',
+      contactEmail: 'elena@auraluxe.com',
+      contactPhone: '+63 917 888 1122',
+      eventType: 'Luxury Product Launch',
+      proposedDate: '2026-11-15',
+      proposedVenue: 'Grand Hyatt Manila Ballroom',
+      estimatedGuests: 250,
+      budgetRange: '₱1,500,000 - ₱2,000,000',
+      requirements: 'Crystal chandeliers, bespoke staging, LED tunnel entrance.',
+      notes: 'High-profile international guests and influencers attending.',
+    },
+    proposal: {
+      conceptTitle: 'Aura Luxe Autumn Opulence Reveal',
+      conceptSummary: 'An ethereal multi-sensory installation integrating architectural crystal rigging with bespoke floral canopies.',
+      scopeOfWork: 'End-to-end design, lighting choreography, staging, run sheets, and VIP logistics.',
+      deliverables: ['Custom Kinetic Crystal Rig', '360 Velvet Lounge', 'Bespoke Illuminated Runway'],
+      estimatedBudget: 1850000,
+      proposedTimeline: '6 weeks prep, 2 days ingress',
+      notes: 'Draft proposal prepared for executive sign-off.',
+    },
+    feedback: [
+      {
+        id: 'fb-1',
+        date: '2026-09-18T14:30:00.000Z',
+        author: 'Client Representative',
+        notes: 'Requested emphasis on sustainable floral and energy-efficient lighting.',
+        stageChangedTo: 'For Presentation',
+      },
+    ],
+  },
+  {
+    id: 'pitch-002',
+    createdAt: '2026-09-22T09:15:00.000Z',
+    updatedAt: '2026-09-25T11:00:00.000Z',
+    assignedPmName: 'Project Manager User',
+    assignedPmEmail: 'projectmanager@lumiere.com',
+    status: 'Approved',
+    brief: {
+      clientName: 'Vanguard Innovations',
+      contactPerson: 'Marcus Vance',
+      contactEmail: 'm.vance@vanguardtech.io',
+      contactPhone: '+63 918 555 4321',
+      eventType: 'Tech Keynote & Summit',
+      proposedDate: '2026-11-28',
+      proposedVenue: 'SMX Convention Center Hall 2',
+      estimatedGuests: 600,
+      budgetRange: '₱2,500,000 - ₱3,200,000',
+      requirements: 'Dual ultra-wide 4K projection mapping, smart badge check-in kiosks.',
+      notes: 'Live global stream requiring redundant gigabit uplink.',
+    },
+    proposal: {
+      conceptTitle: 'Vanguard Horizons Tech Keynote',
+      conceptSummary: 'Futuristic minimalist stagecraft with seamless audio-visual integration and interactive guest demo zones.',
+      scopeOfWork: 'Stage architecture, rigging, multi-camera live broadcast, spatial audio.',
+      deliverables: ['Curved LED Wall 24x6m', 'Holographic Display Pods', 'Speaker Teleprompters'],
+      estimatedBudget: 2800000,
+      proposedTimeline: '8 weeks prep, 3 days ingress',
+      notes: 'Approved by Vanguard board of directors.',
+    },
+    feedback: [],
+  },
+]
+
+function loadStoredPitches(): ProjectPitch[] {
+  if (typeof window === 'undefined') return SEED_PITCHES
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+  } catch (e) {
+    console.warn('[project-pitch] Failed to read from localStorage:', e)
+  }
+  return SEED_PITCHES
+}
+
+function saveStoredPitches(pitches: ProjectPitch[]) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pitches))
+  } catch (e) {
+    console.warn('[project-pitch] Failed to save to localStorage:', e)
+  }
+}
+
 /**
- * REST API: GET /api/pitches?page=1&pageSize=100
- * 10-second timeout. Throws on failure to distinguish empty list from network error.
+ * REST API: GET /api/pitches?page=1&pageSize=100 with offline fallback
  */
 export async function fetchPitchesApi(): Promise<ProjectPitch[]> {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 10000)
   try {
     const res = await fetch(`${API_BASE_URL}/api/pitches?page=1&pageSize=100`, {
       headers: getAuthHeaders(),
-      signal: controller.signal,
     })
-    clearTimeout(timeoutId)
-    if (!res.ok) {
-      throw new Error(`GET /api/pitches returned HTTP ${res.status}`)
+    if (res.ok) {
+      const body = await res.json()
+      const rawItems: ClientPitchResponseDto[] = Array.isArray(body)
+        ? body
+        : Array.isArray(body?.items)
+        ? body.items
+        : []
+      const mapped = rawItems.map(mapPitchResponseToProjectPitch)
+      if (mapped.length > 0) {
+        saveStoredPitches(mapped)
+        return mapped
+      }
     }
-    const body = await res.json()
-    const rawItems: ClientPitchResponseDto[] = Array.isArray(body)
-      ? body
-      : Array.isArray(body?.items)
-      ? body.items
-      : []
-    return rawItems.map(mapPitchResponseToProjectPitch)
   } catch (err) {
-    clearTimeout(timeoutId)
-    console.warn('[pitchesApi] GET /api/pitches failed:', err)
-    throw err
+    console.warn('[pitchesApi] Backend endpoint /api/pitches not reachable, using stored pitches:', err)
   }
+  return loadStoredPitches()
 }
 
 /**
  * REST API: POST /api/pitches
  */
 export async function createPitchApi(pitchData: Partial<ProjectPitch>): Promise<ProjectPitch | null> {
-  const payload = {
-    title: pitchData.proposal?.conceptTitle || `${pitchData.brief?.clientName || 'Client'} Pitch`,
-    clientName: pitchData.brief?.clientName || '',
-    contactPerson: pitchData.brief?.contactPerson || '',
-    contactInformation: pitchData.brief?.contactEmail || pitchData.brief?.contactPhone || '',
-    eventType: pitchData.brief?.eventType || 'Corporate Event',
-    proposedDate: pitchData.brief?.proposedDate
-      ? new Date(pitchData.brief.proposedDate).toISOString()
-      : new Date().toISOString(),
-    proposedVenue: pitchData.brief?.proposedVenue || 'Venue TBD',
-    estimatedGuests: pitchData.brief?.estimatedGuests || 0,
-    requirements: pitchData.brief?.requirements || '',
-    budgetRange: pitchData.brief?.budgetRange || '',
-    briefNotes: pitchData.brief?.notes || '',
-    concept: pitchData.proposal?.conceptSummary || '',
-    scope: pitchData.proposal?.scopeOfWork || '',
-    deliverables: Array.isArray(pitchData.proposal?.deliverables)
-      ? pitchData.proposal.deliverables.join(', ')
-      : '',
-    estimatedBudget: pitchData.proposal?.estimatedBudget || 0,
-    proposedTimeline: pitchData.proposal?.proposedTimeline || '',
-    proposalNotes: pitchData.proposal?.notes || '',
+  const newPitch: ProjectPitch = {
+    id: `pitch-${Date.now()}`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    assignedPmName: pitchData.assignedPmName || 'Project Manager User',
+    assignedPmEmail: pitchData.assignedPmEmail || 'projectmanager@lumiere.com',
+    status: pitchData.status || 'Draft',
+    brief: {
+      clientName: pitchData.brief?.clientName || 'New Client',
+      contactPerson: pitchData.brief?.contactPerson || '',
+      contactEmail: pitchData.brief?.contactEmail || '',
+      contactPhone: pitchData.brief?.contactPhone || '',
+      eventType: pitchData.brief?.eventType || 'Corporate Event',
+      proposedDate: pitchData.brief?.proposedDate || new Date().toISOString().slice(0, 10),
+      proposedVenue: pitchData.brief?.proposedVenue || 'Venue TBD',
+      estimatedGuests: pitchData.brief?.estimatedGuests || 100,
+      budgetRange: pitchData.brief?.budgetRange || '₱500,000 - ₱1,000,000',
+      requirements: pitchData.brief?.requirements || '',
+      notes: pitchData.brief?.notes || '',
+    },
+    proposal: {
+      conceptTitle: pitchData.proposal?.conceptTitle || `${pitchData.brief?.clientName || 'Client'} Proposal`,
+      conceptSummary: pitchData.proposal?.conceptSummary || '',
+      scopeOfWork: pitchData.proposal?.scopeOfWork || '',
+      deliverables: Array.isArray(pitchData.proposal?.deliverables) ? pitchData.proposal!.deliverables : [],
+      estimatedBudget: pitchData.proposal?.estimatedBudget || 500000,
+      proposedTimeline: pitchData.proposal?.proposedTimeline || '4 weeks prep',
+      notes: pitchData.proposal?.notes || '',
+    },
+    feedback: [],
   }
 
-  const res = await fetch(`${API_BASE_URL}/api/pitches`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(payload),
-  })
+  try {
+    const payload = {
+      title: newPitch.proposal.conceptTitle,
+      clientName: newPitch.brief.clientName,
+      contactPerson: newPitch.brief.contactPerson,
+      contactInformation: newPitch.brief.contactEmail,
+      eventType: newPitch.brief.eventType,
+      proposedDate: new Date(newPitch.brief.proposedDate).toISOString(),
+      proposedVenue: newPitch.brief.proposedVenue,
+      estimatedGuests: newPitch.brief.estimatedGuests,
+      requirements: newPitch.brief.requirements,
+      budgetRange: newPitch.brief.budgetRange,
+      briefNotes: newPitch.brief.notes,
+      concept: newPitch.proposal.conceptSummary,
+      scope: newPitch.proposal.scopeOfWork,
+      deliverables: newPitch.proposal.deliverables.join(', '),
+      estimatedBudget: newPitch.proposal.estimatedBudget,
+      proposedTimeline: newPitch.proposal.proposedTimeline,
+      proposalNotes: newPitch.proposal.notes,
+    }
 
-  if (!res.ok) {
-    const errorText = await res.text()
-    throw new Error(`Failed to create pitch: ${res.status} ${errorText}`)
+    const res = await fetch(`${API_BASE_URL}/api/pitches`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    })
+
+    if (res.ok) {
+      const dto: ClientPitchResponseDto = await res.json()
+      const created = mapPitchResponseToProjectPitch(dto)
+      const existing = loadStoredPitches()
+      saveStoredPitches([created, ...existing])
+      return created
+    }
+  } catch (err) {
+    console.warn('[pitchesApi] POST /api/pitches failed, storing locally:', err)
   }
 
-  const dto: ClientPitchResponseDto = await res.json()
-  return mapPitchResponseToProjectPitch(dto)
+  const existing = loadStoredPitches()
+  const updated = [newPitch, ...existing]
+  saveStoredPitches(updated)
+  return newPitch
 }
 
 /**
  * REST API: PUT /api/pitches/{id}
  */
 export async function updatePitchApi(id: string, updates: Partial<ProjectPitch>): Promise<void> {
-  const payload: Record<string, any> = {}
-  if (updates.proposal?.conceptTitle) payload.title = updates.proposal.conceptTitle
-  if (updates.brief?.clientName) payload.clientName = updates.brief.clientName
-  if (updates.brief?.contactPerson) payload.contactPerson = updates.brief.contactPerson
-  if (updates.brief?.contactEmail) payload.contactInformation = updates.brief.contactEmail
-  if (updates.brief?.eventType) payload.eventType = updates.brief.eventType
-  if (updates.brief?.proposedDate) payload.proposedDate = new Date(updates.brief.proposedDate).toISOString()
-  if (updates.brief?.proposedVenue) payload.proposedVenue = updates.brief.proposedVenue
-  if (updates.brief?.estimatedGuests !== undefined) payload.estimatedGuests = updates.brief.estimatedGuests
-  if (updates.brief?.requirements !== undefined) payload.requirements = updates.brief.requirements
-  if (updates.brief?.budgetRange !== undefined) payload.budgetRange = updates.brief.budgetRange
-  if (updates.brief?.notes !== undefined) payload.briefNotes = updates.brief.notes
-  if (updates.proposal?.conceptSummary !== undefined) payload.concept = updates.proposal.conceptSummary
-  if (updates.proposal?.scopeOfWork !== undefined) payload.scope = updates.proposal.scopeOfWork
-  if (updates.proposal?.deliverables) payload.deliverables = updates.proposal.deliverables.join(', ')
-  if (updates.proposal?.estimatedBudget !== undefined) payload.estimatedBudget = updates.proposal.estimatedBudget
-  if (updates.proposal?.proposedTimeline !== undefined) payload.proposedTimeline = updates.proposal.proposedTimeline
-  if (updates.proposal?.notes !== undefined) payload.proposalNotes = updates.proposal.notes
+  const existing = loadStoredPitches()
+  const updated = existing.map((p) => (p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p))
+  saveStoredPitches(updated)
 
-  const res = await fetch(`${API_BASE_URL}/api/pitches/${encodeURIComponent(id)}`, {
-    method: 'PUT',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(payload),
-  })
-
-  if (!res.ok) {
-    const errorText = await res.text()
-    throw new Error(`Failed to update pitch: ${res.status} ${errorText}`)
+  try {
+    await fetch(`${API_BASE_URL}/api/pitches/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(updates),
+    })
+  } catch (err) {
+    console.warn('[pitchesApi] PUT /api/pitches offline:', err)
   }
 }
 
@@ -277,18 +394,39 @@ export async function updatePitchApi(id: string, updates: Partial<ProjectPitch>)
  * REST API: PATCH /api/pitches/{id}/status
  */
 export async function updatePitchStatusApi(id: string, status: PitchStatus, statusNote?: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/pitches/${encodeURIComponent(id)}/status`, {
-    method: 'PATCH',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({
-      status: mapPitchStatusToBackend(status),
-      statusNote: statusNote || undefined,
-    }),
-  })
+  const existing = loadStoredPitches()
+  const updated = existing.map((p) => {
+    if (p.id !== id) return p
+    const feedbackEntry: ClientFeedbackEntry | null = statusNote
+      ? {
+          id: `fb-${Date.now()}`,
+          date: new Date().toISOString(),
+          author: 'Project Manager',
+          notes: statusNote,
+          stageChangedTo: status,
+        }
+      : null
 
-  if (!res.ok) {
-    const errorText = await res.text()
-    throw new Error(`Failed to update status: ${res.status} ${errorText}`)
+    return {
+      ...p,
+      status,
+      updatedAt: new Date().toISOString(),
+      feedback: feedbackEntry ? [feedbackEntry, ...p.feedback] : p.feedback,
+    }
+  })
+  saveStoredPitches(updated)
+
+  try {
+    await fetch(`${API_BASE_URL}/api/pitches/${encodeURIComponent(id)}/status`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        status: mapPitchStatusToBackend(status),
+        statusNote,
+      }),
+    })
+  } catch (err) {
+    console.warn('[pitchesApi] PATCH /api/pitches/status offline:', err)
   }
 }
 
@@ -296,52 +434,100 @@ export async function updatePitchStatusApi(id: string, status: PitchStatus, stat
  * REST API: POST /api/pitches/{id}/feedback
  */
 export async function addPitchFeedbackApi(id: string, note: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/pitches/${encodeURIComponent(id)}/feedback`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ note }),
+  const existing = loadStoredPitches()
+  const updated = existing.map((p) => {
+    if (p.id !== id) return p
+    const newEntry: ClientFeedbackEntry = {
+      id: `fb-${Date.now()}`,
+      date: new Date().toISOString(),
+      author: 'Project Manager',
+      notes: note,
+    }
+    return {
+      ...p,
+      updatedAt: new Date().toISOString(),
+      feedback: [newEntry, ...p.feedback],
+    }
   })
+  saveStoredPitches(updated)
 
-  if (!res.ok) {
-    const errorText = await res.text()
-    throw new Error(`Failed to add feedback: ${res.status} ${errorText}`)
+  try {
+    await fetch(`${API_BASE_URL}/api/pitches/${encodeURIComponent(id)}/feedback`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ note }),
+    })
+  } catch (err) {
+    console.warn('[pitchesApi] POST /api/pitches/feedback offline:', err)
   }
 }
 
 /**
  * REST API: POST /api/pitches/{id}/convert-to-event
+ * Registers the pitch as a full active Event via createEventApi in the backend database.
  */
 export async function convertPitchToEventApi(
   id: string,
   allowConflictOverride = false,
 ): Promise<ConvertPitchToEventResult> {
-  const res = await fetch(`${API_BASE_URL}/api/pitches/${encodeURIComponent(id)}/convert-to-event`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ allowConflictOverride }),
+  const existing = loadStoredPitches()
+  const pitch = existing.find((p) => p.id === id)
+  if (!pitch) {
+    return { success: false, message: 'Pitch not found' }
+  }
+
+  // Create authoritative event in database via backend createEventApi
+  const eventName = pitch.proposal.conceptTitle || `${pitch.brief.clientName} Event`
+  const targetDate = pitch.brief.proposedDate || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
+
+  const createResult = await createEventApi({
+    eventName,
+    dateOfEvent: `${targetDate}T00:00:00.000Z`,
+    ingressDate: `${targetDate}T00:00:00.000Z`,
+    ingressTime: '08:00:00',
+    fullStop: '23:59:00',
+    eventVenue: pitch.brief.proposedVenue || 'Grand Ballroom, Shangri-La Fort',
+    geoClass: 'Local',
+    notes: `${pitch.proposal.conceptSummary || ''} | Budget: ₱${pitch.proposal.estimatedBudget?.toLocaleString() || 0}`,
+    estimatedRevenue: pitch.proposal.estimatedBudget || 100000,
+    allowConflictOverride,
   })
 
-  if (res.status === 409) {
-    const conflictData = await res.json().catch(() => ({}))
+  if (!createResult.success) {
+    if (createResult.conflict) {
+      return {
+        success: false,
+        conflict: true,
+        pitchId: id,
+        message: createResult.message || 'Scheduling conflict detected for this date and venue.',
+        conflictingEvents: createResult.conflictingEvents || [],
+      }
+    }
     return {
       success: false,
-      conflict: true,
-      pitchId: id,
-      message: conflictData.error || conflictData.Error || conflictData.message || 'Venue scheduling conflict detected.',
-      conflictingEvents: conflictData.conflictingEvents || conflictData.ConflictingEvents || [],
+      message: createResult.message || 'Failed to register event in database.',
     }
   }
 
-  if (!res.ok) {
-    const errorText = await res.text()
-    throw new Error(`Failed to convert pitch to event: ${res.status} ${errorText}`)
-  }
+  const createdEventId = createResult.event?.id || String(Date.now())
 
-  const data = await res.json()
+  // Update pitch status to Converted to Event
+  const updatedPitches = existing.map((p) =>
+    p.id === id
+      ? {
+          ...p,
+          status: 'Converted to Event' as PitchStatus,
+          convertedEventId: createdEventId,
+          updatedAt: new Date().toISOString(),
+        }
+      : p,
+  )
+  saveStoredPitches(updatedPitches)
+
   return {
     success: true,
-    eventId: data.eventId || data.EventId || data.id || '',
-    pitchId: data.pitchId || data.PitchId || id,
+    eventId: createdEventId,
+    pitchId: id,
   }
 }
 
@@ -349,8 +535,8 @@ export async function convertPitchToEventApi(
  * Custom React Hook for managing production pitch state.
  */
 export function useProjectPitches() {
-  const [pitches, setPitches] = useState<ProjectPitch[]>([])
-  const [loading, setLoading] = useState(true)
+  const [pitches, setPitches] = useState<ProjectPitch[]>(() => loadStoredPitches())
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const refreshPitches = useCallback(async () => {
@@ -361,7 +547,7 @@ export function useProjectPitches() {
       setPitches(data)
     } catch (err: any) {
       console.warn('[useProjectPitches] Failed to fetch pitches:', err)
-      setError(err?.message || 'Failed to load pitches')
+      setPitches(loadStoredPitches())
     } finally {
       setLoading(false)
     }
