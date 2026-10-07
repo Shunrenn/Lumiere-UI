@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarClock, LogOut, Menu, Moon, PackageSearch, ShieldAlert, Sun, User } from 'lucide-react'
+import {
+  CalendarClock,
+  LogOut,
+  Menu,
+  Moon,
+  PackageSearch,
+  ShieldAlert,
+  Sun,
+  Truck,
+  Hammer,
+  User,
+} from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { useNav } from '@/lib/nav'
 import { usePortal } from '@/lib/store'
@@ -7,13 +18,10 @@ import { useDarkMode } from '@/lib/theme'
 import { NotificationsBell, type NotificationEntry } from '@/components/NotificationsBell'
 import { AssetInformationModal, type Asset } from '@/components/AssetInformationModal'
 
-// Constant top bar for the Executive console: live date/time, the shared
-// notification bell (size="md", matching the Admin top-bar scale), and a
-// profile menu. Sits alongside the rail outside the scroll container so it
-// never scrolls with page content — mirrors AdminTopBar exactly, only
-// swapping the plain bell for the shared NotificationsBell.
+// Constant top bar for Executive and Warehouse Operations Manager consoles:
+// live date/time, scoped notifications bell with read status, and profile menu.
 export function ExecutiveTopBar({ onMenu }: { onMenu?: () => void }) {
-  const { adminName, adminRole, setConfirmLogout } = useAuth()
+  const { adminName, adminRole, setConfirmLogout, isExecutive } = useAuth()
   const { events, damageExceptions, inventory } = usePortal()
   const { navigate } = useNav()
   const { dark, toggle } = useDarkMode()
@@ -46,84 +54,170 @@ export function ExecutiveTopBar({ onMenu }: { onMenu?: () => void }) {
   })
   const timeLabel = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 
-  // Operational signals surfaced as notification entries for the shared bell.
+  // Role-scoped operational signals for the notifications bell
   const notifications = useMemo<NotificationEntry[]>(() => {
     const items: NotificationEntry[] = []
 
-    events
-      .filter((e) => e.status === 'Initialized' || e.status === 'On Hold')
-      .slice(0, 5)
-      .forEach((e) => {
-        items.push({
-          id: `ev-${e.id}`,
-          icon: CalendarClock,
-          color: 'text-sky-500',
-          text: `"${e.title}" is awaiting confirmation.`,
-          time: 'Event Operations',
-          unread: true,
-          onClick: () => navigate('registry', { kind: 'view-event', payload: { id: e.id } }),
+    if (isExecutive) {
+      // ═════════════════════════════════════════════════════════════════
+      // 1. EXECUTIVE NOTIFICATIONS & DIRECTORIES
+      // ═════════════════════════════════════════════════════════════════
+      
+      // Event Registry / Confirmation
+      events
+        .filter((e) => e.status === 'Initialized' || e.status === 'On Hold')
+        .slice(0, 4)
+        .forEach((e) => {
+          items.push({
+            id: `exec-ev-${e.id}`,
+            icon: CalendarClock,
+            color: 'text-sky-500',
+            text: `"${e.title}" is awaiting executive confirmation.`,
+            time: 'Event Registry',
+            unread: true,
+            onClick: () => navigate('registry', { kind: 'view-event', payload: { id: e.id } }),
+          })
         })
+
+      // Executive Settlements
+      events
+        .filter((e) => e.status === 'Completed')
+        .slice(0, 3)
+        .forEach((e) => {
+          items.push({
+            id: `exec-settle-${e.id}`,
+            icon: CalendarClock,
+            color: 'text-amber-500',
+            text: `"${e.title}" completed — ready for settlement review.`,
+            time: 'Executive Work Queue',
+            unread: true,
+            onClick: () => navigate('overview', { kind: 'view-event', payload: { id: e.id } }),
+          })
+        })
+
+      // Damage Review Sign-off
+      damageExceptions
+        .filter((d) => d.status === 'Pending Second Sign-off' || d.status === 'Held for Audit')
+        .slice(0, 3)
+        .forEach((d) => {
+          items.push({
+            id: `exec-dm-${d.id}`,
+            icon: ShieldAlert,
+            color: 'text-rose-500',
+            text: `Damage report ${d.logId || d.id.slice(0, 8)} (${d.assetName}) requires sign-off.`,
+            time: 'Damage Review',
+            unread: true,
+            onClick: () => navigate('damage', { kind: 'review-damage', payload: { id: d.id } }),
+          })
+        })
+
+      // Asset Inventory Allocations
+      inventory
+        .filter((i) => i.status === 'Critical Deficit')
+        .slice(0, 3)
+        .forEach((i) => {
+          items.push({
+            id: `exec-rs-${i.id}`,
+            icon: PackageSearch,
+            color: 'text-amber-500',
+            text: `${i.name} (${i.assetId || i.id}) is in critical stock deficit.`,
+            time: 'Asset Inventory',
+            unread: false,
+            onClick: () => navigate('inventory'),
+          })
+        })
+    } else {
+      // ═════════════════════════════════════════════════════════════════
+      // 2. WAREHOUSE OPERATIONS MANAGER (WOM) NOTIFICATIONS & DIRECTORIES
+      // ═════════════════════════════════════════════════════════════════
+
+      // Damage Validation queue awaiting WOM Verdict
+      damageExceptions
+        .filter((d) => d.status === 'Pending Verdict' || d.status === 'Held for Audit')
+        .slice(0, 4)
+        .forEach((d) => {
+          items.push({
+            id: `wom-dm-${d.id}`,
+            icon: ShieldAlert,
+            color: 'text-rose-500',
+            text: `Damage report ${d.logId || d.id.slice(0, 8)} (${d.assetName}) requires WOM verdict.`,
+            time: 'Damage Validation',
+            unread: true,
+            onClick: () => navigate('damage', { kind: 'review-damage', payload: { id: d.id } }),
+          })
+        })
+
+      // Upcoming Ingress & Event Schedule
+      events
+        .filter((e) => e.status === 'In Production' || e.status === 'Reserved' || e.status === 'Initialized')
+        .slice(0, 3)
+        .forEach((e) => {
+          items.push({
+            id: `wom-ev-${e.id}`,
+            icon: CalendarClock,
+            color: 'text-sky-500',
+            text: `"${e.title}" ingress scheduled at ${e.venue}.`,
+            time: 'Warehouse Dashboard',
+            unread: true,
+            onClick: () => navigate('overview', { kind: 'view-event', payload: { id: e.id } }),
+          })
+        })
+
+      // Replenishment & Stock Deficits
+      inventory
+        .filter((i) => i.status === 'Critical Deficit' || i.status === 'Low Stock')
+        .slice(0, 3)
+        .forEach((i) => {
+          items.push({
+            id: `wom-rep-${i.id}`,
+            icon: PackageSearch,
+            color: 'text-amber-500',
+            text: `${i.name} (${i.assetId || i.id}) is low on stock — review replenishment.`,
+            time: 'Replenishment & Deficits',
+            unread: true,
+            onClick: () => navigate('replenishment'),
+          })
+        })
+
+      // Dispatch & Logistics
+      items.push({
+        id: 'wom-dispatch-check',
+        icon: Truck,
+        color: 'text-emerald-500',
+        text: 'Vehicle assignments and gate pass manifests ready for dispatch review.',
+        time: 'Dispatch & Logistics',
+        unread: false,
+        onClick: () => navigate('dispatch'),
       })
 
-    damageExceptions
-      .filter((d) => d.status === 'Pending Verdict' || d.status === 'Held for Audit' || d.status === 'Pending Second Sign-off')
-      .slice(0, 5)
-      .forEach((d) => {
-        items.push({
-          id: `dm-${d.id}`,
-          icon: ShieldAlert,
-          color: 'text-rose-500',
-          text: `Damage report ${d.logId || d.id.slice(0, 8)} for ${d.assetName} needs a verdict.`,
-          time: 'Damage Validation',
-          unread: true,
-          onClick: () => navigate('damage', { kind: 'review-damage', payload: { id: d.id } }),
-        })
+      // Production & Fabrication
+      items.push({
+        id: 'wom-prod-check',
+        icon: Hammer,
+        color: 'text-amber-600',
+        text: 'Bespoke fabrication queue & workshop capacity timelines updated.',
+        time: 'Production & Fabrication',
+        unread: false,
+        onClick: () => navigate('production'),
       })
-
-    inventory
-      .filter((i) => i.status === 'Critical Deficit' || i.status === 'Low Stock')
-      .slice(0, 5)
-      .forEach((i) => {
-        items.push({
-          id: `rs-${i.id}`,
-          icon: PackageSearch,
-          color: 'text-amber-500',
-          text: `${i.name} (${i.assetId || i.id}) is running low on stock.`,
-          time: 'Asset Inventory',
-          unread: false,
-          onClick: () => {
-            setSelectedAsset({
-              id: i.id,
-              name: i.name,
-              description: i.description ?? i.category,
-              assetId: i.assetId || i.id,
-              dateAdded: i.dateAdded ?? new Date().toLocaleDateString(),
-              store: i.store ?? '—',
-              representative: i.representative ?? '—',
-              contact: i.contact ?? '—',
-              height: i.height ?? '0',
-              width: i.width ?? '0',
-              weight: i.weight ?? '0',
-              category: i.category,
-              tier: 'Standard',
-              fragile: i.fragile ?? false,
-              quantity: i.stock,
-              unit: i.unit ?? 'pcs',
-              cost: i.cost ?? 0,
-              costPerUnit: i.costPerUnit ?? 0,
-              image: i.image,
-            })
-          },
-        })
-      })
+    }
 
     return items
-  }, [events, damageExceptions, inventory, navigate])
+  }, [isExecutive, events, damageExceptions, inventory, navigate])
 
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-border bg-background px-5 sm:px-8 md:static">
       <div className="flex min-w-0 items-center gap-3">
-        {onMenu && <button type="button" onClick={onMenu} aria-label="Open Executive navigation" className="flex size-10 items-center justify-center rounded-full border border-border bg-background text-muted-foreground hover:bg-muted md:hidden"><Menu className="size-4" aria-hidden="true" /></button>}
+        {onMenu && (
+          <button
+            type="button"
+            onClick={onMenu}
+            aria-label="Open navigation"
+            className="flex size-10 items-center justify-center rounded-full border border-border bg-background text-muted-foreground hover:bg-muted md:hidden cursor-pointer"
+          >
+            <Menu className="size-4" aria-hidden="true" />
+          </button>
+        )}
         <p className="truncate text-[0.65rem] font-medium uppercase tracking-[0.12em] text-muted-foreground sm:text-xs sm:tracking-[0.15em]">
           {dateLabel} <span className="mx-1 text-border">|</span> {timeLabel}
         </p>
@@ -139,7 +233,7 @@ export function ExecutiveTopBar({ onMenu }: { onMenu?: () => void }) {
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             aria-label="Account menu"
-            className="flex size-10 items-center justify-center rounded-full border border-border bg-primary/15 text-primary transition-colors hover:bg-primary/25"
+            className="flex size-10 items-center justify-center rounded-full border border-border bg-primary/15 text-primary transition-colors hover:bg-primary/25 cursor-pointer"
           >
             <User className="size-4" aria-hidden="true" />
           </button>
@@ -147,7 +241,7 @@ export function ExecutiveTopBar({ onMenu }: { onMenu?: () => void }) {
           {menuOpen && (
             <div
               role="menu"
-              className="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-lg border border-border bg-card shadow-xl"
+              className="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-lg border border-border bg-card shadow-xl animate-in fade-in zoom-in-95 duration-100"
             >
               <div className="px-4 py-3">
                 <p className="truncate text-sm font-semibold text-card-foreground">{adminName}</p>
@@ -160,7 +254,7 @@ export function ExecutiveTopBar({ onMenu }: { onMenu?: () => void }) {
                   type="button"
                   role="menuitem"
                   onClick={toggle}
-                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-medium text-card-foreground transition-colors hover:bg-accent"
+                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-medium text-card-foreground transition-colors hover:bg-accent cursor-pointer"
                 >
                   {dark ? (
                     <Sun className="size-3.5" aria-hidden="true" />
@@ -176,7 +270,7 @@ export function ExecutiveTopBar({ onMenu }: { onMenu?: () => void }) {
                     setMenuOpen(false)
                     setConfirmLogout(true)
                   }}
-                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-medium text-destructive transition-colors hover:bg-accent"
+                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-medium text-destructive transition-colors hover:bg-accent cursor-pointer"
                 >
                   <LogOut className="size-3.5" aria-hidden="true" />
                   Sign out
@@ -197,4 +291,3 @@ export function ExecutiveTopBar({ onMenu }: { onMenu?: () => void }) {
     </header>
   )
 }
-

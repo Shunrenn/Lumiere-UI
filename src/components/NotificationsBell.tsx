@@ -48,6 +48,38 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  // Persistent read state for controlled / local notifications
+  const [readIds, setReadIds] = useState<Set<string>>(() => {
+    try {
+      const stored = sessionStorage.getItem('lumiere_read_notification_ids')
+      return stored ? new Set(JSON.parse(stored)) : new Set<string>()
+    } catch {
+      return new Set<string>()
+    }
+  })
+
+  const markIdAsRead = useCallback((id: string) => {
+    setReadIds((prev) => {
+      const next = new Set(prev)
+      next.add(id)
+      try {
+        sessionStorage.setItem('lumiere_read_notification_ids', JSON.stringify(Array.from(next)))
+      } catch {}
+      return next
+    })
+  }, [])
+
+  const markAllIdsAsRead = useCallback((ids: string[]) => {
+    setReadIds((prev) => {
+      const next = new Set(prev)
+      ids.forEach((id) => next.add(id))
+      try {
+        sessionStorage.setItem('lumiere_read_notification_ids', JSON.stringify(Array.from(next)))
+      } catch {}
+      return next
+    })
+  }, [])
+
   // Canonical state when no prop is provided
   const [canonicalItems, setCanonicalItems] = useState<NotificationDto[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle')
@@ -98,39 +130,40 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
     }
 
     window.addEventListener('lumiere:realtime_invalidation', handleInvalidation)
-    window.addEventListener('lumiere:realtime_reconnected', handleInvalidation)
-    window.addEventListener('lumiere:notification_invalidation', handleInvalidation)
     window.addEventListener('focus', handleFocus)
 
     return () => {
       clearInterval(intervalId)
       window.removeEventListener('lumiere:realtime_invalidation', handleInvalidation)
-      window.removeEventListener('lumiere:realtime_reconnected', handleInvalidation)
-      window.removeEventListener('lumiere:notification_invalidation', handleInvalidation)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [loadNotifications, isControlled])
+  }, [isControlled, loadNotifications])
 
-  // Click outside listener
+  // Outside click listener for the popover
   useEffect(() => {
     if (!open) return
-    function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open])
 
-  // Derived notification items
+  // Compute unified display items
   const displayItems = isControlled
-    ? propNotifications!
+    ? (propNotifications ?? []).map((n) => ({
+        ...n,
+        unread: n.unread && !readIds.has(n.id),
+      }))
     : canonicalItems.map((n) => ({
         id: n.id,
         text: n.message ? `${n.title}: ${n.message}` : n.title,
         title: n.title,
         message: n.message,
         time: formatRelativeTime(n.createdAt),
-        unread: !n.isRead,
+        unread: !n.isRead && !readIds.has(n.id),
         raw: n,
       }))
 
@@ -146,16 +179,24 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
 
   const scopedItems = isControlled
     ? displayItems
-    : displayItems.filter((item: any) => isInPeriod(item.raw.createdAt, period))
+    : displayItems.filter((item: any) => isInPeriod(item.raw?.createdAt || new Date().toISOString(), period))
   const unreadCount = displayItems.filter((n) => n.unread).length
   const isMd = size === 'md'
 
   const handleMarkOne = async (item: any) => {
+    markIdAsRead(item.id)
+    setOpen(false)
+    setShowAll(false)
+
     if (isControlled) {
       item.onClick?.()
       return
     }
-    if (!item.unread) return
+
+    if (!item.unread) {
+      item.onClick?.()
+      return
+    }
 
     setActionError(null)
     const success = await markNotificationReadApi(item.id)
@@ -166,10 +207,16 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
     } else {
       setActionError('Failed to mark notification as read.')
     }
+    item.onClick?.()
   }
 
   const handleMarkAll = async () => {
-    if (isControlled || isMarkingAll) return
+    const allCurrentIds = displayItems.map((n) => n.id)
+    markAllIdsAsRead(allCurrentIds)
+
+    if (isControlled) return
+
+    if (isMarkingAll) return
     setIsMarkingAll(true)
     setActionError(null)
 
@@ -186,47 +233,40 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
 
   return (
     <div className="relative" ref={containerRef}>
+      {/* Trigger Button */}
       <button
         type="button"
-        aria-label="Notifications"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-haspopup="true"
         aria-expanded={open}
-        onClick={() => {
-          setOpen((o) => !o)
-          if (!open && !isControlled && status !== 'ready') {
-            loadNotifications(false)
-          }
-        }}
+        aria-label="Notifications"
+        title="View Notifications"
         className={cn(
-          'relative flex items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/50 hover:text-foreground cursor-pointer',
-          isMd ? 'size-10' : 'size-8',
+          'relative flex items-center justify-center rounded-full border border-border bg-background transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer',
+          isMd ? 'size-10' : 'size-9',
+          open && 'border-primary/50 bg-accent text-foreground'
         )}
       >
-        <Bell className="size-4" aria-hidden="true" />
+        <Bell className={cn(isMd ? 'size-4' : 'size-4', unreadCount > 0 ? 'text-primary' : 'text-muted-foreground')} />
         {unreadCount > 0 && (
           <span
-            data-testid="notifications-unread-badge"
-            className={cn(
-              'absolute rounded-full bg-primary flex items-center justify-center font-bold text-primary-foreground',
-              isMd ? 'right-1 top-1 min-w-4 h-4 px-1 text-[0.55rem]' : '-right-1 -top-1 min-w-3.5 h-3.5 px-0.5 text-[0.5rem]',
-            )}
-            aria-hidden="true"
+            className="absolute -right-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[0.6rem] font-bold text-primary-foreground ring-2 ring-background animate-in zoom-in-75 duration-150"
+            aria-label={`${unreadCount} unread notifications`}
           >
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>
 
+      {/* Popover Card */}
       {open && (
         <div
-          className={cn(
-            'absolute right-0 z-50 w-80 sm:w-96 rounded-xl border border-border bg-popover shadow-2xl overflow-hidden',
-            isMd ? 'top-12' : 'top-10',
-          )}
           role="menu"
-          aria-label="Notifications"
+          aria-label="Notifications list"
+          className="absolute right-0 z-50 mt-2 w-80 sm:w-96 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl animate-in fade-in zoom-in-95 duration-100"
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-2.5">
+          <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3">
             <div className="flex items-center gap-2">
               <span className="font-serif text-xs font-semibold text-popover-foreground">Notifications</span>
               {unreadCount > 0 && (
@@ -235,7 +275,7 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
                 </span>
               )}
             </div>
-            {!isControlled && unreadCount > 0 && (
+            {unreadCount > 0 && (
               <button
                 type="button"
                 onClick={handleMarkAll}
@@ -284,6 +324,7 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
             ) : (
               scopedItems.slice(0, 5).map((n: any) => {
                 const isUnread = Boolean(n.unread)
+                const IconComponent = n.icon
                 return (
                   <button
                     key={n.id}
@@ -291,17 +332,20 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
                     role="menuitem"
                     onClick={() => handleMarkOne(n)}
                     className={cn(
-                      'flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent focus:bg-accent focus:outline-none cursor-pointer',
+                      'flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent focus:bg-accent focus:outline-none cursor-pointer group',
                       isUnread ? 'bg-primary/5 hover:bg-primary/10' : 'bg-transparent',
                     )}
                   >
                     <span
                       className={cn(
-                        'mt-1 size-2 shrink-0 rounded-full',
-                        isUnread ? 'bg-primary ring-2 ring-primary/20' : 'bg-transparent border border-muted-foreground/30',
+                        'mt-1 size-2 shrink-0 rounded-full transition-all',
+                        isUnread ? 'bg-primary ring-2 ring-primary/20 scale-110' : 'bg-transparent border border-muted-foreground/30',
                       )}
                       aria-hidden="true"
                     />
+                    {IconComponent && (
+                      <IconComponent className={cn('mt-0.5 size-4 shrink-0', n.color || 'text-primary')} />
+                    )}
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       {n.title ? (
                         <>
@@ -319,7 +363,7 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
                           {n.text}
                         </p>
                       )}
-                      <span className="text-[0.55rem] uppercase tracking-wider text-muted-foreground/80 mt-1">
+                      <span className="text-[0.55rem] uppercase tracking-wider text-muted-foreground/80 mt-0.5">
                         {n.time}
                       </span>
                     </div>
@@ -328,9 +372,9 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
               })
             )}
           </div>
-          <button type="button" onClick={() => setShowAll(true)} className="flex w-full items-center justify-center border-t border-border px-4 py-3 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-primary hover:bg-accent">
+          <button type="button" onClick={() => setShowAll(true)} className="flex w-full items-center justify-center border-t border-border px-4 py-3 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-primary hover:bg-accent cursor-pointer">
               View All Notifications
-            </button>
+          </button>
         </div>
       )}
 
@@ -339,13 +383,13 @@ export function NotificationsBell({ notifications: propNotifications, size = 'sm
           <div className="flex max-h-[min(720px,calc(100vh-1.5rem))] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div><h2 id="notifications-dialog-title" className="font-serif text-lg font-semibold text-popover-foreground">Notifications</h2><p className="mt-0.5 text-xs text-muted-foreground">Only notifications authorized for the signed-in account are shown.</p></div>
-              <button type="button" onClick={() => setShowAll(false)} className="flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Close notifications"><X className="size-4" /></button>
+              <button type="button" onClick={() => setShowAll(false)} className="flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer" aria-label="Close notifications"><X className="size-4" /></button>
             </div>
             <div className="flex gap-2 border-b border-border px-5 py-3">
-              {(['today', 'week', 'all'] as const).map((value) => <button key={value} type="button" onClick={() => setPeriod(value)} className={cn('rounded-full px-3 py-1.5 text-xs font-semibold capitalize', period === value ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}>{value === 'week' ? 'This Week' : value}</button>)}
+              {(['today', 'week', 'all'] as const).map((value) => <button key={value} type="button" onClick={() => setPeriod(value)} className={cn('rounded-full px-3 py-1.5 text-xs font-semibold capitalize cursor-pointer', period === value ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}>{value === 'week' ? 'This Week' : value}</button>)}
             </div>
             <div className="min-h-0 overflow-y-auto divide-y divide-border">
-              {scopedItems.length === 0 ? <div className="px-5 py-14 text-center text-sm text-muted-foreground">No notifications for this period.</div> : scopedItems.map((n: any) => <button key={n.id} type="button" onClick={() => handleMarkOne(n)} className={cn('flex w-full items-start gap-3 px-5 py-4 text-left hover:bg-accent', n.unread && 'bg-primary/5')}><span className={cn('mt-1.5 size-2 shrink-0 rounded-full', n.unread ? 'bg-primary' : 'border border-muted-foreground/40')} /><span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-foreground">{n.title || n.text}</span>{n.message && <span className="mt-1 block text-xs text-muted-foreground">{n.message}</span>}<span className="mt-2 block text-[0.65rem] text-muted-foreground">{n.time}</span></span></button>)}
+              {scopedItems.length === 0 ? <div className="px-5 py-14 text-center text-sm text-muted-foreground">No notifications for this period.</div> : scopedItems.map((n: any) => <button key={n.id} type="button" onClick={() => handleMarkOne(n)} className={cn('flex w-full items-start gap-3 px-5 py-4 text-left hover:bg-accent cursor-pointer', n.unread && 'bg-primary/5')}><span className={cn('mt-1.5 size-2 shrink-0 rounded-full', n.unread ? 'bg-primary' : 'border border-muted-foreground/40')} /><span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-foreground">{n.title || n.text}</span>{n.message && <span className="mt-1 block text-xs text-muted-foreground">{n.message}</span>}<span className="mt-2 block text-[0.65rem] text-muted-foreground">{n.time}</span></span></button>)}
             </div>
           </div>
         </div>
