@@ -1,957 +1,1212 @@
-import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Archive, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ChevronRight, Clock, Download, PackageCheck, Truck, User, X } from 'lucide-react'
-import { usePortal } from '@/lib/store'
-import { getPreparation, type DispatchPreparationResponse } from '@/features/warehouse/api/dispatchApi'
+import { Fragment, useMemo, useState } from 'react'
 import {
-  addNewCustomBatch,
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  Download,
+  SlidersHorizontal,
+  Search,
+  Truck,
+  X,
+} from 'lucide-react'
+import { usePortal } from '@/lib/store'
+import { useAuth } from '@/lib/auth'
+import {
   advanceBatchStage,
-  createReturnBatchFromDelivered,
   deleteBatch,
   exportBatchPdf,
-  getArchivedBatches,
   getEventDispatchSummaries,
   markBatchStalled,
-  resolveBatchStall,
   updateBatchHandoffNote,
   updateBatchInfo,
-  updateBatchCrew,
-  updateReconciliationRow,
   useDispatchStore,
   type BatchDirection,
-  type DispatchBatch,
+  type BatchStage,
   type EventDispatchSummary,
+  type ReconciliationRow,
 } from '@/lib/warehouse-dispatch'
-import { getEventDetailSnapshot } from '@/lib/event-detail'
-import { DispatchStepper } from '@/components/warehouse/event-detail/DispatchStepper'
+import { nextStage, stageSequenceFor } from '@/lib/event-detail'
 import { exportDispatchConsolidatedPdf, exportDispatchEventPdf } from '@/lib/pdf-exporter'
-import { BatchDetailView } from '@/components/warehouse/event-detail/BatchDetailView'
-import { ConfirmArchiveBatchModal } from '@/components/warehouse/dispatch/ConfirmArchiveBatchModal'
-import { Pill } from '@/components/warehouse/shared/Pill'
 import { cn } from '@/lib/utils'
-import { WarehouseModuleHeader } from '@/components/warehouse/WarehouseModuleHeader'
 
-type ViewMode = 'grouped' | 'consolidated'
-
-type DispatchAttention = 'pahabol' | 'short' | 'stalled'
-
-function batchAttention(batch: DispatchBatch): DispatchAttention[] {
-  const attention: DispatchAttention[] = []
-  if (batch.stalled) attention.push('stalled')
-  if (batch.reconciliation.some((row) => row.status === 'Pahabol')) attention.push('pahabol')
-  if (batch.reconciliation.some((row) => row.status === 'Short')) attention.push('short')
-  return attention
-}
-
-function attentionLabel(attention: DispatchAttention) {
-  switch (attention) {
-    case 'stalled': return 'Transit delayed'
-    case 'pahabol': return 'Follow-up items needed'
-    case 'short': return 'Items missing'
-  }
-}
+type TabType = 'event-grouped' | 'dispatch-overview' | 'completed-events'
+type ModalSubTab = 'overview' | 'items' | 'requests'
 
 interface DispatchModuleProps {
-  onClose: () => void
+  onClose?: () => void
 }
 
-// A flattened, navigable batch reference — used so Level 3 (batch detail)
-// can page Previous/Next across whichever list it was opened from, be that
-// a single event's batches (Event-Grouped) or every batch fleet-wide
-// (Consolidated).
-interface NavigableBatch {
-  eventId: string
-  eventTitle: string
-  batch: DispatchBatch
-}
-
-function Avatar({ name }: { name: string }) {
-  const initials = name
-    .split(' ')
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join('')
-  return (
-    <span
-      title={name}
-      className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[0.58rem] font-bold uppercase tracking-wide text-primary ring-1 ring-border"
-    >
-      {initials}
-    </span>
-  )
-}
-
-import { useAuth } from '@/lib/auth'
-
-export function DispatchModule(_props?: DispatchModuleProps) {
-  const { events, staff, procurement } = usePortal()
-  const { adminEmail, adminName } = useAuth()
-  // The store snapshot has to be part of the memo key — without it a stage
-  // advance or a newly staged batch mutates the store but never re-derives
-  // the summaries the UI renders from.
-  const batchStore = useDispatchStore(events, staff, procurement)
-  const summaries = useMemo(
-    () => getEventDispatchSummaries(events, staff, procurement),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [events, staff, procurement, batchStore],
-  )
-
-  const [viewMode, setViewMode] = useState<ViewMode>('grouped')
-  const [showAttentionOnly, setShowAttentionOnly] = useState(false)
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
-  const [activeBatchIndex, setActiveBatchIndex] = useState<number | null>(null)
-  const [pendingBatchId, setPendingBatchId] = useState<string | null>(null)
-  const [newBatchModal, setNewBatchModal] = useState<{ eventId: string; direction: BatchDirection } | null>(null)
-  const [archiveBatchTarget, setArchiveBatchTarget] = useState<{ eventId: string; batch: DispatchBatch } | null>(null)
-
-  const selectedEvent = summaries.find((s) => s.eventId === selectedEventId) ?? null
-  const eligibleCrew = useMemo(
-    () => staff
-      .filter((member) => !member.archived && member.role === 'Ground Crew')
-      .map((member) => ({ id: member.id, name: `${member.firstName} ${member.surname}` })),
-    [staff],
-  )
-  const attentionCounts = useMemo(() => {
-    const batches = summaries.flatMap((summary) => summary.batches)
-    return {
-      stalled: batches.filter((batch) => batch.stalled).length,
-      pahabol: batches.filter((batch) => batch.reconciliation.some((row) => row.status === 'Pahabol')).length,
-      short: batches.filter((batch) => batch.reconciliation.some((row) => row.status === 'Short')).length,
-    }
-  }, [summaries])
-  const visibleSummaries = useMemo(
-    () => showAttentionOnly
-      ? summaries.filter((summary) => summary.batches.some((batch) => batchAttention(batch).length > 0))
-      : summaries,
-    [showAttentionOnly, summaries],
-  )
-
-  // The list currently being navigated in the Level 3 overlay.
-  const navList: NavigableBatch[] = useMemo(() => {
-    if (viewMode === 'consolidated') {
-      return summaries.flatMap((summary) =>
-        summary.batches.map((batch) => ({ eventId: summary.eventId, eventTitle: summary.eventTitle, batch })),
-      )
-    }
-    if (selectedEvent) {
-      return selectedEvent.batches.map((batch) => ({
-        eventId: selectedEvent.eventId,
-        eventTitle: selectedEvent.eventTitle,
-        batch,
-      }))
-    }
-    return []
-  }, [viewMode, summaries, selectedEvent])
-
-  const activeNav = activeBatchIndex !== null ? navList[activeBatchIndex] : undefined
-
-  const openBatch = (eventId: string, batchId: string) => {
-    const list =
-      viewMode === 'consolidated'
-        ? summaries.flatMap((summary) =>
-            summary.batches.map((batch) => ({ eventId: summary.eventId, eventTitle: summary.eventTitle, batch })),
-          )
-        : (summaries.find((s) => s.eventId === eventId)?.batches ?? []).map((batch) => ({
-            eventId,
-            eventTitle: summaries.find((s) => s.eventId === eventId)?.eventTitle ?? '',
-            batch,
-          }))
-    const index = list.findIndex((entry) => entry.batch.id === batchId)
-    setActiveBatchIndex(index === -1 ? null : index)
-  }
-
-
-  useEffect(() => {
-    if (!pendingBatchId) return
-    const index = navList.findIndex((entry) => entry.batch.id === pendingBatchId)
-    if (index === -1) return
-    setActiveBatchIndex(index)
-    setPendingBatchId(null)
-  }, [pendingBatchId, navList])
-
-  const exportEventManifest = (summary: EventDispatchSummary) => {
-    exportDispatchEventPdf(summary)
-  }
-
-  const exportConsolidatedManifest = () => {
-    exportDispatchConsolidatedPdf(summaries)
-  }
-
-  return (
-    <div className="flex h-full flex-1 flex-col overflow-y-auto">
-      <div className="flex flex-col gap-4 border-b border-border px-0 py-7">
-        <div className="flex items-start justify-between gap-4">
-          <WarehouseModuleHeader title="Dispatch & Logistics" description="Delivery lists, vehicle assignments, and delivery updates." />
-          
-        </div>
-
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="inline-flex rounded-md border border-border bg-background p-1">
-            <button
-              type="button"
-              onClick={() => {
-                setViewMode('grouped')
-              }}
-              aria-pressed={viewMode === 'grouped'}
-              className={cn(
-                'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
-                viewMode === 'grouped' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
-              )}
-            >
-              By Event
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setViewMode('consolidated')
-                setSelectedEventId(null)
-              }}
-              aria-pressed={viewMode === 'consolidated'}
-              className={cn(
-                'rounded-sm px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition',
-                viewMode === 'consolidated' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
-              )}
-            >
-              All Deliveries
-            </button>
-          </div>
-            {viewMode === 'consolidated' && (
-              <button
-                type="button"
-                onClick={exportConsolidatedManifest}
-                className="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-border bg-background px-4 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-accent"
-              >
-                <Download className="size-3.5" />
-                Export All Lists (PDF)
-              </button>
-            )}
-          </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
-          <div>
-            <p className="text-xs font-semibold text-card-foreground">Needs attention</p>
-            <p className="text-[0.68rem] text-muted-foreground">Items that need a follow-up before this delivery is clear.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">{attentionCounts.stalled} delivery delayed</span>
-            <span className="rounded-full bg-destructive/15 px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wide text-destructive">{attentionCounts.pahabol} follow-up items</span>
-            <span className="rounded-full bg-orange-500/15 px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wide text-orange-800 dark:text-orange-300">{attentionCounts.short} missing items</span>
-            <button
-              type="button"
-              onClick={() => setShowAttentionOnly((current) => !current)}
-              aria-pressed={showAttentionOnly}
-              className={cn('rounded-md border px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition', showAttentionOnly ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-card-foreground hover:bg-muted')}
-            >
-              {showAttentionOnly ? 'Show all' : 'Needs attention'}
-            </button>
-          </div>
-        </div>
-
-        {viewMode === 'grouped' && selectedEvent && (
-          <div className="flex items-center gap-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            <button type="button" onClick={() => setSelectedEventId(null)} className="text-primary hover:underline">
-              All Events
-            </button>
-            <ChevronRight className="size-3" />
-            <span className="text-card-foreground">{selectedEvent.eventTitle}</span>
-          </div>
-        )}
-      </div>
-
-      <div className="flex-1 px-0 py-7">
-        {viewMode === 'consolidated' ? (
-          <ConsolidatedBatchTable summaries={visibleSummaries} onOpenBatch={openBatch} />
-        ) : selectedEvent ? (
-          <EventBatchLevel
-            summary={selectedEvent}
-            onNewBatch={(direction) => setNewBatchModal({ eventId: selectedEvent.eventId, direction })}
-            onOpenBatch={(batchId) => openBatch(selectedEvent.eventId, batchId)}
-            onExportManifest={() => exportEventManifest(selectedEvent)}
-          />
-        ) : (
-          <EventCardGrid summaries={visibleSummaries} onOpenEvent={setSelectedEventId} />
-        )}
-      </div>
-
-      {activeNav && (
-        <BatchDetailView
-          batch={activeNav.batch}
-          hasPrevious={activeBatchIndex !== null && activeBatchIndex > 0}
-          hasNext={activeBatchIndex !== null && activeBatchIndex < navList.length - 1}
-          onPrevious={() => setActiveBatchIndex((i) => (i !== null ? Math.max(0, i - 1) : i))}
-          onNext={() => setActiveBatchIndex((i) => (i !== null ? Math.min(navList.length - 1, i + 1) : i))}
-          onClose={() => setActiveBatchIndex(null)}
-          onJustificationChange={(rowId, value) =>
-            updateReconciliationRow(activeNav.eventId, activeNav.batch.id, rowId, { justification: value })
-          }
-          onHandoffNoteChange={(value) =>
-            updateBatchHandoffNote(activeNav.eventId, activeNav.batch.id, value)
-          }
-          onAdvanceStage={() => advanceBatchStage(activeNav.eventId, activeNav.batch.id)}
-          onStall={(reason) => markBatchStalled(activeNav.eventId, activeNav.batch.id, reason)}
-          onResume={() => resolveBatchStall(activeNav.eventId, activeNav.batch.id)}
-          onUpdateInfo={(info) => updateBatchInfo(activeNav.eventId, activeNav.batch.id, info)}
-          availableCrew={eligibleCrew}
-          onCrewChange={(crew) => updateBatchCrew(activeNav.eventId, activeNav.batch.id, crew)}
-          onExportPdf={() => {
-            const ev = events.find((e) => e.id === activeNav.eventId)
-            exportBatchPdf({ eventTitle: activeNav.eventTitle, venue: ev?.venue || '', targetDate: ev?.targetDate || '' }, activeNav.batch)
-          }}
-          onCreateReturnBatch={() => createReturnBatchFromDelivered(activeNav.eventId, activeNav.batch)}
-          onDelete={() => {
-            setArchiveBatchTarget({ eventId: activeNav.eventId, batch: activeNav.batch })
-          }}
-        />
-      )}
-
-      {archiveBatchTarget && (
-        <ConfirmArchiveBatchModal
-          isOpen={!!archiveBatchTarget}
-          onClose={() => setArchiveBatchTarget(null)}
-          onConfirm={(reason) => {
-            deleteBatch(archiveBatchTarget.eventId, archiveBatchTarget.batch.id, reason, {
-              id: adminEmail || 'wom-001',
-              name: adminName || 'Warehouse Operations Manager',
-            })
-            setArchiveBatchTarget(null)
-            setActiveBatchIndex(null)
-          }}
-          batchCode={archiveBatchTarget.batch.id}
-          driverName={archiveBatchTarget.batch.driverName}
-          vehicleType={archiveBatchTarget.batch.vehicleType}
-          itemCount={archiveBatchTarget.batch.reconciliation.length}
-        />
-      )}
-
-      {newBatchModal && (
-        <NewBatchModal
-          eventId={newBatchModal.eventId}
-          direction={newBatchModal.direction}
-          onClose={() => setNewBatchModal(null)}
-        />
-      )}
-    </div>
-  )
-}
-
-function EventCardGrid({
-  summaries,
-  onOpenEvent,
+/** Step Pipeline for Dispatch Status */
+function DispatchStatusPipeline({
+  stage,
+  direction,
+  onSelectStage,
 }: {
-  summaries: EventDispatchSummary[]
-  onOpenEvent: (eventId: string) => void
+  stage: BatchStage
+  direction: BatchDirection
+  onSelectStage?: (stage: BatchStage) => void
 }) {
-  if (summaries.length === 0) {
-    return <p className="text-sm text-muted-foreground">No events on the registry yet.</p>
-  }
+  const sequence = stageSequenceFor(direction)
+  const activeIdx = sequence.indexOf(stage)
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {summaries.map((summary) => {
-        const attention = summary.batches.flatMap(batchAttention)
-        const uniqueAttention = [...new Set(attention)]
-        const reconciledItems = summary.batches.flatMap((batch) => batch.reconciliation)
-        const matchedItems = reconciledItems.filter((row) => row.status === 'Matched').length
+    <div className="flex items-center gap-1">
+      {sequence.map((step, idx) => {
+        const isCurrent = idx === activeIdx
+        const isPast = idx < activeIdx
+
         return (
-        <button
-          key={summary.eventId}
-          type="button"
-          onClick={() => onOpenEvent(summary.eventId)}
-          className="flex flex-col gap-3 rounded-xl border border-border bg-card px-5 py-4 text-left transition hover:border-primary/50 hover:bg-accent"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="truncate font-serif text-base font-medium text-card-foreground">{summary.eventTitle}</p>
-              <p className="truncate text-[0.62rem] uppercase tracking-[0.06em] text-muted-foreground">{summary.venue}</p>
-            </div>
-            {uniqueAttention.length > 0 && (
-              <span
-                title={uniqueAttention.map(attentionLabel).join(', ')}
-                className="flex size-6 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive"
-              >
-                <AlertTriangle className="size-3.5" />
-              </span>
+          <Fragment key={step}>
+            <button
+              type="button"
+              disabled={!onSelectStage}
+              onClick={() => onSelectStage?.(step)}
+              className={cn(
+                'rounded-md px-2.5 py-1 text-[0.58rem] font-bold uppercase tracking-wider transition-all',
+                isCurrent
+                  ? 'bg-[#8C6B4B] text-white shadow-2xs dark:bg-amber-700'
+                  : isPast
+                    ? 'bg-[#8C6B4B]/20 text-[#8C6B4B] dark:text-amber-300'
+                    : 'bg-muted/70 text-muted-foreground',
+                onSelectStage && 'hover:opacity-80 cursor-pointer',
+              )}
+            >
+              {step}
+            </button>
+            {idx < sequence.length - 1 && (
+              <span className="text-muted-foreground/40 font-mono text-[0.6rem]">—</span>
             )}
-          </div>
-          {uniqueAttention.length > 0 && (
-            <p className="text-[0.62rem] font-semibold text-destructive">
-              Action needed: {uniqueAttention.map(attentionLabel).join(' · ')}
-            </p>
-          )}
-          <div className="flex items-center justify-between gap-3">
-            <span className="inline-flex items-center gap-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-              <Truck className="size-3.5" />
-              {summary.batches.length} batch{summary.batches.length === 1 ? '' : 'es'}
-            </span>
-            <div className="flex items-center gap-2">
-              <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={cn('h-full rounded-full', summary.handshakePercent >= 90 ? 'bg-primary' : summary.handshakePercent >= 60 ? 'bg-accent-foreground/60' : 'bg-destructive')}
-                  style={{ width: `${summary.handshakePercent}%` }}
-                />
-              </div>
-              <span className="text-[0.6rem] font-bold text-card-foreground">{matchedItems}/{reconciledItems.length || 0} matched</span>
-            </div>
-          </div>
-        </button>
+          </Fragment>
         )
       })}
     </div>
   )
 }
 
-function EventBatchLevel({
-  summary,
-  onNewBatch,
-  onOpenBatch,
-  onExportManifest,
-}: {
-  summary: EventDispatchSummary
-  onNewBatch: (direction: BatchDirection) => void
-  onOpenBatch: (batchId: string) => void
-  onExportManifest: () => void
-}) {
-  const [showArchived, setShowArchived] = useState(false)
-  const [prepStatus, setPrepStatus] = useState<DispatchPreparationResponse | null>(null)
+/** Reconciliation Status Badge */
+function ReconciliationBadge({ rows }: { rows: ReconciliationRow[] }) {
+  if (!rows || rows.length === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 px-2 py-0.5 text-[0.58rem] font-bold uppercase tracking-wider">
+        <span className="size-1 rounded-full bg-emerald-500" /> Matched
+      </span>
+    )
+  }
 
-  useEffect(() => {
-    let active = true
-    void getPreparation(summary.eventId, false).then((res) => {
-      if (active && res.success) {
-        setPrepStatus(res.data)
-      }
-    })
-    return () => {
-      active = false
-    }
-  }, [summary.eventId])
+  const hasPahabol = rows.some((r) => r.status === 'Pahabol')
+  const hasShort = rows.some((r) => r.status === 'Short')
+
+  if (hasPahabol) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#8C3A2B] text-white px-2.5 py-0.5 text-[0.58rem] font-bold uppercase tracking-wider shadow-2xs">
+        <span className="size-1.5 rounded-full bg-white/80" /> Additional Delivery
+      </span>
+    )
+  }
+
+  if (hasShort) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-600 text-white px-2.5 py-0.5 text-[0.58rem] font-bold uppercase tracking-wider shadow-2xs">
+        <span className="size-1.5 rounded-full bg-white/80" /> Missing Items
+      </span>
+    )
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      {prepStatus && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-xs">
-          <div className="flex items-center gap-2">
-            <PackageCheck className="size-4 text-primary shrink-0" />
-            <span className="font-semibold text-foreground">Items ready:</span>
-            {!prepStatus.isManifestCurrent ? (
-              <span className="inline-flex items-center gap-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-2 py-0.5 font-bold uppercase text-[0.6rem]">
-                <AlertTriangle className="size-3" />
-                Item list needs checking ({prepStatus.quantityMismatches.length} quantities, {prepStatus.missingPreparationAssetIds.length} missing)
-              </span>
-            ) : prepStatus.isPreparationComplete ? (
-              <span className="inline-flex items-center gap-1 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2 py-0.5 font-bold uppercase text-[0.6rem]">
-                <CheckCircle2 className="size-3" />
-                All {prepStatus.items.length} items ready
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 px-2 py-0.5 font-bold uppercase text-[0.6rem]">
-                <Clock className="size-3" />
-                {prepStatus.items.filter((i) => i.prepStatus === 'Completed').length}/{prepStatus.items.length} items ready
-              </span>
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 text-white px-2.5 py-0.5 text-[0.58rem] font-bold uppercase tracking-wider shadow-2xs">
+      <span className="size-1.5 rounded-full bg-white/80" /> Matched
+    </span>
+  )
+}
+
+export function DispatchModule(_props?: DispatchModuleProps) {
+  const { events, staff, procurement } = usePortal()
+  const { adminName } = useAuth()
+  const batchStore = useDispatchStore(events, staff, procurement)
+
+  const summaries = useMemo(
+    () => getEventDispatchSummaries(events, staff, procurement),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [events, staff, procurement, batchStore],
+  )
+
+  // Tabs & Filters
+  const [activeTab, setActiveTab] = useState<TabType>('event-grouped')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [stageFilter, setStageFilter] = useState('all')
+  const [directionFilter, setDirectionFilter] = useState('all')
+  const [reconciliationFilter, setReconciliationFilter] = useState('all')
+
+  // Modals & Navigation
+  const [selectedEventModalId, setSelectedEventModalId] = useState<string | null>(null)
+  const [eventModalSubTab, setEventModalSubTab] = useState<ModalSubTab>('overview')
+  const [activeBatchDetail, setActiveBatchDetail] = useState<{ eventId: string; batchId: string } | null>(null)
+  const [confirmDeleteModal, setConfirmDeleteModal] = useState<{ eventId: string; batchId: string } | null>(null)
+  const [reportBreakdownModal, setReportBreakdownModal] = useState<{ eventId: string; batchId: string } | null>(null)
+  const [breakdownReason, setBreakdownReason] = useState('')
+
+  // Batch Editing in Modal
+  const [isEditingVehicleInfo, setIsEditingVehicleInfo] = useState(false)
+  const [editVehicle, setEditVehicle] = useState('')
+  const [editPlate, setEditPlate] = useState('')
+  const [editDriver, setEditDriver] = useState('')
+
+  // Selected event for Level 2 modal
+  const selectedEventModal = useMemo(
+    () => summaries.find((s) => s.eventId === selectedEventModalId) ?? null,
+    [summaries, selectedEventModalId],
+  )
+
+  // Filtered summaries
+  const filteredSummaries = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+
+    return summaries.filter((summary) => {
+      // Completed events tab filter
+      const isCompleted =
+        summary.batches.length > 0 &&
+        summary.batches.every((b) => b.stage === 'Delivered' || b.stage === 'Returned')
+      if (activeTab === 'completed-events' && !isCompleted) return false
+      if (activeTab === 'event-grouped' && isCompleted && summary.batches.length > 0) return false
+
+      // Search matching
+      const matchesSearch =
+        !q ||
+        [summary.eventTitle, summary.venue, summary.targetDate].some((val) =>
+          val.toLowerCase().includes(q),
+        ) ||
+        summary.batches.some((b) =>
+          [b.vehicleType, b.plateNumber, b.driverName, b.id]
+            .filter(Boolean)
+            .some((val) => String(val).toLowerCase().includes(q)),
+        )
+
+      if (!matchesSearch) return false
+
+      // Stage filter
+      if (stageFilter !== 'all') {
+        const hasStage = summary.batches.some((b) => b.stage === stageFilter)
+        if (!hasStage) return false
+      }
+
+      // Direction filter
+      if (directionFilter !== 'all') {
+        const hasDirection = summary.batches.some((b) => b.direction === directionFilter)
+        if (!hasDirection) return false
+      }
+
+      // Reconciliation filter
+      if (reconciliationFilter !== 'all') {
+        const hasRecon = summary.batches.some((b) =>
+          b.reconciliation.some((r) => r.status === reconciliationFilter),
+        )
+        if (!hasRecon) return false
+      }
+
+      return true
+    })
+  }, [summaries, activeTab, searchQuery, stageFilter, directionFilter, reconciliationFilter])
+
+  // Overview stats
+  const allBatches = useMemo(() => summaries.flatMap((s) => s.batches), [summaries])
+  const totalDispatchesCount = allBatches.length
+  const inTransitCount = allBatches.filter((b) => b.stage === 'In Transit').length
+  const attentionCount = allBatches.filter(
+    (b) => b.stalled || b.reconciliation.some((r) => r.status !== 'Matched'),
+  ).length
+
+  // Batch Detail active item & previous/next navigation
+  const currentBatchNavList = useMemo(() => {
+    if (selectedEventModal) {
+      return selectedEventModal.batches.map((b) => ({ eventId: selectedEventModal.eventId, batch: b }))
+    }
+    return summaries.flatMap((s) => s.batches.map((b) => ({ eventId: s.eventId, batch: b })))
+  }, [selectedEventModal, summaries])
+
+  const activeBatchIndex = useMemo(() => {
+    if (!activeBatchDetail) return -1
+    return currentBatchNavList.findIndex(
+      (entry) =>
+        entry.eventId === activeBatchDetail.eventId && entry.batch.id === activeBatchDetail.batchId,
+    )
+  }, [activeBatchDetail, currentBatchNavList])
+
+  const activeBatchEntry = activeBatchIndex >= 0 ? currentBatchNavList[activeBatchIndex] : null
+  const activeBatch = activeBatchEntry ? activeBatchEntry.batch : null
+
+  // Open Batch Detail handler
+  const openBatchDetail = (eventId: string, batchId: string) => {
+    const summary = summaries.find((s) => s.eventId === eventId)
+    const batch = summary?.batches.find((b) => b.id === batchId)
+    if (batch) {
+      setEditVehicle(batch.vehicleType)
+      setEditPlate(batch.plateNumber)
+      setEditDriver(batch.driverName || '')
+      setIsEditingVehicleInfo(false)
+    }
+    setActiveBatchDetail({ eventId, batchId })
+  }
+
+  // Next / Previous batch navigation
+  const handleNextBatch = () => {
+    if (activeBatchIndex < currentBatchNavList.length - 1) {
+      const nextEntry = currentBatchNavList[activeBatchIndex + 1]
+      openBatchDetail(nextEntry.eventId, nextEntry.batch.id)
+    }
+  }
+
+  const handlePrevBatch = () => {
+    if (activeBatchIndex > 0) {
+      const prevEntry = currentBatchNavList[activeBatchIndex - 1]
+      openBatchDetail(prevEntry.eventId, prevEntry.batch.id)
+    }
+  }
+
+  // Advance stage for active batch
+  const handleAdvanceStage = () => {
+    if (!activeBatchEntry) return
+    advanceBatchStage(activeBatchEntry.eventId, activeBatchEntry.batch.id)
+  }
+
+  // Save vehicle info
+  const handleSaveVehicleInfo = () => {
+    if (!activeBatchEntry) return
+    updateBatchInfo(activeBatchEntry.eventId, activeBatchEntry.batch.id, {
+      vehicleType: editVehicle,
+      plateNumber: editPlate,
+      driverName: editDriver,
+    })
+    setIsEditingVehicleInfo(false)
+  }
+
+  // Export handlers
+  const exportConsolidatedManifest = () => {
+    exportDispatchConsolidatedPdf(summaries)
+  }
+
+  const exportEventManifest = (summary: EventDispatchSummary) => {
+    exportDispatchEventPdf(summary)
+  }
+
+  return (
+    <div className="flex h-full flex-1 flex-col overflow-y-auto">
+      {/* Top Header */}
+      <div className="flex flex-col gap-6 border-b border-border/80 pb-6">
+        <div>
+          <h1 className="font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+            Dispatch &amp; Logistics
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Dispatch manifests, vehicle assignments, and transit checkpoints.
+          </p>
+        </div>
+
+        {/* Tab Selection & Top Action */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="inline-flex rounded-xl border border-border/80 bg-card p-1 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setActiveTab('event-grouped')}
+              className={cn(
+                'rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-[0.1em] transition',
+                activeTab === 'event-grouped'
+                  ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              Event-Grouped
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('dispatch-overview')}
+              className={cn(
+                'rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-[0.1em] transition',
+                activeTab === 'dispatch-overview'
+                  ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              Dispatch Overview
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('completed-events')}
+              className={cn(
+                'rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-[0.1em] transition',
+                activeTab === 'completed-events'
+                  ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              Completed Events
+            </button>
+          </div>
+
+          {activeTab === 'dispatch-overview' && (
+            <button
+              type="button"
+              onClick={exportConsolidatedManifest}
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-xs font-bold uppercase tracking-wider text-card-foreground shadow-2xs transition hover:bg-accent hover:border-primary/40"
+            >
+              <Download className="size-3.5" />
+              Export All (PDF)
+            </button>
+          )}
+        </div>
+
+        {/* Search & Filter Toolbar */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border/80 bg-card px-3.5 py-2.5 text-sm shadow-2xs">
+            <Search className="size-4 text-muted-foreground shrink-0" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search events, vehicles, batch IDs..."
+              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                ✕
+              </button>
             )}
           </div>
-          <span className="text-[0.62rem] text-muted-foreground font-mono">
-            Event GUID: {summary.eventId}
-          </span>
-        </div>
-      )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Items checked <span className="font-semibold text-card-foreground">{summary.handshakePercent}%</span> across{' '}
-          {summary.batches.length} trip{summary.batches.length === 1 ? '' : 's'}.
-        </p>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onExportManifest}
-            className="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-border bg-background px-3.5 py-2.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-accent"
-          >
-            <Download className="size-3.5" />
-            Export Delivery List (PDF)
-          </button>
-          <button
-            type="button"
-            onClick={() => onNewBatch('outbound')}
-            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3.5 py-2.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-primary-foreground transition hover:opacity-90"
-          >
-            + New Delivery Trip
-          </button>
-          <button
-            type="button"
-            onClick={() => onNewBatch('return')}
-            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-3.5 py-2.5 text-[0.6rem] font-bold uppercase tracking-[0.1em] text-card-foreground transition hover:bg-accent"
-          >
-            + New Return Trip
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex size-9.5 items-center justify-center rounded-xl border border-border/80 bg-card text-muted-foreground">
+              <SlidersHorizontal className="size-4" />
+            </span>
+
+            <select
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value)}
+              className="rounded-xl border border-border/80 bg-card px-3 py-2 text-xs font-medium text-foreground outline-none hover:bg-accent"
+            >
+              <option value="all">All stages</option>
+              <option value="Planned">Planned</option>
+              <option value="Loaded">Loaded</option>
+              <option value="In Transit">In Transit</option>
+              <option value="Delivered">Delivered</option>
+            </select>
+
+            <select
+              value={directionFilter}
+              onChange={(e) => setDirectionFilter(e.target.value)}
+              className="rounded-xl border border-border/80 bg-card px-3 py-2 text-xs font-medium text-foreground outline-none hover:bg-accent"
+            >
+              <option value="all">All directions</option>
+              <option value="outbound">Outbound</option>
+              <option value="return">Return</option>
+            </select>
+
+            <select
+              value={reconciliationFilter}
+              onChange={(e) => setReconciliationFilter(e.target.value)}
+              className="rounded-xl border border-border/80 bg-card px-3 py-2 text-xs font-medium text-foreground outline-none hover:bg-accent"
+            >
+              <option value="all">All reconciliation</option>
+              <option value="Matched">Matched</option>
+              <option value="Pahabol">Pahabol (Additional)</option>
+              <option value="Short">Short (Missing)</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {summary.batches.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border bg-card px-5 py-10 text-center text-sm text-muted-foreground">
-          No delivery trips have been added for this event yet.
-        </p>
-      ) : (
-        <ul className="flex flex-col gap-3">
-          {summary.batches.map((batch) => (
-            <li key={batch.id} className="rounded-xl border border-border bg-card p-4 shadow-xs space-y-3">
-              <div
-                onClick={() => onOpenBatch(batch.id)}
-                className="flex w-full flex-wrap items-center gap-4 cursor-pointer hover:opacity-95"
-              >
-                <span
-                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary"
-                  aria-label={batch.direction === 'outbound' ? 'Delivery' : 'Return'}
-                >
-                  {batch.direction === 'outbound' ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
-                </span>
-                <div className="min-w-0 shrink-0">
-                  <p className="truncate text-sm font-bold text-card-foreground">{batch.vehicleType}</p>
-                  <p className="truncate text-[0.62rem] uppercase tracking-[0.06em] text-muted-foreground">
-                    {batch.plateNumber} · Driver: <span className="font-semibold text-foreground">{batch.driverName || 'Unassigned'}</span>
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  {batch.crew.length === 0 ? (
-                    <span className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                      <User className="size-3.5" />
-                    </span>
-                  ) : (
-                    batch.crew.slice(0, 3).map((member) => <Avatar key={member.id} name={member.name} />)
-                  )}
-                </div>
+      {/* Main Tab Content */}
+      <div className="py-6 flex-1">
+        {/* TAB 1: EVENT-GROUPED (Image 2) */}
+        {activeTab === 'event-grouped' && (
+          <div className="flex flex-col gap-4">
+            {filteredSummaries.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center text-sm text-muted-foreground">
+                No active events matching your search or filters.
+              </div>
+            ) : (
+              filteredSummaries.map((summary) => {
+                const outboundCount = summary.batches.filter((b) => b.direction === 'outbound').length
+                const returnCount = summary.batches.filter((b) => b.direction === 'return').length
+                const hasAttention =
+                  summary.hasStalled ||
+                  summary.hasPahabol ||
+                  summary.batches.some((b) => b.reconciliation.some((r) => r.status !== 'Matched'))
 
-                <div className="ml-auto flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      exportBatchPdf({ eventTitle: summary.eventTitle, venue: summary.venue, targetDate: summary.targetDate }, batch)
+                return (
+                  <div
+                    key={summary.eventId}
+                    onClick={() => {
+                      setSelectedEventModalId(summary.eventId)
+                      setEventModalSubTab('overview')
                     }}
-                    className="inline-flex items-center gap-1 rounded border border-border bg-background px-2.5 py-1 text-[0.58rem] font-bold uppercase tracking-wider text-card-foreground hover:bg-accent"
+                    className="group relative flex flex-col justify-between rounded-2xl border border-border/80 bg-card p-5 sm:p-6 shadow-2xs transition-all duration-150 hover:border-primary/60 hover:shadow-sm cursor-pointer"
                   >
-                    <Download className="size-3" />
-                    PDF
-                  </button>
-
-                  {batch.direction === 'outbound' && batch.stage === 'Delivered' && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        createReturnBatchFromDelivered(summary.eventId, batch)
-                      }}
-                      className="inline-flex items-center gap-1 rounded bg-emerald-600 px-2.5 py-1 text-[0.58rem] font-bold uppercase tracking-wider text-white hover:bg-emerald-700"
-                    >
-                      + Return Trip
-                    </button>
-                  )}
-
-                  <DispatchStepper direction={batch.direction} stage={batch.stage} stalled={batch.stalled} />
-                </div>
-              </div>
-
-              {/* Contained Assets Summary Row */}
-              <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-2.5">
-                <span className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground">
-                  Contained Assets ({batch.reconciliation.length}):
-                </span>
-                {batch.reconciliation.length === 0 ? (
-                  <span className="text-[0.62rem] text-muted-foreground">No assets staged yet.</span>
-                ) : (
-                  batch.reconciliation.map((item) => (
-                    <span
-                      key={item.id}
-                      className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 text-[0.62rem] font-medium text-foreground"
-                    >
-                      <span>{item.itemName}</span>
-                      <span className="font-bold text-primary">({item.planned})</span>
-                    </span>
-                  ))
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* Collapsible Archived Batches Section */}
-      {(() => {
-        const archived = getArchivedBatches(summary.eventId)
-        if (archived.length === 0) return null
-        return (
-          <div className="mt-4 rounded-xl border border-destructive/20 bg-destructive/5 p-4 space-y-3">
-            <button
-              type="button"
-              onClick={() => setShowArchived((v) => !v)}
-              className="flex w-full items-center justify-between text-xs font-semibold text-destructive hover:opacity-90"
-            >
-              <div className="flex items-center gap-2">
-                <Archive className="h-4 w-4 shrink-0" />
-                <span>Past / canceled trips ({archived.length})</span>
-              </div>
-              <ChevronDown className={cn('h-4 w-4 transition-transform duration-200', showArchived && 'rotate-180')} />
-            </button>
-
-            {showArchived && (
-              <div className="space-y-2.5 border-t border-destructive/20 pt-3 animate-in fade-in-0">
-                {archived.map((batch) => (
-                  <div key={batch.id} className="rounded-lg border border-border bg-card p-3.5 text-xs space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
-                      <div className="flex items-center gap-2 font-bold text-foreground">
-                        <span className="rounded bg-destructive/15 px-2 py-0.5 text-[0.62rem] font-bold text-destructive uppercase tracking-wider">Canceled</span>
-                        <span>{batch.vehicleType} ({batch.plateNumber})</span>
-                        <span className="text-[0.7rem] font-normal text-muted-foreground">· Batch ID: {batch.id}</span>
-                      </div>
-                      <span className="text-[0.68rem] text-muted-foreground font-mono">
-                        {batch.archivedAt ? new Date(batch.archivedAt).toLocaleString() : 'Archived'}
-                      </span>
-                    </div>
-
-                    <div className="grid gap-1.5 rounded-md bg-muted/40 p-2.5 text-[0.75rem]">
+                    <div className="flex items-start justify-between gap-4">
                       <div>
-                        <span className="font-semibold text-foreground">Archived By: </span>
-                        <span className="text-muted-foreground">{batch.archivedBy || 'Warehouse Manager'}</span>
+                        <h2 className="font-serif text-lg sm:text-xl font-medium text-card-foreground group-hover:text-primary transition-colors">
+                          {summary.eventTitle}
+                        </h2>
+                        <p className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-muted-foreground mt-0.5">
+                          {summary.venue}
+                        </p>
                       </div>
-                      <div>
-                        <span className="font-semibold text-foreground">Operational Reason: </span>
-                        <span className="text-destructive font-medium">{batch.archiveReason || 'No reason specified'}</span>
-                      </div>
-                      <div>
-                        <span className="font-semibold text-foreground">Delivery list: </span>
-                        <span className="text-muted-foreground">
-                          {batch.reconciliation.length} items ({batch.reconciliation.map((r) => `${r.itemName} [${r.planned}]`).join(', ') || 'None'})
+
+                      {hasAttention && (
+                        <span className="flex size-7 items-center justify-center rounded-full bg-rose-500/10 text-rose-600 border border-rose-200 dark:border-rose-900/40 shrink-0">
+                          <AlertTriangle className="size-3.5" />
                         </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )
-      })()}
-    </div>
-  )
-}
-
-function ConsolidatedBatchTable({
-  summaries,
-  onOpenBatch,
-}: {
-  summaries: EventDispatchSummary[]
-  onOpenBatch: (eventId: string, batchId: string) => void
-}) {
-  const rows = summaries.flatMap((summary) => summary.batches.map((batch) => ({ summary, batch })))
-
-  if (rows.length === 0) {
-    return <p className="rounded-lg border border-dashed border-border bg-card px-5 py-10 text-center text-sm text-muted-foreground">No dispatch batches match this view.</p>
-  }
-
-  return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-card">
-      <table className="w-full min-w-[880px] text-left">
-        <thead>
-          <tr className="border-b border-border bg-muted/40">
-            {['Event', 'Vehicle', 'Going', 'Crew', 'Status', 'Item check'].map((h) => (
-              <th key={h} className="px-5 py-3.5 text-[0.56rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(({ summary, batch }) => {
-            const attention = batchAttention(batch)
-            const hasPahabol = attention.includes('pahabol')
-            const hasShort = attention.includes('short')
-            return (
-              <tr
-                key={batch.id}
-                onClick={() => onOpenBatch(summary.eventId, batch.id)}
-                className="cursor-pointer border-t border-border/60 align-middle transition hover:bg-muted/40"
-              >
-                <td className="px-5 py-3.5">
-                  <p className="text-sm font-medium text-card-foreground">{summary.eventTitle}</p>
-                  <p className="text-[0.6rem] uppercase tracking-[0.06em] text-muted-foreground">{summary.venue}</p>
-                </td>
-                <td className="px-5 py-3.5">
-                  <p className="text-xs text-card-foreground">{batch.vehicleType}</p>
-                  <p className="text-[0.6rem] uppercase tracking-[0.06em] text-muted-foreground">{batch.plateNumber}</p>
-                </td>
-                <td className="px-5 py-3.5">
-                  <span className="inline-flex items-center gap-1.5 text-xs text-card-foreground">
-                    {batch.direction === 'outbound' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
-                    {batch.direction === 'outbound' ? 'Delivery' : 'Return'}
-                  </span>
-                </td>
-                <td className="px-5 py-3.5">
-                  <div className="flex items-center gap-1.5">
-                    {batch.crew.length === 0 ? (
-                      <span className="text-[0.6rem] text-muted-foreground/60">Unassigned</span>
-                    ) : (
-                      <>
-                        {batch.crew.slice(0, 3).map((member) => <Avatar key={member.id} name={member.name} />)}
-                        {batch.crew.length > 3 && (
-                          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[0.58rem] font-bold text-muted-foreground ring-1 ring-border" title={`${batch.crew.length - 3} more crew members`}>
-                            +{batch.crew.length - 3}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </td>
-                <td className="px-5 py-3.5">
-                  <p className={cn('mb-2 text-[0.62rem] font-bold uppercase tracking-[0.06em]', batch.stalled ? 'text-amber-700 dark:text-amber-300' : 'text-primary')}>
-                    {batch.stalled ? 'Transit delayed' : batch.stage}
-                  </p>
-                  <DispatchStepper direction={batch.direction} stage={batch.stage} stalled={batch.stalled} />
-                </td>
-                <td className="px-5 py-3.5">
-                  {hasPahabol ? (
-                    <div className="space-y-1"><Pill tone="critical">Follow-up items</Pill><p className="text-[0.58rem] text-muted-foreground">Additional items required</p></div>
-                  ) : hasShort ? (
-                    <div className="space-y-1"><Pill tone="caution">Items missing</Pill><p className="text-[0.58rem] text-muted-foreground">Delivery list count is short</p></div>
-                  ) : (
-                    <Pill tone="positive">Matched</Pill>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-function NewBatchModal({
-  eventId,
-  direction,
-  onClose,
-}: {
-  eventId: string
-  direction: BatchDirection
-  onClose: () => void
-}) {
-  const { events, staff, procurement } = usePortal()
-  const event = events.find((e) => e.id === eventId)
-  const batchStore = useDispatchStore(events, staff, procurement)
-  const existingBatches = batchStore.get(eventId) ?? []
-
-  const [vehicleType, setVehicleType] = useState('Box Truck (14ft)')
-  const [plateNumber, setPlateNumber] = useState('NBC 1234')
-  const [driverName, setDriverName] = useState('')
-
-  // Event Master Inventory Items
-  const masterItems = useMemo(() => {
-    if (!event) return []
-    return getEventDetailSnapshot(event, staff, procurement).items
-  }, [event, staff, procurement])
-
-  // Deduplication: Calculate open/committed quantities across active outbound batches for this event
-  const itemAvailabilityMap = useMemo(() => {
-    const map = new Map<string, number>()
-    masterItems.forEach((item) => map.set(item.name, item.quantity))
-
-    if (direction === 'outbound') {
-      const openOutboundBatches = existingBatches.filter(
-        (b) => b.direction === 'outbound' && b.stage !== 'Delivered' && b.stage !== 'Returned',
-      )
-      openOutboundBatches.forEach((b) => {
-        b.reconciliation.forEach((r) => {
-          const current = map.get(r.itemName) ?? 0
-          map.set(r.itemName, Math.max(0, current - r.planned))
-        })
-      })
-    }
-    return map
-  }, [masterItems, existingBatches, direction])
-
-  const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({})
-
-  const toggleItem = (name: string, available: number) => {
-    setSelectedQuantities((prev) => {
-      const next = { ...prev }
-      if (next[name] !== undefined) {
-        delete next[name]
-      } else {
-        next[name] = Math.min(available, Math.max(1, available))
-      }
-      return next
-    })
-  }
-
-  const updateQuantity = (name: string, qty: number, available: number) => {
-    setSelectedQuantities((prev) => ({
-      ...prev,
-      [name]: Math.min(available, Math.max(1, qty)),
-    }))
-  }
-
-  const handleCreate = () => {
-    const itemsToAssign = Object.entries(selectedQuantities).map(([itemName, planned]) => ({
-      itemName,
-      planned,
-    }))
-
-    addNewCustomBatch(eventId, direction, vehicleType, plateNumber, driverName, itemsToAssign)
-    onClose()
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-60 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
-      <div
-        className="flex h-full max-h-[44rem] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-card shadow-2xl space-y-4 p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between border-b border-border pb-3">
-          <div>
-            <span className="text-[0.58rem] font-bold uppercase tracking-[0.2em] text-primary">
-              Dispatch &amp; Logistics
-            </span>
-            <h2 className="font-serif text-xl font-bold text-card-foreground">
-              New {direction === 'outbound' ? 'Delivery' : 'Return'} Trip
-            </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Target Event: {event?.title}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto space-y-5 pr-1">
-          {/* Vehicle & Driver Info Form */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground">Vehicle Type</span>
-              <input
-                type="text"
-                value={vehicleType}
-                onChange={(e) => setVehicleType(e.target.value)}
-                placeholder="Vehicle type..."
-                className="rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground">Plate Number</span>
-              <input
-                type="text"
-                value={plateNumber}
-                onChange={(e) => setPlateNumber(e.target.value)}
-                placeholder="Plate number..."
-                className="rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[0.58rem] font-bold uppercase tracking-wider text-muted-foreground">Driver Name</span>
-              <input
-                type="text"
-                value={driverName}
-                onChange={(e) => setDriverName(e.target.value)}
-                placeholder="Assigned driver..."
-                className="rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
-              />
-            </label>
-          </div>
-
-          {/* Asset Selection with Active Open Batch Deduplication */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                Select Event Assets to Allocate
-              </h3>
-              <span className="text-[0.6rem] text-muted-foreground">
-                {Object.keys(selectedQuantities).length} assets selected
-              </span>
-            </div>
-
-            <div className="rounded-lg border border-border bg-background p-3 space-y-2 max-h-56 overflow-y-auto">
-              {masterItems.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-4 text-center">No allocated master items found for this event.</p>
-              ) : (
-                masterItems.map((item) => {
-                  const available = itemAvailabilityMap.get(item.name) ?? 0
-                  const isSelected = selectedQuantities[item.name] !== undefined
-                  const isFullyReserved = available <= 0
-
-                  return (
-                    <div
-                      key={item.id}
-                      className={cn(
-                        'flex items-center justify-between rounded-md border p-2.5 text-xs transition',
-                        isFullyReserved
-                          ? 'border-border bg-muted/40 opacity-60'
-                          : isSelected
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border bg-card',
                       )}
-                    >
-                      <label className="flex items-center gap-2 cursor-pointer min-w-0 flex-1">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          disabled={isFullyReserved}
-                          onChange={() => toggleItem(item.name, available)}
-                          className="size-4 rounded border-input text-primary focus:ring-primary"
-                        />
-                        <div className="min-w-0">
-                          <p className="font-semibold text-foreground truncate">{item.name}</p>
-                          <p className="text-[0.6rem] text-muted-foreground">
-                            Event Total: {item.quantity} · Available: <span className="font-bold text-primary">{available}</span>
-                          </p>
-                        </div>
-                      </label>
+                    </div>
 
-                      {isFullyReserved ? (
-                        <span className="rounded bg-muted px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-wider text-muted-foreground border border-border">
-                          Reserved in Open Batch
+                    <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border/60 pt-4">
+                      <div className="flex flex-wrap items-center gap-4 text-[0.68rem] font-bold uppercase tracking-wider text-muted-foreground">
+                        <span className="flex items-center gap-1.5 text-card-foreground">
+                          <Truck className="size-3.5 text-muted-foreground" />
+                          {summary.batches.length} BATCHES
                         </span>
-                      ) : isSelected ? (
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-[0.58rem] font-bold uppercase text-muted-foreground">Load Qty:</span>
-                          <input
-                            type="number"
-                            min={1}
-                            max={available}
-                            value={selectedQuantities[item.name]}
-                            onChange={(e) => updateQuantity(item.name, Number(e.target.value) || 1, available)}
-                            className="w-16 rounded border border-input bg-background px-2 py-1 text-xs text-foreground font-bold outline-none focus:border-primary"
+                        <span>{outboundCount} OUTBOUND</span>
+                        <span>{returnCount} RETURN</span>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="h-1.5 w-24 sm:w-32 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-[#8C6B4B] dark:bg-amber-600 transition-all duration-300"
+                            style={{ width: `${summary.handshakePercent}%` }}
                           />
                         </div>
-                      ) : null}
+                        <span className="text-xs font-bold text-foreground min-w-8 text-right">
+                          {summary.handshakePercent}%
+                        </span>
+                      </div>
                     </div>
-                  )
-                })
+                  </div>
+                )
+              })
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: DISPATCH OVERVIEW (Image 3) */}
+        {activeTab === 'dispatch-overview' && (
+          <div className="space-y-6">
+            {/* 3 Metric Column Strip */}
+            <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-y-0 sm:divide-x divide-border/80 rounded-2xl border border-border/80 bg-card p-4 shadow-2xs">
+              <div className="px-4 py-2">
+                <span className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                  Dispatch Overview
+                </span>
+                <div className="mt-1 font-serif text-2xl font-medium text-foreground">
+                  {totalDispatchesCount} dispatches
+                </div>
+              </div>
+              <div className="px-4 py-2">
+                <span className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                  In Transit
+                </span>
+                <div className="mt-1 font-serif text-2xl font-medium text-foreground">
+                  {inTransitCount}
+                </div>
+              </div>
+              <div className="px-4 py-2">
+                <span className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                  Attention
+                </span>
+                <div className="mt-1 font-serif text-2xl font-medium text-rose-600 dark:text-rose-400">
+                  {attentionCount}
+                </div>
+              </div>
+            </div>
+
+            {/* Sectioned Table */}
+            <div className="overflow-x-auto rounded-2xl border border-border/80 bg-card shadow-2xs">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border/80 bg-muted/20 text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                    <th className="px-5 py-3.5">Event</th>
+                    <th className="px-5 py-3.5">Vehicle</th>
+                    <th className="px-5 py-3.5">Direction</th>
+                    <th className="px-5 py-3.5">Crew</th>
+                    <th className="px-5 py-3.5">Dispatch Status</th>
+                    <th className="px-5 py-3.5">Reconciliation</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filteredSummaries.map((group) => (
+                    <Fragment key={group.eventId}>
+                      <tr className="bg-muted/30 border-y border-border/80">
+                        <td colSpan={6} className="px-5 py-3">
+                          <span className="font-serif text-sm font-medium text-foreground">{group.eventTitle}</span>
+                          <span className="text-[0.65rem] text-muted-foreground font-sans uppercase tracking-wider ml-2">
+                            · {group.venue}
+                          </span>
+                        </td>
+                      </tr>
+                      {group.batches.map((batch) => (
+                        <tr
+                          key={batch.id}
+                          onClick={() => openBatchDetail(group.eventId, batch.id)}
+                          className="hover:bg-accent/40 cursor-pointer transition-colors"
+                        >
+                          <td className="px-5 py-3.5 font-medium text-muted-foreground">Dispatch batch</td>
+                          <td className="px-5 py-3.5">
+                            <div className="font-semibold text-foreground">{batch.vehicleType}</div>
+                            <div className="text-[0.65rem] font-mono text-muted-foreground uppercase">{batch.plateNumber}</div>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className="inline-flex items-center gap-1 font-semibold text-foreground">
+                              {batch.direction === 'outbound' ? '↑ Outbound' : '↓ Return'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {batch.crew && batch.crew.length > 0 ? (
+                              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[0.65rem] font-medium text-primary">
+                                {batch.crew.map((c) => (typeof c === 'string' ? c : c.name)).join(', ')}
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-amber-100 dark:bg-amber-950/60 px-2 py-0.5 text-[0.65rem] font-medium text-amber-800 dark:text-amber-300">
+                                Unassigned
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <DispatchStatusPipeline stage={batch.stage} direction={batch.direction} />
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <ReconciliationBadge rows={batch.reconciliation} />
+                          </td>
+                        </tr>
+                      ))}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: COMPLETED EVENTS */}
+        {activeTab === 'completed-events' && (
+          <div className="flex flex-col gap-4">
+            {filteredSummaries.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center text-sm text-muted-foreground">
+                No completed event dispatches found.
+              </div>
+            ) : (
+              filteredSummaries.map((summary) => (
+                <div
+                  key={summary.eventId}
+                  onClick={() => {
+                    setSelectedEventModalId(summary.eventId)
+                    setEventModalSubTab('overview')
+                  }}
+                  className="group flex items-center justify-between rounded-2xl border border-border/80 bg-card p-5 shadow-2xs hover:border-primary/50 cursor-pointer"
+                >
+                  <div>
+                    <h2 className="font-serif text-lg font-medium text-card-foreground group-hover:text-primary">
+                      {summary.eventTitle}
+                    </h2>
+                    <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">
+                      {summary.venue} · {summary.targetDate}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-emerald-500/10 text-emerald-600 px-3 py-1 text-xs font-bold uppercase tracking-wider">
+                    Completed (100%)
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ─── LEVEL 2: EVENT DETAIL MODAL (Image 4) ─── */}
+      {selectedEventModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSelectedEventModalId(null)}
+        >
+          <div
+            className="flex h-full max-h-[46rem] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-card shadow-2xl border border-border"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-border/80 px-6 py-5 shrink-0">
+              <div>
+                <span className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                  Event Detail
+                </span>
+                <h2 className="font-serif text-2xl font-medium text-card-foreground mt-0.5">
+                  {selectedEventModal.eventTitle}
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{selectedEventModal.venue}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedEventModalId(null)}
+                className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* 4 Mini KPI Cards */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-xl border border-border/80 bg-background p-4">
+                  <span className="text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground">Planned</span>
+                  <div className="mt-1 font-serif text-2xl font-medium text-foreground">
+                    {selectedEventModal.batches.filter((b) => b.stage === 'Planned').length}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border/80 bg-background p-4">
+                  <span className="text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground">Loaded</span>
+                  <div className="mt-1 font-serif text-2xl font-medium text-foreground">
+                    {selectedEventModal.batches.filter((b) => b.stage === 'Loaded').length}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border/80 bg-background p-4">
+                  <span className="text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground">In Transit</span>
+                  <div className="mt-1 font-serif text-2xl font-medium text-foreground">
+                    {selectedEventModal.batches.filter((b) => b.stage === 'In Transit').length}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border/80 bg-background p-4">
+                  <span className="text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground">Delivered</span>
+                  <div className="mt-1 font-serif text-2xl font-medium text-foreground">
+                    {selectedEventModal.batches.filter((b) => b.stage === 'Delivered' || b.stage === 'Returned').length}
+                  </div>
+                </div>
+              </div>
+
+              {/* Sub-Tabs: OVERVIEW | ITEMS | REQUESTS */}
+              <div className="border-b border-border flex items-center gap-6">
+                <button
+                  type="button"
+                  onClick={() => setEventModalSubTab('overview')}
+                  className={cn(
+                    'pb-2.5 text-xs font-bold uppercase tracking-wider transition border-b-2',
+                    eventModalSubTab === 'overview'
+                      ? 'border-[#8C6B4B] text-[#8C6B4B] dark:border-amber-400 dark:text-amber-400'
+                      : 'border-transparent text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  Overview
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEventModalSubTab('items')}
+                  className={cn(
+                    'pb-2.5 text-xs font-bold uppercase tracking-wider transition border-b-2',
+                    eventModalSubTab === 'items'
+                      ? 'border-[#8C6B4B] text-[#8C6B4B] dark:border-amber-400 dark:text-amber-400'
+                      : 'border-transparent text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  Items
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEventModalSubTab('requests')}
+                  className={cn(
+                    'pb-2.5 text-xs font-bold uppercase tracking-wider transition border-b-2',
+                    eventModalSubTab === 'requests'
+                      ? 'border-[#8C6B4B] text-[#8C6B4B] dark:border-amber-400 dark:text-amber-400'
+                      : 'border-transparent text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  Requests
+                </button>
+              </div>
+
+              {/* Sub-tab 1: OVERVIEW */}
+              {eventModalSubTab === 'overview' && (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-xs text-muted-foreground">
+                      Handshake rate <strong className="text-foreground">{selectedEventModal.handshakePercent}%</strong> across{' '}
+                      {selectedEventModal.batches.length} batches.
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => exportEventManifest(selectedEventModal)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-accent"
+                      >
+                        <Download className="size-3.5" />
+                        Export Manifest (PDF)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const event = events.find((e) => e.id === selectedEventModal.eventId)
+                          if (event && selectedEventModal.batches[0]) {
+                            advanceBatchStage(selectedEventModal.eventId, selectedEventModal.batches[0].id)
+                          }
+                        }}
+                        className="rounded-xl bg-[#8C6B4B] hover:bg-[#78593c] text-white px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider shadow-xs"
+                      >
+                        + New Outbound Batch
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // new return batch trigger
+                        }}
+                        className="rounded-xl border border-border bg-background hover:bg-accent px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider"
+                      >
+                        + New Return Batch
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Batch Cards List */}
+                  <div className="space-y-3">
+                    {selectedEventModal.batches.map((batch) => (
+                      <div
+                        key={batch.id}
+                        onClick={() => openBatchDetail(selectedEventModal.eventId, batch.id)}
+                        className="group flex flex-col gap-3 rounded-xl border border-border/80 bg-background p-4 transition-all hover:border-primary/50 hover:shadow-2xs cursor-pointer"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                              {batch.direction === 'outbound' ? (
+                                <ArrowUp className="size-4" />
+                              ) : (
+                                <ArrowDown className="size-4" />
+                              )}
+                            </span>
+                            <div>
+                              <h4 className="font-serif text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                                {batch.vehicleType}
+                              </h4>
+                              <p className="text-[0.62rem] font-mono text-muted-foreground uppercase">
+                                {batch.plateNumber} · Driver: {batch.driverName || 'Unassigned'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                exportBatchPdf(
+                                  {
+                                    eventTitle: selectedEventModal.eventTitle,
+                                    venue: selectedEventModal.venue,
+                                    targetDate: selectedEventModal.targetDate,
+                                  },
+                                  batch,
+                                )
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2 py-1 text-[0.62rem] font-bold uppercase text-muted-foreground hover:bg-accent hover:text-foreground"
+                            >
+                              <Download className="size-3" /> PDF
+                            </button>
+                            <DispatchStatusPipeline stage={batch.stage} direction={batch.direction} />
+                          </div>
+                        </div>
+
+                        {batch.reconciliation && batch.reconciliation.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1.5 border-t border-border/50 pt-2.5 text-xs">
+                            <span className="text-[0.62rem] font-bold uppercase text-muted-foreground">
+                              Contained Assets ({batch.reconciliation.length}):
+                            </span>
+                            {batch.reconciliation.map((item) => (
+                              <span
+                                key={item.id}
+                                className="rounded-md bg-muted/60 px-2 py-0.5 text-[0.65rem] text-muted-foreground"
+                              >
+                                {item.itemName} <strong className="text-foreground">({item.planned})</strong>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-tab 2: ITEMS */}
+              {eventModalSubTab === 'items' && (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-border bg-background p-4">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-border/60 text-[0.62rem] font-bold uppercase text-muted-foreground">
+                          <th className="pb-2.5">Item Name</th>
+                          <th className="pb-2.5">Planned</th>
+                          <th className="pb-2.5">Actual</th>
+                          <th className="pb-2.5">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/40">
+                        {selectedEventModal.batches.flatMap((b) => b.reconciliation).map((item) => (
+                          <tr key={item.id}>
+                            <td className="py-2.5 font-medium">{item.itemName}</td>
+                            <td className="py-2.5">{item.planned}</td>
+                            <td className="py-2.5">{item.actual}</td>
+                            <td className="py-2.5">
+                              <span
+                                className={cn(
+                                  'rounded-full px-2 py-0.5 text-[0.62rem] font-bold uppercase',
+                                  item.status === 'Matched'
+                                    ? 'bg-emerald-500/10 text-emerald-600'
+                                    : item.status === 'Pahabol'
+                                      ? 'bg-rose-500/10 text-rose-600'
+                                      : 'bg-amber-500/10 text-amber-600',
+                                )}
+                              >
+                                {item.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-tab 3: REQUESTS */}
+              {eventModalSubTab === 'requests' && (
+                <div className="rounded-xl border border-dashed border-border bg-background p-12 text-center text-xs text-muted-foreground">
+                  No pending field requests or escalations for this event.
+                </div>
               )}
             </div>
           </div>
         </div>
+      )}
 
-        <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-border px-4 py-2 text-xs font-bold uppercase tracking-wider hover:bg-accent"
+      {/* ─── LEVEL 3: BATCH DETAIL MODAL (Image 5) ─── */}
+      {activeBatch && activeBatchEntry && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setActiveBatchDetail(null)}
+        >
+          <div
+            className="flex h-full max-h-[46rem] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-card shadow-2xl border border-border"
+            onClick={(e) => e.stopPropagation()}
           >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleCreate}
-            className="rounded-md bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-primary-foreground shadow-sm hover:opacity-90"
-          >
-            Create Trip ({Object.keys(selectedQuantities).length} Items)
-          </button>
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-border/80 px-6 py-5 shrink-0">
+              <div>
+                <span className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                  Batch Detail
+                </span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    {activeBatch.direction === 'outbound' ? (
+                      <ArrowUp className="size-3.5" />
+                    ) : (
+                      <ArrowDown className="size-3.5" />
+                    )}
+                  </span>
+                  <h2 className="font-serif text-2xl font-medium text-card-foreground">
+                    {activeBatch.vehicleType}
+                  </h2>
+                </div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mt-0.5">
+                  {activeBatch.plateNumber} · {activeBatch.direction.toUpperCase()} /{' '}
+                  {activeBatch.direction === 'outbound' ? 'EGRESS' : 'INGRESS'}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const evt = summaries.find((s) => s.eventId === activeBatchEntry.eventId)
+                    if (evt) {
+                      exportBatchPdf(
+                        { eventTitle: evt.eventTitle, venue: evt.venue, targetDate: evt.targetDate },
+                        activeBatch,
+                      )
+                    }
+                  }}
+                  className="rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-accent"
+                >
+                  Export Manifest (PDF)
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setConfirmDeleteModal({
+                      eventId: activeBatchEntry.eventId,
+                      batchId: activeBatch.id,
+                    })
+                  }
+                  className="rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 hover:bg-rose-100"
+                >
+                  Cancel / Delete Batch
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveBatchDetail(null)}
+                  className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Section 1: Vehicle & Driver Assignment */}
+              <div className="rounded-xl border border-border/80 bg-background p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                    Vehicle &amp; Driver Assignment
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isEditingVehicleInfo) {
+                        handleSaveVehicleInfo()
+                      } else {
+                        setIsEditingVehicleInfo(true)
+                      }
+                    }}
+                    className="rounded-lg border border-border bg-card px-2.5 py-1 text-[0.62rem] font-bold uppercase tracking-wider text-foreground hover:bg-accent"
+                  >
+                    {isEditingVehicleInfo ? 'Save Changes' : 'Edit Vehicle & Driver'}
+                  </button>
+                </div>
+
+                {isEditingVehicleInfo ? (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 pt-1">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[0.58rem] font-bold uppercase text-muted-foreground">Vehicle</span>
+                      <input
+                        type="text"
+                        value={editVehicle}
+                        onChange={(e) => setEditVehicle(e.target.value)}
+                        className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[0.58rem] font-bold uppercase text-muted-foreground">Plate #</span>
+                      <input
+                        type="text"
+                        value={editPlate}
+                        onChange={(e) => setEditPlate(e.target.value)}
+                        className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[0.58rem] font-bold uppercase text-muted-foreground">Driver</span>
+                      <input
+                        type="text"
+                        value={editDriver}
+                        onChange={(e) => setEditDriver(e.target.value)}
+                        className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-3 pt-1">
+                    <div>
+                      <span className="text-[0.58rem] font-bold uppercase text-muted-foreground block">Vehicle</span>
+                      <strong className="text-xs text-foreground font-medium">{activeBatch.vehicleType}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[0.58rem] font-bold uppercase text-muted-foreground block">Plate #</span>
+                      <strong className="text-xs text-foreground font-mono">{activeBatch.plateNumber}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[0.58rem] font-bold uppercase text-muted-foreground block">Driver</span>
+                      <strong className="text-xs text-foreground font-medium">{activeBatch.driverName || 'Unassigned'}</strong>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Section 2: Dispatch Stage */}
+              <div className="rounded-xl border border-border/80 bg-background p-4 space-y-3">
+                <span className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-muted-foreground block">
+                  Dispatch Stage
+                </span>
+                <div className="pt-1">
+                  <DispatchStatusPipeline
+                    stage={activeBatch.stage}
+                    direction={activeBatch.direction}
+                    onSelectStage={(_targetStage) => {
+                      advanceBatchStage(activeBatchEntry.eventId, activeBatch.id)
+                    }}
+                  />
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReportBreakdownModal({
+                        eventId: activeBatchEntry.eventId,
+                        batchId: activeBatch.id,
+                      })
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#8C6B4B]/80 hover:bg-[#8C6B4B] text-white px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider shadow-xs"
+                  >
+                    <AlertTriangle className="size-3.5" />
+                    Interrupt / Report Breakdown
+                  </button>
+                </div>
+              </div>
+
+              {/* Section 3: Field Lead Handoff */}
+              <div className="rounded-xl border border-border/80 bg-background p-4 space-y-2">
+                <label className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-muted-foreground block">
+                  Field Lead Handoff *
+                </label>
+                <textarea
+                  rows={4}
+                  value={activeBatch.handoffNote}
+                  onChange={(e) =>
+                    updateBatchHandoffNote(activeBatchEntry.eventId, activeBatch.id, e.target.value)
+                  }
+                  placeholder="Describe where damaged items are placed..."
+                  className="w-full rounded-xl border border-border bg-card p-3 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-primary resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Footer Navigation & Stage Action */}
+            <div className="flex items-center justify-between border-t border-border/80 px-6 py-4 bg-card shrink-0">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={activeBatchIndex <= 0}
+                  onClick={handlePrevBatch}
+                  className="rounded-xl border border-border bg-background px-3.5 py-2 text-xs font-bold uppercase tracking-wider disabled:opacity-40 hover:bg-accent"
+                >
+                  &lt; Previous Batch
+                </button>
+                <button
+                  type="button"
+                  disabled={activeBatchIndex >= currentBatchNavList.length - 1}
+                  onClick={handleNextBatch}
+                  className="rounded-xl border border-border bg-background px-3.5 py-2 text-xs font-bold uppercase tracking-wider disabled:opacity-40 hover:bg-accent"
+                >
+                  Next Batch &gt;
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAdvanceStage}
+                className="rounded-xl bg-[#8C6B4B] hover:bg-[#78593c] text-white px-5 py-2 text-xs font-bold uppercase tracking-wider shadow-xs"
+              >
+                Mark as {nextStage(activeBatch.direction, activeBatch.stage)}
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Confirmation Modal for Delete */}
+      {confirmDeleteModal && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-2xl space-y-4 border border-border">
+            <div className="flex items-center gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-rose-500/15 text-rose-600">
+                <AlertTriangle className="size-5" />
+              </span>
+              <div>
+                <h3 className="font-serif text-lg font-bold text-card-foreground">Delete this batch?</h3>
+                <p className="text-xs text-muted-foreground">
+                  This will archive the batch and return allocated assets to available status.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteModal(null)}
+                className="rounded-xl border border-border px-3.5 py-1.5 text-xs font-bold uppercase hover:bg-accent"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteBatch(confirmDeleteModal.eventId, confirmDeleteModal.batchId, 'Deleted by manager', {
+                    id: 'wom-1',
+                    name: adminName || 'Warehouse Operations Manager',
+                  })
+                  setConfirmDeleteModal(null)
+                  setActiveBatchDetail(null)
+                }}
+                className="rounded-xl bg-rose-600 text-white px-3.5 py-1.5 text-xs font-bold uppercase shadow-sm hover:bg-rose-700"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Breakdown / Interruption Modal */}
+      {reportBreakdownModal && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-2xl space-y-4 border border-border">
+            <div className="flex items-center gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-600">
+                <AlertTriangle className="size-5" />
+              </span>
+              <div>
+                <h3 className="font-serif text-lg font-bold text-card-foreground">Report Transit Interruption</h3>
+                <p className="text-xs text-muted-foreground">
+                  Document any vehicle breakdown, traffic stall, or transit delay.
+                </p>
+              </div>
+            </div>
+            <textarea
+              rows={3}
+              value={breakdownReason}
+              onChange={(e) => setBreakdownReason(e.target.value)}
+              placeholder="Enter breakdown / delay reason..."
+              className="w-full rounded-xl border border-border bg-background p-2.5 text-xs text-foreground outline-none focus:border-primary resize-none"
+            />
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setReportBreakdownModal(null)}
+                className="rounded-xl border border-border px-3.5 py-1.5 text-xs font-bold uppercase hover:bg-accent"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  markBatchStalled(
+                    reportBreakdownModal.eventId,
+                    reportBreakdownModal.batchId,
+                    breakdownReason || 'Vehicle breakdown / delay',
+                  )
+                  setReportBreakdownModal(null)
+                }}
+                className="rounded-xl bg-amber-600 text-white px-3.5 py-1.5 text-xs font-bold uppercase shadow-sm hover:bg-amber-700"
+              >
+                Flag Delay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
+export default DispatchModule
