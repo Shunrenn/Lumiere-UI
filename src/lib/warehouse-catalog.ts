@@ -180,7 +180,7 @@ export interface CatalogAsset {
 export const CANONICAL_CATALOG_ASSETS: CatalogAsset[] = [
   // EVENT ASSETS
   {
-    id: 'evt-ast-001', assetId: 'LM-EV-001',
+    id: '22222222-2222-2222-2222-222222222224', assetId: 'LM-EV-001',
     name: 'Custom Modular Velvet Stage Platform 4x8', itemCallName: 'Velvet Stage Platform',
     category: 'Event Assets', subCategory: 'Staging',
     description: 'Modular 4x8 ft carpeted stage platform with adjustable leg risers.',
@@ -193,7 +193,7 @@ export const CANONICAL_CATALOG_ASSETS: CatalogAsset[] = [
     bespokeStage: 'Ready', bespokeCrew: 'Fab Team',
   },
   {
-    id: 'evt-ast-002', assetId: 'LM-EV-002',
+    id: '22222222-2222-2222-2222-222222222223', assetId: 'LM-EV-002',
     name: 'L-Acoustics K2 Line Array Speaker Module', itemCallName: 'K2 Line Array',
     category: 'Event Assets', subCategory: 'Audio Equipment',
     description: 'Professional line array speaker element, 12-inch woofer + HF compression driver.',
@@ -205,7 +205,7 @@ export const CANONICAL_CATALOG_ASSETS: CatalogAsset[] = [
     currentStock: 16, threshold: 8, lifeSpan: '60 months', damageReplacementCost: 120000,
   },
   {
-    id: 'evt-ast-003', assetId: 'LM-EV-003',
+    id: '22222222-2222-2222-2222-222222222222', assetId: 'LM-EV-003',
     name: 'Arri SkyPanel S60-C LED Softlight', itemCallName: 'SkyPanel S60-C',
     category: 'Event Assets', subCategory: 'Lighting',
     description: 'Full-colour RGBA-W LED softlight panel with integrated yoke. Ideal for stage wash.',
@@ -480,10 +480,23 @@ export const CANONICAL_CATALOG_ASSETS: CatalogAsset[] = [
 ]
 
 
+const CATALOG_STORAGE_KEY = '_lumiere_warehouse_catalog'
 let cachedCatalog: CatalogAsset[] | null = null
 
 export function getCatalogAssets(): CatalogAsset[] {
   if (cachedCatalog) return cachedCatalog
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(CATALOG_STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          cachedCatalog = parsed
+          return cachedCatalog
+        }
+      }
+    } catch {}
+  }
   cachedCatalog = [...CANONICAL_CATALOG_ASSETS]
   return cachedCatalog
 }
@@ -496,45 +509,76 @@ export function getCatalogAssetById(id: string): CatalogAsset | undefined {
 const listeners = new Set<() => void>()
 
 function publishCatalog() {
+  if (cachedCatalog && typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(CATALOG_STORAGE_KEY, JSON.stringify(cachedCatalog))
+    } catch {}
+  }
   listeners.forEach((listener) => listener())
 }
 
 export function useCatalogAssets(): CatalogAsset[] {
   useEffect(() => {
     let active = true
-    fetchAssetsApi().then((items) => {
-      if (!active || !items.length) return
-      const mapped: CatalogAsset[] = items.map((raw: any, idx: number) => ({
-        id: String(raw.id || raw.assetId || `cat-${idx}`),
-        assetId: String(raw.assetId || `LM-${(raw.category || 'AS').slice(0, 2).toUpperCase()}-${1000 + idx}`),
-        name: raw.name || 'Unnamed Asset',
-        itemCallName: raw.itemCallName || raw.name || 'Asset',
-        category: (raw.category as AssetCategory) || 'Stockroom Assets',
-        subCategory: raw.subCategory || 'General',
-        description: raw.description || '',
-        status: (raw.assetState || raw.status || 'Available') as AssetStatus,
-        image: raw.photoUrl || raw.catalogPhotoUrl || raw.image || '',
-        unit: raw.unit || 'pcs',
-        dimensions: raw.dimensions || { height: '—', width: '—', depth: '—', weight: '—' },
-        material: raw.material || 'Standard',
-        purchaseCost: raw.cost ?? raw.originalValue ?? raw.purchaseCost ?? 0,
-        costPerUnit: raw.cost ?? raw.costPerUnit ?? 0,
-        dateAdded: raw.dateAdded || raw.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-        primaryVendorId: raw.primaryVendorId || '',
-        currentStock: typeof raw.quantity === 'number' ? raw.quantity : (raw.currentStock ?? raw.baseCount ?? 0),
-        threshold: raw.threshold ?? 5,
-        criticalThreshold: raw.criticalThreshold ?? 2,
-        ceilingCap: raw.ceilingCap ?? 100,
-      }))
-      // API records replace only matching IDs. The local catalog remains usable
-      // during an unavailable or partial API response.
-      const byId = new Map(getCatalogAssets().map((asset) => [asset.id, asset]))
-      mapped.forEach((asset) => byId.set(asset.id, asset))
-      cachedCatalog = Array.from(byId.values())
-      publishCatalog()
-    })
+    const loadAssets = () => {
+      fetchAssetsApi({ pageSize: 500 }).then((items) => {
+        if (!active || !items.length) return
+        const mapped: CatalogAsset[] = items.map((raw: any, idx: number) => ({
+          id: String(raw.id || raw.assetId || `cat-${idx}`),
+          assetId: String(raw.assetId || `LM-${(raw.category || 'AS').slice(0, 2).toUpperCase()}-${1000 + idx}`),
+          name: raw.name || 'Unnamed Asset',
+          itemCallName: raw.itemCallName || raw.name || 'Asset',
+          category: (raw.category as AssetCategory) || 'Stockroom Assets',
+          subCategory: raw.subCategory || 'General',
+          description: raw.description || '',
+          status: (raw.assetState || raw.status || 'Available') as AssetStatus,
+          image: raw.photoUrl || raw.catalogPhotoUrl || raw.image || '',
+          unit: raw.unit || 'pcs',
+          dimensions: raw.dimensions || { height: '—', width: '—', depth: '—', weight: '—' },
+          material: raw.material || 'Standard',
+          purchaseCost: raw.cost ?? raw.originalValue ?? raw.purchaseCost ?? 0,
+          costPerUnit: raw.cost ?? raw.costPerUnit ?? 0,
+          dateAdded: raw.dateAdded || raw.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+          primaryVendorId: raw.primaryVendorId || '',
+          currentStock: typeof raw.quantity === 'number' ? raw.quantity : (raw.currentStock ?? raw.baseCount ?? 0),
+          threshold: raw.threshold ?? 5,
+          criticalThreshold: raw.criticalThreshold ?? 2,
+          ceilingCap: raw.ceilingCap ?? 100,
+        }))
+
+        // Smart merge: match by ID, or match by Name to adopt server GUID
+        const current = getCatalogAssets()
+        const byId = new Map(current.map((asset) => [asset.id, asset]))
+        const byName = new Map(current.map((asset) => [asset.name.toLowerCase().trim(), asset]))
+
+        mapped.forEach((serverAsset) => {
+          if (byId.has(serverAsset.id)) {
+            const prev = byId.get(serverAsset.id)!
+            byId.set(serverAsset.id, { ...prev, ...serverAsset })
+          } else if (byName.has(serverAsset.name.toLowerCase().trim())) {
+            const prev = byName.get(serverAsset.name.toLowerCase().trim())!
+            byId.delete(prev.id)
+            byId.set(serverAsset.id, { ...prev, ...serverAsset, id: serverAsset.id })
+          } else {
+            byId.set(serverAsset.id, serverAsset)
+          }
+        })
+
+        cachedCatalog = Array.from(byId.values())
+        publishCatalog()
+      }).catch((err) => {
+        console.warn('[catalog] fetchAssetsApi failed:', err)
+      })
+    }
+
+    loadAssets()
+    const interval = setInterval(loadAssets, 30000)
+    window.addEventListener('focus', loadAssets)
+
     return () => {
       active = false
+      clearInterval(interval)
+      window.removeEventListener('focus', loadAssets)
     }
   }, [])
 
@@ -552,6 +596,7 @@ export function addCatalogAsset(asset: CatalogAsset): CatalogAsset {
   const existing = getCatalogAssets()
   cachedCatalog = [asset, ...existing]
   publishCatalog()
+
   createAssetApi(asset).then((res) => {
     if (res && ((res as any).assetId || (res as any).id)) {
       const serverId = String((res as any).assetId || (res as any).id)
@@ -566,9 +611,20 @@ export function addCatalogAsset(asset: CatalogAsset): CatalogAsset {
 
 export function updateCatalogAsset(id: string, changes: Partial<Omit<CatalogAsset, 'id'>>) {
   const existing = getCatalogAssets()
+  const target = existing.find((asset) => asset.id === id || asset.assetId === id)
   cachedCatalog = existing.map((asset) => (asset.id === id || asset.assetId === id ? { ...asset, ...changes } : asset))
   publishCatalog()
-  void updateAssetApi(id, changes)
+
+  if (target) {
+    const updatedAsset = { ...target, ...changes }
+    void updateAssetApi(target.id, updatedAsset).then(() => {
+      if (updatedAsset.id !== target.id) {
+        // If updateAssetApi adopted a new server GUID, update cache
+        cachedCatalog = (cachedCatalog || existing).map((a) => (a.id === target.id ? { ...a, id: updatedAsset.id } : a))
+        publishCatalog()
+      }
+    })
+  }
 }
 
 // Any Event Asset / Stockroom line sitting under its reorder threshold.

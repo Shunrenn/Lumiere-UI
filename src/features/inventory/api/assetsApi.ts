@@ -55,7 +55,7 @@ export async function fetchAssetsApi(params?: SearchAssetsParams): Promise<Parti
     if (params?.category) qs.set('category', params.category)
     if (params?.theme) qs.set('theme', params.theme)
     if (params?.page != null) qs.set('page', String(params.page))
-    if (params?.pageSize != null) qs.set('pageSize', String(params.pageSize))
+    qs.set('pageSize', String(params?.pageSize ?? 500))
     const query = qs.toString()
     const url = query ? `${API_BASE_URL}/api/assets?${query}` : `${API_BASE_URL}/api/assets`
     const res = await fetch(url, {
@@ -99,9 +99,15 @@ export async function createAssetApi(asset: Partial<CatalogAsset>): Promise<Part
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function updateAssetApi(id: string, asset: Partial<CatalogAsset>): Promise<boolean> {
-  // Skip update for seed/demo assets that have non-GUID string IDs (e.g. "evt-ast-002")
+  // Auto-persist seed/demo assets that have non-GUID string IDs to database via POST
   if (!GUID_PATTERN.test(id)) {
-    console.warn(`[assetsApi] Skipping PUT for non-GUID asset id "${id}" — this is a local seed record not yet persisted to the database.`)
+    console.info(`[assetsApi] Persisting local seed asset "${id}" to backend database via POST...`)
+    const created = await createAssetApi(asset)
+    if (created && ((created as any).assetId || (created as any).id)) {
+      const serverId = String((created as any).assetId || (created as any).id)
+      asset.id = serverId
+      return true
+    }
     return false
   }
   try {

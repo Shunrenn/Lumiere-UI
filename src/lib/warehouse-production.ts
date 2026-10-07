@@ -351,12 +351,33 @@ export function calculateProductionSchedule(params: {
 
 const listeners = new Set<() => void>()
 const storeKey = '__warehouse_production_store__'
+const PROD_STORAGE_KEY = '_lumiere_warehouse_production_items'
 type ProdGlobal = typeof globalThis & { [storeKey]?: ProductionItem[] }
 const globalStore = globalThis as ProdGlobal
-let items: ProductionItem[] = (globalStore[storeKey] && globalStore[storeKey]!.length > 0) ? globalStore[storeKey]! : INITIAL_PRODUCTION_ITEMS
+
+function loadStoredProductionItems(): ProductionItem[] {
+  if (globalStore[storeKey] && globalStore[storeKey]!.length > 0) return globalStore[storeKey]!
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(PROD_STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch {}
+  }
+  return INITIAL_PRODUCTION_ITEMS
+}
+
+let items: ProductionItem[] = loadStoredProductionItems()
 
 function publish() {
   globalStore[storeKey] = items
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(PROD_STORAGE_KEY, JSON.stringify(items))
+    } catch {}
+  }
   listeners.forEach((listener) => listener())
 }
 

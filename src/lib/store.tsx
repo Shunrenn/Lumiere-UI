@@ -5,6 +5,7 @@ import { fetchAuditLogs } from '@/features/audit/api/auditApi'
 import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
 import { completeAccessRequest, fetchAccessRequests } from '@/features/access-requests/api'
 import { fetchEventsApi, createEventApi, updateEventApi, isGuid } from '@/features/events/api/eventsApi'
+import { fetchAssetsApi, createAssetApi, updateAssetApi } from '@/features/inventory/api/assetsApi'
 import {
   createContext,
   useCallback,
@@ -1679,7 +1680,72 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const [vendors] = useState<Vendor[]>(seedVendors)
   const [damageExceptions, setDamageExceptions] = useState<DamageException[]>(seedDamage)
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(true)
-  const [inventory, setInventory] = useState<InventoryItem[]>(seedInventory)
+  const [inventory, setInventory] = useState<InventoryItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('_lumiere_cached_inventory')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        }
+      } catch {}
+    }
+    return seedInventory
+  })
+
+  // Hydrate inventory items from the REST API endpoint (checkpoint-based synchronization)
+  useEffect(() => {
+    let active = true
+    const loadInventory = async () => {
+      try {
+        const remoteAssets = await fetchAssetsApi({ pageSize: 500 })
+        if (!active || !remoteAssets || remoteAssets.length === 0) return
+        setInventory((prev) => {
+          const map = new Map(prev.map((i) => [i.id, i]))
+          const nameMap = new Map(prev.map((i) => [i.name.toLowerCase().trim(), i]))
+          remoteAssets.forEach((ra: any) => {
+            const id = ra.id
+            if (id && map.has(id)) {
+              const existing = map.get(id)!
+              map.set(id, {
+                ...existing,
+                name: ra.name || existing.name,
+                stock: typeof ra.quantity === 'number' ? ra.quantity : existing.stock,
+                cost: ra.cost ?? existing.cost,
+              })
+            } else if (ra.name && nameMap.has(ra.name.toLowerCase().trim())) {
+              const existing = nameMap.get(ra.name.toLowerCase().trim())!
+              map.delete(existing.id)
+              map.set(id, {
+                ...existing,
+                id,
+                name: ra.name || existing.name,
+                stock: typeof ra.quantity === 'number' ? ra.quantity : existing.stock,
+                cost: ra.cost ?? existing.cost,
+              })
+            }
+          })
+          const merged = Array.from(map.values())
+          try {
+            localStorage.setItem('_lumiere_cached_inventory', JSON.stringify(merged))
+          } catch {}
+          return merged
+        })
+      } catch (err) {
+        console.warn('[store] Failed to load inventory from backend:', err)
+      }
+    }
+
+    loadInventory()
+    const interval = setInterval(loadInventory, 30000)
+    window.addEventListener('focus', loadInventory)
+
+    return () => {
+      active = false
+      clearInterval(interval)
+      window.removeEventListener('focus', loadInventory)
+    }
+  }, [])
 
   // Hydrate damage reports across active events from the REST API endpoint (checkpoint-based synchronization)
   useEffect(() => {
@@ -2781,7 +2847,35 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
   const addInventoryItem = useCallback(
     (item: InventoryItem) => {
-      setInventory((prev) => [item, ...prev])
+      setInventory((prev) => {
+        const next = [item, ...prev]
+        try {
+          localStorage.setItem('_lumiere_cached_inventory', JSON.stringify(next))
+        } catch {}
+        return next
+      })
+      void createAssetApi({
+        name: item.name,
+        category: item.category as any,
+        description: item.description,
+        currentStock: item.stock,
+        purchaseCost: item.cost,
+        costPerUnit: item.costPerUnit,
+        unit: item.unit,
+        image: item.image,
+      }).then((res) => {
+        if (res && ((res as any).assetId || (res as any).id)) {
+          const serverId = String((res as any).assetId || (res as any).id)
+          setInventory((prev) => {
+            const next = prev.map((it) => (it.id === item.id ? { ...it, id: serverId } : it))
+            try {
+              localStorage.setItem('_lumiere_cached_inventory', JSON.stringify(next))
+            } catch {}
+            return next
+          })
+        }
+      }).catch((err) => console.warn('[store] Failed to persist new asset to backend:', err))
+
       pushLog({
         account: 'WAREHOUSE_MGR_01',
         initiatorRole: 'Warehouse Manager',
@@ -2795,7 +2889,23 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   )
 
   const updateInventoryItem = useCallback((item: InventoryItem) => {
-    setInventory((prev) => prev.map((it) => (it.id === item.id ? item : it)))
+    setInventory((prev) => {
+      const next = prev.map((it) => (it.id === item.id ? item : it))
+      try {
+        localStorage.setItem('_lumiere_cached_inventory', JSON.stringify(next))
+      } catch {}
+      return next
+    })
+    void updateAssetApi(item.id, {
+      name: item.name,
+      category: item.category as any,
+      description: item.description,
+      currentStock: item.stock,
+      purchaseCost: item.cost,
+      costPerUnit: item.costPerUnit,
+      unit: item.unit,
+      image: item.image,
+    }).catch((err) => console.warn('[store] Failed to update asset in backend:', err))
   }, [])
 
   const refreshDamageReports = useCallback(async (): Promise<DamageException[]> => {

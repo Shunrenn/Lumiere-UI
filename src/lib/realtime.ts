@@ -12,6 +12,12 @@ let connectionPromise: Promise<signalR.HubConnection | null> | null = null
 export async function getRealtimeConnection(): Promise<signalR.HubConnection | null> {
   if (typeof window === 'undefined') return null
 
+  // Lumiere architecture uses checkpoint-based polling (30s polling + focus refetch).
+  // Realtime SignalR hub negotiation is disabled unless explicitly opted into via VITE_ENABLE_SIGNALR.
+  if (import.meta.env.VITE_ENABLE_SIGNALR !== 'true') {
+    return null
+  }
+
   if (hubConnection && hubConnection.state === signalR.HubConnectionState.Connected) {
     return hubConnection
   }

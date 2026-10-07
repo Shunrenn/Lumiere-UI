@@ -41,13 +41,38 @@ function computeHandshake(batches: DispatchBatch[]): { percent: number; hasPahab
 
 const listeners = new Set<() => void>()
 const storeKey = '__warehouse_dispatch_store__'
+const DISPATCH_STORAGE_KEY = '_lumiere_warehouse_dispatch_batches'
 type DispatchGlobal = typeof globalThis & { [storeKey]?: Map<string, DispatchBatch[]> }
 const globalStore = globalThis as DispatchGlobal
-let batchesByEvent: Map<string, DispatchBatch[]> = globalStore[storeKey] ?? new Map()
+
+function loadStoredDispatchBatches(): Map<string, DispatchBatch[]> {
+  if (globalStore[storeKey] && globalStore[storeKey]!.size > 0) return globalStore[storeKey]!
+  const map = new Map<string, DispatchBatch[]>()
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(DISPATCH_STORAGE_KEY)
+      if (stored) {
+        const entries = JSON.parse(stored)
+        if (Array.isArray(entries)) {
+          entries.forEach(([k, v]: [string, DispatchBatch[]]) => map.set(k, v))
+          return map
+        }
+      }
+    } catch {}
+  }
+  return map
+}
+
+let batchesByEvent: Map<string, DispatchBatch[]> = loadStoredDispatchBatches()
 
 function publish(_targetEventId?: string, _targetBatch?: DispatchBatch) {
   batchesByEvent = new Map(batchesByEvent)
   globalStore[storeKey] = batchesByEvent
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(DISPATCH_STORAGE_KEY, JSON.stringify(Array.from(batchesByEvent.entries())))
+    } catch {}
+  }
   listeners.forEach((listener) => listener())
 }
 
