@@ -1,4 +1,4 @@
-import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
+﻿import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
 import type { CatalogAsset } from '@/lib/types'
 
 export interface BackendAssetPayload {
@@ -95,7 +95,15 @@ export async function createAssetApi(asset: Partial<CatalogAsset>): Promise<Part
   }
 }
 
+// GUID pattern — backend route requires a valid UUID (Guid)
+const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function updateAssetApi(id: string, asset: Partial<CatalogAsset>): Promise<boolean> {
+  // Skip update for seed/demo assets that have non-GUID string IDs (e.g. "evt-ast-002")
+  if (!GUID_PATTERN.test(id)) {
+    console.warn(`[assetsApi] Skipping PUT for non-GUID asset id "${id}" — this is a local seed record not yet persisted to the database.`)
+    return false
+  }
   try {
     const payload = mapCatalogAssetToBackendPayload(asset)
     const res = await fetch(`${API_BASE_URL}/api/assets/${encodeURIComponent(id)}`, {

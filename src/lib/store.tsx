@@ -1,4 +1,4 @@
-import { logAuditEvent } from '@/lib/audit-logger'
+﻿import { logAuditEvent } from '@/lib/audit-logger'
 import * as damageApi from '@/features/damage/api/damageApi'
 import * as partialEgressApi from '@/features/warehouse/api/partialEgressApi'
 import { fetchAuditLogs } from '@/features/audit/api/auditApi'
@@ -1583,6 +1583,8 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const refetchLogs = useCallback(async () => {
     const token = getAuthToken()
     if (!token) return
+    // Role guard: audit-logs requires Admin or Executive role
+    try { const _s = localStorage.getItem('_lumiere_auth_user') || sessionStorage.getItem('_lumiere_auth_user'); const _r: string = _s ? (JSON.parse(_s)?.role ?? '') : ''; if (_r !== 'Admin' && _r !== 'Executive') return } catch { return }
     try {
       const { logs: fetchedLogs, connected } = await fetchAuditLogs(200)
       if (connected) {
@@ -1600,6 +1602,8 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     const loadAuditLogs = async () => {
       const token = getAuthToken()
       if (!token) return
+      // Role guard: audit-logs endpoint requires Admin or Executive
+      try { const _s = localStorage.getItem('_lumiere_auth_user') || sessionStorage.getItem('_lumiere_auth_user'); const _r: string = _s ? (JSON.parse(_s)?.role ?? '') : ''; if (_r !== 'Admin' && _r !== 'Executive') return } catch { return }
       try {
         const { logs: fetchedLogs, connected } = await fetchAuditLogs(200)
         if (!active) return
@@ -1635,6 +1639,8 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
     const loadAccessRequests = async () => {
       if (!active) return
+      // Role guard: access-requests GET is Admin-only
+      try { const _s = localStorage.getItem('_lumiere_auth_user') || sessionStorage.getItem('_lumiere_auth_user'); const _r: string = _s ? (JSON.parse(_s)?.role ?? '') : ''; if (_r !== 'Admin') return } catch { return }
       try {
         const data = await fetchAccessRequests()
         if (!active) return
@@ -1647,8 +1653,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         }))
         setUserActions(fromApi)
       } catch (error) {
-        console.error('[AccessRequests] Failed to load requests from API:', error)
-        setUserActions([])
+        console.warn('[AccessRequests] Failed to load requests from API:', error)
       }
     }
 

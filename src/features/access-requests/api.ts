@@ -1,4 +1,4 @@
-import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
+﻿import { API_BASE_URL, getAuthToken } from '@/shared/api/apiConfig'
 
 export interface AccessRequest {
   id: string
@@ -39,6 +39,8 @@ export async function createAccessRequest(input: CreateAccessRequestInput): Prom
 
 export async function fetchAccessRequests(): Promise<AccessRequest[]> {
   const response = await fetch(`${API_BASE_URL}/api/access-requests`, { headers: authHeaders() })
+  // 403: non-Admin roles cannot access this endpoint — return empty rather than throwing
+  if (response.status === 403 || response.status === 401) return []
   if (!response.ok) throw new Error(`Access requests failed to load (HTTP ${response.status}).`)
   return response.json()
 }
