@@ -220,7 +220,8 @@ export function GroundCrewPage() {
   void declarations
   const [tab, setTab] = useState<Tab>('home')
   const [fieldSection, setFieldSection] = useState<'tasks' | 'requests' | 'history'>('tasks')
-  const isFieldSeed = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('seed') === 'field'
+  // Temporary frontend fixture: Ground Crew always opens with test data until the seed is removed.
+  const isFieldSeed = true
 
   // Canonical Manning operational assignments for authenticated user
   const [myAssignments, setMyAssignments] = useState<MyManningAssignmentDto[]>([])
