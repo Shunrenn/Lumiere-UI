@@ -11,6 +11,7 @@ import {
 import { useAuth } from '@/lib/auth'
 
 export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => void }) {
+  // Keep the login module fresh after the credential field redesign.
   const { login } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
