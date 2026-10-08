@@ -1192,9 +1192,9 @@ function Home({
 }) {
   const manilaDate = (value: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date(value.includes('T') ? value : `${value}T00:00:00Z`))
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
-  const previewMode = assignments.length === 0 && events.length === 0
-  const displayAssignments = previewMode ? [HOME_PREVIEW_ASSIGNMENT, { ...HOME_PREVIEW_ASSIGNMENT, assignmentId: 'home-preview-return', taskTitle: 'Warehouse return handoff', workArea: 'Warehouse', assignedRole: 'Warehouse Crew', isLead: false }, HOME_PREVIEW_NEXT_ASSIGNMENT] : assignments
-  const displayEvents = previewMode ? [HOME_PREVIEW_EVENT, HOME_PREVIEW_NEXT_EVENT] : events
+  const previewMode = assignments.length === 0
+  const displayAssignments = assignments.length === 0 ? [HOME_PREVIEW_ASSIGNMENT, { ...HOME_PREVIEW_ASSIGNMENT, assignmentId: 'home-preview-return', taskTitle: 'Warehouse return handoff', workArea: 'Warehouse', assignedRole: 'Warehouse Crew', isLead: false }, HOME_PREVIEW_NEXT_ASSIGNMENT] : assignments
+  const displayEvents = events.length === 0 ? [HOME_PREVIEW_EVENT, HOME_PREVIEW_NEXT_EVENT] : events
   const grouped = Array.from(new Set(displayAssignments.map((a) => a.eventId))).map((eventId) => {
     const items = displayAssignments.filter((a) => a.eventId === eventId)
     const first = items[0]
@@ -1222,6 +1222,7 @@ function Home({
       {previewMode && <div className="rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">Preview data is shown because this account has no active assignments yet.</div>}
       {pendingActions.length > 0 && <section aria-labelledby="pending-actions-heading" className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3.5"><div className="mb-3 flex items-center justify-between"><h2 id="pending-actions-heading" className="font-serif text-base font-bold">Pending actions</h2><span className="rounded-full bg-amber-400/20 px-2 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-200">{pendingActions.length} open</span></div><div className="space-y-2">{pendingActions.map((item) => <button key={item.label} type="button" onClick={item.action} className="flex w-full items-center justify-between gap-3 rounded-xl border border-amber-400/20 bg-background/50 p-3 text-left"><span className="min-w-0"><span className="block text-xs font-semibold">{item.label}</span><span className="mt-1 block truncate text-[10px] text-muted-foreground">{item.detail}</span></span><span aria-hidden="true" className="text-lg text-amber-600">›</span></button>)}</div></section>}
       <GroundCrewSyncPill assignments={displayAssignments as MyManningAssignmentDto[]} isCachedData={isCachedData} />
+      <div className="grid grid-cols-3 gap-2"><div className="rounded-xl border border-border bg-card p-3"><p className="text-lg font-bold">{grouped.length}</p><p className="text-[10px] text-muted-foreground">Events</p></div><div className="rounded-xl border border-border bg-card p-3"><p className="text-lg font-bold">{displayAssignments.length}</p><p className="text-[10px] text-muted-foreground">Assignments</p></div><div className="rounded-xl border border-border bg-card p-3"><p className="text-lg font-bold">{displayAssignments.filter((assignment) => assignment.executionStatus === 'InProgress').length}</p><p className="text-[10px] text-muted-foreground">In progress</p></div></div>
       {todayShift ? (
         <button type="button" onClick={() => onOpenToday(toEvent(todayShift))} className="block w-full text-left">
           <PwaCard className="border-border/80 bg-card p-4" headerClassName="hidden">
