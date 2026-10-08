@@ -38,7 +38,7 @@ export interface EventReplenishmentSummary {
 
 export type BatchDirection = 'outbound' | 'return'
 export type BatchStage = 'Planned' | 'Loaded' | 'In Transit' | 'Delivered' | 'Returned'
-export type DispatchBannerState = 'No Dispatch Yet' | 'Dispatch In Progress' | 'Delayed Dispatch' | 'Stalled In Transit — Needs Attention'
+export type DispatchBannerState = 'No Dispatch Yet' | 'Ingress in progress' | 'Ingress done, Egress in progress' | 'Egress in progress' | 'All stages done' | 'Stage unavailable' | 'Delayed Dispatch' | 'Stalled In Transit — Needs Attention'
 export type ReconciliationStatus = 'Matched' | 'Short' | 'Pahabol'
 
 export interface ReconciliationRow {
@@ -222,14 +222,26 @@ function buildBatches(event: PortalEvent, procurement: ProcurementItem[], crewPo
 // snapshot derived here.
 export function dispatchBannerFor(batches: DispatchBatch[]): DispatchBannerState {
   if (batches.length === 0) return 'No Dispatch Yet'
-  const anyShortOrPahabol = batches.some((batch) =>
-    batch.reconciliation.some((row) => row.status !== 'Matched'),
-  )
-  const anyStuck = batches.some((batch) => batch.stage === 'In Transit' && anyShortOrPahabol)
   const anyStalled = batches.some((batch) => batch.stalled)
   if (anyStalled) return 'Stalled In Transit — Needs Attention'
+  const anyShortOrPahabol = batches.some((batch) => batch.reconciliation.some((row) => row.status !== 'Matched'))
+  const anyStuck = batches.some((batch) => batch.stage === 'In Transit' && anyShortOrPahabol)
   if (anyStuck) return 'Delayed Dispatch'
-  return 'Dispatch In Progress'
+  const stageRank = (batch: DispatchBatch) => {
+    if (batch.direction === 'outbound') {
+      if (batch.stage === 'Delivered') return 2
+      if (batch.stage === 'Planned' || batch.stage === 'Loaded' || batch.stage === 'In Transit') return 1
+      return 3
+    }
+    if (batch.stage === 'Returned') return 3
+    if (batch.stage === 'Planned' || batch.stage === 'Loaded' || batch.stage === 'In Transit' || batch.stage === 'Delivered') return 2
+    return 0
+  }
+  const earliest = Math.min(...batches.map(stageRank))
+  if (earliest === 1) return 'Ingress in progress'
+  if (earliest === 2) return batches.some((batch) => batch.direction === 'outbound' && batch.stage === 'Delivered') ? 'Ingress done, Egress in progress' : 'Egress in progress'
+  if (earliest === 3) return 'All stages done'
+  return 'Stage unavailable'
 }
 
 export function getEventDetailSnapshot(

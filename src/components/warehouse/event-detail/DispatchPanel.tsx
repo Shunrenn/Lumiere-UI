@@ -30,7 +30,11 @@ import { cn } from '@/lib/utils'
 
 const BANNER_TONE: Record<DispatchBannerState, Tone> = {
   'No Dispatch Yet': 'neutral',
-  'Dispatch In Progress': 'progress',
+  'Ingress in progress': 'progress',
+  'Ingress done, Egress in progress': 'progress',
+  'Egress in progress': 'progress',
+  'All stages done': 'positive',
+  'Stage unavailable': 'neutral',
   'Delayed Dispatch': 'caution',
   'Stalled In Transit — Needs Attention': 'critical',
 }

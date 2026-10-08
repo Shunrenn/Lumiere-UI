@@ -1204,7 +1204,6 @@ function Home({
   const previewMode = assignments.length === 0 && events.length === 0
   const displayAssignments = previewMode ? [HOME_PREVIEW_ASSIGNMENT, { ...HOME_PREVIEW_ASSIGNMENT, assignmentId: 'home-preview-return', taskTitle: 'Warehouse return handoff', workArea: 'Warehouse', assignedRole: 'Warehouse Crew', isLead: false }, HOME_PREVIEW_NEXT_ASSIGNMENT] : assignments
   const displayEvents = previewMode ? [HOME_PREVIEW_EVENT, HOME_PREVIEW_NEXT_EVENT] : events
-  const scope = displayAssignments.some((a) => /warehouse/i.test(`${a.workArea} ${a.taskTitle}`)) ? 'Warehouse Crew' : 'Field Crew'
   const grouped = Array.from(new Set(displayAssignments.map((a) => a.eventId))).map((eventId) => {
     const items = displayAssignments.filter((a) => a.eventId === eventId)
     const first = items[0]
@@ -1242,7 +1241,7 @@ function Home({
               </div>
               <p className="text-xs text-muted-foreground">{todayShift.venue || 'Venue not provided'}</p>
               {todayShift.time && <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="size-3" /> Call time {formatTime(todayShift.time)}</p>}
-              <p className="text-xs font-semibold leading-snug text-foreground">Your stages: {scope === 'Field Crew' ? 'Venue Arrival, Warehouse Return' : 'Venue Arrival, Warehouse Return'}</p>
+              <div><p className="text-xs font-semibold leading-snug text-foreground">Stage 1 of 2 · Ingress</p><div className="mt-2 grid grid-cols-2 gap-1"><span className="h-1.5 rounded-full bg-primary" /><span className="h-1.5 rounded-full bg-muted" /></div></div>
             </div>
           </PwaCard>
         </button>
@@ -2173,16 +2172,14 @@ type ScheduleShift = {
   stages: string[]
 }
 
-const SCHEDULE_STAGES = ['Venue Arrival', 'Venue Arrival', 'Warehouse Return', 'Warehouse Return'] as const
+const SCHEDULE_STAGES = ['Ingress · Venue Arrival', 'Egress · Warehouse Return'] as const
 
 function manilaToday() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
 }
 
-function stagesForCrewScope(scope: 'Warehouse Crew' | 'Field Crew') {
-  return scope === 'Warehouse Crew'
-    ? ['Venue Arrival', 'Warehouse Return']
-    : ['Venue Arrival', 'Warehouse Return']
+function stagesForCrewScope(_scope: 'Warehouse Crew' | 'Field Crew') {
+  return ['Ingress · Venue Arrival', 'Egress · Warehouse Return']
 }
 
 function formatTime(value?: string | null) {
@@ -2260,11 +2257,10 @@ function CalendarView({
           <div><h3 className="font-serif text-sm font-bold text-foreground">{shift.event.name}</h3><p className="mt-0.5 text-xs text-muted-foreground">{shift.event.venue || 'Venue not provided'}</p></div>
           <div className="flex flex-wrap items-center justify-end gap-1">
             <PwaBadge variant="neutral" label={tagFor(shift.event.date)} />
-            {isLeadForEvent(assignment.eventId) && <PwaBadge variant="subrole" subRole="Field" label="Shift Lead" />}
+            {isLeadForEvent(assignment.eventId) && <PwaBadge variant="subrole" subRole="Field" label="Team Lead" />}
           </div>
         </div>
         {formatTime(assignment.shiftStartTime) && <p className="mt-2 text-xs text-muted-foreground"><Clock className="mr-1 inline size-3" />Call time {formatTime(assignment.shiftStartTime)}</p>}
-        <p className="mt-2 text-xs font-medium text-foreground">Your stages: {shift.stages.join(', ')}</p>
       </button>
     )
   }
@@ -2287,7 +2283,7 @@ function CalendarView({
 function ScheduleDetail({ shift, today, isLead, onBack }: { shift: ScheduleShift; today: string; isLead: boolean; onBack: () => void }) {
   const { assignment, event, stages } = shift
   const completed = assignment.executionStatus === 'Completed'
-  return <div className="space-y-4"><button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm font-semibold text-primary"><ChevronLeft className="size-4" />Back</button><PwaCard><div className="flex items-start justify-between gap-2"><div><h1 className="font-serif text-xl font-bold">{event.name}</h1><p className="mt-1 text-sm text-muted-foreground">{event.venue || 'Venue not provided'}</p></div>{isLead && <PwaBadge variant="subrole" subRole="Field" label="Shift Lead" />}</div><div className="mt-4 space-y-2 text-sm"><p>Ingress: {dateLabel(event.date)}{formatTime(assignment.shiftStartTime) ? ` · ${formatTime(assignment.shiftStartTime)}` : ''}</p>{formatTime(assignment.shiftStartTime) && <p>Call time: {formatTime(assignment.shiftStartTime)}</p>}{formatTime(assignment.shiftEndTime) && <p>Event hours end: {formatTime(assignment.shiftEndTime)}</p>}<p>Your stages: {stages.join(', ')}</p>{completed && <p className="font-semibold text-primary">Completed</p>}{!completed && event.date < today && <p className="text-muted-foreground">Past</p>}</div><div className="mt-5 space-y-2">{SCHEDULE_STAGES.map((stage) => <div key={stage} className="flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm"><span>{stage}</span>{stages.includes(stage) && <span className="font-semibold text-primary">Yours</span>}</div>)}</div></PwaCard></div>
+  return <div className="space-y-4"><button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm font-semibold text-primary"><ChevronLeft className="size-4" />Back</button><PwaCard><div className="flex items-start justify-between gap-2"><div><h1 className="font-serif text-xl font-bold">{event.name}</h1><p className="mt-1 text-sm text-muted-foreground">{event.venue || 'Venue not provided'}</p></div>{isLead && <PwaBadge variant="subrole" subRole="Field" label="Team Lead" />}</div><div className="mt-4 space-y-2 text-sm"><p>{stages[0]}: {dateLabel(event.date)}{formatTime(assignment.shiftStartTime) ? ` · ${formatTime(assignment.shiftStartTime)}` : ''}</p>{formatTime(assignment.shiftStartTime) && <p>Call time: {formatTime(assignment.shiftStartTime)}</p>}{formatTime(assignment.shiftEndTime) && <p>Event hours end: {formatTime(assignment.shiftEndTime)}</p>}{completed && <p className="font-semibold text-primary">Completed</p>}{!completed && event.date < today && <p className="text-muted-foreground">Past</p>}</div><div className="mt-5 space-y-2">{SCHEDULE_STAGES.map((stage) => <div key={stage} className="flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm"><span>{stage}</span></div>)}</div></PwaCard></div>
 }
 
 function Activity({
