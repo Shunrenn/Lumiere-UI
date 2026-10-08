@@ -1,11 +1,9 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import {
   Lock,
-  IdCard,
+  Mail,
   Eye,
   EyeOff,
-  WifiOff,
-  ShieldCheck,
   ArrowRight,
   HardHat,
   ChevronLeft,
@@ -14,8 +12,8 @@ import { useAuth } from '@/lib/auth'
 
 export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => void }) {
   const { login } = useAuth()
-  const [crewId, setCrewId] = useState('')
-  const [pin, setPin] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [showPin, setShowPin] = useState(false)
   const [error, setError] = useState('')
   const [signingIn, setSigningIn] = useState(false)
@@ -25,9 +23,9 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
     setError('')
     setSigningIn(true)
     try {
-      const result = await login(crewId, pin, 'pwa')
+      const result = await login(email, password, 'pwa')
       if (!result.ok) {
-        setError(result.message || 'Credentials not recognized. Check your Crew ID and access code.')
+        setError(result.message || 'Credentials not recognized. Check your email and password.')
         return
       }
     } finally {
@@ -68,27 +66,22 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
             Ground Crew Console
           </h1>
           <p className="mt-1.5 text-pretty text-sm leading-relaxed text-sidebar-foreground/75">
-          Sign in to access your operational console.
+          Log in to access your operational console.
           </p>
 
-          {/* Status strip */}
-          <div className="mt-4 flex flex-wrap gap-2">
-            <StatusPill icon={WifiOff} label="Offline-ready" />
-            <StatusPill icon={ShieldCheck} label="Secured device" />
-          </div>
         </header>
 
         {/* Form */}
         <main className="flex flex-col px-5 pb-6 pt-6">
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <Field label="Crew ID">
+            <Field label="Email">
               <InputWrap>
-                <IdCard className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <Mail className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <input
                   type="email"
                   inputMode="email"
-                  value={crewId}
-                  onChange={(e) => setCrewId(e.target.value)}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="crew@example.com"
                   autoComplete="username"
                   className="w-full min-w-0 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/60"
@@ -96,21 +89,21 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
               </InputWrap>
             </Field>
 
-            <Field label="Access Code">
+            <Field label="Password">
               <InputWrap>
                 <Lock className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <input
                   type={showPin ? 'text' : 'password'}
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  placeholder="Enter access code"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password"
                   autoComplete="current-password"
                   className="w-full min-w-0 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/60"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPin((s) => !s)}
-                  aria-label={showPin ? 'Hide access code' : 'Show access code'}
+                  aria-label={showPin ? 'Hide password' : 'Show password'}
                   className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
                 >
                   {showPin ? (
@@ -137,7 +130,7 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
               className="mt-1 inline-flex h-13 w-full items-center justify-center gap-2.5 rounded-xl bg-primary text-sm font-bold uppercase tracking-[0.18em] text-primary-foreground shadow-sm transition-opacity hover:opacity-90 active:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
               style={{ height: '3.25rem' }}
             >
-              {signingIn ? 'SIGNING IN...' : 'Sign In'}
+              {signingIn ? 'LOGGING IN...' : 'Login'}
               {!signingIn && <ArrowRight className="size-4" aria-hidden="true" />}
             </button>
           </form>
@@ -150,14 +143,6 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
 
 /* ----------------------------- Primitives ----------------------------- */
 
-function StatusPill({ icon: Icon, label }: { icon: typeof WifiOff; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-sidebar-border bg-sidebar-accent/30 px-3 py-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.12em]">
-      <Icon className="size-3.5" aria-hidden="true" />
-      {label}
-    </span>
-  )
-}
 
 function Field({ label, children, required = true }: { label: string; children: ReactNode; required?: boolean }) {
   return (
