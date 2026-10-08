@@ -2174,6 +2174,22 @@ function formatTime(value?: string | null) {
   return `${hour % 12 || 12}:${match[2]} ${suffix}`
 }
 
+const SCHEDULE_PREVIEW_ASSIGNMENT = {
+  ...HOME_PREVIEW_ASSIGNMENT,
+  assignmentId: 'schedule-preview-assignment',
+  taskTitle: 'Venue arrival verification',
+  workArea: 'Field',
+  assignedRole: 'Field Crew',
+  isLead: true,
+} as MyManningAssignmentDto
+
+const SCHEDULE_PREVIEW_EVENT: EventItem = {
+  ...HOME_PREVIEW_EVENT,
+  id: 'schedule-preview-event',
+  name: 'Lumière Live Operational Demonstration',
+  phase: 'Venue Arrival',
+}
+
 function CalendarView({
   selectedDate,
   setSelectedDate,
@@ -2199,9 +2215,12 @@ function CalendarView({
     return { year, month: month - 1 }
   })
   const [detail, setDetail] = useState<ScheduleShift | null>(null)
+  const previewMode = assignments.length === 0 && events.length === 0
+  const displayAssignments = previewMode ? [SCHEDULE_PREVIEW_ASSIGNMENT] : assignments
+  const displayEvents = previewMode ? [SCHEDULE_PREVIEW_EVENT] : events
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-  const shifts: ScheduleShift[] = assignments.filter((a) => Boolean(a.shiftDate)).map((assignment) => {
-    const event = events.find((item) => item.id === assignment.eventId) ?? { id: assignment.eventId, name: assignment.eventName || 'Event', date: assignment.shiftDate!.slice(0, 10), venue: '', status: 'Upcoming' as EventStatus, editable: false, phase: null, items: [] }
+  const shifts: ScheduleShift[] = displayAssignments.filter((a) => Boolean(a.shiftDate)).map((assignment) => {
+    const event = displayEvents.find((item) => item.id === assignment.eventId) ?? { id: assignment.eventId, name: assignment.eventName || 'Event', date: assignment.shiftDate!.slice(0, 10), venue: '', status: 'Upcoming' as EventStatus, editable: false, phase: null, items: [] }
     return { assignment, event: { ...event, date: assignment.shiftDate!.slice(0, 10) }, stages: stagesForCrewScope(crewScope) }
   })
   const selected = shifts.filter((shift) => shift.event.date === selectedDate)
@@ -2231,8 +2250,9 @@ function CalendarView({
   if (loading) return <div className="space-y-3" aria-label="Loading schedule"><div className="h-48 animate-pulse rounded-2xl bg-muted" /><div className="h-28 animate-pulse rounded-2xl bg-muted" /></div>
   if (error && shifts.length === 0) return <PwaEmptyState title="Couldn't load your schedule. Try again." description="" />
   return (
-    <div className="space-y-3">
-      <PwaCard>
+  <div className="space-y-3">
+  {previewMode && <div className="rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">Preview schedule data is shown because this account has no active assignments yet.</div>}
+  <PwaCard>
         <div className="mb-1 flex items-center justify-between"><button type="button" aria-label="Previous month" onClick={() => shiftMonth(-1)} className="rounded-full p-1.5 hover:bg-accent"><ChevronLeft className="size-4" /></button><h2 className="font-serif text-base font-bold">{monthNames[view.month]} {view.year}</h2><button type="button" aria-label="Next month" onClick={() => shiftMonth(1)} className="rounded-full p-1.5 hover:bg-accent"><ChevronRight className="size-4" /></button></div>
         <div className="grid grid-cols-7 gap-0.5 text-center text-[0.6rem] text-muted-foreground">{['S','M','T','W','T','F','S'].map((day, index) => <span key={`${day}-${index}`} className="py-0.5 font-bold">{day}</span>)}{Array.from({ length: firstWeekday }, (_, index) => <span key={`pad-${index}`} />)}{monthDays.map((day) => { const date = `${view.year}-${String(view.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`; const hasShift = shifts.some((shift) => shift.event.date === date); const past = date < today; const isToday = date === today; const isSelected = date === selectedDate; return <button type="button" key={date} onClick={() => setSelectedDate(date)} className={`relative flex min-h-7 flex-col items-center justify-center rounded-lg text-xs ${isSelected ? 'ring-2 ring-primary' : ''} ${isToday ? 'bg-primary text-primary-foreground font-bold' : 'text-foreground'}`}><span>{day}</span>{hasShift && <span className={`mt-0.5 size-1.5 rounded-full ${past ? 'bg-muted-foreground/50' : isToday ? 'bg-primary-foreground' : 'bg-primary'}`} />}</button>})}</div>
       </PwaCard>
