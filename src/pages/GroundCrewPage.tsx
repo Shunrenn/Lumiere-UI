@@ -67,7 +67,7 @@ import {
 } from '@/components/pwa'
 import type { HavaDeclarationState, HavaEvidenceStatus } from '@/lib/types'
 
-type Tab = 'home' | 'schedule' | 'tasks' | 'history' | 'account'
+type Tab = 'home' | 'tasks' | 'history' | 'account'
 type AccessLevel = 'Ground Crew / Member' | 'Team Lead / Field Lead' | 'Receiver' | 'Event Admin'
 export type CheckpointPhase = 'Dispatch Loading' | 'Venue Arrival' | 'Pre-Event Setup' | 'Post-Event Egress'
 type EventStatus = 'Current' | 'Upcoming' | 'Completed'
@@ -895,8 +895,7 @@ export function GroundCrewPage() {
   }
 
   const navItems: PwaNavItem[] = [
-    { id: 'home', label: 'Home', icon: MapPin },
-    { id: 'schedule', label: 'Calendar', icon: CalendarDays },
+    { id: 'home', label: 'Home', icon: CalendarDays },
   { id: 'tasks', label: 'Tasks', icon: ClipboardList },
   { id: 'history', label: 'History', icon: History },
   { id: 'account', label: 'Profile', icon: UserCircle2 },
@@ -909,18 +908,14 @@ export function GroundCrewPage() {
   title={
   tab === 'home'
   ? 'Home'
-            : tab === 'schedule'
-              ? 'Schedule'
-: tab === 'tasks'
+            : tab === 'tasks'
   ? selectedEvent ? selectedEvent.name : 'Tasks'
                 : adminName || 'Profile'
         }
             subtitle={
           tab === 'home'
             ? undefined
-            : tab === 'schedule'
-              ? undefined
-: tab === 'tasks'
+            : tab === 'tasks'
   ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Field and production work'
                 : adminEmail || undefined
         }
@@ -928,10 +923,8 @@ export function GroundCrewPage() {
         subRole={hasAnyLead ? 'Team Lead' : undefined}
         icon={
           tab === 'home' ? (
-            <MapPin className="size-5 text-primary" />
-          ) : tab === 'schedule' ? (
             <CalendarDays className="size-5 text-primary" />
-) : tab === 'tasks' ? (
+          ) : tab === 'tasks' ? (
   <ClipboardList className="size-5 text-primary" />
           ) : (
             <UserCircle2 className="size-5 text-primary" />
@@ -941,16 +934,14 @@ export function GroundCrewPage() {
 
       {/* Main Tab Content */}
       <main className="mx-auto w-full max-w-[440px] px-4 pt-4 space-y-4">
-        {tab === 'schedule' && (
-          <GroundCrewSyncPill assignments={myAssignments} isCachedData={isCachedData} />
-        )}
+        {tab === 'home' && <GroundCrewSyncPill assignments={myAssignments} isCachedData={isCachedData} />}
 
         {tab === 'home' && (
           <Home
             events={crewEvents}
             greetingName={adminName || currentUser?.name || ''}
             onOpenToday={(item) => { setSelectedEventId(item.id); setTab('tasks') }}
-            onOpenNext={() => setTab('schedule')}
+            onOpenNext={() => setTab('home')}
             assignments={myAssignments}
                       loadingAssignments={loadingAssignments}
             assignmentError={assignmentError}
@@ -958,7 +949,7 @@ export function GroundCrewPage() {
           />
         )}
 
-        {tab === 'schedule' && (
+        {tab === 'home' && (
           <CalendarView
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
