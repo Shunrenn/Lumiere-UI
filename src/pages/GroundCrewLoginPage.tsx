@@ -30,10 +30,6 @@ export function GroundCrewLoginPage({ onStaffPortal }: { onStaffPortal: () => vo
         setError(result.message || 'Credentials not recognized. Check your Crew ID and access code.')
         return
       }
-
-      const redirectUrl = new URL(window.location.href)
-      redirectUrl.searchParams.set('seed', 'field')
-      window.location.assign(redirectUrl.toString())
     } finally {
       setSigningIn(false)
     }
