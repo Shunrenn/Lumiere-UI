@@ -60,7 +60,6 @@ import {
   PwaHeader,
   PwaModal,
   PwaToast,
-  PwaSyncStatusBar,
   HavaCameraCaptureModal,
   type CapturedEvidence,
   type PwaNavItem,
@@ -915,13 +914,6 @@ export function GroundCrewPage() {
 
       {/* Main Tab Content */}
       <main className="mx-auto w-full max-w-[440px] px-4 pt-4 space-y-4">
-        {tab === 'field' && (
-          <PwaSyncStatusBar
-            userId={currentUser?.id || adminEmail || 'crew'}
-            onSyncComplete={loadAssignments}
-          />
-        )}
-
         {tab === 'schedule' && (
           <GroundCrewSyncPill assignments={myAssignments} isCachedData={isCachedData} />
         )}
