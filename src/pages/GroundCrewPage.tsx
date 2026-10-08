@@ -121,7 +121,7 @@ function dateLabel(date: string) {
   })
 }
 
-const FIELD_STAGES = ['Dispatch Release', 'Venue Arrival', 'Egress Release', 'Warehouse Return'] as const
+const FIELD_STAGES = ['Venue Arrival', 'Warehouse Return'] as const
 
 const FIELD_PREVIEW_EVENT: EventItem = {
   id: 'field-preview-event',
@@ -140,7 +140,7 @@ const FIELD_PREVIEW_EVENT: EventItem = {
 }
 
 type FieldStage = (typeof FIELD_STAGES)[number]
-type FieldItemState = 'Not checked' | 'Verified' | 'Missing' | 'Damaged'
+type FieldItemState = 'Not checked' | 'Verified' | 'Missing'
 
 type CrewAssignmentScope = 'Warehouse' | 'Field'
 
@@ -154,7 +154,7 @@ function FieldConsole({ events, assignmentScope, isLeadForEvent }: { events: Eve
   const items = selectedEvent?.items ?? []
   const stageKey = selectedEvent && activeStage ? `${selectedEvent.id}:${activeStage}` : ''
   const completed = items.filter((item) => checkedItems[`${stageKey}:${item.id}`] && checkedItems[`${stageKey}:${item.id}`] !== 'Not checked').length
-  const editableStages = assignmentScope === 'Warehouse' ? new Set<FieldStage>(['Dispatch Release', 'Warehouse Return']) : new Set<FieldStage>(['Venue Arrival', 'Egress Release'])
+  const editableStages = new Set<FieldStage>(FIELD_STAGES)
   const isEditableStage = activeStage ? editableStages.has(activeStage) : false
   const canOpenStage = (eventId: string, index: number) => FIELD_STAGES.slice(0, index).every((stage) => !editableStages.has(stage) || confirmedStages[`${eventId}:${stage}`])
   const canConfirm = isEditableStage && isLeadForEvent(selectedEvent?.id ?? '') && items.length > 0 && completed === items.length
@@ -163,10 +163,10 @@ function FieldConsole({ events, assignmentScope, isLeadForEvent }: { events: Eve
     return (
       <div className="space-y-4">
         <button type="button" onClick={() => setActiveStage(null)} className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground">← Back to stages</button>
-        <PwaCard title={activeStage} subtitle={`${selectedEvent.name} · ${selectedEvent.venue}`}>
+        <PwaCard title={activeStage === 'Venue Arrival' ? 'Ingress · Venue Arrival' : 'Egress · Warehouse Return'} subtitle={`${selectedEvent.name} · ${selectedEvent.venue}`}>
           <div className="space-y-4">
             <div className="flex items-center justify-between text-xs"><span className="font-semibold">Asset manifest</span><span className="text-muted-foreground">{completed}/{items.length} verified</span></div>
-            {!isEditableStage && <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">Read-only checkpoint. Your assignment is <span className="font-semibold text-foreground">{assignmentScope}</span>; another crew owns this stage.</div>}
+            
             {items.length === 0 ? <PwaEmptyState title="Manifest not available" description="This event has no dispatch manifest yet." /> : <div className="space-y-2">{items.map((item) => { const key = `${stageKey}:${item.id}`; const status = checkedItems[key] ?? 'Not checked'; return <div key={item.id} className="flex items-center gap-3 rounded-xl border border-border p-3"><button type="button" disabled={!isEditableStage} aria-label={`Verify ${item.name}`} onClick={() => setCheckedItems((current) => ({ ...current, [key]: status === 'Verified' ? 'Not checked' : 'Verified' }))} className={`flex size-6 shrink-0 items-center justify-center rounded-md border disabled:opacity-50 ${status === 'Verified' ? 'border-primary bg-primary text-primary-foreground' : 'border-border'}`}>{status === 'Verified' && <Check className="size-4" />}</button><div className="min-w-0 flex-1"><p className="text-xs font-semibold">{item.name} <span className="font-normal text-muted-foreground">× {item.qty}</span></p><p className="text-[10px] text-muted-foreground">{status}</p></div><PwaBadge label={status} variant={status === 'Verified' ? 'subrole' : 'neutral'} /></div>})}</div>}
             {!isLeadForEvent(selectedEvent.id) && isEditableStage && <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">Only the Team Lead can mark this phase complete. You can still review the manifest and add field notes.</div>}
             <label className="block text-xs font-semibold">Notes (optional)<textarea disabled={!isEditableStage} value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs disabled:opacity-60" placeholder="Add a note for the next crew..." /></label>
@@ -182,39 +182,34 @@ function FieldConsole({ events, assignmentScope, isLeadForEvent }: { events: Eve
 
 void FieldConsole
 
-function FieldEventWorkflow({ event, assignmentScope, isLead, onBack }: { event: EventItem; assignmentScope: CrewAssignmentScope; isLead: boolean; onBack: () => void }) {
-  const initialCurrentStage: FieldStage = assignmentScope === 'Warehouse' ? 'Dispatch Release' : 'Venue Arrival'
-  const [selectedStage, setSelectedStage] = useState<FieldStage>(initialCurrentStage)
+function FieldEventWorkflow({ event, isLead, onBack, onReport, damageReports }: { event: EventItem; isLead: boolean; onBack: () => void; onReport: (item: EventItem['items'][number]) => void; damageReports: DamageReport[] }) {
+  const [selectedStage, setSelectedStage] = useState<FieldStage>('Venue Arrival')
   const [itemStates, setItemStates] = useState<Record<string, FieldItemState>>({})
-  const [completedStages, setCompletedStages] = useState<Partial<Record<FieldStage, boolean>>>({ 'Dispatch Release': true })
-  const [damageReviewed, setDamageReviewed] = useState(false)
-  const [cameraItem, setCameraItem] = useState<EventItem['items'][number] | null>(null)
+  const [completedStages, setCompletedStages] = useState<Partial<Record<FieldStage, boolean>>>({})
   const currentStageIndex = FIELD_STAGES.findIndex((stage) => !completedStages[stage])
   const selectedIndex = FIELD_STAGES.indexOf(selectedStage)
-  const scopeStages = assignmentScope === 'Warehouse' ? new Set<FieldStage>(['Dispatch Release', 'Warehouse Return']) : new Set<FieldStage>(['Venue Arrival', 'Egress Release'])
+  const inScope = true
   const isCurrent = selectedIndex === currentStageIndex
-  const inScope = scopeStages.has(selectedStage)
   const stageKey = `${event.id}:${selectedStage}`
   const itemCount = event.items.length
   const states = event.items.map((item) => itemStates[`${stageKey}:${item.id}`] ?? 'Not checked')
   const completedCount = states.filter((state) => state !== 'Not checked').length
-  const damagedCount = states.filter((state) => state === 'Damaged').length
-  const canComplete = isLead && isCurrent && inScope && completedCount === itemCount && (!damagedCount || damageReviewed)
+  const canComplete = isLead && isCurrent && completedCount === itemCount
   const markItem = (itemId: string, state: FieldItemState) => setItemStates((current) => ({ ...current, [`${stageKey}:${itemId}`]: state }))
 
   return <div className="space-y-4">
     <button type="button" onClick={onBack} className="text-xs font-semibold text-muted-foreground">← Back to events</button>
     <div><h1 className="font-serif text-xl font-bold">{event.name}</h1><p className="mt-1 text-xs text-muted-foreground">{event.venue || 'Venue not provided'}</p></div>
     <div className="rounded-2xl border border-border bg-card p-3">
-      <div className="relative grid grid-cols-4 gap-1 after:absolute after:left-[12%] after:right-[12%] after:top-4 after:h-px after:bg-border">{FIELD_STAGES.map((stage, index) => { const done = Boolean(completedStages[stage]); const current = index === currentStageIndex; const allowed = scopeStages.has(stage); return <button key={stage} type="button" onClick={() => setSelectedStage(stage)} className={`min-w-0 rounded-xl px-1 py-2 text-center ${current ? 'bg-primary/10 text-primary ring-1 ring-primary/40' : 'text-muted-foreground'} ${!allowed ? 'opacity-60' : ''}`}><span className={`relative z-10 mx-auto flex size-8 items-center justify-center rounded-full border text-xs font-bold ${done ? 'border-emerald-500 bg-emerald-500 text-white' : current ? 'size-9 border-primary bg-primary text-primary-foreground' : 'border-current bg-muted'}`}>{done ? '✓' : index + 1}</span><span className="mt-1 block min-h-5 text-[9px] font-semibold leading-tight">{stage === 'Dispatch Release' ? <>Dispatch<br />Release</> : stage === 'Venue Arrival' ? <>Venue<br />Arrival</> : stage === 'Egress Release' ? <>Egress<br />Release</> : <>Warehouse<br />Return</>}</span>{!allowed && <span className="mt-1 block text-[8px]">View only</span>}</button> })}</div>
+      <div className="relative grid grid-cols-2 gap-1 after:absolute after:left-[12%] after:right-[12%] after:top-4 after:h-px after:bg-border">{FIELD_STAGES.map((stage, index) => { const done = Boolean(completedStages[stage]); const current = index === currentStageIndex; const allowed = true; return <button key={stage} type="button" onClick={() => setSelectedStage(stage)} className={`min-w-0 rounded-xl px-1 py-2 text-center ${current ? 'bg-primary/10 text-primary ring-1 ring-primary/40' : 'text-muted-foreground'} ${!allowed ? 'opacity-60' : ''}`}><span className={`relative z-10 mx-auto flex size-8 items-center justify-center rounded-full border text-xs font-bold ${done ? 'border-emerald-500 bg-emerald-500 text-white' : current ? 'size-9 border-primary bg-primary text-primary-foreground' : 'border-current bg-muted'}`}>{done ? '✓' : index + 1}</span><span className="mt-1 block min-h-5 text-[9px] font-semibold leading-tight">{stage === 'Venue Arrival' ? <><span>Ingress</span><br /><span className="font-normal text-[8px]">Venue Arrival</span></> : <><span>Egress</span><br /><span className="font-normal text-[8px]">Warehouse Return</span></>}</span>{!allowed && <span className="mt-1 block text-[8px]">View only</span>}</button> })}</div>
     </div>
     <section className="rounded-2xl border border-border bg-card p-3">
-      <div className="mb-3 flex items-center justify-between"><div><h2 className="font-serif text-base font-bold">{selectedStage}</h2><p className="text-[10px] text-muted-foreground">{completedCount} of {itemCount} items checked</p></div>{!inScope && <PwaBadge label="Read-only" variant="neutral" />}</div>
-      {!inScope && <p className="mb-3 rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">This phase belongs to the {assignmentScope === 'Field' ? 'Warehouse' : 'Field'} Crew.</p>}
-      <div className="space-y-2">{event.items.length === 0 ? <PwaEmptyState title="No assets assigned" description="The event manifest is not available yet." /> : event.items.map((item) => { const state = itemStates[`${stageKey}:${item.id}`] ?? 'Not checked'; return <div key={item.id} className="flex items-center gap-2 rounded-xl border border-border p-2.5"><button type="button" disabled={!isCurrent || !inScope} onClick={() => markItem(item.id, state === 'Verified' ? 'Not checked' : 'Verified')} className={`flex size-6 shrink-0 items-center justify-center rounded-md border ${state === 'Verified' ? 'border-primary bg-primary text-primary-foreground' : 'border-border'} disabled:opacity-50`}>{state === 'Verified' && <Check className="size-4" />}</button><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{item.name}</p><p className="text-[10px] text-muted-foreground">Qty {item.qty} · {state}</p></div><button type="button" disabled={!isCurrent || !inScope} aria-label={`Report damage for ${item.name}`} onClick={() => setCameraItem(item)} className="rounded-lg p-2 text-primary disabled:opacity-40"><Camera className="size-4" /></button><button type="button" disabled={!isCurrent || !inScope} onClick={() => markItem(item.id, 'Missing')} className="rounded-lg px-2 py-1 text-[10px] text-muted-foreground disabled:opacity-40">•••</button></div> })}</div>
+      <div className="mb-3 flex items-center justify-between"><div><h2 className="font-serif text-base font-bold">{selectedStage}</h2><p className="text-[10px] text-muted-foreground">{completedCount} of {itemCount} items checked</p></div></div>
+      {isCurrent && !isLead && <p className="mb-3 rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">Only the Team Lead can tick this checklist.</p>}
+      <div className="space-y-2">{event.items.length === 0 ? <PwaEmptyState title="No assets assigned" description="The event manifest is not available yet." /> : event.items.map((item) => { const state = itemStates[`${stageKey}:${item.id}`] ?? 'Not checked'; return <div key={item.id} className="flex items-center gap-2 rounded-xl border border-border p-2.5"><button type="button" disabled={!isCurrent || !inScope} onClick={() => markItem(item.id, state === 'Verified' ? 'Not checked' : 'Verified')} className={`flex size-6 shrink-0 items-center justify-center rounded-md border ${state === 'Verified' ? 'border-primary bg-primary text-primary-foreground' : 'border-border'} disabled:opacity-50`}>{state === 'Verified' && <Check className="size-4" />}</button><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{item.name}</p><p className="text-[10px] text-muted-foreground">Qty {item.qty} · {state}</p></div><button type="button" disabled={!isCurrent || !inScope} onClick={() => markItem(item.id, 'Missing')} className="rounded-lg px-2 py-1 text-[10px] text-muted-foreground disabled:opacity-40">•••</button></div> })}</div>
     </section>
-    {isCurrent && inScope && (isLead ? <div className="space-y-2">{damagedCount > 0 && <label className="flex items-center gap-2 rounded-xl bg-amber-500/10 p-3 text-xs"><input type="checkbox" checked={damageReviewed} onChange={(e) => setDamageReviewed(e.target.checked)} /> I&apos;ve reviewed the reported damage ({damagedCount})</label>}<button type="button" disabled={!canComplete} onClick={() => { setCompletedStages((current) => ({ ...current, [selectedStage]: true })); setDamageReviewed(false); const next = FIELD_STAGES[currentStageIndex + 1]; if (next) setSelectedStage(next) }} className="w-full rounded-xl bg-primary px-4 py-3 text-xs font-semibold text-primary-foreground disabled:opacity-40">Mark {selectedStage} complete</button></div> : <p className="rounded-xl border border-border p-3 text-xs text-muted-foreground">Waiting for shift lead to complete this stage</p>)}
-    {cameraItem && <HavaCameraCaptureModal isOpen={true} onClose={() => setCameraItem(null)} onCaptureComplete={() => { markItem(cameraItem.id, 'Damaged'); setCameraItem(null) }} itemName={cameraItem.name} eventName={event.name} />}
+    {isCurrent && (isLead ? <div className="space-y-2"><button type="button" disabled={!canComplete} onClick={() => { setCompletedStages((current) => ({ ...current, [selectedStage]: true })); const next = FIELD_STAGES[currentStageIndex + 1]; if (next) setSelectedStage(next) }} className="w-full rounded-xl bg-primary px-4 py-3 text-xs font-semibold text-primary-foreground disabled:opacity-40">Mark as {selectedStage === 'Venue Arrival' ? 'Delivered' : 'Returned'}</button></div> : <p className="rounded-xl border border-border p-3 text-xs text-muted-foreground">Waiting for the Team Lead to mark this stage</p>)}
+    <section className="rounded-2xl border border-border bg-card p-3"><div className="mb-3 flex items-center justify-between"><div><h2 className="font-serif text-base font-bold">Damage reporting</h2><p className="text-[10px] text-muted-foreground">Separate from the checklist.</p></div><button type="button" onClick={() => onReport(event.items[0])} disabled={event.items.length === 0} className="rounded-xl bg-primary px-3 py-2 text-[10px] font-semibold text-primary-foreground disabled:opacity-40">Report damage</button></div>{damageReports.length === 0 ? <p className="text-xs text-muted-foreground">No damage reported</p> : damageReports.map((report) => <div key={report.id} className="border-b border-border py-2 text-xs last:border-0"><p className="font-semibold">{report.item}</p><p className="text-[10px] text-muted-foreground">by crew member · {report.capturedAt} · Waiting for review</p></div>)}</section>
   </div>
 }
 
@@ -262,7 +257,6 @@ export function GroundCrewPage() {
       .filter((assignment) => assignment.executionStatus !== 'Completed')
       .sort((a, b) => `${a.shiftDate ?? ''}${a.shiftStartTime ?? ''}`.localeCompare(`${b.shiftDate ?? ''}${b.shiftStartTime ?? ''}`))[0] ?? null
   }, [myAssignments])
-  const assignmentScope: CrewAssignmentScope = activeAssignment && /warehouse/i.test(`${activeAssignment.workArea ?? ''} ${activeAssignment.taskTitle ?? ''} ${activeAssignment.assignedRole ?? ''}`) ? 'Warehouse' : 'Field'
 
   const derivedEvents = useMemo<EventItem[]>(() => {
   if (!activeAssignment || !events || events.length === 0) return adminEmail === 'crew@lumiere.com' ? [FIELD_PREVIEW_EVENT] : []
@@ -965,13 +959,14 @@ export function GroundCrewPage() {
           selectedEvent ? (
             <FieldEventWorkflow
               event={selectedEvent}
-              assignmentScope={assignmentScope}
               isLead={isLeadForEvent(selectedEvent.id)}
               onBack={() => setSelectedEventId(null)}
+              onReport={openReport}
+              damageReports={reports.filter((report) => report.event === selectedEvent.name)}
             />
           ) : (
             <div className="space-y-4">
-              {fieldSection === 'tasks' && (selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed') ? <FieldEventWorkflow event={selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed')!} assignmentScope={assignmentScope} isLead={isLeadForEvent((selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))!.id)} onBack={() => setSelectedEventId(null)} /> : <PwaEmptyState title="Nothing to do right now" description="Assigned events will appear here when your Ground Crew schedule is ready." />)}
+              {fieldSection === 'tasks' && (selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed') ? <FieldEventWorkflow event={selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed')!} isLead={isLeadForEvent((selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))!.id)} onBack={() => setSelectedEventId(null)} onReport={openReport} damageReports={reports.filter((report) => report.event === (selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))?.name)} /> : <PwaEmptyState title="Nothing to do right now" description="Assigned events will appear here when your Ground Crew schedule is ready." />)}
               <div className="flex items-center gap-2 rounded-2xl border border-border bg-card p-2">
                 {(['tasks', 'history'] as const).map((section) => <button key={section} type="button" onClick={() => setFieldSection(section)} className={`flex-1 rounded-xl px-3 py-2.5 text-xs font-semibold capitalize ${fieldSection === section ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>{section}</button>)}
                 <button type="button" aria-label="Open camera evidence" onClick={() => setCameraShortcutOpen(true)} className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/40 text-primary"><Camera className="size-4" /></button>
@@ -1247,7 +1242,7 @@ function Home({
               </div>
               <p className="text-xs text-muted-foreground">{todayShift.venue || 'Venue not provided'}</p>
               {todayShift.time && <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="size-3" /> Call time {formatTime(todayShift.time)}</p>}
-              <p className="text-xs font-semibold leading-snug text-foreground">Your stages: {scope === 'Field Crew' ? 'Venue Arrival, Egress Release' : 'Dispatch Release, Warehouse Return'}</p>
+              <p className="text-xs font-semibold leading-snug text-foreground">Your stages: {scope === 'Field Crew' ? 'Venue Arrival, Warehouse Return' : 'Venue Arrival, Warehouse Return'}</p>
             </div>
           </PwaCard>
         </button>
@@ -2178,7 +2173,7 @@ type ScheduleShift = {
   stages: string[]
 }
 
-const SCHEDULE_STAGES = ['Dispatch Release', 'Venue Arrival', 'Egress Release', 'Warehouse Return'] as const
+const SCHEDULE_STAGES = ['Venue Arrival', 'Venue Arrival', 'Warehouse Return', 'Warehouse Return'] as const
 
 function manilaToday() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
@@ -2186,8 +2181,8 @@ function manilaToday() {
 
 function stagesForCrewScope(scope: 'Warehouse Crew' | 'Field Crew') {
   return scope === 'Warehouse Crew'
-    ? ['Dispatch Release', 'Warehouse Return']
-    : ['Venue Arrival', 'Egress Release']
+    ? ['Venue Arrival', 'Warehouse Return']
+    : ['Venue Arrival', 'Warehouse Return']
 }
 
 function formatTime(value?: string | null) {
