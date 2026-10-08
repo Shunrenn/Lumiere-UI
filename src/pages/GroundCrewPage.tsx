@@ -925,7 +925,7 @@ export function GroundCrewPage() {
             />
           ) : (
             <div className="space-y-4">
-              <PwaCard title="Field Console" subtitle="Open an assigned event or review operational work.">
+              <PwaCard title="Chain of custody" subtitle="Follow each handoff from release to return.">
   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
   {(['tasks', 'requests', 'history'] as const).map((section) => <button key={section} type="button" onClick={() => setFieldSection(section)} className={`rounded-xl border px-3 py-3 text-xs font-semibold capitalize ${fieldSection === section ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>{section}</button>)}
   <button type="button" onClick={() => setCameraShortcutOpen(true)} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary/40 px-3 py-3 text-xs font-semibold text-primary"><Camera className="size-4" /> Camera</button>
