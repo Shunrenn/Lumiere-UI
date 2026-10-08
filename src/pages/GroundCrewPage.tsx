@@ -165,10 +165,46 @@ function FieldConsole({ events, assignmentScope, isLeadForEvent }: { events: Eve
   return <div className="space-y-4"><PwaCard title="Field · Chain of custody" subtitle={`${assignmentScope} assignment · verify every handoff against the asset manifest.`}><p className="text-xs leading-relaxed text-muted-foreground">Single-Lock Assignment keeps this account on one event. Work offline when needed; records sync when a connection returns.</p></PwaCard>{events.length === 0 ? <PwaEmptyState title="Nothing to do right now" description="Assigned events will appear here when your Ground Crew schedule is ready." /> : events.map((event) => <PwaCard key={event.id} title={event.name} subtitle={`${dateLabel(event.date)} · ${event.venue}`}><div className="space-y-3"><div className="relative grid grid-cols-4 gap-1">{FIELD_STAGES.map((stage, index) => { const previousDone = canOpenStage(event.id, index); const done = confirmedStages[`${event.id}:${stage}`]; const editable = editableStages.has(stage); const isCurrent = previousDone && !done && editable; return <button key={stage} type="button" disabled={!previousDone} onClick={() => { setSelectedEventId(event.id); setActiveStage(stage) }} className={`relative z-10 min-w-0 rounded-xl px-1 py-2.5 text-[10px] font-semibold transition-colors ${done ? 'bg-emerald-500/15 text-emerald-700' : isCurrent ? 'bg-primary/15 text-primary ring-1 ring-primary/50' : previousDone ? 'bg-muted text-muted-foreground' : 'bg-muted text-muted-foreground opacity-60'}`}><span className={`mx-auto mb-1 flex size-7 items-center justify-center rounded-full border text-xs ${isCurrent ? 'border-primary bg-primary text-primary-foreground' : 'border-current'}`}>{done ? '✓' : index + 1}</span><span className="block truncate">{stage.replace(' Release', '').replace('Warehouse ', '')}</span><span className="mt-0.5 block text-[8px] font-normal">{editable ? 'Your stage' : 'Read-only'}</span></button>})}</div><div className="flex items-center justify-between border-t border-border pt-3 text-[10px] text-muted-foreground"><span>{event.items.length} manifest items</span><span>Saved locally · pending sync</span></div></div></PwaCard>)}</div>
 }
 
+function FieldEventWorkflow({ event, assignmentScope, isLead, onBack }: { event: EventItem; assignmentScope: CrewAssignmentScope; isLead: boolean; onBack: () => void }) {
+  const [selectedStage, setSelectedStage] = useState<FieldStage>('Venue Arrival')
+  const [itemStates, setItemStates] = useState<Record<string, FieldItemState>>({})
+  const [completedStages, setCompletedStages] = useState<Partial<Record<FieldStage, boolean>>>({ 'Dispatch Release': true })
+  const [damageReviewed, setDamageReviewed] = useState(false)
+  const [cameraItem, setCameraItem] = useState<EventItem['items'][number] | null>(null)
+  const currentStageIndex = FIELD_STAGES.findIndex((stage) => !completedStages[stage])
+  const selectedIndex = FIELD_STAGES.indexOf(selectedStage)
+  const scopeStages = assignmentScope === 'Warehouse' ? new Set<FieldStage>(['Dispatch Release', 'Warehouse Return']) : new Set<FieldStage>(['Venue Arrival', 'Egress Release'])
+  const isCurrent = selectedIndex === currentStageIndex
+  const inScope = scopeStages.has(selectedStage)
+  const stageKey = `${event.id}:${selectedStage}`
+  const itemCount = event.items.length
+  const states = event.items.map((item) => itemStates[`${stageKey}:${item.id}`] ?? 'Not checked')
+  const completedCount = states.filter((state) => state !== 'Not checked').length
+  const damagedCount = states.filter((state) => state === 'Damaged').length
+  const canComplete = isLead && isCurrent && inScope && completedCount === itemCount && (!damagedCount || damageReviewed)
+  const markItem = (itemId: string, state: FieldItemState) => setItemStates((current) => ({ ...current, [`${stageKey}:${itemId}`]: state }))
+
+  return <div className="space-y-4">
+    <button type="button" onClick={onBack} className="text-xs font-semibold text-muted-foreground">← Back to events</button>
+    <div><h1 className="font-serif text-xl font-bold">{event.name}</h1><p className="mt-1 text-xs text-muted-foreground">{event.venue || 'Venue not provided'}</p></div>
+    <div className="rounded-2xl border border-border bg-card p-3">
+      <div className="grid grid-cols-4 gap-1">{FIELD_STAGES.map((stage, index) => { const done = Boolean(completedStages[stage]); const current = index === currentStageIndex; const allowed = scopeStages.has(stage); return <button key={stage} type="button" onClick={() => setSelectedStage(stage)} className={`min-w-0 rounded-xl px-1 py-2 text-center ${current ? 'bg-primary/10 text-primary ring-1 ring-primary/40' : 'text-muted-foreground'} ${!allowed ? 'opacity-60' : ''}`}><span className={`mx-auto flex size-8 items-center justify-center rounded-full border text-xs font-bold ${done ? 'border-emerald-500 bg-emerald-500 text-white' : current ? 'border-primary bg-primary text-primary-foreground scale-110' : 'border-current bg-muted'}`}>{done ? '✓' : index + 1}</span><span className="mt-1 block text-[9px] font-semibold leading-tight">{stage}</span>{!allowed && <span className="mt-1 block text-[8px]">View only</span>}</button> })}</div>
+    </div>
+    <section className="rounded-2xl border border-border bg-card p-3">
+      <div className="mb-3 flex items-center justify-between"><div><h2 className="font-serif text-base font-bold">{selectedStage}</h2><p className="text-[10px] text-muted-foreground">{completedCount} of {itemCount} items checked</p></div>{!inScope && <PwaBadge label="Read-only" variant="neutral" />}</div>
+      {!inScope && <p className="mb-3 rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">This phase belongs to the {assignmentScope === 'Field' ? 'Warehouse' : 'Field'} Crew.</p>}
+      <div className="space-y-2">{event.items.length === 0 ? <PwaEmptyState title="No assets assigned" description="The event manifest is not available yet." /> : event.items.map((item) => { const state = itemStates[`${stageKey}:${item.id}`] ?? 'Not checked'; return <div key={item.id} className="flex items-center gap-2 rounded-xl border border-border p-2.5"><button type="button" disabled={!isCurrent || !inScope} onClick={() => markItem(item.id, state === 'Verified' ? 'Not checked' : 'Verified')} className={`flex size-6 shrink-0 items-center justify-center rounded-md border ${state === 'Verified' ? 'border-primary bg-primary text-primary-foreground' : 'border-border'} disabled:opacity-50`}>{state === 'Verified' && <Check className="size-4" />}</button><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{item.name}</p><p className="text-[10px] text-muted-foreground">Qty {item.qty} · {state}</p></div><button type="button" disabled={!isCurrent || !inScope} aria-label={`Report damage for ${item.name}`} onClick={() => setCameraItem(item)} className="rounded-lg p-2 text-primary disabled:opacity-40"><Camera className="size-4" /></button><button type="button" disabled={!isCurrent || !inScope} onClick={() => markItem(item.id, 'Missing')} className="rounded-lg px-2 py-1 text-[10px] text-muted-foreground disabled:opacity-40">•••</button></div> })}</div>
+    </section>
+    {isCurrent && inScope && (isLead ? <div className="space-y-2">{damagedCount > 0 && <label className="flex items-center gap-2 rounded-xl bg-amber-500/10 p-3 text-xs"><input type="checkbox" checked={damageReviewed} onChange={(e) => setDamageReviewed(e.target.checked)} /> I&apos;ve reviewed the reported damage ({damagedCount})</label>}<button type="button" disabled={!canComplete} onClick={() => { setCompletedStages((current) => ({ ...current, [selectedStage]: true })); setDamageReviewed(false); const next = FIELD_STAGES[currentStageIndex + 1]; if (next) setSelectedStage(next) }} className="w-full rounded-xl bg-primary px-4 py-3 text-xs font-semibold text-primary-foreground disabled:opacity-40">Mark {selectedStage} complete</button></div> : <p className="rounded-xl border border-border p-3 text-xs text-muted-foreground">Waiting for shift lead to complete this stage</p>)}
+    {cameraItem && <HavaCameraCaptureModal isOpen={true} onClose={() => setCameraItem(null)} onCaptureComplete={() => { markItem(cameraItem.id, 'Damaged'); setCameraItem(null) }} itemName={cameraItem.name} eventName={event.name} />}
+  </div>
+}
+
 export function GroundCrewPage() {
   const { currentUser, adminName, adminEmail, adminRole, logout } = useAuth()
   const { events, staff, procurement, initiateEventEgress } = usePortal()
   const dispatchStore = useDispatchStore(events, staff, procurement)
+  void dispatchStore
   const declarations = useGroundCrewDeclarations()
   void declarations
   const [tab, setTab] = useState<Tab>('home')
@@ -615,6 +651,8 @@ export function GroundCrewPage() {
 
   const [handoffNotes, setHandoffNotes] = useState<Record<string, string>>({})
   const [egressErrors, setEgressErrors] = useState<Record<string, string>>({})
+  void setHandoffNotes
+  void egressErrors
 
   const [requestOpen, setRequestOpen] = useState(false)
   const [requestType, setRequestType] = useState('Sick leave')
@@ -629,6 +667,7 @@ export function GroundCrewPage() {
     setReportError(null)
     setShowReport(true)
   }
+  void openReport
 
   const submitReport = async (
     event: FormEvent<HTMLFormElement>,
@@ -756,6 +795,7 @@ export function GroundCrewPage() {
       })
     )
   }
+  void advancePhase
 
   const handleStartEgress = async (eventId: string) => {
     const note = (handoffNotes[eventId] || '').trim()
@@ -815,6 +855,7 @@ export function GroundCrewPage() {
       }))
     }
   }
+  void handleStartEgress
 
   const submitRequest = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -911,17 +952,11 @@ export function GroundCrewPage() {
 
         {tab === 'field' && (
           selectedEvent ? (
-            <EventDetail
+            <FieldEventWorkflow
               event={selectedEvent}
-              batches={dispatchStore.get(selectedEvent.id) ?? []}
-              handoffNote={handoffNotes[selectedEvent.id] || ''}
-              onHandoffNoteChange={(val) => setHandoffNotes((prev) => ({ ...prev, [selectedEvent.id]: val }))}
-              egressError={egressErrors[selectedEvent.id] || ''}
+              assignmentScope={assignmentScope}
               isLead={isLeadForEvent(selectedEvent.id)}
-              onAdvancePhase={() => advancePhase(selectedEvent.id)}
-              onStartEgress={() => handleStartEgress(selectedEvent.id)}
               onBack={() => setSelectedEventId(null)}
-              onReport={openReport}
             />
           ) : (
             <div className="space-y-4">
@@ -2168,6 +2203,8 @@ const SCHEDULE_PREVIEW_EVENT: EventItem = {
   name: 'Lumière Live Operational Demonstration',
   phase: 'Venue Arrival',
 }
+
+void EventDetail
 
 function CalendarView({
   selectedDate,
