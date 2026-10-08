@@ -836,9 +836,9 @@ export function GroundCrewPage() {
     <div className="min-h-screen bg-background text-foreground pb-24">
       {/* Shared PWA Station Header */}
       <PwaHeader
-        title={
-          tab === 'home'
-            ? `Hi, ${(adminName || currentUser?.name || '').trim().split(/\s+/)[0] || 'Home'}`
+  title={
+  tab === 'home'
+  ? 'Home'
             : tab === 'schedule'
               ? 'Schedule'
               : tab === 'field'
@@ -885,6 +885,7 @@ export function GroundCrewPage() {
         {tab === 'home' && (
           <Home
             events={crewEvents}
+            greetingName={adminName || currentUser?.name || ''}
             onOpenToday={(item) => { setSelectedEventId(item.id); setTab('field') }}
             onOpenNext={() => setTab('schedule')}
             assignments={myAssignments}
@@ -1142,6 +1143,7 @@ const HOME_PREVIEW_NEXT_ASSIGNMENT = {
 
 function Home({
   events,
+  greetingName,
   onOpenToday,
   onOpenNext,
   assignments,
@@ -1151,6 +1153,7 @@ function Home({
   isCachedData,
 }: {
   events: EventItem[]
+  greetingName: string
   onOpenToday: (event: EventItem) => void
   onOpenNext: () => void
   assignments: MyManningAssignmentDto[]
@@ -1210,6 +1213,10 @@ function Home({
 
   return (
     <div className="space-y-3">
+      <div className="rounded-2xl border border-border bg-card px-4 py-3">
+        <p className="font-serif text-xl font-bold">Hi, {greetingName.trim().split(/\s+/)[0] || 'there'}</p>
+        <p className="mt-1 text-xs text-muted-foreground">Here&apos;s what needs your attention today.</p>
+      </div>
       {previewMode && <div className="rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">Preview data is shown because this account has no active assignments yet.</div>}
       {pendingActions.length > 0 && <section aria-labelledby="pending-actions-heading" className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3.5"><div className="mb-3 flex items-center justify-between"><h2 id="pending-actions-heading" className="font-serif text-base font-bold">Pending actions</h2><span className="rounded-full bg-amber-400/20 px-2 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-200">{pendingActions.length} open</span></div><div className="space-y-2">{pendingActions.map((item) => <button key={item.label} type="button" onClick={item.action} className="flex w-full items-center justify-between gap-3 rounded-xl border border-amber-400/20 bg-background/50 p-3 text-left"><span className="min-w-0"><span className="block text-xs font-semibold">{item.label}</span><span className="mt-1 block truncate text-[10px] text-muted-foreground">{item.detail}</span></span><span aria-hidden="true" className="text-lg text-amber-600">›</span></button>)}</div></section>}
       <GroundCrewSyncPill assignments={displayAssignments as MyManningAssignmentDto[]} isCachedData={isCachedData} />
