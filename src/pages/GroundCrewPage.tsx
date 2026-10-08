@@ -1207,7 +1207,7 @@ function Home({
           </PwaCard>
         </button>
       ) : <PwaCard title="Today"><p className="text-sm text-muted-foreground">No shift today</p></PwaCard>}
-      {nextShift ? <button type="button" onClick={onOpenNext} className="block w-full text-left"><PwaCard title="Next shift"><h2 className="font-serif text-lg font-bold">{nextShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{nextShift.venue} • {dateLabel(nextShift.date)}</p></PwaCard></button> : <PwaCard title="Next shift"><p className="text-sm text-muted-foreground">No upcoming shifts</p></PwaCard>}
+      {nextShift ? <button type="button" onClick={onOpenNext} className="block w-full text-left"><PwaCard title="Next shift"><h2 className="font-serif text-base font-bold leading-tight">{nextShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{nextShift.venue} • {dateLabel(nextShift.date)}</p></PwaCard></button> : <PwaCard title="Next shift"><p className="text-xs text-muted-foreground">No upcoming shifts</p></PwaCard>}
     </div>
   )
 }
