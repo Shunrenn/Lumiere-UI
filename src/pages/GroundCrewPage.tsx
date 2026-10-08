@@ -22,6 +22,8 @@ import {
   RefreshCw,
   AlertCircle,
   CheckCircle2,
+  History,
+  Hammer,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { usePortal } from '@/lib/store'
@@ -66,7 +68,7 @@ import {
 } from '@/components/pwa'
 import type { HavaDeclarationState, HavaEvidenceStatus } from '@/lib/types'
 
-type Tab = 'home' | 'schedule' | 'field' | 'account'
+type Tab = 'home' | 'schedule' | 'field' | 'history' | 'production' | 'account'
 type AccessLevel = 'Ground Crew / Member' | 'Team Lead / Field Lead' | 'Receiver' | 'Event Admin'
 export type CheckpointPhase = 'Dispatch Loading' | 'Venue Arrival' | 'Pre-Event Setup' | 'Post-Event Egress'
 type EventStatus = 'Current' | 'Upcoming' | 'Completed'
@@ -220,8 +222,8 @@ export function GroundCrewPage() {
   const declarations = useGroundCrewDeclarations()
   void declarations
   const [tab, setTab] = useState<Tab>('home')
-  const [fieldView, setFieldView] = useState<'workflow' | 'history' | 'production'>('workflow')
   const [cameraShortcutOpen, setCameraShortcutOpen] = useState(false)
+  const activeFieldView = tab === 'history' ? 'history' : tab === 'production' ? 'production' : 'workflow'
   // Canonical Manning operational assignments for authenticated user
   const [myAssignments, setMyAssignments] = useState<MyManningAssignmentDto[]>([])
   const [loadingAssignments, setLoadingAssignments] = useState(true)
@@ -886,8 +888,10 @@ export function GroundCrewPage() {
   const navItems: PwaNavItem[] = [
     { id: 'home', label: 'Home', icon: MapPin },
     { id: 'schedule', label: 'Schedule', icon: CalendarDays },
-    { id: 'field', label: 'Field', icon: ClipboardList },
-    { id: 'account', label: 'Profile', icon: UserCircle2 },
+  { id: 'field', label: 'Field', icon: ClipboardList },
+  { id: 'history', label: 'History', icon: History },
+  { id: 'production', label: 'Production', icon: Hammer },
+  { id: 'account', label: 'Profile', icon: UserCircle2 },
   ]
 
   return (
@@ -959,9 +963,9 @@ export function GroundCrewPage() {
   />
         )}
 
-        {tab === 'field' && <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-1 rounded-2xl border border-border bg-card p-1"><button type="button" onClick={() => setFieldView('workflow')} className={`rounded-xl px-2 py-2.5 text-xs font-semibold ${fieldView === 'workflow' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>Workflow</button><button type="button" onClick={() => setFieldView('history')} className={`rounded-xl px-2 py-2.5 text-xs font-semibold ${fieldView === 'history' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>History</button><button type="button" onClick={() => setFieldView('production')} className={`rounded-xl px-2 py-2.5 text-xs font-semibold ${fieldView === 'production' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>Production</button></div>
-          {fieldView === 'workflow' && (selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed')) ? <FieldEventWorkflow event={(selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))!} isLead={isLeadForEvent((selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))!.id)} damageReports={reports.filter((report) => report.event === (selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))?.name)} onOpenCamera={() => setCameraShortcutOpen(true)} /> : fieldView === 'workflow' ? <PwaEmptyState title="Nothing to do right now" description="Assigned events will appear here when your Ground Crew schedule is ready." /> : fieldView === 'history' ? <div className="space-y-3"><PwaCard title="Past events" subtitle="Completed crew work"><div className="space-y-2">{crewEvents.filter((event) => event.status === 'Completed').map((event) => <div key={event.id} className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">{event.name}</p><p className="text-xs text-muted-foreground">{event.venue} · {dateLabel(event.date)}</p></div>)}{reports.map((report) => <div key={report.id} className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">Damage report · {report.item}</p><p className="text-xs text-muted-foreground">{report.event} · {report.capturedAt}</p></div>)}{crewEvents.filter((event) => event.status === 'Completed').length === 0 && reports.length === 0 && <p className="text-xs text-muted-foreground">No history yet.</p>}</div></PwaCard></div> : <div className="space-y-3"><PwaCard title="Production" subtitle="Bespoke asset tasks"><div className="space-y-2"><div className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">Custom Modular Velvet Stage Platform</p><p className="text-xs text-muted-foreground">Fabrication · In progress</p></div><div className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">Modular Arch Panel</p><p className="text-xs text-muted-foreground">Assembly check · Ready</p></div></div></PwaCard></div>}
+        {(tab === 'field' || tab === 'history' || tab === 'production') && <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-1 rounded-2xl border border-border bg-card p-1"><button type="button" onClick={() => setTab('field')} className={`rounded-xl px-2 py-2.5 text-xs font-semibold ${activeFieldView === 'workflow' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>Workflow</button><button type="button" onClick={() => setTab('history')} className={`rounded-xl px-2 py-2.5 text-xs font-semibold ${activeFieldView === 'history' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>History</button><button type="button" onClick={() => setTab('production')} className={`rounded-xl px-2 py-2.5 text-xs font-semibold ${activeFieldView === 'production' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>Production</button></div>
+          {activeFieldView === 'workflow' && (selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed')) ? <FieldEventWorkflow event={(selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))!} isLead={isLeadForEvent((selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))!.id)} damageReports={reports.filter((report) => report.event === (selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))?.name)} onOpenCamera={() => setCameraShortcutOpen(true)} /> : activeFieldView === 'workflow' ? <PwaEmptyState title="Nothing to do right now" description="Assigned events will appear here when your Ground Crew schedule is ready." /> : activeFieldView === 'history' ? <div className="space-y-3"><PwaCard title="Past events" subtitle="Completed crew work"><div className="space-y-2">{crewEvents.filter((event) => event.status === 'Completed').map((event) => <div key={event.id} className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">{event.name}</p><p className="text-xs text-muted-foreground">{event.venue} · {dateLabel(event.date)}</p></div>)}{reports.map((report) => <div key={report.id} className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">Damage report · {report.item}</p><p className="text-xs text-muted-foreground">{report.event} · {report.capturedAt}</p></div>)}{crewEvents.filter((event) => event.status === 'Completed').length === 0 && reports.length === 0 && <p className="text-xs text-muted-foreground">No history yet.</p>}</div></PwaCard></div> : <div className="space-y-3"><PwaCard title="Production" subtitle="Bespoke asset tasks"><div className="space-y-2"><div className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">Custom Modular Velvet Stage Platform</p><p className="text-xs text-muted-foreground">Fabrication · In progress</p></div><div className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">Modular Arch Panel</p><p className="text-xs text-muted-foreground">Assembly check · Ready</p></div></div></PwaCard></div>}
         </div>}
 
         {tab === 'account' && (
