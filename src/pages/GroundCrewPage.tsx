@@ -889,8 +889,7 @@ export function GroundCrewPage() {
             onOpenToday={(item) => { setSelectedEventId(item.id); setTab('field') }}
             onOpenNext={() => setTab('schedule')}
             assignments={myAssignments}
-            batchesByEvent={dispatchStore}
-            loadingAssignments={loadingAssignments}
+                      loadingAssignments={loadingAssignments}
             assignmentError={assignmentError}
             isCachedData={isCachedData}
           />
@@ -1147,7 +1146,6 @@ function Home({
   onOpenToday,
   onOpenNext,
   assignments,
-  batchesByEvent,
   loadingAssignments,
   assignmentError,
   isCachedData,
@@ -1157,7 +1155,6 @@ function Home({
   onOpenToday: (event: EventItem) => void
   onOpenNext: () => void
   assignments: MyManningAssignmentDto[]
-  batchesByEvent: Map<string, DispatchBatch[]>
   loadingAssignments: boolean
   assignmentError: string | null
   isCachedData?: boolean
@@ -1168,31 +1165,6 @@ function Home({
   const displayAssignments = previewMode ? [HOME_PREVIEW_ASSIGNMENT, { ...HOME_PREVIEW_ASSIGNMENT, assignmentId: 'home-preview-return', taskTitle: 'Warehouse return handoff', workArea: 'Warehouse', assignedRole: 'Warehouse Crew', isLead: false }, HOME_PREVIEW_NEXT_ASSIGNMENT] : assignments
   const displayEvents = previewMode ? [HOME_PREVIEW_EVENT, HOME_PREVIEW_NEXT_EVENT] : events
   const scope = displayAssignments.some((a) => /warehouse/i.test(`${a.workArea} ${a.taskTitle}`)) ? 'Warehouse Crew' : 'Field Crew'
-  const stages = ['Dispatch Release', 'Venue Arrival', 'Egress Release', 'Warehouse Return']
-  // Keep Home's batch-to-stage contract in one place so Field can share it later.
-  const BATCH_STAGE_PROGRESS: Record<string, Record<string, number>> = {
-    outbound: { Planned: 0, Loaded: 0, 'In Transit': 1, Delivered: 2, Returned: 4 },
-    return: { Planned: 2, Loaded: 2, 'In Transit': 3, Delivered: 3, Returned: 4 },
-  }
-  const stageFor = (eventId: string) => {
-    const batches = (batchesByEvent.get(eventId) ?? []).filter((batch) => !batch.isArchived)
-    if (batches.length === 0) return { index: -1, label: 'Not started yet', state: 'empty' as const }
-
-    const progressFor = (batch: DispatchBatch) => {
-      const progress = BATCH_STAGE_PROGRESS[batch.direction]?.[batch.stage]
-      if (progress === undefined) {
-        console.log('[v0] Unknown dispatch batch status:', { direction: batch.direction, stage: batch.stage, batchId: batch.id })
-        return null
-      }
-      return progress
-    }
-    const progress = batches.map(progressFor)
-    if (progress.some((value) => value === null)) return { index: -1, label: 'Stage unavailable', state: 'unavailable' as const }
-    if (progress.every((value) => value === 4)) return { index: stages.length - 1, label: 'All stages done', state: 'complete' as const }
-
-    const earliestUnfinished = Math.min(...(progress as number[]))
-    return { index: earliestUnfinished, label: stages[earliestUnfinished], state: 'active' as const }
-  }
   const grouped = Array.from(new Set(displayAssignments.map((a) => a.eventId))).map((eventId) => {
     const items = displayAssignments.filter((a) => a.eventId === eventId)
     const first = items[0]
@@ -1222,8 +1194,16 @@ function Home({
       <GroundCrewSyncPill assignments={displayAssignments as MyManningAssignmentDto[]} isCachedData={isCachedData} />
       {todayShift ? (
         <button type="button" onClick={() => onOpenToday(toEvent(todayShift))} className="block w-full text-left">
-          <PwaCard title="Today" action={todayShift.isLead ? <PwaBadge variant="neutral" label="Shift Lead" /> : undefined}>
-            <div className="space-y-3"><div><h2 className="font-serif text-lg font-bold">{todayShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{todayShift.venue}{todayShift.time ? ` • Call ${todayShift.time}` : ''}</p></div>{(() => { const stage = stageFor(todayShift.id); const showProgress = stage.state === 'active' || stage.state === 'complete'; return <div><div className="grid grid-cols-4 gap-1">{stages.map((stageName, index) => <span key={stageName} className={`h-2 rounded-full ${showProgress && index <= stage.index ? 'bg-primary' : 'bg-muted'}`} />)}</div><p className="mt-2 text-xs text-muted-foreground">{stage.state === 'active' || stage.state === 'complete' ? `Stage ${stage.index + 1} of 4 · ${stage.label}` : stage.label}</p></div> })()}<p className="text-xs text-muted-foreground">Your stages: {scope === 'Field Crew' ? 'Venue Arrival, Egress Release' : 'Dispatch Release, Warehouse Return'}</p></div>
+          <PwaCard className="border-border/80 bg-card p-4" headerClassName="hidden">
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="max-w-[70%] font-serif text-lg font-bold leading-tight">{todayShift.name}</h2>
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground"><span className="size-2 rounded-full bg-muted-foreground/60" /> Today</span>
+              </div>
+              <p className="text-sm text-muted-foreground">{todayShift.venue || 'Venue not provided'}</p>
+              {todayShift.time && <p className="flex items-center gap-1.5 text-sm text-muted-foreground"><Clock className="size-3.5" /> Call time {formatTime(todayShift.time)}</p>}
+              <p className="text-sm font-semibold leading-snug text-foreground">Your stages: {scope === 'Field Crew' ? 'Venue Arrival, Egress Release' : 'Dispatch Release, Warehouse Return'}</p>
+            </div>
           </PwaCard>
         </button>
       ) : <PwaCard title="Today"><p className="text-sm text-muted-foreground">No shift today</p></PwaCard>}
