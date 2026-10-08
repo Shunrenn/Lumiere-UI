@@ -192,8 +192,8 @@ export function DispatchPanel({
       action={<SectionButton onClick={onNewBatch}>+ New Batch</SectionButton>}
     >
       <div className="flex flex-col gap-6">
-        {/* Core State Banner */}
-        <StateBanner label={banner} tone={BANNER_TONE[banner]} />
+  {/* Core State Banner */}
+  {banner !== 'Stalled In Transit — Needs Attention' && <StateBanner label={banner} tone={BANNER_TONE[banner]} />}
 
         {/* =========================================================================
             ZONE 1: AUTHORITATIVE PREPARATION (Warehouse Floor Readiness)
