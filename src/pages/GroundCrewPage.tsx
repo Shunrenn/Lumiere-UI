@@ -182,7 +182,7 @@ function FieldConsole({ events, assignmentScope, isLeadForEvent }: { events: Eve
 
 void FieldConsole
 
-function FieldEventWorkflow({ event, isLead, onBack, onReport, damageReports }: { event: EventItem; isLead: boolean; onBack: () => void; onReport: (item: EventItem['items'][number]) => void; damageReports: DamageReport[] }) {
+function FieldEventWorkflow({ event, isLead, damageReports, onOpenCamera }: { event: EventItem; isLead: boolean; damageReports: DamageReport[]; onOpenCamera: () => void }) {
   const [selectedStage, setSelectedStage] = useState<FieldStage>('Venue Arrival')
   const [itemStates, setItemStates] = useState<Record<string, FieldItemState>>({})
   const [completedStages, setCompletedStages] = useState<Partial<Record<FieldStage, boolean>>>({})
@@ -198,7 +198,6 @@ function FieldEventWorkflow({ event, isLead, onBack, onReport, damageReports }: 
   const markItem = (itemId: string, state: FieldItemState) => setItemStates((current) => ({ ...current, [`${stageKey}:${itemId}`]: state }))
 
   return <div className="space-y-4">
-    <button type="button" onClick={onBack} className="text-xs font-semibold text-muted-foreground">← Back to events</button>
     <div><h1 className="font-serif text-xl font-bold">{event.name}</h1><p className="mt-1 text-xs text-muted-foreground">{event.venue || 'Venue not provided'}</p></div>
     <div className="rounded-2xl border border-border bg-card p-3">
       <div className="relative grid grid-cols-2 gap-1 after:absolute after:left-[12%] after:right-[12%] after:top-4 after:h-px after:bg-border">{FIELD_STAGES.map((stage, index) => { const done = Boolean(completedStages[stage]); const current = index === currentStageIndex; const allowed = true; return <button key={stage} type="button" onClick={() => setSelectedStage(stage)} className={`min-w-0 rounded-xl px-1 py-2 text-center ${current ? 'bg-primary/10 text-primary ring-1 ring-primary/40' : 'text-muted-foreground'} ${!allowed ? 'opacity-60' : ''}`}><span className={`relative z-10 mx-auto flex size-8 items-center justify-center rounded-full border text-xs font-bold ${done ? 'border-emerald-500 bg-emerald-500 text-white' : current ? 'size-9 border-primary bg-primary text-primary-foreground' : 'border-current bg-muted'}`}>{done ? '✓' : index + 1}</span><span className="mt-1 block min-h-5 text-[9px] font-semibold leading-tight">{stage === 'Venue Arrival' ? <><span>Ingress</span><br /><span className="font-normal text-[8px]">Venue Arrival</span></> : <><span>Egress</span><br /><span className="font-normal text-[8px]">Warehouse Return</span></>}</span>{!allowed && <span className="mt-1 block text-[8px]">View only</span>}</button> })}</div>
@@ -206,10 +205,10 @@ function FieldEventWorkflow({ event, isLead, onBack, onReport, damageReports }: 
     <section className="rounded-2xl border border-border bg-card p-3">
       <div className="mb-3 flex items-center justify-between"><div><h2 className="font-serif text-base font-bold">{selectedStage}</h2><p className="text-[10px] text-muted-foreground">{completedCount} of {itemCount} items checked</p></div></div>
       {isCurrent && !isLead && <p className="mb-3 rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">Only the Team Lead can tick this checklist.</p>}
-      <div className="space-y-2">{event.items.length === 0 ? <PwaEmptyState title="No assets assigned" description="The event manifest is not available yet." /> : event.items.map((item) => { const state = itemStates[`${stageKey}:${item.id}`] ?? 'Not checked'; return <div key={item.id} className="flex items-center gap-2 rounded-xl border border-border p-2.5"><button type="button" disabled={!isCurrent || !inScope} onClick={() => markItem(item.id, state === 'Verified' ? 'Not checked' : 'Verified')} className={`flex size-6 shrink-0 items-center justify-center rounded-md border ${state === 'Verified' ? 'border-primary bg-primary text-primary-foreground' : 'border-border'} disabled:opacity-50`}>{state === 'Verified' && <Check className="size-4" />}</button><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{item.name}</p><p className="text-[10px] text-muted-foreground">Qty {item.qty} · {state}</p></div><button type="button" disabled={!isCurrent || !inScope} onClick={() => markItem(item.id, 'Missing')} className="rounded-lg px-2 py-1 text-[10px] text-muted-foreground disabled:opacity-40">•••</button></div> })}</div>
+      <div className="space-y-2">{event.items.length === 0 ? <PwaEmptyState title="No assets assigned" description="The event manifest is not available yet." /> : event.items.map((item) => { const state = itemStates[`${stageKey}:${item.id}`] ?? 'Not checked'; return <div key={item.id} className="flex items-center gap-2 rounded-xl border border-border p-2.5"><button type="button" disabled={!isCurrent || !inScope || !isLead} onClick={() => markItem(item.id, state === 'Verified' ? 'Not checked' : 'Verified')} className={`flex size-6 shrink-0 items-center justify-center rounded-md border ${state === 'Verified' ? 'border-primary bg-primary text-primary-foreground' : 'border-border'} disabled:opacity-50`}>{state === 'Verified' && <Check className="size-4" />}</button><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{item.name}</p><p className="text-[10px] text-muted-foreground">Qty {item.qty} · {state}</p></div><button type="button" disabled={!isCurrent || !inScope || !isLead} onClick={() => markItem(item.id, 'Missing')} className="rounded-lg px-2 py-1 text-[10px] text-muted-foreground disabled:opacity-40">•••</button></div> })}</div>
     </section>
     {isCurrent && (isLead ? <div className="space-y-2"><button type="button" disabled={!canComplete} onClick={() => { setCompletedStages((current) => ({ ...current, [selectedStage]: true })); const next = FIELD_STAGES[currentStageIndex + 1]; if (next) setSelectedStage(next) }} className="w-full rounded-xl bg-primary px-4 py-3 text-xs font-semibold text-primary-foreground disabled:opacity-40">Mark as {selectedStage === 'Venue Arrival' ? 'Delivered' : 'Returned'}</button></div> : <p className="rounded-xl border border-border p-3 text-xs text-muted-foreground">Waiting for the Team Lead to mark this stage</p>)}
-    <section className="rounded-2xl border border-border bg-card p-3"><div className="mb-3 flex items-center justify-between"><div><h2 className="font-serif text-base font-bold">Damage reporting</h2><p className="text-[10px] text-muted-foreground">Separate from the checklist.</p></div><button type="button" onClick={() => onReport(event.items[0])} disabled={event.items.length === 0} className="rounded-xl bg-primary px-3 py-2 text-[10px] font-semibold text-primary-foreground disabled:opacity-40">Report damage</button></div>{damageReports.length === 0 ? <p className="text-xs text-muted-foreground">No damage reported</p> : damageReports.map((report) => <div key={report.id} className="border-b border-border py-2 text-xs last:border-0"><p className="font-semibold">{report.item}</p><p className="text-[10px] text-muted-foreground">by crew member · {report.capturedAt} · Waiting for review</p></div>)}</section>
+    <section className="rounded-2xl border border-border bg-card p-4"><div className="text-center"><h2 className="font-serif text-base font-bold">Damage reporting</h2><p className="mt-1 text-[10px] text-muted-foreground">Capture photo evidence for damaged assets.</p><button type="button" aria-label="Open camera for damage report" onClick={onOpenCamera} className="mx-auto mt-3 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"><Camera className="size-6" /></button><p className="mt-2 text-[10px] font-semibold text-primary">Tap to take a photo</p></div>{damageReports.length === 0 ? <p className="text-xs text-muted-foreground">No damage reported</p> : damageReports.map((report) => <div key={report.id} className="border-b border-border py-2 text-xs last:border-0"><p className="font-semibold">{report.item}</p><p className="text-[10px] text-muted-foreground">by crew member · {report.capturedAt} · Waiting for review</p></div>)}</section>
   </div>
 }
 
@@ -221,7 +220,6 @@ export function GroundCrewPage() {
   const declarations = useGroundCrewDeclarations()
   void declarations
   const [tab, setTab] = useState<Tab>('home')
-  const [fieldSection, setFieldSection] = useState<'tasks' | 'history'>('tasks')
   const [cameraShortcutOpen, setCameraShortcutOpen] = useState(false)
   // Canonical Manning operational assignments for authenticated user
   const [myAssignments, setMyAssignments] = useState<MyManningAssignmentDto[]>([])
@@ -633,6 +631,11 @@ export function GroundCrewPage() {
   }
 
   const [requests] = useState<CrewRequest[]>([])
+  void offlineItems
+  void isSyncingQueue
+  void handleTriggerSync
+  void handleUpdateReport
+  void requests
   const [showReport, setShowReport] = useState(false)
   const [reportItem, setReportItem] = useState<EventItem['items'][number] | null>(null)
   const [toast, setToast] = useState('')
@@ -905,11 +908,11 @@ export function GroundCrewPage() {
             : tab === 'schedule'
               ? undefined
               : tab === 'field'
-                ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Tasks, requests and history'
+                ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Chain of custody'
                 : adminEmail || undefined
         }
         roleName={currentUser?.groundCrewSubRole === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew'}
-        subRole={hasAnyLead ? 'Shift Lead' : undefined}
+        subRole={hasAnyLead ? 'Team Lead' : undefined}
         icon={
           tab === 'home' ? (
             <MapPin className="size-5 text-primary" />
@@ -960,18 +963,12 @@ export function GroundCrewPage() {
             <FieldEventWorkflow
               event={selectedEvent}
               isLead={isLeadForEvent(selectedEvent.id)}
-              onBack={() => setSelectedEventId(null)}
-              onReport={openReport}
               damageReports={reports.filter((report) => report.event === selectedEvent.name)}
+              onOpenCamera={() => setCameraShortcutOpen(true)}
             />
           ) : (
             <div className="space-y-4">
-              {fieldSection === 'tasks' && (selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed') ? <FieldEventWorkflow event={selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed')!} isLead={isLeadForEvent((selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))!.id)} onBack={() => setSelectedEventId(null)} onReport={openReport} damageReports={reports.filter((report) => report.event === (selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))?.name)} /> : <PwaEmptyState title="Nothing to do right now" description="Assigned events will appear here when your Ground Crew schedule is ready." />)}
-              <div className="flex items-center gap-2 rounded-2xl border border-border bg-card p-2">
-                {(['tasks', 'history'] as const).map((section) => <button key={section} type="button" onClick={() => setFieldSection(section)} className={`flex-1 rounded-xl px-3 py-2.5 text-xs font-semibold capitalize ${fieldSection === section ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>{section}</button>)}
-                <button type="button" aria-label="Open camera evidence" onClick={() => setCameraShortcutOpen(true)} className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/40 text-primary"><Camera className="size-4" /></button>
-              </div>
-              {fieldSection === 'history' && <Activity reports={reports} requests={requests} events={crewEvents} offlineItems={offlineItems} isSyncingQueue={isSyncingQueue} onTriggerSync={handleTriggerSync} onUpdateReport={handleUpdateReport} />}
+              {(selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed')) ? <FieldEventWorkflow event={(selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))!} isLead={isLeadForEvent((selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))!.id)} damageReports={reports.filter((report) => report.event === (selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))?.name)} onOpenCamera={() => setCameraShortcutOpen(true)} /> : <PwaEmptyState title="Nothing to do right now" description="Assigned events will appear here when your Ground Crew schedule is ready." />}
             </div>
           )
         )}
@@ -2285,6 +2282,8 @@ function ScheduleDetail({ shift, today, isLead, onBack }: { shift: ScheduleShift
   const completed = assignment.executionStatus === 'Completed'
   return <div className="space-y-4"><button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm font-semibold text-primary"><ChevronLeft className="size-4" />Back</button><PwaCard><div className="flex items-start justify-between gap-2"><div><h1 className="font-serif text-xl font-bold">{event.name}</h1><p className="mt-1 text-sm text-muted-foreground">{event.venue || 'Venue not provided'}</p></div>{isLead && <PwaBadge variant="subrole" subRole="Field" label="Team Lead" />}</div><div className="mt-4 space-y-2 text-sm"><p>{stages[0]}: {dateLabel(event.date)}{formatTime(assignment.shiftStartTime) ? ` · ${formatTime(assignment.shiftStartTime)}` : ''}</p>{formatTime(assignment.shiftStartTime) && <p>Call time: {formatTime(assignment.shiftStartTime)}</p>}{formatTime(assignment.shiftEndTime) && <p>Event hours end: {formatTime(assignment.shiftEndTime)}</p>}{completed && <p className="font-semibold text-primary">Completed</p>}{!completed && event.date < today && <p className="text-muted-foreground">Past</p>}</div><div className="mt-5 space-y-2">{SCHEDULE_STAGES.map((stage) => <div key={stage} className="flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm"><span>{stage}</span></div>)}</div></PwaCard></div>
 }
+
+void Activity
 
 function Activity({
   reports,
