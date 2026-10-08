@@ -941,8 +941,7 @@ export function GroundCrewPage() {
             events={crewEvents}
             greetingName={adminName || currentUser?.name || ''}
             onOpenToday={(item) => { setSelectedEventId(item.id); setTab('tasks') }}
-            onOpenNext={() => setTab('home')}
-            assignments={myAssignments}
+                      assignments={myAssignments}
                       loadingAssignments={loadingAssignments}
             assignmentError={assignmentError}
             isCachedData={isCachedData}
@@ -1175,7 +1174,6 @@ function Home({
   events,
   greetingName,
   onOpenToday,
-  onOpenNext,
   assignments,
   loadingAssignments,
   assignmentError,
@@ -1184,7 +1182,6 @@ function Home({
   events: EventItem[]
   greetingName: string
   onOpenToday: (event: EventItem) => void
-  onOpenNext: () => void
   assignments: MyManningAssignmentDto[]
   loadingAssignments: boolean
   assignmentError: string | null
@@ -1203,7 +1200,6 @@ function Home({
   }).filter((item) => item.date)
   const dated = grouped.map((item) => ({ ...item, manilaDate: manilaDate(item.date) }))
   const todayShift = dated.find((item) => item.manilaDate === today)
-  const nextShift = dated.filter((item) => item.manilaDate > today).sort((a, b) => a.manilaDate.localeCompare(b.manilaDate))[0]
   const toEvent = (item: typeof grouped[number]) => displayEvents.find((e) => e.id === item.id) || { id: item.id, name: item.name, venue: item.venue, date: item.date, status: 'Upcoming' as EventStatus, editable: false, phase: null, items: [] }
   if (loadingAssignments) return <div className="space-y-3"><div className="h-5 w-20 animate-pulse rounded bg-muted" /><div className="h-44 animate-pulse rounded-2xl bg-muted" /><div className="h-28 animate-pulse rounded-2xl bg-muted" /></div>
   if (assignmentError && assignments.length === 0) return <p className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Couldn&apos;t load your shifts. Try again.</p>
@@ -1238,7 +1234,6 @@ function Home({
           </PwaCard>
         </button>
       ) : <PwaCard title="Today"><p className="text-sm text-muted-foreground">No shift today</p></PwaCard>}
-      {nextShift ? <button type="button" onClick={onOpenNext} className="block w-full text-left"><PwaCard title="Next shift"><h2 className="font-serif text-base font-bold leading-tight">{nextShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{nextShift.venue} • {dateLabel(nextShift.date)}</p></PwaCard></button> : <PwaCard title="Next shift"><p className="text-xs text-muted-foreground">No upcoming shifts</p></PwaCard>}
     </div>
   )
 }
