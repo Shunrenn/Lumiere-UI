@@ -403,7 +403,7 @@ export function AdminSystemDashboardPage() {
       .filter((email): email is string => Boolean(email)),
   )
   const lockedAccounts = staff.filter(
-    (person) => person.accountStatus === 'Locked' || recoveryEmails.has(person.email.trim().toLowerCase()),
+    (person) => person.accountStatus === 'Locked' || (person.email && recoveryEmails.has(person.email.trim().toLowerCase())),
   ).length
   // Pending Activation is an account lifecycle state, not an admin action queue.
   const pendingActivations = staff.filter((person) => person.accountStatus === 'Pending').length
@@ -416,7 +416,7 @@ export function AdminSystemDashboardPage() {
         tally['Inactive Account'] += 1
         return
       }
-      const role = person.role.toLowerCase()
+      const role = (person.role || '').toLowerCase()
       const category = role.includes('admin')
         ? 'Admin'
         : role.includes('executive')
