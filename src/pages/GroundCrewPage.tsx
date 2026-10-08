@@ -172,7 +172,7 @@ export function GroundCrewPage() {
   const declarations = useGroundCrewDeclarations()
   void declarations
   const [tab, setTab] = useState<Tab>('home')
-  const [fieldSection, setFieldSection] = useState<'tasks' | 'requests' | 'history'>('tasks')
+  const [fieldSection, setFieldSection] = useState<'tasks' | 'history'>('tasks')
   const [cameraShortcutOpen, setCameraShortcutOpen] = useState(false)
   // Canonical Manning operational assignments for authenticated user
   const [myAssignments, setMyAssignments] = useState<MyManningAssignmentDto[]>([])
@@ -926,11 +926,11 @@ export function GroundCrewPage() {
           ) : (
             <div className="space-y-4">
               {fieldSection === 'tasks' && <FieldConsole events={crewEvents.filter((event) => event.status !== 'Completed')} assignmentScope={assignmentScope} isLeadForEvent={isLeadForEvent} />}
-              <div className="grid grid-cols-3 gap-2 rounded-2xl border border-border bg-card p-2">
-                {(['tasks', 'requests', 'history'] as const).map((section) => <button key={section} type="button" onClick={() => setFieldSection(section)} className={`rounded-xl px-3 py-2.5 text-xs font-semibold capitalize ${fieldSection === section ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>{section}</button>)}
-                <button type="button" onClick={() => setCameraShortcutOpen(true)} className="col-span-3 inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary/40 px-3 py-2.5 text-xs font-semibold text-primary"><Camera className="size-4" /> Camera evidence</button>
+              <div className="flex items-center gap-2 rounded-2xl border border-border bg-card p-2">
+                {(['tasks', 'history'] as const).map((section) => <button key={section} type="button" onClick={() => setFieldSection(section)} className={`flex-1 rounded-xl px-3 py-2.5 text-xs font-semibold capitalize ${fieldSection === section ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>{section}</button>)}
+                <button type="button" aria-label="Open camera evidence" onClick={() => setCameraShortcutOpen(true)} className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/40 text-primary"><Camera className="size-4" /></button>
               </div>
-              {fieldSection !== 'tasks' && <Activity reports={fieldSection === 'requests' ? reports : []} requests={fieldSection === 'requests' ? requests : []} events={crewEvents} offlineItems={offlineItems} isSyncingQueue={isSyncingQueue} onTriggerSync={handleTriggerSync} onUpdateReport={handleUpdateReport} />}
+              {fieldSection === 'history' && <Activity reports={reports} requests={requests} events={crewEvents} offlineItems={offlineItems} isSyncingQueue={isSyncingQueue} onTriggerSync={handleTriggerSync} onUpdateReport={handleUpdateReport} />}
             </div>
           )
         )}
