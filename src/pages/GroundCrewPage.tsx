@@ -11,9 +11,7 @@ import {
   ClipboardList,
   Layers,
   Lock,
-  LogOut,
   MapPin,
-  MessageSquare,
   PackageCheck,
   Play,
   Send,
@@ -37,7 +35,6 @@ import type { DispatchBatch } from '@/lib/event-detail'
 import { PartialEgressSection } from '@/components/warehouse/PartialEgressSection'
 import {
   decideGroundCrewDeclaration,
-  getApproachingDeclarationsSummary,
   getDeclarationAging,
   loadDeclarationsFromBackend,
   submitGroundCrewDeclaration,
@@ -53,6 +50,7 @@ import { queueOfflinePhaseAdvancement } from '@/lib/offline/checklistOutbox'
 import { triggerOutboxReplay, subscribeSyncEngine } from '@/lib/offline/offlineReplayEngine'
 import { setReadCache, getReadCache } from '@/lib/offline/db'
 import { StatusBadge } from '@/components/StatusBadge'
+import { GroundCrewSyncPill } from '@/pages/GroundCrewSyncPill'
 import {
   PwaBadge,
   PwaBottomNav,
@@ -67,7 +65,7 @@ import {
   type CapturedEvidence,
   type PwaNavItem,
 } from '@/components/pwa'
-import type { GroundCrewSubRole, HavaDeclarationState, HavaEvidenceStatus } from '@/lib/types'
+import type { HavaDeclarationState, HavaEvidenceStatus } from '@/lib/types'
 
 type Tab = 'home' | 'schedule' | 'field' | 'account'
 type AccessLevel = 'Ground Crew / Member' | 'Team Lead / Field Lead' | 'Receiver' | 'Event Admin'
@@ -140,7 +138,6 @@ export function GroundCrewPage() {
   const [assignmentError, setAssignmentError] = useState<string | null>(null)
   const [mutatingAssignmentId, setMutatingAssignmentId] = useState<string | null>(null)
   const [isCachedData, setIsCachedData] = useState(false)
-  const [cacheTimestamp, setCacheTimestamp] = useState<string | null>(null)
   const [blockerModalAssignment, setBlockerModalAssignment] = useState<MyManningAssignmentDto | null>(null)
   const [blockerReasonInput, setBlockerReasonInput] = useState('')
   const [blockerNotesInput, setBlockerNotesInput] = useState('')
@@ -194,7 +191,6 @@ export function GroundCrewPage() {
       try {
         const data = await fetchMyManningAssignments()
         setIsCachedData(false)
-        setCacheTimestamp(null)
 
         // Store authoritative read snapshot into durable IndexedDB read_cache
         if (userId) {
@@ -256,7 +252,6 @@ export function GroundCrewPage() {
           })
           setMyAssignments(merged)
           setIsCachedData(true)
-          setCacheTimestamp(cached.cachedAt)
           setLoadingAssignments(false)
           return
         }
@@ -423,13 +418,6 @@ export function GroundCrewPage() {
     }
   }
 
-  const handleOpenBlockerModal = (assignment: MyManningAssignmentDto) => {
-    setBlockerModalAssignment(assignment)
-    setBlockerReasonInput('')
-    setBlockerNotesInput('')
-    setBlockerError(null)
-  }
-
   const handleSubmitBlocker = async (e: FormEvent) => {
     e.preventDefault()
     if (!blockerModalAssignment) return
@@ -558,7 +546,7 @@ export function GroundCrewPage() {
     const d = String(now.getDate()).padStart(2, '0')
     return `${y}-${m}-${d}`
   })
-  const [notes, setNotes] = useState<Record<string, string>>(() => {
+  const [notes] = useState<Record<string, string>>(() => {
     if (typeof window === 'undefined') return {}
     try {
       const stored = localStorage.getItem('__lumiere_crew_notes__')
@@ -788,19 +776,10 @@ export function GroundCrewPage() {
     window.setTimeout(() => setToast(''), 5000)
   }
 
-  const pendingDeclarationsForCurrentAdmin = declarations.filter(
-    (d) => d.eventId === adminEventId && d.status === 'Pending Event Admin'
-  )
-
-  const approachingSummary = useMemo(() => {
-    if (accessLevel !== 'Event Admin') return null
-    return getApproachingDeclarationsSummary()
-  }, [accessLevel])
-
   const navItems: PwaNavItem[] = [
     { id: 'home', label: 'Home', icon: MapPin },
     { id: 'schedule', label: 'Schedule', icon: CalendarDays },
-    { id: 'field', label: 'Field', icon: ClipboardList, badgeCount: pendingDeclarationsForCurrentAdmin.length, isCenter: true },
+    { id: 'field', label: 'Field', icon: ClipboardList },
     { id: 'account', label: 'Profile', icon: UserCircle2 },
   ]
 
@@ -810,24 +789,24 @@ export function GroundCrewPage() {
       <PwaHeader
         title={
           tab === 'home'
-            ? 'Ground Crew'
+            ? `Hi, ${(adminName || currentUser?.name || '').trim().split(/\s+/)[0] || 'Home'}`
             : tab === 'schedule'
               ? 'Schedule'
               : tab === 'field'
-                ? selectedEvent ? selectedEvent.name : 'Field Console'
-                : adminName || 'Ground Crew Account'
+                ? selectedEvent ? selectedEvent.name : 'Field'
+                : adminName || 'Profile'
         }
-        subtitle={
+            subtitle={
           tab === 'home'
-            ? 'Current and upcoming operational work'
+            ? undefined
             : tab === 'schedule'
-              ? 'Calendar, assigned events & shift reminders'
+              ? undefined
               : tab === 'field'
-                ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Tasks, reports, requests & history'
-                : adminEmail || 'Ground Crew Member'
+                ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Tasks, reports, requests and history'
+                : adminEmail || undefined
         }
-        roleName={accessLevel}
-        subRole={effectiveRole as GroundCrewSubRole}
+        roleName={currentUser?.groundCrewSubRole === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew'}
+        subRole={hasAnyLead ? 'Shift Lead' : undefined}
         icon={
           tab === 'home' ? (
             <MapPin className="size-5 text-primary" />
@@ -839,41 +818,31 @@ export function GroundCrewPage() {
             <UserCircle2 className="size-5 text-primary" />
           )
         }
-        actions={
-          <button
-            type="button"
-            onClick={logout}
-            className="flex size-10 items-center justify-center rounded-xl border border-sidebar-border bg-sidebar-accent/50 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
-            title="Sign out"
-            aria-label="Sign out"
-          >
-            <LogOut className="size-4" />
-          </button>
-        }
       />
 
       {/* Main Tab Content */}
       <main className="mx-auto w-full max-w-[440px] px-4 pt-4 space-y-4">
-        {/* Unified Ground Crew Synchronization State */}
-        <PwaSyncStatusBar
-          userId={currentUser?.id || adminEmail || 'crew'}
-          onSyncComplete={loadAssignments}
-        />
+        {tab === 'field' && (
+          <PwaSyncStatusBar
+            userId={currentUser?.id || adminEmail || 'crew'}
+            onSyncComplete={loadAssignments}
+          />
+        )}
+
+        {tab === 'schedule' && (
+          <GroundCrewSyncPill assignments={myAssignments} isCachedData={isCachedData} />
+        )}
 
         {tab === 'home' && (
           <Home
             events={crewEvents}
-            onOpen={(item) => { setSelectedEventId(item.id); setTab('field') }}
-            approachingSummary={approachingSummary}
+            onOpenToday={(item) => { setSelectedEventId(item.id); setTab('field') }}
+            onOpenNext={() => setTab('schedule')}
             assignments={myAssignments}
+            batchesByEvent={dispatchStore}
             loadingAssignments={loadingAssignments}
             assignmentError={assignmentError}
             isCachedData={isCachedData}
-            cacheTimestamp={cacheTimestamp}
-            onRefreshAssignments={loadAssignments}
-            mutatingAssignmentId={mutatingAssignmentId}
-            onUpdateAssignmentStatus={handleUpdateAssignmentStatus}
-            onOpenBlockerModal={handleOpenBlockerModal}
           />
         )}
 
@@ -881,19 +850,13 @@ export function GroundCrewPage() {
           <CalendarView
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
-            notes={notes}
-            setNotes={setNotes}
-            onSave={() => {
-              try {
-                localStorage.setItem('__lumiere_crew_notes__', JSON.stringify(notes))
-                setToast('Personal note saved.')
-              } catch {
-                setToast('Failed to save note.')
-              }
-              window.setTimeout(() => setToast(''), 3000)
-            }}
+            assignments={myAssignments}
             events={crewEvents}
-          />
+            loading={loadingAssignments}
+            error={assignmentError}
+  isLeadForEvent={isLeadForEvent}
+  crewScope={currentUser?.groundCrewSubRole === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew'}
+  />
         )}
 
         {tab === 'field' && (
@@ -1067,133 +1030,80 @@ export function GroundCrewPage() {
 
 function Home({
   events,
-  onOpen,
-  approachingSummary,
+  onOpenToday,
+  onOpenNext,
   assignments,
+  batchesByEvent,
   loadingAssignments,
   assignmentError,
   isCachedData,
-  cacheTimestamp,
-  onRefreshAssignments,
-  mutatingAssignmentId,
-  onUpdateAssignmentStatus,
-  onOpenBlockerModal,
 }: {
   events: EventItem[]
-  onOpen: (event: EventItem) => void
-  approachingSummary?: { totalApproaching: number; eventsCount: number } | null
+  onOpenToday: (event: EventItem) => void
+  onOpenNext: () => void
   assignments: MyManningAssignmentDto[]
+  batchesByEvent: Map<string, DispatchBatch[]>
   loadingAssignments: boolean
   assignmentError: string | null
   isCachedData?: boolean
-  cacheTimestamp?: string | null
-  onRefreshAssignments: () => void
-  mutatingAssignmentId: string | null
-  onUpdateAssignmentStatus: (
-    assignmentId: string,
-    req: { status: 'InProgress' | 'Completed' | 'Blocked'; blockerReason?: string | null; notes?: string | null },
-  ) => Promise<{ success: boolean; error?: string }>
-  onOpenBlockerModal: (assignment: MyManningAssignmentDto) => void
 }) {
-  const currentEvent = events.find((e) => e.status === 'Current') || events[0]
-  const upcomingEvents = events.filter((e) => e.id !== currentEvent?.id && e.status !== 'Completed')
+  const manilaDate = (value: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date(value.includes('T') ? value : `${value}T00:00:00Z`))
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
+  const scope = assignments.some((a) => /warehouse/i.test(`${a.workArea} ${a.taskTitle}`)) ? 'Warehouse Crew' : 'Field Crew'
+  const stages = ['Dispatch Release', 'Venue Arrival', 'Egress Release', 'Warehouse Return']
+  // Keep Home's batch-to-stage contract in one place so Field can share it later.
+  const BATCH_STAGE_PROGRESS: Record<string, Record<string, number>> = {
+    outbound: { Planned: 0, Loaded: 0, 'In Transit': 1, Delivered: 2, Returned: 4 },
+    return: { Planned: 2, Loaded: 2, 'In Transit': 3, Delivered: 3, Returned: 4 },
+  }
+  const stageFor = (eventId: string) => {
+    const batches = (batchesByEvent.get(eventId) ?? []).filter((batch) => !batch.isArchived)
+    if (batches.length === 0) return { index: -1, label: 'Not started yet', state: 'empty' as const }
+
+    const progressFor = (batch: DispatchBatch) => {
+      const progress = BATCH_STAGE_PROGRESS[batch.direction]?.[batch.stage]
+      if (progress === undefined) {
+        console.log('[v0] Unknown dispatch batch status:', { direction: batch.direction, stage: batch.stage, batchId: batch.id })
+        return null
+      }
+      return progress
+    }
+    const progress = batches.map(progressFor)
+    if (progress.some((value) => value === null)) return { index: -1, label: 'Stage unavailable', state: 'unavailable' as const }
+    if (progress.every((value) => value === 4)) return { index: stages.length - 1, label: 'All stages done', state: 'complete' as const }
+
+    const earliestUnfinished = Math.min(...(progress as number[]))
+    return { index: earliestUnfinished, label: stages[earliestUnfinished], state: 'active' as const }
+  }
+  const grouped = Array.from(new Set(assignments.map((a) => a.eventId))).map((eventId) => {
+    const items = assignments.filter((a) => a.eventId === eventId)
+    const first = items[0]
+    const event = events.find((e) => e.id === eventId)
+    return { id: eventId, name: first.eventName || event?.name || 'Event', venue: event?.venue || first.workArea || 'Venue', date: first.shiftDate || event?.date || '', time: first.shiftStartTime, isLead: items.some((a) => a.isLead), items }
+  }).filter((item) => item.date)
+  const dated = grouped.map((item) => ({ ...item, manilaDate: manilaDate(item.date) }))
+  const todayShift = dated.find((item) => item.manilaDate === today)
+  const nextShift = dated.filter((item) => item.manilaDate > today).sort((a, b) => a.manilaDate.localeCompare(b.manilaDate))[0]
+  const toEvent = (item: typeof grouped[number]) => events.find((e) => e.id === item.id) || { id: item.id, name: item.name, venue: item.venue, date: item.date, status: 'Upcoming' as EventStatus, editable: false, phase: null, items: [] }
+  if (loadingAssignments) return <div className="space-y-3"><div className="h-5 w-20 animate-pulse rounded bg-muted" /><div className="h-44 animate-pulse rounded-2xl bg-muted" /><div className="h-28 animate-pulse rounded-2xl bg-muted" /></div>
+  if (assignmentError && assignments.length === 0) return <p className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Couldn&apos;t load your shifts. Try again.</p>
 
   return (
-    <div className="space-y-4">
-      {approachingSummary && approachingSummary.totalApproaching > 0 && (
-        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-200">
-          <div className="flex items-center gap-2 font-bold uppercase tracking-wider">
-            <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
-            Pending Escalation Warning
-          </div>
-          <p className="mt-1 leading-relaxed">
-            {approachingSummary.totalApproaching} declaration(s) approaching safety cutoff across{' '}
-            {approachingSummary.eventsCount} event(s). Review in Decision tab.
-          </p>
-        </div>
-      )}
-
-      {/* Canonical My Assignments Section */}
-      <MyAssignmentsSection
-        assignments={assignments}
-        loading={loadingAssignments}
-        error={assignmentError}
-        isCachedData={isCachedData}
-        cacheTimestamp={cacheTimestamp}
-        onRefresh={onRefreshAssignments}
-        mutatingAssignmentId={mutatingAssignmentId}
-        onUpdateStatus={onUpdateAssignmentStatus}
-        onOpenBlocker={onOpenBlockerModal}
-      />
-
-      {currentEvent && (
-        <PwaCard
-          title="Active Shift Context"
-          subtitle="Primary operational focus for today"
-          action={currentEvent.phase ? <PwaBadge subRole={currentEvent.phase === 'Dispatch Loading' ? 'Field' : 'Warehouse'} label={currentEvent.phase} /> : undefined}
-        >
-          <div className="mt-1 space-y-3">
-            <div>
-              <h4 className="font-serif text-lg font-bold text-foreground">{currentEvent.name}</h4>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <MapPin className="size-3.5 text-primary" /> {currentEvent.venue}
-                </span>
-                <span>•</span>
-                <span className="inline-flex items-center gap-1">
-                  <CalendarDays className="size-3.5 text-primary" /> {dateLabel(currentEvent.date)}
-                </span>
-              </div>
-            </div>
-
-            {currentEvent.items.length > 0 && (
-              <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-xs">
-                <span className="font-bold text-foreground uppercase tracking-wider text-[0.625rem]">Manifest Items: </span>
-                <span className="text-muted-foreground">
-                  {currentEvent.items.map((i) => `${i.qty}x ${i.name}`).join(', ')}
-                </span>
-              </div>
-            )}
-
-            <PwaButton onClick={() => onOpen(currentEvent)} variant="primary" size="md" className="w-full">
-              Open Event Console
-            </PwaButton>
-          </div>
-        </PwaCard>
-      )}
-
-      <div className="pt-2">
-        <h3 className="mb-2.5 font-serif text-sm font-semibold tracking-tight text-foreground uppercase tracking-[0.14em]">
-          Upcoming Operational Shifts
-        </h3>
-        {upcomingEvents.length === 0 ? (
-          <PwaEmptyState title="No Upcoming Shifts" description="All scheduled events for this period have been completed." />
-        ) : (
-          <div className="space-y-3">
-            {upcomingEvents.map((evt) => (
-              <PwaCard key={evt.id} className="p-3.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h4 className="font-serif text-sm font-bold text-foreground">{evt.name}</h4>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{evt.venue} • {dateLabel(evt.date)}</p>
-                  </div>
-                  {evt.phase && <PwaBadge variant="neutral" label={evt.phase} />}
-                </div>
-                <div className="mt-3 flex items-center justify-end">
-                  <PwaButton onClick={() => onOpen(evt)} variant="outline" size="sm">
-                    View Shift
-                  </PwaButton>
-                </div>
-              </PwaCard>
-            ))}
-          </div>
-        )}
-      </div>
+    <div className="space-y-3">
+      <GroundCrewSyncPill assignments={assignments} isCachedData={isCachedData} />
+      {todayShift ? (
+        <button type="button" onClick={() => onOpenToday(toEvent(todayShift))} className="block w-full text-left">
+          <PwaCard title="Today" action={todayShift.isLead ? <PwaBadge variant="neutral" label="Shift Lead" /> : undefined}>
+            <div className="space-y-3"><div><h2 className="font-serif text-lg font-bold">{todayShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{todayShift.venue}{todayShift.time ? ` • Call ${todayShift.time}` : ''}</p></div>{(() => { const stage = stageFor(todayShift.id); const showProgress = stage.state === 'active' || stage.state === 'complete'; return <div><div className="grid grid-cols-4 gap-1">{stages.map((stageName, index) => <span key={stageName} className={`h-2 rounded-full ${showProgress && index <= stage.index ? 'bg-primary' : 'bg-muted'}`} />)}</div><p className="mt-2 text-xs text-muted-foreground">{stage.state === 'active' || stage.state === 'complete' ? `Stage ${stage.index + 1} of 4 · ${stage.label}` : stage.label}</p></div> })()}<p className="text-xs text-muted-foreground">Your stages: {scope === 'Field Crew' ? 'Venue Arrival, Egress Release' : 'Dispatch Release, Warehouse Return'}</p></div>
+          </PwaCard>
+        </button>
+      ) : <PwaCard title="Today"><p className="text-sm text-muted-foreground">No shift today</p></PwaCard>}
+      {nextShift ? <button type="button" onClick={onOpenNext} className="block w-full text-left"><PwaCard title="Next shift"><h2 className="font-serif text-lg font-bold">{nextShift.name}</h2><p className="mt-1 text-xs text-muted-foreground">{nextShift.venue} • {dateLabel(nextShift.date)}</p></PwaCard></button> : <PwaCard title="Next shift"><p className="text-sm text-muted-foreground">No upcoming shifts</p></PwaCard>}
     </div>
   )
 }
 
-function MyAssignmentsSection({
+export function MyAssignmentsSection({
   assignments,
   loading,
   error,
@@ -2108,140 +2018,105 @@ function DamageForm({
   )
 }
 
-function DayDots({ hasSchedule, hasNote }: { hasSchedule: boolean; hasNote: boolean }) {
-  if (!hasSchedule && !hasNote) return <span className="mt-1 block h-1.5" />
-  return (
-    <span className="mt-1 flex items-center justify-center gap-1">
-      {hasSchedule && <span className="size-1.5 rounded-full bg-primary" />}
-      {hasNote && <span className="size-1.5 rounded-full border border-current" />}
-    </span>
-  )
+type ScheduleShift = {
+  assignment: MyManningAssignmentDto
+  event: EventItem
+  stages: string[]
+}
+
+const SCHEDULE_STAGES = ['Dispatch Release', 'Venue Arrival', 'Egress Release', 'Warehouse Return'] as const
+
+function manilaToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
+}
+
+function stagesForCrewScope(scope: 'Warehouse Crew' | 'Field Crew') {
+  return scope === 'Warehouse Crew'
+    ? ['Dispatch Release', 'Warehouse Return']
+    : ['Venue Arrival', 'Egress Release']
+}
+
+function formatTime(value?: string | null) {
+  if (!value) return null
+  const match = value.match(/(\d{1,2}):(\d{2})/)
+  if (!match) return value
+  const hour = Number(match[1])
+  const suffix = hour >= 12 ? 'PM' : 'AM'
+  return `${hour % 12 || 12}:${match[2]} ${suffix}`
 }
 
 function CalendarView({
   selectedDate,
   setSelectedDate,
-  notes,
-  setNotes,
-  onSave,
+  assignments,
   events,
+  loading,
+  error,
+  isLeadForEvent,
+  crewScope,
 }: {
   selectedDate: string
   setSelectedDate: (date: string) => void
-  notes: Record<string, string>
-  setNotes: (updater: (current: Record<string, string>) => Record<string, string>) => void
-  onSave: () => void
+  assignments: MyManningAssignmentDto[]
   events: EventItem[]
+  loading: boolean
+  error: string | null
+  isLeadForEvent: (eventId: string) => boolean
+  crewScope: 'Warehouse Crew' | 'Field Crew'
 }) {
+  const today = manilaToday()
   const [view, setView] = useState(() => {
-    if (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate.trim())) {
-      const [y, m] = selectedDate.trim().split('-').map(Number)
-      return { year: y, month: m - 1 }
-    }
-    const now = new Date()
-    return { year: now.getFullYear(), month: now.getMonth() }
+    const [year, month] = selectedDate.split('-').map(Number)
+    return { year, month: month - 1 }
   })
-
-  const MONTH_NAMES = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ]
-
-  const shiftMonth = (delta: number) => {
-    setView((prev) => {
-      const next = new Date(prev.year, prev.month + delta, 1)
-      return { year: next.getFullYear(), month: next.getMonth() }
-    })
-  }
-
+  const [detail, setDetail] = useState<ScheduleShift | null>(null)
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  const shifts: ScheduleShift[] = assignments.filter((a) => Boolean(a.shiftDate)).map((assignment) => {
+    const event = events.find((item) => item.id === assignment.eventId) ?? { id: assignment.eventId, name: assignment.eventName || 'Event', date: assignment.shiftDate!.slice(0, 10), venue: '', status: 'Upcoming' as EventStatus, editable: false, phase: null, items: [] }
+    return { assignment, event: { ...event, date: assignment.shiftDate!.slice(0, 10) }, stages: stagesForCrewScope(crewScope) }
+  })
+  const selected = shifts.filter((shift) => shift.event.date === selectedDate)
+  const recent = shifts.filter((shift) => shift.event.date < today).sort((a, b) => b.event.date.localeCompare(a.event.date)).slice(0, 5)
   const firstWeekday = new Date(view.year, view.month, 1).getDay()
   const daysInMonth = new Date(view.year, view.month + 1, 0).getDate()
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
-  const entries = events.filter((item) => item.date === selectedDate)
-  const noteValue = notes[selectedDate] ?? ''
-
-  return (
-    <div className="space-y-4">
-      <PwaCard title={`${MONTH_NAMES[view.month]} ${view.year} Calendar`}>
-        <div className="flex items-center justify-between mb-3">
-          <PwaButton variant="ghost" size="sm" onClick={() => shiftMonth(-1)} aria-label="Previous month">
-            <ChevronLeft className="size-4" /> Prev
-          </PwaButton>
-          <span className="font-serif text-sm font-bold text-foreground">
-            {MONTH_NAMES[view.month]} {view.year}
-          </span>
-          <PwaButton variant="ghost" size="sm" onClick={() => shiftMonth(1)} aria-label="Next month">
-            Next <ChevronRight className="size-4" />
-          </PwaButton>
-        </div>
-        <div className="grid grid-cols-7 gap-1 text-center text-xs">
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-            <span key={`${d}-${i}`} className="font-bold text-muted-foreground text-[0.65rem] py-1">
-              {d}
-            </span>
-          ))}
-          {Array.from({ length: firstWeekday }).map((_, i) => (
-            <span key={`pad-${i}`} />
-          ))}
-          {days.map((day) => {
-            const date = `${view.year}-${String(view.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-            const hasSchedule = events.some((item) => item.date === date)
-            const hasNote = Boolean(notes[date])
-            const isSelected = date === selectedDate
-
-            return (
-              <button
-                key={date}
-                onClick={() => setSelectedDate(date)}
-                className={`flex min-h-[44px] flex-col items-center justify-center rounded-xl p-1 text-xs transition-all ${
-                  isSelected
-                    ? 'bg-primary text-primary-foreground font-bold shadow-sm'
-                    : hasSchedule
-                      ? 'bg-primary/10 text-primary font-bold'
-                      : 'hover:bg-accent/40 text-foreground'
-                }`}
-              >
-                <span>{day}</span>
-                <DayDots hasSchedule={hasSchedule} hasNote={hasNote} />
-              </button>
-            )
-          })}
-        </div>
-      </PwaCard>
-
-      <PwaCard title={`Shift Schedule • ${dateLabel(selectedDate)}`}>
-        {entries.length ? (
-          <div className="space-y-2 pt-1">
-            {entries.map((entry) => (
-              <div key={entry.id} className="rounded-xl border border-border p-3">
-                {entry.phase && <PwaBadge variant="subrole" subRole="Field" label={entry.phase} />}
-                <h4 className="mt-1 font-serif text-sm font-bold text-foreground">{entry.name}</h4>
-                <p className="text-xs text-muted-foreground">{entry.venue}</p>
-              </div>
-            ))}
+  const monthDays = Array.from({ length: daysInMonth }, (_, index) => index + 1)
+  const shiftMonth = (delta: number) => setView((current) => { const next = new Date(current.year, current.month + delta, 1); return { year: next.getFullYear(), month: next.getMonth() } })
+  const tagFor = (date: string) => date === today ? 'Today' : date > today ? 'Upcoming' : 'Past'
+  const card = (shift: ScheduleShift) => {
+    const assignment = shift.assignment
+    return (
+      <button key={assignment.assignmentId} type="button" onClick={() => setDetail(shift)} className="w-full rounded-2xl border border-border bg-card p-3 text-left transition-colors hover:bg-accent/30">
+        <div className="flex items-start justify-between gap-2">
+          <div><h3 className="font-serif text-sm font-bold text-foreground">{shift.event.name}</h3><p className="mt-0.5 text-xs text-muted-foreground">{shift.event.venue || 'Venue not provided'}</p></div>
+          <div className="flex flex-wrap items-center justify-end gap-1">
+            <PwaBadge variant="neutral" label={tagFor(shift.event.date)} />
+            {isLeadForEvent(assignment.eventId) && <PwaBadge variant="subrole" subRole="Field" label="Shift Lead" />}
           </div>
-        ) : (
-          <p className="text-xs text-muted-foreground py-2">No shift briefings assigned for this date.</p>
-        )}
-
-        <div className="mt-4 border-t border-border pt-3 space-y-2">
-          <label className="block text-xs font-semibold text-foreground">
-            Personal Shift Reminders
-            <textarea
-              value={noteValue}
-              onChange={(e) => setNotes((curr) => ({ ...curr, [selectedDate]: e.target.value }))}
-              rows={3}
-              placeholder="Add personal notes or reminders..."
-              className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-          <PwaButton onClick={onSave} variant="primary" size="sm" icon={<MessageSquare className="size-3.5" />}>
-            Save Reminder
-          </PwaButton>
         </div>
+        {formatTime(assignment.shiftStartTime) && <p className="mt-2 text-xs text-muted-foreground"><Clock className="mr-1 inline size-3" />Call time {formatTime(assignment.shiftStartTime)}</p>}
+        <p className="mt-2 text-xs font-medium text-foreground">Your stages: {shift.stages.join(', ')}</p>
+      </button>
+    )
+  }
+  if (detail) return <ScheduleDetail shift={detail} today={today} isLead={isLeadForEvent(detail.event.id)} onBack={() => setDetail(null)} />
+  if (loading) return <div className="space-y-3" aria-label="Loading schedule"><div className="h-48 animate-pulse rounded-2xl bg-muted" /><div className="h-28 animate-pulse rounded-2xl bg-muted" /></div>
+  if (error && shifts.length === 0) return <PwaEmptyState title="Couldn't load your schedule. Try again." description="" />
+  return (
+    <div className="space-y-3">
+      <PwaCard>
+        <div className="mb-1 flex items-center justify-between"><button type="button" aria-label="Previous month" onClick={() => shiftMonth(-1)} className="rounded-full p-1.5 hover:bg-accent"><ChevronLeft className="size-4" /></button><h2 className="font-serif text-base font-bold">{monthNames[view.month]} {view.year}</h2><button type="button" aria-label="Next month" onClick={() => shiftMonth(1)} className="rounded-full p-1.5 hover:bg-accent"><ChevronRight className="size-4" /></button></div>
+        <div className="grid grid-cols-7 gap-0.5 text-center text-[0.6rem] text-muted-foreground">{['S','M','T','W','T','F','S'].map((day, index) => <span key={`${day}-${index}`} className="py-0.5 font-bold">{day}</span>)}{Array.from({ length: firstWeekday }, (_, index) => <span key={`pad-${index}`} />)}{monthDays.map((day) => { const date = `${view.year}-${String(view.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`; const hasShift = shifts.some((shift) => shift.event.date === date); const past = date < today; const isToday = date === today; const isSelected = date === selectedDate; return <button type="button" key={date} onClick={() => setSelectedDate(date)} className={`relative flex min-h-7 flex-col items-center justify-center rounded-lg text-xs ${isSelected ? 'ring-2 ring-primary' : ''} ${isToday ? 'bg-primary text-primary-foreground font-bold' : 'text-foreground'}`}><span>{day}</span>{hasShift && <span className={`mt-0.5 size-1.5 rounded-full ${past ? 'bg-muted-foreground/50' : isToday ? 'bg-primary-foreground' : 'bg-primary'}`} />}</button>})}</div>
       </PwaCard>
+      <section aria-labelledby="selected-shifts-heading"><h2 id="selected-shifts-heading" className="mb-2 font-serif text-base font-bold">{selectedDate === today ? `Today · ${dateLabel(selectedDate)}` : dateLabel(selectedDate)}</h2>{selected.length ? <div className="space-y-2">{selected.map(card)}</div> : <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">{selectedDate === today ? 'Not rostered today' : 'Not rostered on this day'}</div>}</section>
+      {recent.length > 0 && <section aria-labelledby="recent-shifts-heading"><h2 id="recent-shifts-heading" className="mb-2 font-serif text-base font-bold">Recent shifts</h2><div className="space-y-2">{recent.map(card)}</div></section>}
     </div>
   )
+}
+
+function ScheduleDetail({ shift, today, isLead, onBack }: { shift: ScheduleShift; today: string; isLead: boolean; onBack: () => void }) {
+  const { assignment, event, stages } = shift
+  const completed = assignment.executionStatus === 'Completed'
+  return <div className="space-y-4"><button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm font-semibold text-primary"><ChevronLeft className="size-4" />Back</button><PwaCard><div className="flex items-start justify-between gap-2"><div><h1 className="font-serif text-xl font-bold">{event.name}</h1><p className="mt-1 text-sm text-muted-foreground">{event.venue || 'Venue not provided'}</p></div>{isLead && <PwaBadge variant="subrole" subRole="Field" label="Shift Lead" />}</div><div className="mt-4 space-y-2 text-sm"><p>Ingress: {dateLabel(event.date)}{formatTime(assignment.shiftStartTime) ? ` · ${formatTime(assignment.shiftStartTime)}` : ''}</p>{formatTime(assignment.shiftStartTime) && <p>Call time: {formatTime(assignment.shiftStartTime)}</p>}{formatTime(assignment.shiftEndTime) && <p>Event hours end: {formatTime(assignment.shiftEndTime)}</p>}<p>Your stages: {stages.join(', ')}</p>{completed && <p className="font-semibold text-primary">Completed</p>}{!completed && event.date < today && <p className="text-muted-foreground">Past</p>}</div><div className="mt-5 space-y-2">{SCHEDULE_STAGES.map((stage) => <div key={stage} className="flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm"><span>{stage}</span>{stages.includes(stage) && <span className="font-semibold text-primary">Yours</span>}</div>)}</div></PwaCard></div>
 }
 
 function Activity({
