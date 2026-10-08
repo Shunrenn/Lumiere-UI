@@ -1197,12 +1197,12 @@ function Home({
           <PwaCard className="border-border/80 bg-card p-4" headerClassName="hidden">
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-3">
-                <h2 className="max-w-[70%] font-serif text-lg font-bold leading-tight">{todayShift.name}</h2>
+                <h2 className="max-w-[70%] font-serif text-base font-bold leading-tight">{todayShift.name}</h2>
                 <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground"><span className="size-2 rounded-full bg-muted-foreground/60" /> Today</span>
               </div>
-              <p className="text-sm text-muted-foreground">{todayShift.venue || 'Venue not provided'}</p>
-              {todayShift.time && <p className="flex items-center gap-1.5 text-sm text-muted-foreground"><Clock className="size-3.5" /> Call time {formatTime(todayShift.time)}</p>}
-              <p className="text-sm font-semibold leading-snug text-foreground">Your stages: {scope === 'Field Crew' ? 'Venue Arrival, Egress Release' : 'Dispatch Release, Warehouse Return'}</p>
+              <p className="text-xs text-muted-foreground">{todayShift.venue || 'Venue not provided'}</p>
+              {todayShift.time && <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="size-3" /> Call time {formatTime(todayShift.time)}</p>}
+              <p className="text-xs font-semibold leading-snug text-foreground">Your stages: {scope === 'Field Crew' ? 'Venue Arrival, Egress Release' : 'Dispatch Release, Warehouse Return'}</p>
             </div>
           </PwaCard>
         </button>
