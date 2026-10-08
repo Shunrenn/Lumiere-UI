@@ -23,7 +23,6 @@ import {
   AlertCircle,
   CheckCircle2,
   History,
-  Hammer,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { usePortal } from '@/lib/store'
@@ -68,7 +67,7 @@ import {
 } from '@/components/pwa'
 import type { HavaDeclarationState, HavaEvidenceStatus } from '@/lib/types'
 
-type Tab = 'home' | 'schedule' | 'field' | 'history' | 'production' | 'account'
+type Tab = 'home' | 'schedule' | 'tasks' | 'history' | 'account'
 type AccessLevel = 'Ground Crew / Member' | 'Team Lead / Field Lead' | 'Receiver' | 'Event Admin'
 export type CheckpointPhase = 'Dispatch Loading' | 'Venue Arrival' | 'Pre-Event Setup' | 'Post-Event Egress'
 type EventStatus = 'Current' | 'Upcoming' | 'Completed'
@@ -223,7 +222,7 @@ export function GroundCrewPage() {
   void declarations
   const [tab, setTab] = useState<Tab>('home')
   const [cameraShortcutOpen, setCameraShortcutOpen] = useState(false)
-  const activeFieldView = tab === 'history' ? 'history' : tab === 'production' ? 'production' : 'workflow'
+  const [taskView, setTaskView] = useState<'field' | 'production'>('field')
   // Canonical Manning operational assignments for authenticated user
   const [myAssignments, setMyAssignments] = useState<MyManningAssignmentDto[]>([])
   const [loadingAssignments, setLoadingAssignments] = useState(true)
@@ -887,10 +886,9 @@ export function GroundCrewPage() {
 
   const navItems: PwaNavItem[] = [
     { id: 'home', label: 'Home', icon: MapPin },
-    { id: 'schedule', label: 'Schedule', icon: CalendarDays },
-  { id: 'field', label: 'Field', icon: ClipboardList },
+    { id: 'schedule', label: 'Calendar', icon: CalendarDays },
+  { id: 'tasks', label: 'Tasks', icon: ClipboardList },
   { id: 'history', label: 'History', icon: History },
-  { id: 'production', label: 'Production', icon: Hammer },
   { id: 'account', label: 'Profile', icon: UserCircle2 },
   ]
 
@@ -903,8 +901,8 @@ export function GroundCrewPage() {
   ? 'Home'
             : tab === 'schedule'
               ? 'Schedule'
-              : tab === 'field'
-                ? selectedEvent ? selectedEvent.name : 'Field'
+: tab === 'tasks'
+  ? selectedEvent ? selectedEvent.name : 'Tasks'
                 : adminName || 'Profile'
         }
             subtitle={
@@ -912,8 +910,8 @@ export function GroundCrewPage() {
             ? undefined
             : tab === 'schedule'
               ? undefined
-              : tab === 'field'
-                ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Chain of custody'
+: tab === 'tasks'
+  ? selectedEvent ? `${selectedEvent.venue} • ${dateLabel(selectedEvent.date)}` : 'Field and production work'
                 : adminEmail || undefined
         }
         roleName={currentUser?.groundCrewSubRole === 'Warehouse' ? 'Warehouse Crew' : 'Field Crew'}
@@ -923,8 +921,8 @@ export function GroundCrewPage() {
             <MapPin className="size-5 text-primary" />
           ) : tab === 'schedule' ? (
             <CalendarDays className="size-5 text-primary" />
-          ) : tab === 'field' ? (
-            <ClipboardList className="size-5 text-primary" />
+) : tab === 'tasks' ? (
+  <ClipboardList className="size-5 text-primary" />
           ) : (
             <UserCircle2 className="size-5 text-primary" />
           )
@@ -941,7 +939,7 @@ export function GroundCrewPage() {
           <Home
             events={crewEvents}
             greetingName={adminName || currentUser?.name || ''}
-            onOpenToday={(item) => { setSelectedEventId(item.id); setTab('field') }}
+            onOpenToday={(item) => { setSelectedEventId(item.id); setTab('tasks') }}
             onOpenNext={() => setTab('schedule')}
             assignments={myAssignments}
                       loadingAssignments={loadingAssignments}
@@ -963,8 +961,9 @@ export function GroundCrewPage() {
   />
         )}
 
-        {(tab === 'field' || tab === 'history' || tab === 'production') && <div className="space-y-4">
-          {activeFieldView === 'workflow' && (selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed')) ? <FieldEventWorkflow event={(selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))!} isLead={isLeadForEvent((selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))!.id)} damageReports={reports.filter((report) => report.event === (selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))?.name)} onOpenCamera={() => setCameraShortcutOpen(true)} /> : activeFieldView === 'workflow' ? <PwaEmptyState title="Nothing to do right now" description="Assigned events will appear here when your Ground Crew schedule is ready." /> : activeFieldView === 'history' ? <div className="space-y-3"><PwaCard title="Past events" subtitle="Completed crew work"><div className="space-y-2">{crewEvents.filter((event) => event.status === 'Completed').map((event) => <div key={event.id} className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">{event.name}</p><p className="text-xs text-muted-foreground">{event.venue} · {dateLabel(event.date)}</p></div>)}{reports.map((report) => <div key={report.id} className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">Damage report · {report.item}</p><p className="text-xs text-muted-foreground">{report.event} · {report.capturedAt}</p></div>)}{crewEvents.filter((event) => event.status === 'Completed').length === 0 && reports.length === 0 && <p className="text-xs text-muted-foreground">No history yet.</p>}</div></PwaCard></div> : <div className="space-y-3"><PwaCard title="Production" subtitle="Bespoke asset tasks"><div className="space-y-2"><div className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">Custom Modular Velvet Stage Platform</p><p className="text-xs text-muted-foreground">Fabrication · In progress</p></div><div className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">Modular Arch Panel</p><p className="text-xs text-muted-foreground">Assembly check · Ready</p></div></div></PwaCard></div>}
+        {(tab === 'tasks' || tab === 'history') && <div className="space-y-4">
+          {tab === 'tasks' && <div className="flex items-center gap-1 rounded-2xl border border-border bg-card p-1"><button type="button" onClick={() => setTaskView('field')} className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold ${taskView === 'field' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>Field</button><button type="button" onClick={() => setTaskView('production')} className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold ${taskView === 'production' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>Production</button></div>}
+          {tab === 'tasks' && taskView === 'field' && (selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed')) ? <FieldEventWorkflow event={(selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))!} isLead={isLeadForEvent((selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))!.id)} damageReports={reports.filter((report) => report.event === (selectedEvent ?? crewEvents.find((event) => event.status !== 'Completed'))?.name)} onOpenCamera={() => setCameraShortcutOpen(true)} /> : tab === 'tasks' && taskView === 'field' ? <PwaEmptyState title="Nothing to do right now" description="Assigned events will appear here when your Ground Crew schedule is ready." /> : tab === 'history' ? <div className="space-y-3"><PwaCard title="Past events" subtitle="Completed crew work"><div className="space-y-2">{crewEvents.filter((event) => event.status === 'Completed').map((event) => <div key={event.id} className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">{event.name}</p><p className="text-xs text-muted-foreground">{event.venue} · {dateLabel(event.date)}</p></div>)}{reports.map((report) => <div key={report.id} className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">Damage report · {report.item}</p><p className="text-xs text-muted-foreground">{report.event} · {report.capturedAt}</p></div>)}{crewEvents.filter((event) => event.status === 'Completed').length === 0 && reports.length === 0 && <p className="text-xs text-muted-foreground">No history yet.</p>}</div></PwaCard></div> : <div className="space-y-3"><PwaCard title="Production" subtitle="Bespoke asset tasks"><div className="space-y-2"><div className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">Custom Modular Velvet Stage Platform</p><p className="text-xs text-muted-foreground">Fabrication · In progress</p></div><div className="rounded-xl border border-border p-3"><p className="text-sm font-semibold">Modular Arch Panel</p><p className="text-xs text-muted-foreground">Assembly check · Ready</p></div></div></PwaCard></div>}
         </div>}
 
         {tab === 'account' && (
