@@ -1087,6 +1087,34 @@ export function GroundCrewPage() {
   )
 }
 
+const HOME_PREVIEW_EVENT: EventItem = {
+  id: 'home-preview-event',
+  name: 'Lumière Live Operational Demonstration',
+  date: new Date().toISOString().slice(0, 10),
+  venue: 'The Glasshouse, Makati',
+  status: 'Current',
+  editable: true,
+  phase: 'Venue Arrival',
+  items: [
+    { id: 'home-preview-stage', name: 'Custom Modular Velvet Stage Platform 4×8', sku: 'STG-4X8', qty: 1, color: 'Onyx' },
+    { id: 'home-preview-chairs', name: 'Ghost Chair', sku: 'CHR-GHOST', qty: 24, color: 'Clear' },
+  ],
+}
+
+const HOME_PREVIEW_ASSIGNMENT = {
+  assignmentId: 'home-preview-assignment',
+  eventId: HOME_PREVIEW_EVENT.id,
+  eventName: HOME_PREVIEW_EVENT.name,
+  shiftDate: HOME_PREVIEW_EVENT.date,
+  shiftStartTime: '08:00',
+  shiftEndTime: '18:00',
+  workArea: 'Field',
+  taskTitle: 'Venue arrival verification',
+  assignedRole: 'Field Crew',
+  isLead: true,
+  executionStatus: 'InProgress',
+}
+
 function Home({
   events,
   onOpenToday,
@@ -1108,7 +1136,10 @@ function Home({
 }) {
   const manilaDate = (value: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date(value.includes('T') ? value : `${value}T00:00:00Z`))
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
-  const scope = assignments.some((a) => /warehouse/i.test(`${a.workArea} ${a.taskTitle}`)) ? 'Warehouse Crew' : 'Field Crew'
+  const previewMode = assignments.length === 0 && events.length === 0
+  const displayAssignments = previewMode ? [HOME_PREVIEW_ASSIGNMENT, { ...HOME_PREVIEW_ASSIGNMENT, assignmentId: 'home-preview-return', taskTitle: 'Warehouse return handoff', workArea: 'Warehouse', assignedRole: 'Warehouse Crew', isLead: false }] : assignments
+  const displayEvents = previewMode ? [HOME_PREVIEW_EVENT] : events
+  const scope = displayAssignments.some((a) => /warehouse/i.test(`${a.workArea} ${a.taskTitle}`)) ? 'Warehouse Crew' : 'Field Crew'
   const stages = ['Dispatch Release', 'Venue Arrival', 'Egress Release', 'Warehouse Return']
   // Keep Home's batch-to-stage contract in one place so Field can share it later.
   const BATCH_STAGE_PROGRESS: Record<string, Record<string, number>> = {
@@ -1134,22 +1165,23 @@ function Home({
     const earliestUnfinished = Math.min(...(progress as number[]))
     return { index: earliestUnfinished, label: stages[earliestUnfinished], state: 'active' as const }
   }
-  const grouped = Array.from(new Set(assignments.map((a) => a.eventId))).map((eventId) => {
-    const items = assignments.filter((a) => a.eventId === eventId)
+  const grouped = Array.from(new Set(displayAssignments.map((a) => a.eventId))).map((eventId) => {
+    const items = displayAssignments.filter((a) => a.eventId === eventId)
     const first = items[0]
-    const event = events.find((e) => e.id === eventId)
+    const event = displayEvents.find((e) => e.id === eventId)
     return { id: eventId, name: first.eventName || event?.name || 'Event', venue: event?.venue || first.workArea || 'Venue', date: first.shiftDate || event?.date || '', time: first.shiftStartTime, isLead: items.some((a) => a.isLead), items }
   }).filter((item) => item.date)
   const dated = grouped.map((item) => ({ ...item, manilaDate: manilaDate(item.date) }))
   const todayShift = dated.find((item) => item.manilaDate === today)
   const nextShift = dated.filter((item) => item.manilaDate > today).sort((a, b) => a.manilaDate.localeCompare(b.manilaDate))[0]
-  const toEvent = (item: typeof grouped[number]) => events.find((e) => e.id === item.id) || { id: item.id, name: item.name, venue: item.venue, date: item.date, status: 'Upcoming' as EventStatus, editable: false, phase: null, items: [] }
+  const toEvent = (item: typeof grouped[number]) => displayEvents.find((e) => e.id === item.id) || { id: item.id, name: item.name, venue: item.venue, date: item.date, status: 'Upcoming' as EventStatus, editable: false, phase: null, items: [] }
   if (loadingAssignments) return <div className="space-y-3"><div className="h-5 w-20 animate-pulse rounded bg-muted" /><div className="h-44 animate-pulse rounded-2xl bg-muted" /><div className="h-28 animate-pulse rounded-2xl bg-muted" /></div>
   if (assignmentError && assignments.length === 0) return <p className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Couldn&apos;t load your shifts. Try again.</p>
 
   return (
     <div className="space-y-3">
-      <GroundCrewSyncPill assignments={assignments} isCachedData={isCachedData} />
+      {previewMode && <div className="rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">Preview data is shown because this account has no active assignments yet.</div>}
+      <GroundCrewSyncPill assignments={displayAssignments as MyManningAssignmentDto[]} isCachedData={isCachedData} />
       {todayShift ? (
         <button type="button" onClick={() => onOpenToday(toEvent(todayShift))} className="block w-full text-left">
           <PwaCard title="Today" action={todayShift.isLead ? <PwaBadge variant="neutral" label="Shift Lead" /> : undefined}>
