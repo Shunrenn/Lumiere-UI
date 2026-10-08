@@ -123,6 +123,22 @@ function dateLabel(date: string) {
 
 const FIELD_STAGES = ['Dispatch Release', 'Venue Arrival', 'Egress Release', 'Warehouse Return'] as const
 
+const FIELD_PREVIEW_EVENT: EventItem = {
+  id: 'field-preview-event',
+  name: 'Lumière Live Operational Demonstration',
+  date: new Date().toISOString().slice(0, 10),
+  venue: 'The Glasshouse, Makati',
+  status: 'Current',
+  editable: true,
+  phase: 'Venue Arrival',
+  items: [
+    { id: 'field-preview-stage', name: 'Custom Modular Velvet Stage Platform 4×8', sku: 'STG-4X8', qty: 1, color: 'Onyx' },
+    { id: 'field-preview-chairs', name: 'Ghost Chair', sku: 'CHR-GHOST', qty: 24, color: 'Clear' },
+    { id: 'field-preview-lights', name: 'Warm Pin Light', sku: 'LGT-PIN-WARM', qty: 8, color: 'Warm white' },
+    { id: 'field-preview-arch', name: 'Modular Arch Panel', sku: 'ARC-MOD-01', qty: 6, color: 'Ivory' },
+  ],
+}
+
 type FieldStage = (typeof FIELD_STAGES)[number]
 type FieldItemState = 'Not checked' | 'Verified' | 'Missing' | 'Damaged'
 
@@ -161,7 +177,7 @@ function FieldConsole({ events, assignmentScope, isLeadForEvent }: { events: Eve
     )
   }
 
-  return <div className="space-y-4"><PwaCard title="Field · Chain of custody" subtitle={`${assignmentScope} assignment · verify every handoff against the asset manifest.`}><p className="text-xs leading-relaxed text-muted-foreground">Single-Lock Assignment keeps this account on one event. Work offline when needed; records sync when a connection returns.</p></PwaCard>{events.length === 0 ? <PwaEmptyState title="Nothing to do right now" description="Assigned events will appear here when your Ground Crew schedule is ready." /> : events.map((event) => <PwaCard key={event.id} title={event.name} subtitle={`${dateLabel(event.date)} · ${event.venue}`}><div className="space-y-3"><div className="relative grid grid-cols-4 gap-1">{FIELD_STAGES.map((stage, index) => { const previousDone = canOpenStage(event.id, index); const done = confirmedStages[`${event.id}:${stage}`]; const editable = editableStages.has(stage); const isCurrent = previousDone && !done && editable; return <button key={stage} type="button" disabled={!previousDone} onClick={() => { setSelectedEventId(event.id); setActiveStage(stage) }} className={`relative z-10 min-w-0 rounded-xl px-1 py-2.5 text-[10px] font-semibold transition-colors ${done ? 'bg-emerald-500/15 text-emerald-700' : isCurrent ? 'bg-primary/15 text-primary ring-1 ring-primary/50' : previousDone ? 'bg-muted text-muted-foreground' : 'bg-muted text-muted-foreground opacity-60'}`}><span className={`mx-auto mb-1 flex size-7 items-center justify-center rounded-full border text-xs ${isCurrent ? 'border-primary bg-primary text-primary-foreground' : 'border-current'}`}>{done ? '✓' : index + 1}</span><span className="block truncate">{stage.replace(' Release', '').replace('Warehouse ', '')}</span><span className="mt-0.5 block text-[8px] font-normal">{editable ? 'Your stage' : 'Read-only'}</span></button>})}</div><div className="flex items-center justify-between border-t border-border pt-3 text-[10px] text-muted-foreground"><span>{event.items.length} manifest items</span><span>Saved locally · pending sync</span></div></div></PwaCard>)}</div>
+  return <div className="space-y-4"><PwaCard title="Field · Chain of custody" subtitle={`${assignmentScope} assignment · verify every handoff against the asset manifest.`}><p className="text-xs leading-relaxed text-muted-foreground">Single-Lock Assignment keeps this account on one event. Work offline when needed; records sync when a connection returns.</p>{events.some((event) => event.id === FIELD_PREVIEW_EVENT.id) && <p className="mt-3 rounded-lg bg-primary/10 px-3 py-2 text-[10px] text-primary">Preview event data for crew@lumiere.com</p>}</PwaCard>{events.length === 0 ? <PwaEmptyState title="Nothing to do right now" description="Assigned events will appear here when your Ground Crew schedule is ready." /> : events.map((event) => <PwaCard key={event.id} title={event.name} subtitle={`${dateLabel(event.date)} · ${event.venue}`}><div className="space-y-3"><div className="relative grid grid-cols-4 gap-1">{FIELD_STAGES.map((stage, index) => { const previousDone = canOpenStage(event.id, index); const done = confirmedStages[`${event.id}:${stage}`]; const editable = editableStages.has(stage); const isCurrent = previousDone && !done && editable; return <button key={stage} type="button" disabled={!previousDone} onClick={() => { setSelectedEventId(event.id); setActiveStage(stage) }} className={`relative z-10 min-w-0 rounded-xl px-1 py-2.5 text-[10px] font-semibold transition-colors ${done ? 'bg-emerald-500/15 text-emerald-700' : isCurrent ? 'bg-primary/15 text-primary ring-1 ring-primary/50' : previousDone ? 'bg-muted text-muted-foreground' : 'bg-muted text-muted-foreground opacity-60'}`}><span className={`mx-auto mb-1 flex size-7 items-center justify-center rounded-full border text-xs ${isCurrent ? 'border-primary bg-primary text-primary-foreground' : 'border-current'}`}>{done ? '✓' : index + 1}</span><span className="block truncate">{stage.replace(' Release', '').replace('Warehouse ', '')}</span><span className="mt-0.5 block text-[8px] font-normal">{editable ? 'Your stage' : 'Read-only'}</span></button>})}</div><div className="flex items-center justify-between border-t border-border pt-3 text-[10px] text-muted-foreground"><span>{event.items.length} manifest items</span><span>Saved locally · pending sync</span></div></div></PwaCard>)}</div>
 }
 
 void FieldConsole
@@ -249,8 +265,8 @@ export function GroundCrewPage() {
   const assignmentScope: CrewAssignmentScope = activeAssignment && /warehouse/i.test(`${activeAssignment.workArea ?? ''} ${activeAssignment.taskTitle ?? ''} ${activeAssignment.assignedRole ?? ''}`) ? 'Warehouse' : 'Field'
 
   const derivedEvents = useMemo<EventItem[]>(() => {
-    if (!activeAssignment || !events || events.length === 0) return []
-    const assignedEvent = events.find((event) => event.id === activeAssignment.eventId)
+  if (!activeAssignment || !events || events.length === 0) return adminEmail === 'crew@lumiere.com' ? [FIELD_PREVIEW_EVENT] : []
+  const assignedEvent = events.find((event) => event.id === activeAssignment.eventId)
     if (!assignedEvent) return []
     // Single-Lock Assignment: Ground Crew receives only the one event in the active Manning assignment.
     return [{
@@ -263,7 +279,7 @@ export function GroundCrewPage() {
       phase: null,
       items: [],
     }]
-  }, [activeAssignment, events])
+  }, [activeAssignment, adminEmail, events])
 
   const [adminEventId, setAdminEventId] = useState('')
   const [crewEvents, setCrewEvents] = useState<EventItem[]>([])
