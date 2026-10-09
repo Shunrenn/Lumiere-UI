@@ -30,7 +30,11 @@ import { cn } from '@/lib/utils'
 
 const BANNER_TONE: Record<DispatchBannerState, Tone> = {
   'No Dispatch Yet': 'neutral',
-  'Dispatch In Progress': 'progress',
+  'Ingress in progress': 'progress',
+  'Ingress done, Egress in progress': 'progress',
+  'Egress in progress': 'progress',
+  'All stages done': 'positive',
+  'Stage unavailable': 'neutral',
   'Delayed Dispatch': 'caution',
   'Stalled In Transit — Needs Attention': 'critical',
 }
@@ -188,8 +192,8 @@ export function DispatchPanel({
       action={<SectionButton onClick={onNewBatch}>+ New Batch</SectionButton>}
     >
       <div className="flex flex-col gap-6">
-        {/* Core State Banner */}
-        <StateBanner label={banner} tone={BANNER_TONE[banner]} />
+  {/* Core State Banner */}
+  {banner !== 'Stalled In Transit — Needs Attention' && <StateBanner label={banner} tone={BANNER_TONE[banner]} />}
 
         {/* =========================================================================
             ZONE 1: AUTHORITATIVE PREPARATION (Warehouse Floor Readiness)

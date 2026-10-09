@@ -224,9 +224,67 @@ function publish() {
   listeners.forEach((listener) => listener())
 }
 
+function seedProductionPreviewData(events: PortalEvent[], staff: Staff[]) {
+  if (items.length > 0 || events.length === 0) return
+  const crewName = getCrewPool(staff)[0]?.fullName || 'Ground Crew Team'
+  const today = new Date().toISOString().slice(0, 10)
+  const seeded = events.slice(0, 3).flatMap((event, eventIndex) => {
+    const stage: ProductionStage[] = ['InProgress', 'CompletedAwaitingApproval', 'DispatchReady']
+    const schedule = calculateProductionSchedule({
+      quota: 1,
+      baseSingleWorkerMinutes: 240 + eventIndex * 60,
+      maxParallelWorkers: 3,
+      assignedWorkers: 2,
+      shift: 'morning',
+      startDate: today,
+    })
+    return [{
+      id: `prod-shared-${event.id}`,
+      itemName: `${event.title} fabrication package`,
+      assetId: `asset-${event.id}`,
+      subCategory: 'Bespoke Fabrication',
+      eventId: event.id,
+      eventTitle: event.title,
+      thumbnail: event.thumbnail || event.coverUrl || '',
+      assignedCrew: crewName,
+      manCount: 2,
+      estimatedHours: schedule.computedTotalWorkHours,
+      startedAt: Date.now() - eventIndex * 86_400_000,
+      stage: stage[eventIndex],
+      status: stage[eventIndex],
+      progressPercentage: [55, 100, 100][eventIndex],
+      completedQuantity: eventIndex === 0 ? 0 : 1,
+      targetQuantity: 1,
+      rawMaterials: buildMaterials(hashOf(event.id)),
+      quota: 1,
+      assignedWorkers: 2,
+      shiftSelection: 'morning' as ShiftType,
+      startDate: today,
+      lockedBaseSingleWorkerMinutes: 240 + eventIndex * 60,
+      lockedMaxParallelWorkers: 3,
+      computedMinutesPerItem: schedule.computedMinutesPerItem,
+      computedTotalWorkHours: schedule.computedTotalWorkHours,
+      computedWorkDays: schedule.computedWorkDays,
+      computedEndDate: schedule.computedEndDate,
+      delayFlags: [],
+      effectiveEndDate: schedule.effectiveEndDate,
+      handoffNotes: 'Ground Crew verifies the final fabrication check before WOM releases this asset for dispatch.',
+    } satisfies ProductionItem]
+  })
+  if (seeded.length > 0) {
+    items = seeded
+    publish()
+  }
+}
+
+export function updateProductionHandoff(itemId: string, action: 'start' | 'submit' | 'undo-start' | 'undo-submit') {
+  const stage: ProductionStage = action === 'start' ? 'InProgress' : action === 'submit' ? 'CompletedAwaitingApproval' : action === 'undo-start' ? 'Pending' : 'InProgress'
+  items = items.map((item) => item.id === itemId ? { ...item, stage, status: stage, progressPercentage: action === 'submit' ? 100 : action === 'undo-start' ? 0 : Math.max(item.progressPercentage ?? 0, 1) } : item)
+  publish()
+}
+
 export function useProductionItems(events: PortalEvent[] = [], staff: Staff[] = []): ProductionItem[] {
-  void events
-  void staff
+  seedProductionPreviewData(events, staff)
   return useSyncExternalStore(
     (listener) => {
       listeners.add(listener)

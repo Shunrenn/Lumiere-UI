@@ -96,7 +96,6 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
   )
 
   const [viewMode, setViewMode] = useState<ViewMode>('grouped')
-  const [showAttentionOnly, setShowAttentionOnly] = useState(false)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [activeBatchIndex, setActiveBatchIndex] = useState<number | null>(null)
   const [pendingBatchId, setPendingBatchId] = useState<string | null>(null)
@@ -110,20 +109,8 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
       .map((member) => ({ id: member.id, name: `${member.firstName} ${member.surname}` })),
     [staff],
   )
-  const attentionCounts = useMemo(() => {
-    const batches = summaries.flatMap((summary) => summary.batches)
-    return {
-      stalled: batches.filter((batch) => batch.stalled).length,
-      pahabol: batches.filter((batch) => batch.reconciliation.some((row) => row.status === 'Pahabol')).length,
-      short: batches.filter((batch) => batch.reconciliation.some((row) => row.status === 'Short')).length,
-    }
-  }, [summaries])
-  const visibleSummaries = useMemo(
-    () => showAttentionOnly
-      ? summaries.filter((summary) => summary.batches.some((batch) => batchAttention(batch).length > 0))
-      : summaries,
-    [showAttentionOnly, summaries],
-  )
+
+  const visibleSummaries = summaries
 
   // The list currently being navigated in the Level 3 overlay.
   const navList: NavigableBatch[] = useMemo(() => {
@@ -233,25 +220,6 @@ export function DispatchModule({ onClose }: DispatchModuleProps) {
             )}
           </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
-          <div>
-            <p className="text-xs font-semibold text-card-foreground">Needs attention</p>
-            <p className="text-[0.68rem] text-muted-foreground">Items that need a follow-up before this delivery is clear.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">{attentionCounts.stalled} delivery delayed</span>
-            <span className="rounded-full bg-destructive/15 px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wide text-destructive">{attentionCounts.pahabol} follow-up items</span>
-            <span className="rounded-full bg-orange-500/15 px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-wide text-orange-800 dark:text-orange-300">{attentionCounts.short} missing items</span>
-            <button
-              type="button"
-              onClick={() => setShowAttentionOnly((current) => !current)}
-              aria-pressed={showAttentionOnly}
-              className={cn('rounded-md border px-3 py-1.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] transition', showAttentionOnly ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-card-foreground hover:bg-muted')}
-            >
-              {showAttentionOnly ? 'Show all' : 'Needs attention'}
-            </button>
-          </div>
-        </div>
 
         {viewMode === 'grouped' && selectedEvent && (
           <div className="flex items-center gap-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">

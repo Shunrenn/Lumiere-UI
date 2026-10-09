@@ -174,7 +174,13 @@ export function BatchDetailView({
         )}
 
         <div className="flex flex-1 flex-col gap-6 px-6 py-6">
-          {/* Automated Ingress / Return Batch Prompt Banner */}
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+    <p className="text-xs font-bold uppercase tracking-wider text-primary">Ground Crew handoff</p>
+    <p className="mt-1 text-sm font-semibold">{batch.direction === 'outbound' ? (batch.stage === 'Planned' ? 'Ready for Ingress' : batch.stage === 'Delivered' ? 'Ingress completed' : batch.stage) : (batch.stage === 'Planned' ? 'Ready for Egress' : batch.stage === 'Returned' ? 'Egress completed' : batch.stage)}</p>
+    <p className="mt-1 text-[0.68rem] text-muted-foreground">Ground Crew completes the assigned checklist. WOM confirms the handoff before closing this trip.</p>
+  </div>
+
+  {/* Automated Ingress / Return Batch Prompt Banner */}
           {batch.direction === 'outbound' && batch.stage === 'Delivered' && onCreateReturnBatch && (
             <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 flex items-center justify-between">
               <div>
@@ -331,7 +337,7 @@ export function BatchDetailView({
           <div>
             <div className="mb-2 flex items-center justify-between gap-3">
               <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                Crew on this trip
+                Trip crew
               </p>
               {onCrewChange && availableCrew.length > 0 && (
                 <button
