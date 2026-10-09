@@ -337,7 +337,7 @@ export function BatchDetailView({
           <div>
             <div className="mb-2 flex items-center justify-between gap-3">
               <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                Crew on this trip
+                Trip crew
               </p>
               {onCrewChange && availableCrew.length > 0 && (
                 <button
