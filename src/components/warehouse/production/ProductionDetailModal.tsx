@@ -163,13 +163,15 @@ export function ProductionDetailModal({ item, onClose }: ProductionDetailModalPr
     setErrorMessage(null)
     setSuccessMessage(null)
 
-    const result = await approveProductionTask(item.id, {
-      notes: notes || approvalNotes.trim() || undefined,
-    })
+  const approvalNotesValue = notes || approvalNotes.trim() || undefined
+  const isLocalPreviewItem = item.id.startsWith('prod-shared-') || item.id.startsWith('home-preview-')
+  const result = isLocalPreviewItem
+  ? { success: true as const, data: undefined }
+  : await approveProductionTask(item.id, { notes: approvalNotesValue })
 
-    setIsSubmitting(false)
-    if (result.success) {
-      approveProductionItem(item.id, notes || approvalNotes.trim())
+  setIsSubmitting(false)
+  if (result.success) {
+  approveProductionItem(item.id, approvalNotesValue)
       setSuccessMessage('Production quality approved. Ready for warehouse dispatch handoff.')
       setActiveConfirmation(null)
     } else {
