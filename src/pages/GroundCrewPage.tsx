@@ -229,7 +229,6 @@ export function GroundCrewPage() {
   const { events, staff, procurement, initiateEventEgress } = usePortal()
   const productionItems = useProductionItems(events, staff)
   const dispatchStore = useDispatchStore(events, staff, procurement)
-  void dispatchStore
   const declarations = useGroundCrewDeclarations()
   void declarations
   const [tab, setTab] = useState<Tab>('home')
@@ -561,6 +560,10 @@ export function GroundCrewPage() {
 
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const selectedEvent = selectedEventId ? crewEvents.find((event) => event.id === selectedEventId) ?? null : null
+  const assignedBatch = useMemo(() => {
+    const event = selectedEventId ? events.find((item) => item.id === selectedEventId) : events[0]
+    return event ? (dispatchStore.get(event.id) ?? []).find((batch) => !batch.isArchived && batch.crew.length > 0) ?? null : null
+  }, [dispatchStore, events, selectedEventId])
   const [reports, setReports] = useState<DamageReport[]>([])
   const [offlineItems, setOfflineItems] = useState<QueuedDeclaration[]>([])
   const [isSyncingQueue, setIsSyncingQueue] = useState(false)
@@ -938,6 +941,7 @@ export function GroundCrewPage() {
       {/* Main Tab Content */}
       <main className="mx-auto w-full max-w-[440px] px-4 pt-4 space-y-4">
         {tab === 'home' && <GroundCrewSyncPill assignments={myAssignments} isCachedData={isCachedData} />}
+        {tab === 'home' && assignedBatch && <PwaCard title="Assigned delivery" subtitle="Trip crew"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold">{assignedBatch.vehicleType} · {assignedBatch.plateNumber}</p><p className="mt-1 text-xs text-muted-foreground">{assignedBatch.direction === 'outbound' ? 'Outbound' : 'Return'} · {assignedBatch.stage}</p></div><div className="text-right"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Crew</p><p className="mt-1 text-sm font-semibold">{assignedBatch.crew.length}</p></div></div><div className="mt-3 flex flex-wrap gap-1.5">{assignedBatch.crew.map((member) => <span key={member.id} className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">{member.name}</span>)}</div></PwaCard>}
 
         {tab === 'home' && (
           <Home

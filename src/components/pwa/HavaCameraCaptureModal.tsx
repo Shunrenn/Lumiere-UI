@@ -51,6 +51,7 @@ export function HavaCameraCaptureModal({
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [cameraState, setCameraState] = useState<CameraState>('requesting')
   const [gpsState, setGpsState] = useState<GpsState>('acquiring')
@@ -81,7 +82,7 @@ export function HavaCameraCaptureModal({
 
     if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setCameraState('unsupported')
-      setCameraErrorMessage('In-system MediaDevices API is unavailable on this browser or origin.')
+      setCameraErrorMessage('Live camera access is unavailable here. You can still choose a photo from the device camera or gallery.')
       return
     }
 
@@ -231,6 +232,41 @@ export function HavaCameraCaptureModal({
     }
   }
 
+  const handleFileCapture = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    try {
+      const buffer = await file.arrayBuffer()
+      const sha256Hash = await computePhotoSha256(buffer)
+      const photoDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result))
+        reader.onerror = () => reject(new Error('Unable to read selected photo.'))
+        reader.readAsDataURL(file)
+      })
+      const capturedAt = new Date().toISOString()
+      setPreviewEvidence({
+        photoDataUrl,
+        sha256Hash,
+        meta: {
+          capturedAt,
+          gpsCoordinates: gpsCoords ? formatGpsDisplay(gpsCoords.lat, gpsCoords.lon) : 'GPS unavailable',
+          latitude: gpsCoords?.lat ?? null,
+          longitude: gpsCoords?.lon ?? null,
+          gpsSource: gpsCoords ? 'geolocation' : 'unavailable',
+          exifJson: JSON.stringify({ source: 'device-photo', capturedAt }),
+        },
+        file,
+      })
+      stopStream()
+      setCameraState('preview')
+    } catch (error) {
+      setCameraErrorMessage(error instanceof Error ? error.message : 'Unable to use selected photo.')
+      setCameraState('unsupported')
+    }
+  }
+
   const handleRetake = () => {
     setPreviewEvidence(null)
     startCamera()
@@ -245,6 +281,8 @@ export function HavaCameraCaptureModal({
   if (!isOpen) return null
 
   return (
+    <>
+    <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileCapture} className="sr-only" aria-label="Choose evidence photo" />
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4">
       <div className="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border/80 bg-card shadow-2xl">
         {/* Header */}
@@ -315,6 +353,14 @@ export function HavaCameraCaptureModal({
               <p className="text-[0.68rem] text-muted-foreground leading-relaxed">
                 {cameraErrorMessage || 'Camera access was blocked by your browser or operating system settings.'}
               </p>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition"
+              >
+                <Camera className="size-3.5" />
+                Use Device Camera
+              </button>
               <button
                 type="button"
                 onClick={startCamera}
@@ -445,5 +491,6 @@ export function HavaCameraCaptureModal({
         </div>
       </div>
     </div>
+    </>
   )
 }
