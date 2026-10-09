@@ -7,7 +7,6 @@ import {
   getTeamCapacity,
   moveProductionItem,
   flagProductionDelay,
-  PRODUCTION_STAGES,
   useProductionItems,
   type ProductionItem,
   type ProductionStage,
@@ -27,6 +26,14 @@ import { cn } from '@/lib/utils'
 import { WarehouseModuleHeader } from '@/components/warehouse/WarehouseModuleHeader'
 
 type MainModuleView = 'gantt' | 'kanban' | 'workload'
+type ProductionStageFilter = 'All' | 'Planned' | 'Making' | 'Quality Check' | 'Ready'
+
+function simplifiedStage(stage: ProductionStage): Exclude<ProductionStageFilter, 'All'> {
+  if (stage === 'Pending' || stage === 'MaterialsVerified') return 'Planned'
+  if (stage === 'InProgress') return 'Making'
+  if (stage === 'CompletedAwaitingApproval' || stage === 'RejectedRework') return 'Quality Check'
+  return 'Ready'
+}
 
 const VIEW_HELP: Record<MainModuleView, string> = {
   gantt: 'Schedule shows when each job is planned.',
@@ -34,16 +41,7 @@ const VIEW_HELP: Record<MainModuleView, string> = {
   workload: 'Overview shows workshop capacity across all events.',
 }
 
-const STATUS_FILTERS: Array<ProductionStage | 'All'> = [
-  'All',
-  'Pending',
-  'MaterialsVerified',
-  'InProgress',
-  'CompletedAwaitingApproval',
-  'RejectedRework',
-  'Approved',
-  'DispatchReady',
-]
+const STATUS_FILTERS: ProductionStageFilter[] = ['All', 'Planned', 'Making', 'Quality Check', 'Ready']
 
 interface ProductionModuleProps {
   onClose: () => void
@@ -57,7 +55,7 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
 
   const [view, setView] = useState<MainModuleView>('kanban')
   const [query, setQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<ProductionStage | 'All'>('All')
+  const [statusFilter, setStatusFilter] = useState<ProductionStageFilter>('All')
   const [selectedItem, setSelectedItem] = useState<ProductionItem | null>(null)
   const [quotaOpen, setQuotaOpen] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
@@ -71,7 +69,7 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return items.filter((item) => {
-      const matchesStatus = statusFilter === 'All' || item.stage === statusFilter
+      const matchesStatus = statusFilter === 'All' || simplifiedStage(item.stage) === statusFilter
       const matchesQuery =
         !q || item.itemName.toLowerCase().includes(q) || item.eventTitle.toLowerCase().includes(q)
       return matchesStatus && matchesQuery
@@ -387,8 +385,8 @@ function KanbanBoard({
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {PRODUCTION_STAGES.map((stage) => {
-        const stageItems = filtered.filter((item) => (item.status || item.stage) === stage)
+      {(['Pending', 'InProgress', 'CompletedAwaitingApproval', 'DispatchReady'] as ProductionStage[]).map((stage) => {
+        const stageItems = filtered.filter((item) => simplifiedStage(item.stage) === simplifiedStage(stage))
         return (
           <div
             key={stage}

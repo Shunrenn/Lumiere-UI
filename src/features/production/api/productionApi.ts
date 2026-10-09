@@ -459,22 +459,19 @@ export function formatProductionStatus(status?: string): string {
   switch (status) {
     case 'Pending':
     case 'Unprepped':
-      return 'Pending'
     case 'MaterialsVerified':
-      return 'Materials Verified'
+      return 'Planned'
     case 'InProgress':
     case 'Prepping':
-      return 'In Progress'
+      return 'Making'
     case 'CompletedAwaitingApproval':
     case 'Awaiting Approval':
-      return 'Awaiting Approval'
     case 'RejectedRework':
-      return 'Rejected / Rework'
+      return 'Quality Check'
     case 'Approved':
-      return 'Approved'
     case 'DispatchReady':
     case 'Ready':
-      return 'Dispatch Ready'
+      return 'Ready'
     case 'Cancelled':
       return 'Cancelled'
     default:
@@ -489,18 +486,19 @@ export function getProductionStatusTone(
   switch (status) {
     case 'Pending':
     case 'Unprepped':
-      return 'neutral'
     case 'MaterialsVerified':
-      return 'progress'
+      return 'neutral'
+    case 'Awaiting Approval':
+    case 'CompletedAwaitingApproval':
+      return 'caution'
     case 'InProgress':
     case 'Prepping':
       return 'progress'
-    case 'CompletedAwaitingApproval':
-    case 'Awaiting Approval':
-      return 'caution'
     case 'RejectedRework':
       return 'critical'
     case 'Approved':
+    case 'DispatchReady':
+    case 'Ready':
       return 'positive'
     case 'DispatchReady':
     case 'Ready':
