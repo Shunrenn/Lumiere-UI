@@ -277,8 +277,9 @@ function seedProductionPreviewData(events: PortalEvent[], staff: Staff[]) {
   }
 }
 
-export function updateProductionHandoff(itemId: string, completed: boolean) {
-  items = items.map((item) => item.id === itemId ? { ...item, stage: completed ? 'CompletedAwaitingApproval' : 'InProgress', status: completed ? 'CompletedAwaitingApproval' : 'InProgress', progressPercentage: completed ? 100 : item.progressPercentage } : item)
+export function updateProductionHandoff(itemId: string, action: 'start' | 'submit') {
+  const stage: ProductionStage = action === 'start' ? 'InProgress' : 'CompletedAwaitingApproval'
+  items = items.map((item) => item.id === itemId ? { ...item, stage, status: stage, progressPercentage: action === 'submit' ? 100 : Math.max(item.progressPercentage ?? 0, 1) } : item)
   publish()
 }
 
