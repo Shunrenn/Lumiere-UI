@@ -28,6 +28,11 @@ function ProductionItemCard({ item }: { item: ProductionItem }) {
     setStage('CompletedAwaitingApproval')
     updateProductionHandoff(item.id, 'submit')
   }
+  const undoAction = () => {
+    const previousStage = stage === 'InProgress' ? 'Pending' : 'InProgress'
+    setStage(previousStage)
+    updateProductionHandoff(item.id, stage === 'InProgress' ? 'undo-start' : 'undo-submit')
+  }
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
@@ -46,6 +51,7 @@ function ProductionItemCard({ item }: { item: ProductionItem }) {
         <p className="mt-1 text-[10px] text-muted-foreground">Check finish, size, and readiness.</p>
       </div>
       {stage === 'Pending' || stage === 'MaterialsVerified' ? <button type="button" onClick={startWork} className="mt-3 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">Start Work</button> : isMaking ? <button type="button" onClick={submitCheck} className="mt-3 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">Submit Check</button> : isQualityCheck ? <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-xs font-semibold text-amber-800 dark:text-amber-200">Needs Review</p> : <p className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-xs font-semibold text-emerald-800 dark:text-emerald-200">Ready</p>}
+      {(isMaking || isQualityCheck) && <button type="button" onClick={undoAction} className="mt-2 w-full rounded-xl border border-border px-4 py-2.5 text-xs font-semibold text-foreground hover:bg-muted">Undo</button>}
       <p className="mt-2 text-center text-[10px] text-muted-foreground">Required before dispatch.</p>
     </div>
   )
