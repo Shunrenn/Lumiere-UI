@@ -5,7 +5,7 @@ export function ProductionHandoffCard({ items }: { items: ProductionItem[] }) {
     <section className="space-y-3">
       <div>
         <h1 className="font-serif text-xl font-bold">Assigned production work</h1>
-        <p className="mt-1 text-xs text-muted-foreground">Work assigned by WOM and shared with Ground Crew.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Your assigned production work.</p>
       </div>
       {items.length === 0 ? <p className="rounded-2xl border border-border bg-card p-4 text-xs text-muted-foreground">No production work assigned.</p> : items.map((item) => {
         const completed = item.stage === 'CompletedAwaitingApproval' || item.stage === 'Approved' || item.stage === 'DispatchReady'
@@ -16,7 +16,7 @@ export function ProductionHandoffCard({ items }: { items: ProductionItem[] }) {
           </div>
           <div className="mt-4 rounded-xl border border-border bg-background p-3"><p className="text-xs font-semibold">Complete fabrication check</p><p className="mt-1 text-[10px] text-muted-foreground">Verify finish, dimensions, and readiness for dispatch.</p></div>
           <button type="button" onClick={() => updateProductionHandoff(item.id, completed)} className="mt-3 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">{completed ? 'Reopen assigned work' : 'Mark assigned work complete'}</button>
-          <p className="mt-2 text-center text-[10px] text-muted-foreground">WOM sees this handoff and reviews it before dispatch.</p>
+          <p className="mt-2 text-center text-[10px] text-muted-foreground">Complete this check before dispatch.</p>
         </div>
       })}
     </section>
