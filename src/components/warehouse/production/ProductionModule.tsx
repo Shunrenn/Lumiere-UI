@@ -29,9 +29,9 @@ import { WarehouseModuleHeader } from '@/components/warehouse/WarehouseModuleHea
 type MainModuleView = 'gantt' | 'kanban' | 'workload'
 
 const VIEW_HELP: Record<MainModuleView, string> = {
-  gantt: 'Timeline shows when each job is scheduled.',
-  kanban: 'Board shows each job’s current stage.',
-  workload: 'Workload shows workshop capacity across all events.',
+  gantt: 'Schedule shows when each job is planned.',
+  kanban: 'Work queue shows what stage each job is in.',
+  workload: 'Overview shows workshop capacity across all events.',
 }
 
 const STATUS_FILTERS: Array<ProductionStage | 'All'> = [
@@ -55,7 +55,7 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
   const canApproveProduction = hasFullWarehouseAccess || isProductionManager
   const items = useProductionItems(events, staff)
 
-  const [view, setView] = useState<MainModuleView>('gantt')
+  const [view, setView] = useState<MainModuleView>('kanban')
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProductionStage | 'All'>('All')
   const [selectedItem, setSelectedItem] = useState<ProductionItem | null>(null)
@@ -89,7 +89,7 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
         <div className="flex items-start justify-between gap-4">
           <WarehouseModuleHeader
             title="Production & Fabrication"
-            description="Bespoke build estimation, Gantt timeline scheduling, and workshop capacity."
+            description="Track assigned work, plan schedules, and monitor workshop capacity."
           />
           <button
             type="button"
@@ -114,7 +114,7 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
               )}
             >
               <Calendar className="size-3" />
-              Gantt Timeline
+              Schedule
             </button>
             <button
               type="button"
@@ -126,7 +126,7 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
               )}
             >
               <LayoutGrid className="size-3" />
-              Kanban Board
+              Work Queue
             </button>
             <button
               type="button"
@@ -138,7 +138,7 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
               )}
             >
               <Table className="size-3" />
-              Cross-Event Workload
+              Overview
             </button>
           </div>
 
@@ -153,16 +153,16 @@ export function ProductionModule({ onClose }: ProductionModuleProps) {
               />
             </div>
 
-            <details className="relative">
-              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-3 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.08em] text-foreground transition hover:bg-muted [&::-webkit-details-marker]:hidden">
+            {canApproveProduction && <details className="relative">
+              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-3 py-2.5 text-[0.62rem] font-bold uppercase tracking-[0.08em] text-foreground transition hover:bg-muted">
                 <Sliders className="size-3.5 text-muted-foreground" />
-                Planning tools
+                Manager tools
               </summary>
               <div className="absolute right-0 z-20 mt-2 flex w-44 flex-col gap-1 rounded-md border border-border bg-card p-1.5 shadow-lg">
-                <button type="button" onClick={() => setSubCategorySettingsOpen(true)} className="rounded px-3 py-2 text-left text-xs font-medium text-card-foreground hover:bg-muted">Worker caps</button>
-                <button type="button" onClick={() => setQuotaOpen(true)} className="rounded px-3 py-2 text-left text-xs font-medium text-card-foreground hover:bg-muted">Estimate quota</button>
+                <button type="button" onClick={() => setSubCategorySettingsOpen(true)} className="rounded px-3 py-2 text-left text-xs font-medium text-card-foreground hover:bg-muted">Worker capacity</button>
+                <button type="button" onClick={() => setQuotaOpen(true)} className="rounded px-3 py-2 text-left text-xs font-medium text-card-foreground hover:bg-muted">Estimate resources</button>
               </div>
-            </details>
+            </details>}
 
             <button
               type="button"
